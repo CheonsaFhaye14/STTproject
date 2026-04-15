@@ -1,4 +1,4 @@
-﻿namespace STTproject.Components.Models
+﻿namespace STTproject.Models
 {
     public class SalesInvoice
     {
@@ -10,7 +10,7 @@
         public String CustomerCode { get; set; } = string.Empty;
         public String CustomerName { get; set; } = string.Empty;
         public String CustomerAddress { get; set; } = string.Empty;
-        public List<SalesInvoiceItems> Items { get; set; } = new();
+        public List<SalesInvoiceItem> Items { get; set; } = new();
     }
    
 }

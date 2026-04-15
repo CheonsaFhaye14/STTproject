@@ -1,6 +1,6 @@
-﻿namespace STTproject.Components.Models
+﻿namespace STTproject.Models
 {
-    public class SubdItemMap
+    public class SubdItem
     {
         public int SubdItemId { get; set; }
         public String SubdItemCode { get; set; } = string.Empty;

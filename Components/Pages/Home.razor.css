@@ -1,0 +1,146 @@
+﻿body {
+    font-family: Arial, sans-serif;
+    background: #f7e4e4;
+}
+
+/* TOPBAR */
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #e8a9a9;
+    padding: 10px 20px;
+}
+
+.subdname {
+    align-items: center;
+}
+
+.menu span {
+    margin: 0 10px;
+    cursor: pointer;
+}
+
+.menu .active {
+    background: #d48c8c;
+    padding: 5px 15px;
+    border-radius: 20px;
+}
+
+/* CONTAINER */
+.container {
+    padding-bottom: 10px;
+}
+
+/* CARDS */
+.cards {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-top: 50px;
+}
+
+.card {
+    background: #eecfcf;
+    padding: 20px;
+    border-radius: 15px;
+    width: 300px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 5px 8px rgba(0,0,0,0.1), 0 15px 25px rgba(0,0,0,0.25);
+    transition: 0.3s;
+}
+
+    .card:hover {
+        transform: translateY(-5px);
+    }
+
+.card-content {
+    flex-grow: 1;
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15PX;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.subdname h3 {
+    font-size: 10px;
+}
+/* TEXT SIZE */
+.card h4 {
+    font-size: 0.9rem;
+}
+
+.title {
+    margin-bottom: 20px;
+}
+
+.card h3 {
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+.card p {
+    font-size: 0.85rem;
+}
+
+/* BUTTON */
+.invoice-btn {
+    background: #c57c7c;
+    border: none;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+    width: 100px;
+    padding: 0px 10px;
+    border-radius: 8px;
+    display: block;
+    margin: 10px auto;
+    font-size: 11px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.25);
+}
+
+    .invoice-btn:hover {
+        background: #a85f5f;
+        transform: translateY(-2px);
+    }
+
+/* ACTIVITY */
+.activity {
+    margin-top: 30px;
+    background: #eecfcf;
+    padding: 20px;
+    border-radius: 15px;
+}
+
+/* FILTER */
+.filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+/* TABLE */
+table {
+    width: 100%;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 10px;
+    text-align: center;
+}
+
+.edit-btn {
+    background: #ffb3b3;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}

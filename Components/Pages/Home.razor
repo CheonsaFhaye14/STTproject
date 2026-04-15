@@ -1,7 +1,110 @@
 ﻿@page "/"
+@using STTproject.Components.Helper
+@using STTproject.Data
 
-<PageTitle>Home</PageTitle>
+@inject AppDbContext db
 
-<h1>Hello, world!</h1>
 
-Welcome to your new app.
+<div class="container">
+    <div class="title">
+        <h2>Hello, Encoder!</h2>
+
+    </div>
+
+    <!-- CARDS -->
+    <div class="cards">
+        @foreach (var subd in db.SubDistributors)
+        {
+            <div class="card">
+
+                <div class="card-content">
+                    <h4>@subd.SubdCode</h4>
+                    <div class="subdname">
+                        <h3>@FormatHelper.ToAllCaps(subd.SubdName)</h3>
+                    </div>
+                   
+                    <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province)</p>
+                </div>
+
+               
+                <button class="invoice-btn">
+                    INPUT INVOICE
+                </button>
+
+            </div>
+        }
+    </div>
+
+   
+    <div class="activity">
+        <h3>Recent Activity...</h3>
+
+        <div class="filters">
+            <select>
+                <option>ALL</option>
+            </select>
+
+            <input type="date" />
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>BUTTON</th>
+                    <th>SUB DISTRIBUTOR</th>
+                    <th>INVOICE NUMBER</th>
+                    <th>DATE</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var act in activities)
+                {
+                    <tr>
+                        <td><button class="edit-btn">✏️</button></td>
+                        <td>@act.Sub</td>
+                        <td>@act.Invoice</td>
+                        <td>@act.Date</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    class Distributor
+    {
+        public string Code { get; set; }
+        public string Name { get; set; }
+        public string Location { get; set; }
+    }
+
+    class Activity
+    {
+        public string Sub { get; set; }
+        public string Invoice { get; set; }
+        public string Date { get; set; }
+    }
+
+    List<Distributor> distributors = new()
+    {
+        new() { Code="01GMA06", Name="STARWIDE DISTRIBUTION", Location="Imus City, Cavite" },
+        new() { Code="05MIN03", Name="DAVAO CONSUMER LINKAGE CORP.", Location="Davao City" },
+        new() { Code="03SL04", Name="KING ALTON ENTERPRISE INC.", Location="Batangas City" }
+    };
+
+    List<Activity> activities = new()
+    {
+        new() { Sub="01GMA06", Invoice="1162862", Date="03/13/2026" },
+        new() { Sub="01GMA06", Invoice="1162861", Date="03/13/2026" },
+        new() { Sub="01GMA06", Invoice="1162860", Date="03/13/2026" },
+        new() { Sub="01GMA06", Invoice="1162879", Date="03/13/2026" },
+        new() { Sub="01GMA06", Invoice="1162878", Date="03/13/2026" }
+    };
+
+    void ClickInvoice(Distributor item)
+    {
+        Console.WriteLine($"Invoice clicked: {item.Name}");
+    }
+}
