@@ -1,7 +1,193 @@
 ﻿@page "/salesinvoice"
+@using Microsoft.AspNetCore.Components
+@rendermode InteractiveServer
+<h3 class="title">SALES INVOICE</h3>
 
-<PageTitle>Home</PageTitle>
+<div class="top-buttons">
+    <button class="btn">Download Template</button>
+    <button class="btn">Import</button>
+</div>
 
-<h1>Hello, world!</h1>
+<!-- HEADER FORM -->
+<div class="card">
+    <div class="form-grid">
+        <div>
+            <label>Sales Invoice Number</label>
+            <input @bind="invoice.InvoiceNumber" />
+        </div>
 
-Welcome to your new app.
+        <div>
+            <label>Sales Invoice Date</label>
+            <input type="date" @bind="invoice.InvoiceDate" />
+        </div>
+
+        <div>
+            <label>Order Type</label>
+            <input @bind="invoice.OrderType" />
+        </div>
+
+        <div>
+            <label>Customer Type</label>
+            <input @bind="invoice.CustomerType" />
+        </div>
+
+        <div>
+            <label>Customer Code</label>
+            <input @bind="invoice.CustomerCode" />
+        </div>
+
+        <div>
+            <label>Customer Name</label>
+            <input @bind="invoice.CustomerName" />
+        </div>
+
+        <div class="full-width">
+            <label>Customer Address</label>
+            <input @bind="invoice.CustomerAddress" />
+        </div>
+    </div>
+
+    <button class="btn save-btn">Save</button>
+</div>
+
+<!-- MAIN SECTION -->
+<div class="main-grid">
+
+    <!-- LEFT -->
+    <div class="card">
+        <div>
+            <label>Item Code</label>
+            <input @bind="newItem.ItemCode" />
+        </div>
+
+        <div>
+            <label>Description</label>
+            <input @bind="newItem.Description" />
+        </div>
+
+        <div>
+            <label>Unit of Measure</label>
+            <input @bind="newItem.Unit" />
+        </div>
+
+        <div>
+            <label>Quantity</label>
+            <input type="number" @bind="newItem.Quantity" />
+        </div>
+
+        <button class="btn add-btn" @onclick="AddItem">Add</button>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+        <h4 class="center">INVOICE ITEMS</h4>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Code</th>
+                    <th>Description</th>
+                    <th>Unit</th>
+                    <th>Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in items)
+                {
+                    <tr>
+                        <td>@item.ItemCode</td>
+                        <td>@item.Description</td>
+                        <td>@item.Unit</td>
+                        <td>@item.Quantity</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <button class="btn">Upload</button>
+    </div>
+
+</div>
+@code {
+    [Parameter]
+    public string Code { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "name")]
+    public string CustomerNameQuery { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "city")]
+    public string CustomerCityQuery { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "province")]
+    public string CustomerProvinceQuery { get; set; }
+
+    InvoiceModel invoice = new();
+    ItemModel newItem = new();
+    List<ItemModel> items = new();
+
+    Dictionary<string, string> distributorNames = new()
+    {
+        { "01GMA06", "STARWIDE DISTRIBUTION" },
+        { "05MIN03", "DAVAO CONSUMER LINKAGE CORP." },
+        { "03SL04", "KING ALTON ENTERPRISE INC." }
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(Code))
+        {
+            invoice.CustomerCode = Code;
+
+            if (distributorNames.TryGetValue(Code, out var name))
+            {
+                invoice.CustomerName = name;
+            }
+        }
+
+        // If query string provided a customer name, city, or province, use them to populate fields
+        if (!string.IsNullOrEmpty(CustomerNameQuery))
+        {
+            invoice.CustomerName = CustomerNameQuery;
+        }
+
+        if (!string.IsNullOrEmpty(CustomerCityQuery) || !string.IsNullOrEmpty(CustomerProvinceQuery))
+        {
+            invoice.CustomerAddress = string.Join(", ", new[] { CustomerCityQuery, CustomerProvinceQuery }.Where(s => !string.IsNullOrEmpty(s)));
+        }
+    }
+
+    void AddItem()
+    {
+        items.Add(new ItemModel
+        {
+            ItemCode = newItem.ItemCode,
+            Description = newItem.Description,
+            Unit = newItem.Unit,
+            Quantity = newItem.Quantity
+        });
+
+        newItem = new ItemModel();
+    }
+
+    public class InvoiceModel
+    {
+        public string InvoiceNumber { get; set; }
+        public DateTime InvoiceDate { get; set; } = DateTime.Today;
+        public string OrderType { get; set; }
+        public string CustomerType { get; set; }
+        public string CustomerCode { get; set; }
+        public string CustomerName { get; set; }
+        public string CustomerAddress { get; set; }
+    }
+
+    public class ItemModel
+    {
+        public string ItemCode { get; set; }
+        public string Description { get; set; }
+        public string Unit { get; set; }
+        public int Quantity { get; set; }
+    }
+}

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Components;
-using STTproject.Data;
+using STTproject.Data;     
 
 var builder = WebApplication.CreateBuilder(args);
 

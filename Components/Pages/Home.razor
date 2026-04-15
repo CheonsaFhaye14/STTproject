@@ -1,14 +1,18 @@
 ﻿@page "/"
 @using STTproject.Components.Helper
+@using System.Linq
 @using STTproject.Data
+@rendermode InteractiveServer
 
 @inject AppDbContext db
+@inject NavigationManager Navigation
+
+
 
 
 <div class="container">
     <div class="title">
         <h2>Hello, Encoder!</h2>
-
     </div>
 
     <!-- CARDS -->
@@ -25,11 +29,12 @@
                    
                     <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province)</p>
                 </div>
-
-               
-                <button class="invoice-btn">
+                @* GoToInvoice(subd) *@
+                <button class="invoice-btn" @onclick="GoToSalesInvoice">
                     INPUT INVOICE
                 </button>
+
+             
 
             </div>
         }
@@ -73,12 +78,6 @@
 </div>
 
 @code {
-    class Distributor
-    {
-        public string Code { get; set; }
-        public string Name { get; set; }
-        public string Location { get; set; }
-    }
 
     class Activity
     {
@@ -86,13 +85,6 @@
         public string Invoice { get; set; }
         public string Date { get; set; }
     }
-
-    List<Distributor> distributors = new()
-    {
-        new() { Code="01GMA06", Name="STARWIDE DISTRIBUTION", Location="Imus City, Cavite" },
-        new() { Code="05MIN03", Name="DAVAO CONSUMER LINKAGE CORP.", Location="Davao City" },
-        new() { Code="03SL04", Name="KING ALTON ENTERPRISE INC.", Location="Batangas City" }
-    };
 
     List<Activity> activities = new()
     {
@@ -103,8 +95,20 @@
         new() { Sub="01GMA06", Invoice="1162878", Date="03/13/2026" }
     };
 
-    void ClickInvoice(Distributor item)
+    void GoToInvoice(Models.SubDistributor subd)
     {
-        Console.WriteLine($"Invoice clicked: {item.Name}");
+        var url = $"/salesinvoice/{subd.SubdCode}" +
+                  $"?name={Uri.EscapeDataString(subd.SubdName)}" +
+                  $"&city={Uri.EscapeDataString(subd.CityMunicipality)}" +
+                  $"&province={Uri.EscapeDataString(subd.Province)}";
+
+        Navigation.NavigateTo(url);
     }
+
+    private void GoToSalesInvoice()
+    {
+        // Navigates to the "/dashboard" route
+        Navigation.NavigateTo("salesinvoice");
+    }
+
 }
