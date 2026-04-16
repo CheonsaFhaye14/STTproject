@@ -29,8 +29,8 @@
                    
                     <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province)</p>
                 </div>
-                @* GoToInvoice(subd) *@
-                <button class="invoice-btn" @onclick="GoToSalesInvoice">
+
+                <button class="invoice-btn" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
                     INPUT INVOICE
                 </button>
 
@@ -40,75 +40,13 @@
         }
     </div>
 
-   
-    <div class="activity">
-        <h3>Recent Activity...</h3>
-
-        <div class="filters">
-            <select>
-                <option>ALL</option>
-            </select>
-
-            <input type="date" />
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>BUTTON</th>
-                    <th>SUB DISTRIBUTOR</th>
-                    <th>INVOICE NUMBER</th>
-                    <th>DATE</th>
-                </tr>
-            </thead>
-
-            <tbody>
-                @foreach (var act in activities)
-                {
-                    <tr>
-                        <td><button class="edit-btn">✏️</button></td>
-                        <td>@act.Sub</td>
-                        <td>@act.Invoice</td>
-                        <td>@act.Date</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
 </div>
 
 @code {
 
-    class Activity
+    void InputSalesInvoice(int subDistributorId)
     {
-        public string Sub { get; set; }
-        public string Invoice { get; set; }
-        public string Date { get; set; }
-    }
-
-    List<Activity> activities = new()
-    {
-        new() { Sub="01GMA06", Invoice="1162862", Date="03/13/2026" },
-        new() { Sub="01GMA06", Invoice="1162861", Date="03/13/2026" },
-        new() { Sub="01GMA06", Invoice="1162860", Date="03/13/2026" },
-        new() { Sub="01GMA06", Invoice="1162879", Date="03/13/2026" },
-        new() { Sub="01GMA06", Invoice="1162878", Date="03/13/2026" }
-    };
-
-    void GoToInvoice(Models.SubDistributor subd)
-    {
-        var url = $"/salesinvoice/{subd.SubdCode}" +
-                  $"?name={Uri.EscapeDataString(subd.SubdName)}" +
-                  $"&city={Uri.EscapeDataString(subd.CityMunicipality)}" +
-                  $"&province={Uri.EscapeDataString(subd.Province)}";
-
-        Navigation.NavigateTo(url);
-    }
-
-    private void GoToSalesInvoice()
-    {
-        // Navigates to the "/dashboard" route
-        Navigation.NavigateTo("salesinvoice");
+        Navigation.NavigateTo($"/salesinvoice/{subDistributorId}");
     }
 
 }

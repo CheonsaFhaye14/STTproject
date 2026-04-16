@@ -1,0 +1,8 @@
+﻿.line {
+    display: flex;
+    gap: 10px;
+}
+
+label{
+    margin-top: 9px;
+}

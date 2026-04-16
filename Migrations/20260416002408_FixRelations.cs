@@ -5,11 +5,18 @@
 namespace STTproject.Migrations
 {
     /// <inheritdoc />
-    public partial class U : Migration
+    public partial class FixRelations : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropForeignKey(
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId",
+                table: "SalesInvoiceItems");
+
+            migrationBuilder.DropTable(
+                name: "RecentActivitys");
+
             migrationBuilder.DropColumn(
                 name: "CustomerAddress",
                 table: "SalesInvoices");
@@ -27,20 +34,8 @@ namespace STTproject.Migrations
                 table: "SalesInvoices");
 
             migrationBuilder.DropColumn(
-                name: "InvoiceNumber",
-                table: "SalesInvoiceItems");
-
-            migrationBuilder.DropColumn(
-                name: "Province",
-                table: "SalesInvoiceItems");
-
-            migrationBuilder.DropColumn(
                 name: "SubdCode",
                 table: "SalesInvoiceItems");
-
-            migrationBuilder.DropColumn(
-                name: "InvoiceNumber",
-                table: "RecentActivitys");
 
             migrationBuilder.RenameColumn(
                 name: "SubdId",
@@ -48,19 +43,14 @@ namespace STTproject.Migrations
                 newName: "SubdItemId");
 
             migrationBuilder.RenameColumn(
-                name: "SubdId",
-                table: "RecentActivitys",
-                newName: "SubDistributorId");
-
-            migrationBuilder.RenameColumn(
-                name: "SubdCode",
-                table: "RecentActivitys",
-                newName: "BatchId");
-
-            migrationBuilder.RenameColumn(
                 name: "Province",
-                table: "RecentActivitys",
-                newName: "SalesInvoiceId");
+                table: "SalesInvoiceItems",
+                newName: "Quantity");
+
+            migrationBuilder.RenameColumn(
+                name: "InvoiceNumber",
+                table: "SalesInvoiceItems",
+                newName: "Price");
 
             migrationBuilder.AddColumn<int>(
                 name: "SubDistributorId",
@@ -83,6 +73,22 @@ namespace STTproject.Migrations
                 nullable: false,
                 defaultValue: 0);
 
+            migrationBuilder.AlterColumn<int>(
+                name: "SalesInvoiceId",
+                table: "SalesInvoiceItems",
+                type: "int",
+                nullable: false,
+                defaultValue: 0,
+                oldClrType: typeof(int),
+                oldType: "int",
+                oldNullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "SalesInvoiceId1",
+                table: "SalesInvoiceItems",
+                type: "int",
+                nullable: true);
+
             migrationBuilder.CreateTable(
                 name: "Customer",
                 columns: table => new
@@ -92,11 +98,18 @@ namespace STTproject.Migrations
                     CustomerType = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CustomerCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CustomerName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CustomerAddress = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    CustomerAddress = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SubDistributorId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Customer", x => x.CustomerId);
+                    table.ForeignKey(
+                        name: "FK_Customer_SubDistributors_SubDistributorId",
+                        column: x => x.SubDistributorId,
+                        principalTable: "SubDistributors",
+                        principalColumn: "SubDistributorId",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -115,35 +128,34 @@ namespace STTproject.Migrations
                 column: "SubDistributorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_SalesInvoiceItems_SalesInvoiceId1",
+                table: "SalesInvoiceItems",
+                column: "SalesInvoiceId1");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_SalesInvoiceItems_SubdItemId",
                 table: "SalesInvoiceItems",
                 column: "SubdItemId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_RecentActivitys_SalesInvoiceId",
-                table: "RecentActivitys",
-                column: "SalesInvoiceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RecentActivitys_SubDistributorId",
-                table: "RecentActivitys",
+                name: "IX_Customer_SubDistributorId",
+                table: "Customer",
                 column: "SubDistributorId");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_RecentActivitys_SalesInvoices_SalesInvoiceId",
-                table: "RecentActivitys",
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId",
+                table: "SalesInvoiceItems",
                 column: "SalesInvoiceId",
                 principalTable: "SalesInvoices",
                 principalColumn: "SalesInvoiceId",
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_RecentActivitys_SubDistributors_SubDistributorId",
-                table: "RecentActivitys",
-                column: "SubDistributorId",
-                principalTable: "SubDistributors",
-                principalColumn: "SubDistributorId",
-                onDelete: ReferentialAction.Cascade);
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId1",
+                table: "SalesInvoiceItems",
+                column: "SalesInvoiceId1",
+                principalTable: "SalesInvoices",
+                principalColumn: "SalesInvoiceId");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_SalesInvoiceItems_SubdItems_SubdItemId",
@@ -159,7 +171,7 @@ namespace STTproject.Migrations
                 column: "CustomerId",
                 principalTable: "Customer",
                 principalColumn: "CustomerId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_SalesInvoices_SubDistributors_SubDistributorId",
@@ -167,7 +179,7 @@ namespace STTproject.Migrations
                 column: "SubDistributorId",
                 principalTable: "SubDistributors",
                 principalColumn: "SubDistributorId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_SubdItems_SubDistributors_SubDistributorId",
@@ -182,12 +194,12 @@ namespace STTproject.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_RecentActivitys_SalesInvoices_SalesInvoiceId",
-                table: "RecentActivitys");
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId",
+                table: "SalesInvoiceItems");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_RecentActivitys_SubDistributors_SubDistributorId",
-                table: "RecentActivitys");
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId1",
+                table: "SalesInvoiceItems");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_SalesInvoiceItems_SubdItems_SubdItemId",
@@ -221,16 +233,12 @@ namespace STTproject.Migrations
                 table: "SalesInvoices");
 
             migrationBuilder.DropIndex(
-                name: "IX_SalesInvoiceItems_SubdItemId",
+                name: "IX_SalesInvoiceItems_SalesInvoiceId1",
                 table: "SalesInvoiceItems");
 
             migrationBuilder.DropIndex(
-                name: "IX_RecentActivitys_SalesInvoiceId",
-                table: "RecentActivitys");
-
-            migrationBuilder.DropIndex(
-                name: "IX_RecentActivitys_SubDistributorId",
-                table: "RecentActivitys");
+                name: "IX_SalesInvoiceItems_SubdItemId",
+                table: "SalesInvoiceItems");
 
             migrationBuilder.DropColumn(
                 name: "SubDistributorId",
@@ -244,25 +252,24 @@ namespace STTproject.Migrations
                 name: "SubDistributorId",
                 table: "SalesInvoices");
 
+            migrationBuilder.DropColumn(
+                name: "SalesInvoiceId1",
+                table: "SalesInvoiceItems");
+
             migrationBuilder.RenameColumn(
                 name: "SubdItemId",
                 table: "SalesInvoiceItems",
                 newName: "SubdId");
 
             migrationBuilder.RenameColumn(
-                name: "SubDistributorId",
-                table: "RecentActivitys",
-                newName: "SubdId");
-
-            migrationBuilder.RenameColumn(
-                name: "SalesInvoiceId",
-                table: "RecentActivitys",
+                name: "Quantity",
+                table: "SalesInvoiceItems",
                 newName: "Province");
 
             migrationBuilder.RenameColumn(
-                name: "BatchId",
-                table: "RecentActivitys",
-                newName: "SubdCode");
+                name: "Price",
+                table: "SalesInvoiceItems",
+                newName: "InvoiceNumber");
 
             migrationBuilder.AddColumn<string>(
                 name: "CustomerAddress",
@@ -292,19 +299,13 @@ namespace STTproject.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            migrationBuilder.AddColumn<int>(
-                name: "InvoiceNumber",
+            migrationBuilder.AlterColumn<int>(
+                name: "SalesInvoiceId",
                 table: "SalesInvoiceItems",
                 type: "int",
-                nullable: false,
-                defaultValue: 0);
-
-            migrationBuilder.AddColumn<int>(
-                name: "Province",
-                table: "SalesInvoiceItems",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
+                nullable: true,
+                oldClrType: typeof(int),
+                oldType: "int");
 
             migrationBuilder.AddColumn<string>(
                 name: "SubdCode",
@@ -313,12 +314,28 @@ namespace STTproject.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            migrationBuilder.AddColumn<int>(
-                name: "InvoiceNumber",
-                table: "RecentActivitys",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
+            migrationBuilder.CreateTable(
+                name: "RecentActivitys",
+                columns: table => new
+                {
+                    RecentActivityId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    InvoiceNumber = table.Column<int>(type: "int", nullable: false),
+                    Province = table.Column<int>(type: "int", nullable: false),
+                    SubdCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SubdId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RecentActivitys", x => x.RecentActivityId);
+                });
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_SalesInvoiceItems_SalesInvoices_SalesInvoiceId",
+                table: "SalesInvoiceItems",
+                column: "SalesInvoiceId",
+                principalTable: "SalesInvoices",
+                principalColumn: "SalesInvoiceId");
         }
     }
 }

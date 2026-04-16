@@ -1,0 +1,275 @@
+﻿@page "/salesinvoice/{SubDistributorId:int}"
+
+@using Microsoft.AspNetCore.Components
+
+@using STTproject.Data
+@using STTproject.Models
+
+@inject AppDbContext db
+
+@rendermode InteractiveServer
+
+<div class="line">
+    <h3 class="title">SALES INVOICE</h3>
+
+    <label>Subd Code</label>
+    <select @bind="invoice.SubdistributorId" @bind:after="OnSubdChange">
+        @foreach (var s in subdList)
+        {
+            <option value="@s.SubDistributorId">
+                @s.SubdCode
+            </option>
+        }
+    </select>
+
+    <label>Subd Name</label>
+    <input value="@subdModel.Name" disabled />
+</div>
+
+<div class="top-buttons">
+    <button class="btn">Download Template</button>
+    <button class="btn">Import</button>
+</div>
+
+
+
+<!-- HEADER FORM -->
+<div class="card">
+    <div class="form-grid">
+        <div>
+            <label>Sales Invoice Number</label>
+            <input @bind="invoice.InvoiceNumber" />
+        </div>
+
+        <div>
+            <label>Sales Invoice Date</label>
+            <input type="date" @bind="invoice.InvoiceDate" />
+        </div>
+
+        <div>
+            <label>Order Type</label>
+            <input @bind="invoice.OrderType" />
+        </div>
+
+        <div>
+            <label>Customer Type</label>
+            <input @bind="invoice.CustomerType" />
+        </div>
+
+        <div>
+            <label>Customer Code</label>
+            <input @bind="invoice.CustomerCode" @onblur="CheckCustomer" />
+        </div>
+
+        <div>
+            <label>Customer Name</label>
+            <input @bind="invoice.CustomerName" />
+        </div>
+
+        <div class="full-width">
+            <label>Customer Address</label>
+            <input @bind="invoice.CustomerAddress" />
+        </div>
+    </div>
+
+    <button class="btn save-btn" onclick=" ">Save</button>
+</div>
+
+<!-- MAIN SECTION -->
+<div class="main-grid">
+
+    <!-- LEFT -->
+    <div class="card">
+        <div>
+            <label>Item Code</label>
+            <input @bind="newItem.ItemCode" />
+        </div>
+
+        <div>
+            <label>Description</label>
+            <input @bind="newItem.Description" />
+        </div>
+
+        <div>
+            <label>Unit of Measure</label>
+            <input @bind="newItem.Unit" />
+        </div>
+
+        <div>
+            <label>Quantity</label>
+            <input type="number" @bind="newItem.Quantity" />
+        </div>
+
+        <button class="btn add-btn" @onclick="AddItem">Add</button>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+        <h4 class="center">INVOICE ITEMS</h4>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Code</th>
+                    <th>Description</th>
+                    <th>Unit</th>
+                    <th>Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in items)
+                {
+                    <tr>
+                        <td>@item.ItemCode</td>
+                        <td>@item.Description</td>
+                        <td>@item.Unit</td>
+                        <td>@item.Quantity</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <button class="btn">Upload</button>
+    </div>
+
+</div>
+@code {
+    [Parameter]
+    public int SubDistributorId { get; set; }
+    
+    SubDistributor? subd;
+
+    SubdModel subdModel = new();
+    InputInvoiceModel invoice = new();
+    InputItemModel newItem = new();
+    List<InputItemModel> items = new();
+
+    List<SubDistributor> subdList = new();
+
+    protected override void OnParametersSet()
+    {
+        subdList = db.SubDistributors.ToList();
+
+        subd = subdList
+            .FirstOrDefault(s => s.SubDistributorId == SubDistributorId);
+
+        if (subd != null)
+        {
+            invoice.SubdistributorId = subd.SubDistributorId;
+            UpdateSubdDisplay(subd);
+        }
+    }
+
+    void CheckCustomer()
+    {
+        var existing = db.Customers
+            .FirstOrDefault(c => c.CustomerCode == invoice.CustomerCode);
+
+        if (existing != null)
+        {
+            invoice.CustomerId = existing.CustomerId;
+            invoice.CustomerType = existing.CustomerType;
+            invoice.CustomerName = existing.CustomerName;
+            invoice.CustomerAddress = existing.CustomerAddress;
+        }
+        else
+        {
+            invoice.CustomerId = 0;
+        }
+    }
+
+    // async Task SaveInvoice()
+    // {
+    //     var customerId = GetOrCreateCustomer();
+
+    //     var salesInvoice = new SalesInvoice
+    //     {
+    //         SalesInvoiceCode = invoice.InvoiceNumber,
+    //         SalesInvoiceDate = invoice.InvoiceDate,
+    //         OrderType = invoice.OrderType,
+    //         CustomerId = customerId,
+    //         SubDistributorId = SubDistributorId
+    //     };
+
+    //     db.SalesInvoices.Add(salesInvoice);
+    //     await db.SaveChangesAsync();
+    // }
+
+    int GetOrCreateCustomer()
+    {
+        if (invoice.CustomerId != 0)
+            return invoice.CustomerId;
+
+        var customer = new Customer
+        {
+            CustomerCode = invoice.CustomerCode,
+            CustomerName = invoice.CustomerName,
+            CustomerAddress = invoice.CustomerAddress,
+            CustomerType = invoice.CustomerType,
+        };
+
+        db.Customers.Add(customer);
+        db.SaveChanges();
+
+        return customer.CustomerId;
+    }
+
+    void AddItem()
+    {
+        items.Add(new InputItemModel
+        {
+            ItemCode = newItem.ItemCode,
+            Description = newItem.Description,
+            Unit = newItem.Unit,
+            Quantity = newItem.Quantity
+        });
+
+        newItem = new InputItemModel();
+    }
+
+    public class SubdModel
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class InputInvoiceModel
+    {
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateOnly InvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string OrderType { get; set; } = string.Empty;
+        public int CustomerId { get; set; }
+        public string CustomerType { get; set; } = string.Empty;
+        public string CustomerCode { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
+        public string CustomerAddress { get; set; } = string.Empty;
+        public int SubdistributorId { get; set; }
+    }
+
+    public class InputItemModel
+    {
+        public string ItemCode { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Unit { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+    }
+
+    void OnSubdChange()
+    {
+        var selected = subdList
+            .FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId);
+
+        if (selected != null)
+        {
+            UpdateSubdDisplay(selected);
+        }
+    }
+   
+    void UpdateSubdDisplay(SubDistributor s)
+    {
+        subdModel.Code = s.SubdCode;
+        subdModel.Name = s.SubdName;
+
+        invoice.SubdistributorId = s.SubDistributorId;
+    }
+}

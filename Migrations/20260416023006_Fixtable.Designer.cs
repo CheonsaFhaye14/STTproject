@@ -12,8 +12,8 @@ using STTproject.Data;
 namespace STTproject.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260415082252_U")]
-    partial class U
+    [Migration("20260416023006_Fixtable")]
+    partial class Fixtable
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -51,34 +51,7 @@ namespace STTproject.Migrations
 
                     b.HasKey("CustomerId");
 
-                    b.ToTable("Customer");
-                });
-
-            modelBuilder.Entity("STTproject.Models.RecentActivity", b =>
-                {
-                    b.Property<int>("RecentActivityId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RecentActivityId"));
-
-                    b.Property<string>("BatchId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("SalesInvoiceId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SubDistributorId")
-                        .HasColumnType("int");
-
-                    b.HasKey("RecentActivityId");
-
-                    b.HasIndex("SalesInvoiceId");
-
-                    b.HasIndex("SubDistributorId");
-
-                    b.ToTable("RecentActivitys");
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("STTproject.Models.SalesInvoice", b =>
@@ -123,7 +96,16 @@ namespace STTproject.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SalesInvoiceItemId"));
 
-                    b.Property<int?>("SalesInvoiceId")
+                    b.Property<int>("Price")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesInvoiceId1")
                         .HasColumnType("int");
 
                     b.Property<int>("SubdItemId")
@@ -132,6 +114,8 @@ namespace STTproject.Migrations
                     b.HasKey("SalesInvoiceItemId");
 
                     b.HasIndex("SalesInvoiceId");
+
+                    b.HasIndex("SalesInvoiceId1");
 
                     b.HasIndex("SubdItemId");
 
@@ -206,37 +190,18 @@ namespace STTproject.Migrations
                     b.ToTable("SubdItems");
                 });
 
-            modelBuilder.Entity("STTproject.Models.RecentActivity", b =>
-                {
-                    b.HasOne("STTproject.Models.SalesInvoice", "SalesInvoice")
-                        .WithMany()
-                        .HasForeignKey("SalesInvoiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STTproject.Models.SubDistributor", "SubDistributor")
-                        .WithMany()
-                        .HasForeignKey("SubDistributorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SalesInvoice");
-
-                    b.Navigation("SubDistributor");
-                });
-
             modelBuilder.Entity("STTproject.Models.SalesInvoice", b =>
                 {
                     b.HasOne("STTproject.Models.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("STTproject.Models.SubDistributor", "SubDistributor")
                         .WithMany()
                         .HasForeignKey("SubDistributorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Customer");
@@ -246,15 +211,23 @@ namespace STTproject.Migrations
 
             modelBuilder.Entity("STTproject.Models.SalesInvoiceItem", b =>
                 {
+                    b.HasOne("STTproject.Models.SalesInvoice", "SalesInvoice")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("STTproject.Models.SalesInvoice", null)
                         .WithMany("Items")
-                        .HasForeignKey("SalesInvoiceId");
+                        .HasForeignKey("SalesInvoiceId1");
 
                     b.HasOne("STTproject.Models.SubdItem", "SubdItem")
                         .WithMany()
                         .HasForeignKey("SubdItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("SalesInvoice");
 
                     b.Navigation("SubdItem");
                 });

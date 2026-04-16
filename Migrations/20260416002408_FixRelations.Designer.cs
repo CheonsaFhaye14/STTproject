@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using STTproject.Data;
 
@@ -11,9 +12,11 @@ using STTproject.Data;
 namespace STTproject.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260416002408_FixRelations")]
+    partial class FixRelations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -46,9 +49,14 @@ namespace STTproject.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("SubDistributorId")
+                        .HasColumnType("int");
+
                     b.HasKey("CustomerId");
 
-                    b.ToTable("Customers");
+                    b.HasIndex("SubDistributorId");
+
+                    b.ToTable("Customer");
                 });
 
             modelBuilder.Entity("STTproject.Models.SalesInvoice", b =>
@@ -185,6 +193,17 @@ namespace STTproject.Migrations
                     b.HasIndex("SubDistributorId");
 
                     b.ToTable("SubdItems");
+                });
+
+            modelBuilder.Entity("STTproject.Models.Customer", b =>
+                {
+                    b.HasOne("STTproject.Models.SubDistributor", "SubDistributor")
+                        .WithMany()
+                        .HasForeignKey("SubDistributorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SubDistributor");
                 });
 
             modelBuilder.Entity("STTproject.Models.SalesInvoice", b =>

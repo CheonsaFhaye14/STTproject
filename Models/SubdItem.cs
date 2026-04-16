@@ -10,6 +10,6 @@
         public int QuantityPerPiece { get; set; }
         public int Price { get; set; }
         public int SubDistributorId { get; set; }
-        public required SubDistributor SubDistributor { get; set; }
+        public SubDistributor SubDistributor { get; set; }
     }
 }
