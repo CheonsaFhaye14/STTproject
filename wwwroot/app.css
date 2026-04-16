@@ -6,11 +6,38 @@ a, .btn-link {
     color: #006bb7;
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+.title{
+    padding-left:70px;
+    color: black;
 }
+
+.btn-primary {
+    background-color: #AC7A7A;
+    color: white;
+    border-radius: 10px;
+    border: none;
+    box-shadow: 5px 5px 2px #888888;
+}
+    .btn-primary:hover {
+        background-color: #F5AFAF;
+        color: black;
+        border-radius: 10px;
+        border: none;
+    }
+
+.btn-secondary {
+    background-color: #F5AFAF;
+    color: black;
+    border-radius: 10px;
+    border: none;
+}
+
+    .btn-secondary:hover {
+        background-color: #AC7A7A;
+        color: white;
+        border-radius: 10px;
+        border: none;
+    }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
   box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
@@ -57,4 +84,30 @@ h1:focus {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* FILTER */
+.filters {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 40px;
+    padding-right: 40px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+label {
+    margin-top: 9px;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.filter-group select,
+.filter-group input {
+    border-radius: 10px;
+    field-sizing: content;
+    padding: 5px;
+    min-width: 150px;
+    border: none;
+    box-shadow: 2px 2px 2px #888888;
 }

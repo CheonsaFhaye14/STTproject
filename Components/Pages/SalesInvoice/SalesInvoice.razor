@@ -9,64 +9,52 @@
 
 @rendermode InteractiveServer
 
-<div class="line">
-    <h3 class="title">SALES INVOICE</h3>
-
-    <label>Subd Code</label>
-    <select @bind="invoice.SubdistributorId" @bind:after="OnSubdChange">
-        @foreach (var s in subdList)
-        {
-            <option value="@s.SubDistributorId">
-                @s.SubdCode
-            </option>
-        }
-    </select>
-
-    <label>Subd Name</label>
-    <input value="@subdModel.Name" disabled />
-</div>
+<TitleHeader
+    Subdistributors="subdList"
+    @bind-SelectedSubdId="invoice.SubdistributorId"
+    OnSubdChanged="UpdateSubdDisplay" />
 
 <div class="top-buttons">
-    <button class="btn">Download Template</button>
-    <button class="btn">Import</button>
+    <button class="btn-primary">Download Template</button>
+    <button class="btn-primary">Import</button>
 </div>
 
 
 
 <!-- HEADER FORM -->
-<div class="card">
+<div class="card top-card">
     <div class="form-grid">
-        <div>
+        <div class="form-group">
             <label>Sales Invoice Number</label>
             <input @bind="invoice.InvoiceNumber" />
         </div>
 
-        <div>
+        <div class="form-group">
             <label>Sales Invoice Date</label>
             <input type="date" @bind="invoice.InvoiceDate" />
         </div>
 
-        <div>
+        <div class="form-group">
             <label>Order Type</label>
             <input @bind="invoice.OrderType" />
         </div>
 
-        <div>
+        <div class="form-group">
             <label>Customer Type</label>
             <input @bind="invoice.CustomerType" />
         </div>
 
-        <div>
+        <div class="form-group">
             <label>Customer Code</label>
             <input @bind="invoice.CustomerCode" @onblur="CheckCustomer" />
         </div>
 
-        <div>
+        <div class="form-group">
             <label>Customer Name</label>
             <input @bind="invoice.CustomerName" />
         </div>
 
-        <div class="full-width">
+        <div class="form-group">
             <label>Customer Address</label>
             <input @bind="invoice.CustomerAddress" />
         </div>

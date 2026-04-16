@@ -8,9 +8,6 @@
 @inject NavigationManager Navigation
 
 
-
-
-<div class="container">
     <div class="title">
         <h2>Hello, Encoder!</h2>
     </div>
@@ -22,23 +19,70 @@
             <div class="card">
 
                 <div class="card-content">
+                    <div class="card-text">
+                    
                     <h4>@subd.SubdCode</h4>
                     <div class="subdname">
                         <h3>@FormatHelper.ToAllCaps(subd.SubdName)</h3>
                     </div>
                    
                     <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province)</p>
-                </div>
+                    </div>
 
-                <button class="invoice-btn" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
+                <button class="btn-primary" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
                     INPUT INVOICE
                 </button>
-
+                </div>
              
 
             </div>
         }
     </div>
+
+<!-- RECENT ACTIVITY -->
+<div class="activity">
+    <h3>Recent Activity...</h3>
+
+    <!-- FILTERS -->
+    <div class="filters">
+        <div class="filter-group">
+            <label>SUB DISTRIBUTOR</label>
+            <select>
+                <option value="">ALL</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>DATE</label>
+            <input type="date"/>
+        </div>
+
+        <div class="filter-group">
+            <label>SORT BY</label>
+            <select>
+                <option value="">None</option>
+                <option value="date">Date</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <div class="activity-header">
+        <span>BATCH ID</span>
+        <span>SubdCode</span>
+        <span>Invoice Date</span>
+    </div>
+
+    @* FOR ROW OF ACTIVITY
+        @foreach (var act in FilteredActivities)
+    {
+        <div class="activity-row">
+            <span>@act.BatchId</span>
+            <span>@act.Sub</span>
+            <span>@act.Date</span>
+        </div>
+    } *@
+
 
 </div>
 
@@ -48,5 +92,7 @@
     {
         Navigation.NavigateTo($"/salesinvoice/{subDistributorId}");
     }
+
+
 
 }

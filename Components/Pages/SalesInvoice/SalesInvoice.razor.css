@@ -1,8 +1,28 @@
-﻿.line {
+﻿.top-buttons {
+    margin-bottom: 10px;
+    justify-content: flex-end;
     display: flex;
-    gap: 10px;
+    gap: 20px;
 }
 
-label{
-    margin-top: 9px;
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+    .form-group input {
+        field-sizing: content;
+        min-width: 180px;
+    }
+
+.form-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+}
+.top-card {
+    margin-left: 70px;
+    background-color: #F9DFDF;
+    padding: 20px;
+    margin-right: 70px;
+    border-radius: 15px;
 }
