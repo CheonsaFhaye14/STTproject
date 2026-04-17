@@ -26,7 +26,7 @@
     <div class="form-grid">
         <div class="form-group">
             <label>Sales Invoice Number</label>
-            <input @bind="invoice.InvoiceNumber" />
+            <input @ref="invoiceNumberInput" @bind="invoice.InvoiceNumber" />
         </div>
 
         <div class="form-group">
@@ -36,31 +36,34 @@
 
         <div class="form-group">
             <label>Order Type</label>
-            <input @bind="invoice.OrderType" />
-        </div>
-
-        <div class="form-group">
-            <label>Customer Type</label>
-            <input @bind="invoice.CustomerType" />
+            <select @bind="invoice.OrderType"> 
+                <option value="">Invoice</option>
+                <option value="">Credit</option>
+            </select>
         </div>
 
         <div class="form-group">
             <label>Customer Code</label>
-            <input @bind="invoice.CustomerCode" @onblur="CheckCustomer" />
+            <input @bind="invoice.CustomerCode" @bind:event="oninput" @bind:after="CheckCustomer" />
+        </div>
+
+        <div class="form-group">
+            <label>Customer Type</label>
+            <input @bind="invoice.CustomerType" disabled />
         </div>
 
         <div class="form-group">
             <label>Customer Name</label>
-            <input @bind="invoice.CustomerName" />
+            <input @bind="invoice.CustomerName" disabled />
         </div>
 
         <div class="form-group">
             <label>Customer Address</label>
-            <input @bind="invoice.CustomerAddress" />
+            <input @bind="invoice.CustomerAddress" disabled />
         </div>
     </div>
 
-    <button class="btn save-btn" onclick=" ">Save</button>
+    <button class="btn-primary" onclick=" ">Save</button>
 </div>
 
 <!-- MAIN SECTION -->
@@ -122,9 +125,17 @@
 
 </div>
 @code {
+    private ElementReference invoiceNumberInput;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await invoiceNumberInput.FocusAsync();
+        }
+    }
     [Parameter]
     public int SubDistributorId { get; set; }
-    
+
     SubDistributor? subd;
 
     SubdModel subdModel = new();
@@ -147,9 +158,14 @@
             UpdateSubdDisplay(subd);
         }
     }
-
     void CheckCustomer()
     {
+        if (string.IsNullOrWhiteSpace(invoice.CustomerCode))
+        {
+            ClearCustomer();
+            return;
+        }
+
         var existing = db.Customers
             .FirstOrDefault(c => c.CustomerCode == invoice.CustomerCode);
 
@@ -162,46 +178,29 @@
         }
         else
         {
-            invoice.CustomerId = 0;
+            ClearCustomer();
         }
     }
-
-    // async Task SaveInvoice()
-    // {
-    //     var customerId = GetOrCreateCustomer();
-
-    //     var salesInvoice = new SalesInvoice
-    //     {
-    //         SalesInvoiceCode = invoice.InvoiceNumber,
-    //         SalesInvoiceDate = invoice.InvoiceDate,
-    //         OrderType = invoice.OrderType,
-    //         CustomerId = customerId,
-    //         SubDistributorId = SubDistributorId
-    //     };
-
-    //     db.SalesInvoices.Add(salesInvoice);
-    //     await db.SaveChangesAsync();
-    // }
-
-    int GetOrCreateCustomer()
+    void ClearCustomer()
     {
-        if (invoice.CustomerId != 0)
-            return invoice.CustomerId;
-
-        var customer = new Customer
-        {
-            CustomerCode = invoice.CustomerCode,
-            CustomerName = invoice.CustomerName,
-            CustomerAddress = invoice.CustomerAddress,
-            CustomerType = invoice.CustomerType,
-        };
-
-        db.Customers.Add(customer);
-        db.SaveChanges();
-
-        return customer.CustomerId;
+        invoice.CustomerId = 0;
+        invoice.CustomerType = string.Empty;
+        invoice.CustomerName = string.Empty;
+        invoice.CustomerAddress = string.Empty;
     }
 
+    async Task SaveInvoice()
+    {
+        var salesInvoice = new SalesInvoice
+        {
+           
+
+        };
+
+      
+    }
+
+    
     void AddItem()
     {
         items.Add(new InputItemModel
@@ -224,7 +223,7 @@
     public class InputInvoiceModel
     {
         public string InvoiceNumber { get; set; } = string.Empty;
-        public DateOnly InvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly InvoiceDate { get; set; }
         public string OrderType { get; set; } = string.Empty;
         public int CustomerId { get; set; }
         public string CustomerType { get; set; } = string.Empty;

@@ -5,20 +5,17 @@
     gap: 20px;
 }
 
-.form-group {
-    display: flex;
-    flex-direction: column;
-}
-    .form-group input {
-        field-sizing: content;
-        min-width: 180px;
-    }
+
+
 
 .form-grid {
+    justify-content: space-between ;
     display: flex;
     flex-wrap: wrap;
-    gap: 40px;
+    gap: 10px;
+    margin-bottom: 10px;
 }
+
 .top-card {
     margin-left: 70px;
     background-color: #F9DFDF;

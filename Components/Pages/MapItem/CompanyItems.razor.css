@@ -1,0 +1,35 @@
+﻿.header-fields {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+    .header-fields .field {
+        background-color: #007bff;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+
+.search-bar {
+    margin-bottom: 15px;
+}
+
+.company-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ffe6f0; /* light pink background */
+}
+
+    .company-items-table th {
+        background-color: #ff99cc;
+        color: white;
+        padding: 10px;
+        text-align: left;
+    }
+
+    .company-items-table td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+    }

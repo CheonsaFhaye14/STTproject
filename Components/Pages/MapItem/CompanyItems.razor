@@ -1,0 +1,60 @@
+﻿@page "/companyitems"
+
+
+<h2>COMPANY ITEMS</h2>
+
+<!-- Header fields -->
+<div class="header-fields">
+    <div class="field">SUBD ITEM CODE</div>
+    <div class="field">ITEM NAME</div>
+    <div class="field">UNIT CONTENT</div>
+    <div class="field">UOM</div>
+    <div class="field">QUANTITY PER PIECE</div>
+    <div class="field">PRICE</div>
+</div>
+
+<!-- Search bar -->
+<div class="search-bar">
+    <input type="text" placeholder="Search Company Item..." class="form-input" />
+</div>
+
+<!-- Table layout for items -->
+<table class="companyitems-table">
+    <thead>
+        <tr>
+            <th>COMPANY ITEM DESCRIPTION</th>
+            <th>PRICE</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in companyitems)
+        {
+            <tr>
+                <td>@item.Description</td>
+                <td>@item.Price</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    public class CompanyItem
+    {
+        public string Description { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+    }
+
+    private List<CompanyItem> companyitems = new List<CompanyItem>
+    {
+        new CompanyItem { Description = "Ovaltine Premium 400g Jar x 12's", Price = 250 },
+        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 },
+        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 },
+        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 }
+    };
+
+    // Lifecycle method para makita kung may laman
+    protected override void OnInitialized()
+    {
+        Console.WriteLine($"Items loaded: {companyitems.Count}");
+    }
+}

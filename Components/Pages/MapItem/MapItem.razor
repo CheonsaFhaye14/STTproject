@@ -1,0 +1,97 @@
+﻿@page "/mapitem"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<div class="card-section">
+    <!-- LINE 1: SUB DISTRIBUTOR + SEARCH + LOCATION -->
+    <div class="header-split">
+        <div class="left-side">
+            <label>SUB DISTRIBUTOR</label>
+            <input type="text" placeholder="Search Sub Distributor..." class="form-input" />
+        </div>
+        <div class="right-side">
+            <label>LOCATION</label>
+            <span class="badge">Warehouse A</span>
+        </div>
+    </div>
+
+    <!-- LINE 2: DOWNLOAD TEMPLATE + IMPORT -->
+    <div class="button-group">
+        <button class="btn-pink">DOWNLOAD TEMPLATE</button>
+        <button class="btn-pink">IMPORT</button>
+    </div>
+
+    <!-- LINE 3: INPUT ROW (label-card style) + ADD BUTTON -->
+    <div class="form-row">
+        <div class="label-card">
+            <h5>ITEM CODE</h5>
+            <div class="label-box">
+                <InputText @bind-Value="itemCode" placeholder="Enter code" />
+            </div>
+        </div>
+
+        <div class="label-card">
+            <h5>ITEM NAME</h5>
+            <div class="label-box">
+                <InputText @bind-Value="itemName" placeholder="Enter name" />
+            </div>
+        </div>
+
+        <div class="label-card">
+            <h5>UNIT CONTENT</h5>
+            <div class="label-box">
+                <InputText @bind-Value="unitContent" placeholder="Enter unit" />
+            </div>
+        </div>
+
+        <div class="label-card">
+            <h5>UOM</h5>
+            <div class="label-box">
+                <InputText @bind-Value="uom" placeholder="Enter UOM" />
+            </div>
+        </div>
+
+        <div class="label-card">
+            <h5>QUANTITY PER PIECE</h5>
+            <div class="label-box">
+                <InputNumber @bind-Value="qty" placeholder="Enter qty" />
+            </div>
+        </div>
+
+        <div class="label-card">
+            <h5>PRICE</h5>
+            <div class="label-box">
+                <InputNumber @bind-Value="price" placeholder="Enter price" />
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <!-- UPDATED MAP BUTTON -->
+            <button class="btn-action" @onclick="GoToCompanyItems">MAP</button>
+            <button class="btn-action" @onclick="AddItem">ADD</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Input fields
+    private string? itemCode { get; set; }
+    private string? itemName { get; set; }
+    private string? unitContent { get; set; }
+    private string? uom { get; set; }
+    private int? qty { get; set; }
+    private decimal? price { get; set; }
+
+    private void AddItem()
+    {
+        Console.WriteLine($"Added: {itemCode}, {itemName}, {unitContent}, {uom}, {qty}, {price}");
+    }
+
+    // UPDATED METHOD FOR MAP BUTTON
+    private void GoToCompanyItems()
+    {
+        Navigation.NavigateTo("/companyitems");
+    }
+}
