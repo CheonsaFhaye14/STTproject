@@ -19,32 +19,30 @@
     <button class="btn-primary">Import</button>
 </div>
 
-
-
-<!-- HEADER FORM -->
+@* invoice header *@
 <div class="top-card">
     <div class="form-grid">
         <div class="form-group">
             <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="invoice.InvoiceNumber" />
+            <input @ref="invoiceNumberInput" @bind="invoice.InvoiceNumber" disabled="@isSaved" />
         </div>
 
         <div class="form-group">
             <label>Sales Invoice Date</label>
-            <input type="date" @bind="invoice.InvoiceDate" />
+            <input type="date" @bind="invoice.InvoiceDate" disabled="@isSaved" />
         </div>
 
         <div class="form-group">
             <label>Order Type</label>
-            <select @bind="invoice.OrderType"> 
-                <option value="">Invoice</option>
-                <option value="">Credit</option>
+            <select @bind="invoice.OrderType" disabled="@isSaved">
+                <option value="invoice">Invoice</option>
+                <option value="credit">Credit</option>
             </select>
         </div>
 
         <div class="form-group">
             <label>Customer Code</label>
-            <input @bind="invoice.CustomerCode" @bind:event="oninput" @bind:after="CheckCustomer" />
+            <input @bind="invoice.CustomerCode" @bind:event="oninput" @bind:after="CheckCustomer" disabled="@isSaved" />
         </div>
 
         <div class="form-group">
@@ -63,8 +61,31 @@
         </div>
     </div>
 
-    <button class="btn-primary" onclick=" ">Save</button>
+
+        <button class="btn-primary" @onclick="ShowConfirm">
+            Save
+        </button>
+
+    @if (isSaved)
+    {
+        <button class="btn-primary" @onclick="EnableEdit">
+            Edit
+        </button>
+    }
+
 </div>
+
+@if (showConfirmModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-box">
+            <h4>Are you sure you want to save?</h4>
+
+            <button class="btn-primary" @onclick="ConfirmSave">Yes</button>
+            <button class="btn-primary" @onclick="CancelSave">No</button>
+        </div>
+    </div>
+}
 
 <!-- MAIN SECTION -->
 <div class="main-grid">
@@ -125,6 +146,81 @@
 
 </div>
 @code {
+    int currentInvoiceId = 0;
+    void ShowConfirm()
+    {
+        showConfirmModal = true;
+    }
+
+    void CancelSave()
+    {
+        showConfirmModal = false;
+    }
+
+    async Task ConfirmSave()
+    {
+        showConfirmModal = false;
+
+        // ❗ CHECK duplicate invoice number (except current one)
+        var existingInvoice = db.SalesInvoices
+            .FirstOrDefault(x => x.SalesInvoiceCode == invoice.InvoiceNumber);
+
+        if (existingInvoice != null && existingInvoice.SalesInvoiceId != currentInvoiceId)
+        {
+            // stop saving
+            Console.WriteLine("Duplicate invoice number!");
+            return;
+        }
+
+        if (currentInvoiceId == 0)
+        {
+            // ✅ CREATE NEW
+            var salesInvoice = new STTproject.Models.SalesInvoice
+            {
+                SalesInvoiceCode = invoice.InvoiceNumber,
+                SalesInvoiceDate = invoice.InvoiceDate,
+                OrderType = invoice.OrderType,
+                CustomerId = invoice.CustomerId,
+                SubDistributorId = invoice.SubdistributorId,
+
+                Items = items.Select(i => new STTproject.Models.SalesInvoiceItem
+                {
+                    SubdItemId = i.SubdItemId
+                }).ToList()
+            };
+
+            db.SalesInvoices.Add(salesInvoice);
+            await db.SaveChangesAsync();
+
+            currentInvoiceId = salesInvoice.SalesInvoiceId; // 👈 important
+        }
+        else
+        {
+            // ✅ UPDATE EXISTING
+            var existing = db.SalesInvoices
+                .FirstOrDefault(x => x.SalesInvoiceId == currentInvoiceId);
+
+            if (existing != null)
+            {
+                existing.SalesInvoiceCode = invoice.InvoiceNumber;
+                existing.SalesInvoiceDate = invoice.InvoiceDate;
+                existing.OrderType = invoice.OrderType;
+                existing.CustomerId = invoice.CustomerId;
+                existing.SubDistributorId = invoice.SubdistributorId;
+
+                await db.SaveChangesAsync();
+            }
+        }
+
+        isSaved = true;
+    }
+    void EnableEdit()
+    {
+        isSaved = false; 
+    }
+    bool showConfirmModal = false;
+    bool isSaved = false;
+
     private ElementReference invoiceNumberInput;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -133,6 +229,7 @@
             await invoiceNumberInput.FocusAsync();
         }
     }
+   
     [Parameter]
     public int SubDistributorId { get; set; }
 
@@ -191,13 +288,24 @@
 
     async Task SaveInvoice()
     {
-        var salesInvoice = new SalesInvoice
+
+        var salesInvoice = new STTproject.Models.SalesInvoice
         {
-           
+            SalesInvoiceCode = invoice.InvoiceNumber,
+            SalesInvoiceDate = invoice.InvoiceDate,
+            OrderType = invoice.OrderType,
 
+            CustomerId = invoice.CustomerId,
+            SubDistributorId = invoice.SubdistributorId,
+
+            Items = items.Select(i => new STTproject.Models.SalesInvoiceItem
+            {
+                SubdItemId = i.SubdItemId
+            }).ToList()
         };
-
-      
+         
+        db.SalesInvoices.Add(salesInvoice);
+        await db.SaveChangesAsync();
     }
 
     
@@ -235,6 +343,7 @@
 
     public class InputItemModel
     {
+        public int SubdItemId { get; set; }   
         public string ItemCode { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Unit { get; set; } = string.Empty;
