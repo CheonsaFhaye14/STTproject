@@ -4,45 +4,73 @@
 <div class="top-card">
     <div class="form-grid">
         <div class="form-group">
-            <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" />
-        </div>
+    <label>Sales Invoice Number</label>
+    <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceNumber")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
 
+<div class="form-group">
+    <label>Sales Invoice Date</label>
+    <input type="date" @bind="Invoice.InvoiceDate" disabled="@IsSaved" />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceDate")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>    
         <div class="form-group">
-            <label>Sales Invoice Date</label>
-            <input type="date" @bind="Invoice.InvoiceDate" disabled="@IsSaved" />
-        </div>
+    <label>Order Type</label>
+    <select @bind="Invoice.OrderType" disabled="@IsSaved">
+        <option value="">-- Select --</option>
+        <option value="invoice">Invoice</option>
+        <option value="credit">Credit</option>
+    </select>
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "OrderType")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
 
-        <div class="form-group">
-            <label>Order Type</label>
-            <select @bind="Invoice.OrderType" disabled="@IsSaved">
-                <option value="invoice">Invoice</option>
-                <option value="credit">Credit</option>
-            </select>
-        </div>
+<div class="form-group">
+    <label>Customer Code</label>
+    <input @bind="Invoice.CustomerCode" @bind:event="oninput" @bind:after="OnCustomerCheck" disabled="@IsSaved" />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
 
-        <div class="form-group">
-            <label>Customer Code</label>
-            <input @bind="Invoice.CustomerCode" @bind:event="oninput" @bind:after="OnCustomerCheck" disabled="@IsSaved" />
-        </div>
+<div class="form-group">
+    <label>Customer Type</label>
+    <input @bind="Invoice.CustomerType" disabled />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerType")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
 
-        <div class="form-group">
-            <label>Customer Type</label>
-            <input @bind="Invoice.CustomerType" disabled />
-        </div>
+<div class="form-group">
+    <label>Customer Name</label>
+    <input @bind="Invoice.CustomerName" disabled />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerName")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
 
-        <div class="form-group">
-            <label>Customer Name</label>
-            <input @bind="Invoice.CustomerName" disabled />
-        </div>
-
-        <div class="form-group">
-            <label>Customer Address</label>
-            <input @bind="Invoice.CustomerAddress" disabled />
-        </div>
+<div class="form-group">
+    <label>Customer Address</label>
+    <input @bind="Invoice.CustomerAddress" disabled />
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerAddress")
+    {
+        <span class="error-text">@ErrorMessage</span>
+    }
+</div>
     </div>
 
-    <button class="btn-primary" @onclick="OnSaveClick">Save</button>
+<button class="btn-primary" @onclick="ValidateAndSave">Save</button>
 
     @if (IsSaved)
     {
@@ -59,6 +87,10 @@
 
     private ElementReference invoiceNumberInput;
 
+    // Error handling state
+    private string ErrorMessage = string.Empty;
+    private string ErrorField = string.Empty;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -66,4 +98,62 @@
             await invoiceNumberInput.FocusAsync();
         }
     }
-}
+
+    private async Task ValidateAndSave()
+{
+    ErrorMessage = string.Empty;
+    ErrorField = string.Empty;
+
+    if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+    {
+        ErrorField = "InvoiceNumber";
+        ErrorMessage = "Invoice number is required.";
+        return;
+    }
+
+    if (Invoice.InvoiceDate == default)
+    {
+        ErrorField = "InvoiceDate";
+        ErrorMessage = "Invoice date is required.";
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(Invoice.OrderType))
+    {
+        ErrorField = "OrderType";
+        ErrorMessage = "Order type is required.";
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+    {
+        ErrorField = "CustomerCode";
+        ErrorMessage = "Customer code is required.";
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(Invoice.CustomerType))
+    {
+        ErrorField = "CustomerType";
+        ErrorMessage = "Customer type is required.";
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(Invoice.CustomerName))
+    {
+        ErrorField = "CustomerName";
+        ErrorMessage = "Customer name is required.";
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(Invoice.CustomerAddress))
+    {
+        ErrorField = "CustomerAddress";
+        ErrorMessage = "Customer address is required.";
+        return;
+    }
+
+    // ✅ If all checks pass, trigger parent save
+    await OnSaveClick.InvokeAsync();
+}}
+
