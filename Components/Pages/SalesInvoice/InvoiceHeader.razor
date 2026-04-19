@@ -1,5 +1,69 @@
-﻿<h3>InvoiceHeader</h3>
+@using STTproject.Models
+@using STTproject.Data
+
+<div class="top-card">
+    <div class="form-grid">
+        <div class="form-group">
+            <label>Sales Invoice Number</label>
+            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" />
+        </div>
+
+        <div class="form-group">
+            <label>Sales Invoice Date</label>
+            <input type="date" @bind="Invoice.InvoiceDate" disabled="@IsSaved" />
+        </div>
+
+        <div class="form-group">
+            <label>Order Type</label>
+            <select @bind="Invoice.OrderType" disabled="@IsSaved">
+                <option value="invoice">Invoice</option>
+                <option value="credit">Credit</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Customer Code</label>
+            <input @bind="Invoice.CustomerCode" @bind:event="oninput" @bind:after="OnCustomerCheck" disabled="@IsSaved" />
+        </div>
+
+        <div class="form-group">
+            <label>Customer Type</label>
+            <input @bind="Invoice.CustomerType" disabled />
+        </div>
+
+        <div class="form-group">
+            <label>Customer Name</label>
+            <input @bind="Invoice.CustomerName" disabled />
+        </div>
+
+        <div class="form-group">
+            <label>Customer Address</label>
+            <input @bind="Invoice.CustomerAddress" disabled />
+        </div>
+    </div>
+
+    <button class="btn-primary" @onclick="OnSaveClick">Save</button>
+
+    @if (IsSaved)
+    {
+        <button class="btn-primary" @onclick="OnEditClick">Edit</button>
+    }
+</div>
 
 @code {
+    [Parameter] public InputInvoiceModel Invoice { get; set; } = new();
+    [Parameter] public bool IsSaved { get; set; }
+    [Parameter] public EventCallback OnSaveClick { get; set; }
+    [Parameter] public EventCallback OnEditClick { get; set; }
+    [Parameter] public EventCallback OnCustomerCheck { get; set; }
 
+    private ElementReference invoiceNumberInput;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await invoiceNumberInput.FocusAsync();
+        }
+    }
 }
