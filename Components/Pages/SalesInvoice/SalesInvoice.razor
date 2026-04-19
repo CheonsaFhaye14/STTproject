@@ -19,61 +19,12 @@
     <button class="btn-primary">Import</button>
 </div>
 
-@* invoice header *@
-<div class="top-card">
-    <div class="form-grid">
-        <div class="form-group">
-            <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="invoice.InvoiceNumber" disabled="@isSaved" />
-        </div>
-
-        <div class="form-group">
-            <label>Sales Invoice Date</label>
-            <input type="date" @bind="invoice.InvoiceDate" disabled="@isSaved" />
-        </div>
-
-        <div class="form-group">
-            <label>Order Type</label>
-            <select @bind="invoice.OrderType" disabled="@isSaved">
-                <option value="invoice">Invoice</option>
-                <option value="credit">Credit</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label>Customer Code</label>
-            <input @bind="invoice.CustomerCode" @bind:event="oninput" @bind:after="CheckCustomer" disabled="@isSaved" />
-        </div>
-
-        <div class="form-group">
-            <label>Customer Type</label>
-            <input @bind="invoice.CustomerType" disabled />
-        </div>
-
-        <div class="form-group">
-            <label>Customer Name</label>
-            <input @bind="invoice.CustomerName" disabled />
-        </div>
-
-        <div class="form-group">
-            <label>Customer Address</label>
-            <input @bind="invoice.CustomerAddress" disabled />
-        </div>
-    </div>
-
-
-        <button class="btn-primary" @onclick="ShowConfirm">
-            Save
-        </button>
-
-    @if (isSaved)
-    {
-        <button class="btn-primary" @onclick="EnableEdit">
-            Edit
-        </button>
-    }
-
-</div>
+<InvoiceHeader 
+    Invoice="invoice" 
+    IsSaved="isSaved" 
+    OnSaveClick="ShowConfirm" 
+    OnEditClick="EnableEdit" 
+    OnCustomerCheck="CheckCustomer" />
 
 @if (showConfirmModal)
 {
