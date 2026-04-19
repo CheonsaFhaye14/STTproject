@@ -9,6 +9,7 @@
         public String UOM { get; set; } = string.Empty;
         public int QuantityPerPiece { get; set; }
         public int Price { get; set; }
+        public int PricePerPiece { get; set; }
         public int SubDistributorId { get; set; }
         public SubDistributor SubDistributor { get; set; }
     }

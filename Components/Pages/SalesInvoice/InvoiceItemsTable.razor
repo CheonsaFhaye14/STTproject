@@ -1,0 +1,80 @@
+@using STTproject.Models
+
+<div class="card">
+    <h4 class="center">INVOICE ITEMS</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>SKU Code</th>
+                <th>Description</th>
+                <th>UOM</th>
+                <th>Qty</th>
+                <th>Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>
+                    <td>@item.ItemCode</td>
+                    <td>@item.Description</td>
+                    <td>@item.Unit</td>
+                    <td>@GetDisplayedQuantity(item)</td>
+                    <td>@GetUnitPrice(item)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Items.Any())
+    {
+        <div style="text-align: right; margin-top: 10px; font-weight: bold;">
+            Total Price: @CalculateTotalPrice()
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<InputItemModel> Items { get; set; } = new();
+    [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
+    [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
+
+    private int GetDisplayedQuantity(InputItemModel item)
+    {
+        if (item.Unit.Equals("per piece", StringComparison.OrdinalIgnoreCase))
+        {
+            return item.Quantity;
+        }
+
+        var subdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
+        if (subdItem != null && !item.Unit.Equals(subdItem.UOM, StringComparison.OrdinalIgnoreCase))
+        {
+            return item.Quantity * subdItem.QuantityPerPiece;
+        }
+
+        return item.Quantity;
+    }
+
+    private int GetUnitPrice(InputItemModel item)
+    {
+        if (item.Unit.Equals("per piece", StringComparison.OrdinalIgnoreCase))
+        {
+            var subdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
+            return subdItem?.PricePerPiece ?? item.Price;
+        }
+
+        return item.Price;
+    }
+
+    private int CalculateTotalPrice()
+    {
+        return Items.Sum(i => GetDisplayedQuantity(i) * GetUnitPrice(i));
+    }
+
+    private async Task RemoveItem(InputItemModel item)
+    {
+        Items.Remove(item);
+        await ItemsChanged.InvokeAsync(Items);
+    }
+}

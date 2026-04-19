@@ -1,30 +1,28 @@
 ﻿@page "/salesinvoice/{SubDistributorId:int}"
 
 @using Microsoft.AspNetCore.Components
-
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
 @using STTproject.Data
 @using STTproject.Models
 
 @inject AppDbContext db
+@inject IJSRuntime JS
+
+@implements IAsyncDisposable
 
 @rendermode InteractiveServer
 
-<TitleHeader
-    Subdistributors="subdList"
-    @bind-SelectedSubdId="invoice.SubdistributorId"
-    OnSubdChanged="UpdateSubdDisplay" />
+<TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
+             OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
 <div class="top-buttons">
     <button class="btn-primary">Download Template</button>
     <button class="btn-primary">Import</button>
 </div>
 
-<InvoiceHeader 
-    Invoice="invoice" 
-    IsSaved="isSaved" 
-    OnSaveClick="ShowConfirm" 
-    OnEditClick="EnableEdit" 
-    OnCustomerCheck="CheckCustomer" />
+<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="ShowConfirm" OnEditClick="EnableEdit"
+               OnCustomerCheck="CheckCustomer" />
 
 @if (showConfirmModal)
 {
@@ -38,69 +36,37 @@
     </div>
 }
 
-<!-- MAIN SECTION -->
-<div class="main-grid">
-
-    <!-- LEFT -->
-    <div class="card">
-        <div>
-            <label>Item Code</label>
-            <input @bind="newItem.ItemCode" />
-        </div>
-
-        <div>
-            <label>Description</label>
-            <input @bind="newItem.Description" />
-        </div>
-
-        <div>
-            <label>Unit of Measure</label>
-            <input @bind="newItem.Unit" />
-        </div>
-
-        <div>
-            <label>Quantity</label>
-            <input type="number" @bind="newItem.Quantity" />
-        </div>
-
-        <button class="btn add-btn" @onclick="AddItem">Add</button>
+@if (isSaved)
+{
+    <div class="item-actions">
+        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items</button>
+        <span class="shortcut-hint">Press F3 to open the add-items modal</span>
     </div>
+}
 
-    <!-- RIGHT -->
-    <div class="card">
-        <h4 class="center">INVOICE ITEMS</h4>
+<InvoiceItems ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved" OnCancelModal="CloseAddItemsModal"
+              Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+              SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Item Code</th>
-                    <th>Description</th>
-                    <th>Unit</th>
-                    <th>Qty</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in items)
-                {
-                    <tr>
-                        <td>@item.ItemCode</td>
-                        <td>@item.Description</td>
-                        <td>@item.Unit</td>
-                        <td>@item.Quantity</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" />
 
-        <button class="btn">Upload</button>
-    </div>
-
-</div>
 @code {
+    private bool showAddItemsModal = false;
+    private IJSObjectReference? jsModule;
+    private DotNetObjectReference<SalesInvoice>? objRef;
+
+    void OnItemsChanged(List<InputItemModel> updatedItems)
+    {
+        items = updatedItems;
+    }
+
     int currentInvoiceId = 0;
     void ShowConfirm()
     {
-        showConfirmModal = true;
+        if (!isSaved)
+        {
+            showConfirmModal = true;
+        }
     }
 
     void CancelSave()
@@ -112,20 +78,17 @@
     {
         showConfirmModal = false;
 
-        // ❗ CHECK duplicate invoice number (except current one)
         var existingInvoice = db.SalesInvoices
             .FirstOrDefault(x => x.SalesInvoiceCode == invoice.InvoiceNumber);
 
         if (existingInvoice != null && existingInvoice.SalesInvoiceId != currentInvoiceId)
         {
-            // stop saving
             Console.WriteLine("Duplicate invoice number!");
             return;
         }
 
         if (currentInvoiceId == 0)
         {
-            // ✅ CREATE NEW
             var salesInvoice = new STTproject.Models.SalesInvoice
             {
                 SalesInvoiceCode = invoice.InvoiceNumber,
@@ -133,21 +96,21 @@
                 OrderType = invoice.OrderType,
                 CustomerId = invoice.CustomerId,
                 SubDistributorId = invoice.SubdistributorId,
-
                 Items = items.Select(i => new STTproject.Models.SalesInvoiceItem
                 {
-                    SubdItemId = i.SubdItemId
+                    SubdItemId = i.SubdItemId,
+                    Quantity = i.Quantity,
+                    Price = i.Price
                 }).ToList()
             };
 
             db.SalesInvoices.Add(salesInvoice);
             await db.SaveChangesAsync();
 
-            currentInvoiceId = salesInvoice.SalesInvoiceId; // 👈 important
+            currentInvoiceId = salesInvoice.SalesInvoiceId;
         }
         else
         {
-            // ✅ UPDATE EXISTING
             var existing = db.SalesInvoices
                 .FirstOrDefault(x => x.SalesInvoiceId == currentInvoiceId);
 
@@ -159,28 +122,96 @@
                 existing.CustomerId = invoice.CustomerId;
                 existing.SubDistributorId = invoice.SubdistributorId;
 
+                var existingItems = db.SalesInvoiceItems
+                    .Where(x => x.SalesInvoiceId == currentInvoiceId)
+                    .ToList();
+
+                if (existingItems.Any())
+                {
+                    db.SalesInvoiceItems.RemoveRange(existingItems);
+                }
+
+                db.SalesInvoiceItems.AddRange(items.Select(i => new STTproject.Models.SalesInvoiceItem
+                {
+                    SalesInvoiceId = currentInvoiceId,
+                    SubdItemId = i.SubdItemId,
+                    Quantity = i.Quantity,
+                    Price = i.Price
+                }));
+
                 await db.SaveChangesAsync();
             }
         }
 
         isSaved = true;
     }
+
     void EnableEdit()
     {
-        isSaved = false; 
+        isSaved = false;
     }
-    bool showConfirmModal = false;
-    bool isSaved = false;
 
-    private ElementReference invoiceNumberInput;
+    void OpenAddItemsModal()
+    {
+        modalItems.Clear();
+        showAddItemsModal = true;
+    }
+
+    void CloseAddItemsModal()
+    {
+        showAddItemsModal = false;
+        modalItems.Clear();
+    }
+
+    Task OnModalItemsSaved(List<InputItemModel> savedItems)
+    {
+        if (savedItems?.Any() == true)
+        {
+            items.AddRange(savedItems);
+        }
+
+        showAddItemsModal = false;
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task OpenAddItemsModalFromShortcut()
+    {
+        if (isSaved)
+        {
+            showAddItemsModal = true;
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await invoiceNumberInput.FocusAsync();
+            objRef = DotNetObjectReference.Create(this);
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            await jsModule.InvokeVoidAsync("registerF3", objRef);
         }
     }
-   
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule != null)
+        {
+            await jsModule.InvokeVoidAsync("unregisterF3");
+            await jsModule.DisposeAsync();
+            jsModule = null;
+        }
+
+        objRef?.Dispose();
+    }
+
+    bool showConfirmModal = false;
+    bool isSaved = false;
+    List<InputItemModel> modalItems = new();
+
     [Parameter]
     public int SubDistributorId { get; set; }
 
@@ -188,14 +219,17 @@
 
     SubdModel subdModel = new();
     InputInvoiceModel invoice = new();
-    InputItemModel newItem = new();
     List<InputItemModel> items = new();
+    List<SubdItem> subdItems = new();
 
     List<SubDistributor> subdList = new();
 
     protected override void OnParametersSet()
     {
         subdList = db.SubDistributors.ToList();
+        subdItems = db.SubdItems
+            .Where(i => i.SubDistributorId == SubDistributorId)
+            .ToList();
 
         subd = subdList
             .FirstOrDefault(s => s.SubDistributorId == SubDistributorId);
@@ -206,6 +240,7 @@
             UpdateSubdDisplay(subd);
         }
     }
+
     void CheckCustomer()
     {
         if (string.IsNullOrWhiteSpace(invoice.CustomerCode))
@@ -229,6 +264,7 @@
             ClearCustomer();
         }
     }
+
     void ClearCustomer()
     {
         invoice.CustomerId = 0;
@@ -237,68 +273,10 @@
         invoice.CustomerAddress = string.Empty;
     }
 
-    async Task SaveInvoice()
-    {
-
-        var salesInvoice = new STTproject.Models.SalesInvoice
-        {
-            SalesInvoiceCode = invoice.InvoiceNumber,
-            SalesInvoiceDate = invoice.InvoiceDate,
-            OrderType = invoice.OrderType,
-
-            CustomerId = invoice.CustomerId,
-            SubDistributorId = invoice.SubdistributorId,
-
-            Items = items.Select(i => new STTproject.Models.SalesInvoiceItem
-            {
-                SubdItemId = i.SubdItemId
-            }).ToList()
-        };
-         
-        db.SalesInvoices.Add(salesInvoice);
-        await db.SaveChangesAsync();
-    }
-
-    
-    void AddItem()
-    {
-        items.Add(new InputItemModel
-        {
-            ItemCode = newItem.ItemCode,
-            Description = newItem.Description,
-            Unit = newItem.Unit,
-            Quantity = newItem.Quantity
-        });
-
-        newItem = new InputItemModel();
-    }
-
     public class SubdModel
     {
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
-    }
-
-    public class InputInvoiceModel
-    {
-        public string InvoiceNumber { get; set; } = string.Empty;
-        public DateOnly InvoiceDate { get; set; }
-        public string OrderType { get; set; } = string.Empty;
-        public int CustomerId { get; set; }
-        public string CustomerType { get; set; } = string.Empty;
-        public string CustomerCode { get; set; } = string.Empty;
-        public string CustomerName { get; set; } = string.Empty;
-        public string CustomerAddress { get; set; } = string.Empty;
-        public int SubdistributorId { get; set; }
-    }
-
-    public class InputItemModel
-    {
-        public int SubdItemId { get; set; }   
-        public string ItemCode { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string Unit { get; set; } = string.Empty;
-        public int Quantity { get; set; }
     }
 
     void OnSubdChange()
@@ -316,7 +294,6 @@
     {
         subdModel.Code = s.SubdCode;
         subdModel.Name = s.SubdName;
-
         invoice.SubdistributorId = s.SubDistributorId;
     }
 }
