@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Components;
-using STTproject.Data;     
+using STTproject.Models;
+using STTproject.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,8 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContext<SttprojectContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IHomeService, HomeService>();
+builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 
 var app = builder.Build();
 

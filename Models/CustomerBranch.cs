@@ -1,20 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace STTproject.Models;
 
-public partial class Customer
+public partial class CustomerBranch
 {
+    public int CustomerBranchId { get; set; }
+
     public int CustomerId { get; set; }
 
-    public string CustomerCode { get; set; } = null!;
+    public string BranchName { get; set; } = null!;
 
-    public string CustomerName { get; set; } = null!;
+    public string AddressLine { get; set; } = null!;
 
-    public string CustomerType { get; set; } = null!;
+    public string City { get; set; } = null!;
 
-    public int SubDistributorId { get; set; }
+    public string Province { get; set; } = null!;
+
+    public string? ZipCode { get; set; }
+
+    public bool IsDefault { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -28,14 +33,9 @@ public partial class Customer
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual CustomerBranch? CustomerBranch { get; set; }
+    public virtual Customer Customer { get; set; } = null!;
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 
-    public virtual SubDistributor SubDistributor { get; set; } = null!;
-
     public virtual User? UpdatedByNavigation { get; set; }
-
-    [NotMapped]
-    public string CustomerAddress => CustomerBranch?.AddressLine ?? string.Empty;
 }

@@ -1,43 +1,44 @@
 ﻿@page "/"
 @using STTproject.Components.Helper
 @using System.Linq
-@using STTproject.Data
+@using STTproject.Models
+@using STTproject.Services
 @rendermode InteractiveServer
 
-@inject AppDbContext db
+@inject IHomeService homeService
 @inject NavigationManager Navigation
 
 
-    <div class="title">
-        <h2>Hello, Encoder!</h2>
-    </div>
+<div class="title">
+    <h2>Hello</h2>
+</div>
 
-    <!-- CARDS -->
-    <div class="cards">
-        @foreach (var subd in db.SubDistributors)
-        {
-            <div class="card">
+<!-- CARDS -->
+<div class="cards">
+    @foreach (var subd in subdList)
+    {
+        <div class="card">
 
-                <div class="card-content">
-                    <div class="card-text">
+            <div class="card-content">
+                <div class="card-text">
                     
                     <h4>@subd.SubdCode</h4>
                     <div class="subdname">
                         <h3>@FormatHelper.ToAllCaps(subd.SubdName)</h3>
                     </div>
                    
-                    <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province)</p>
-                    </div>
+                    <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province ?? string.Empty)</p>
+                </div>
 
                 <button class="btn-primary" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
                     INPUT INVOICE
                 </button>
-                </div>
-             
-
             </div>
-        }
-    </div>
+
+             
+        </div>
+    }
+</div>
 
 <!-- RECENT ACTIVITY -->
 <div class="activity">
@@ -54,7 +55,7 @@
 
         <div class="filter-group">
             <label>DATE</label>
-            <input type="date"/>
+            <input type="date" />
         </div>
 
         <div class="filter-group">
@@ -87,6 +88,12 @@
 </div>
 
 @code {
+    private List<SubDistributor> subdList = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        subdList = await homeService.GetSubDistributorsAsync();
+    }
 
     void InputSalesInvoice(int subDistributorId)
     {

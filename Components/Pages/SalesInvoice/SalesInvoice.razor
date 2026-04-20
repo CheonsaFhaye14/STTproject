@@ -3,10 +3,10 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
-@using STTproject.Data
 @using STTproject.Models
+@using STTproject.Services
 
-@inject AppDbContext db
+@inject ISalesInvoiceService salesInvoiceService
 @inject IJSRuntime JS
 
 @implements IAsyncDisposable
@@ -22,7 +22,7 @@
 </div>
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="ShowConfirm" OnEditClick="EnableEdit"
-               OnCustomerCheck="CheckCustomer" />
+               Customers="customers" CustomerBranches="customerBranches" />
 
 @if (showConfirmModal)
 {
@@ -78,70 +78,21 @@
     {
         showConfirmModal = false;
 
-        var existingInvoice = db.SalesInvoices
-            .FirstOrDefault(x => x.SalesInvoiceCode == invoice.InvoiceNumber);
+        var result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId);
 
-        if (existingInvoice != null && existingInvoice.SalesInvoiceId != currentInvoiceId)
+        if (result.IsDuplicate)
         {
             Console.WriteLine("Duplicate invoice number!");
             return;
         }
 
-        if (currentInvoiceId == 0)
+        if (!result.IsSaved)
         {
-            var salesInvoice = new STTproject.Models.SalesInvoice
-            {
-                SalesInvoiceCode = invoice.InvoiceNumber,
-                SalesInvoiceDate = invoice.InvoiceDate,
-                OrderType = invoice.OrderType,
-                CustomerId = invoice.CustomerId,
-                SubDistributorId = invoice.SubdistributorId,
-                Items = items.Select(i => new STTproject.Models.SalesInvoiceItem
-                {
-                    SubdItemId = i.SubdItemId,
-                    Quantity = i.Quantity,
-                    Price = i.Price
-                }).ToList()
-            };
-
-            db.SalesInvoices.Add(salesInvoice);
-            await db.SaveChangesAsync();
-
-            currentInvoiceId = salesInvoice.SalesInvoiceId;
+            Console.WriteLine(result.ErrorMessage ?? "Unable to save invoice.");
+            return;
         }
-        else
-        {
-            var existing = db.SalesInvoices
-                .FirstOrDefault(x => x.SalesInvoiceId == currentInvoiceId);
 
-            if (existing != null)
-            {
-                existing.SalesInvoiceCode = invoice.InvoiceNumber;
-                existing.SalesInvoiceDate = invoice.InvoiceDate;
-                existing.OrderType = invoice.OrderType;
-                existing.CustomerId = invoice.CustomerId;
-                existing.SubDistributorId = invoice.SubdistributorId;
-
-                var existingItems = db.SalesInvoiceItems
-                    .Where(x => x.SalesInvoiceId == currentInvoiceId)
-                    .ToList();
-
-                if (existingItems.Any())
-                {
-                    db.SalesInvoiceItems.RemoveRange(existingItems);
-                }
-
-                db.SalesInvoiceItems.AddRange(items.Select(i => new STTproject.Models.SalesInvoiceItem
-                {
-                    SalesInvoiceId = currentInvoiceId,
-                    SubdItemId = i.SubdItemId,
-                    Quantity = i.Quantity,
-                    Price = i.Price
-                }));
-
-                await db.SaveChangesAsync();
-            }
-        }
+        currentInvoiceId = result.InvoiceId;
 
         isSaved = true;
     }
@@ -153,14 +104,12 @@
 
     void OpenAddItemsModal()
     {
-        modalItems.Clear();
         showAddItemsModal = true;
     }
 
     void CloseAddItemsModal()
     {
         showAddItemsModal = false;
-        modalItems.Clear();
     }
 
     Task OnModalItemsSaved(List<InputItemModel> savedItems)
@@ -210,90 +159,37 @@
 
     bool showConfirmModal = false;
     bool isSaved = false;
-    List<InputItemModel> modalItems = new();
 
     [Parameter]
     public int SubDistributorId { get; set; }
 
-    SubDistributor? subd;
-
-    SubdModel subdModel = new();
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();
 
     List<SubDistributor> subdList = new();
+    List<Customer> customers = new();
+    List<CustomerBranch> customerBranches = new();
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        subdList = db.SubDistributors.ToList();
-        subdItems = db.SubdItems
-            .Where(i => i.SubDistributorId == SubDistributorId)
-            .ToList();
+        var pageData = await salesInvoiceService.GetPageDataAsync(SubDistributorId);
+        subdList = pageData.Subdistributors;
+        customers = pageData.Customers;
+        customerBranches = pageData.CustomerBranches;
+        subdItems = pageData.SubdItems;
 
-        subd = subdList
-            .FirstOrDefault(s => s.SubDistributorId == SubDistributorId);
-
-        if (subd != null)
+        if (pageData.SelectedSubd != null)
         {
-            invoice.SubdistributorId = subd.SubDistributorId;
-            UpdateSubdDisplay(subd);
+            invoice.SubdistributorId = pageData.SelectedSubd.SubDistributorId;
         }
     }
 
-    void CheckCustomer()
+    async Task UpdateSubdDisplay(SubDistributor s)
     {
-        if (string.IsNullOrWhiteSpace(invoice.CustomerCode))
-        {
-            ClearCustomer();
-            return;
-        }
-
-        var existing = db.Customers
-            .FirstOrDefault(c => c.CustomerCode == invoice.CustomerCode);
-
-        if (existing != null)
-        {
-            invoice.CustomerId = existing.CustomerId;
-            invoice.CustomerType = existing.CustomerType;
-            invoice.CustomerName = existing.CustomerName;
-            invoice.CustomerAddress = existing.CustomerAddress;
-        }
-        else
-        {
-            ClearCustomer();
-        }
-    }
-
-    void ClearCustomer()
-    {
-        invoice.CustomerId = 0;
-        invoice.CustomerType = string.Empty;
-        invoice.CustomerName = string.Empty;
-        invoice.CustomerAddress = string.Empty;
-    }
-
-    public class SubdModel
-    {
-        public string Code { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-    }
-
-    void OnSubdChange()
-    {
-        var selected = subdList
-            .FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId);
-
-        if (selected != null)
-        {
-            UpdateSubdDisplay(selected);
-        }
-    }
-   
-    void UpdateSubdDisplay(SubDistributor s)
-    {
-        subdModel.Code = s.SubdCode;
-        subdModel.Name = s.SubdName;
         invoice.SubdistributorId = s.SubDistributorId;
+
+        var pageData = await salesInvoiceService.GetPageDataAsync(s.SubDistributorId);
+        subdItems = pageData.SubdItems;
     }
 }

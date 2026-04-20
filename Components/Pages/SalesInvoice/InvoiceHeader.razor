@@ -1,5 +1,4 @@
 @using STTproject.Models
-@using STTproject.Data
 
 <div class="top-card">
     <div class="form-grid">
@@ -32,15 +31,47 @@
                 <span class="error-text">@ErrorMessage</span>
             }
         </div>
-
         <div class="form-group">
             <label>Customer Code</label>
-            <input @bind="Invoice.CustomerCode" @bind:event="oninput" @onchange="OnCustomerCheck" disabled="@IsSaved" />
+            <input @bind="Invoice.CustomerCode" @bind:event="onchange" @bind:after="HandleCustomerCodeChanged" disabled="@IsSaved" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
             {
                 <span class="error-text">@ErrorMessage</span>
             }
         </div>
+        <div class="form-group">
+            <label>Customer Name</label>
+            <input @bind="Invoice.CustomerName" disabled />
+            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerId")
+            {
+                <span class="error-text">@ErrorMessage</span>
+            }
+        </div>
+
+
+
+        <div class="form-group">
+            <label>Customer Branch</label>
+            @if (FilteredCustomerBranches.Any())
+            {
+                <select @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged" disabled="@IsSaved">
+                    <option value="0">-- Select branch --</option>
+                    @foreach (var branch in FilteredCustomerBranches)
+                    {
+                        <option value="@branch.CustomerBranchId">@branch.BranchName - @branch.City</option>
+                    }
+                </select>
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerBranchId")
+                {
+                    <span class="error-text">@ErrorMessage</span>
+                }
+            }
+            else
+            {
+                <input value="No branches available" disabled />
+            }
+        </div>
+
 
         <div class="form-group">
             <label>Customer Type</label>
@@ -50,16 +81,7 @@
                 <span class="error-text">@ErrorMessage</span>
             }
         </div>
-
-        <div class="form-group">
-            <label>Customer Name</label>
-            <input @bind="Invoice.CustomerName" disabled />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerName")
-            {
-                <span class="error-text">@ErrorMessage</span>
-            }
-        </div>
-
+        
         <div class="form-group">
             <label>Customer Address</label>
             <input @bind="Invoice.CustomerAddress" disabled />
@@ -87,8 +109,6 @@
     [Parameter] public bool IsSaved { get; set; }
     [Parameter] public EventCallback OnSaveClick { get; set; }
     [Parameter] public EventCallback OnEditClick { get; set; }
-    [Parameter] public EventCallback OnCustomerCheck { get; set; }
-
     private DateOnly? DateValue
     {
         get => Invoice.InvoiceDate != default(DateOnly) ? Invoice.InvoiceDate : null;
@@ -138,10 +158,17 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        if (Invoice.CustomerId <= 0)
         {
-            ErrorField = "CustomerCode";
-            ErrorMessage = "Customer code is required.";
+            ErrorField = "CustomerId";
+            ErrorMessage = "Customer is required.";
+            return;
+        }
+
+        if (FilteredCustomerBranches.Any() && Invoice.CustomerBranchId <= 0)
+        {
+            ErrorField = "CustomerBranchId";
+            ErrorMessage = "Customer branch is required.";
             return;
         }
 
@@ -171,6 +198,101 @@
 
         // 👇 Mark as saved so Edit button appears
         IsSaved = true;
+    }
+
+    [Parameter] public List<Customer> Customers { get; set; } = new();
+    [Parameter] public List<CustomerBranch> CustomerBranches { get; set; } = new();
+
+    private List<CustomerBranch> FilteredCustomerBranches { get; set; } = new();
+
+    protected override void OnParametersSet()
+    {
+        SyncCustomerState();
+    }
+
+    private Task HandleCustomerCodeChanged()
+    {
+        SyncCustomerState();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleBranchChanged()
+    {
+        ApplySelectedBranch(Invoice.CustomerBranchId);
+        return Task.CompletedTask;
+    }
+
+    private void SyncCustomerState()
+    {
+        var selectedCustomer = Customers.FirstOrDefault(customer =>
+            customer.CustomerCode.Equals(Invoice.CustomerCode, StringComparison.OrdinalIgnoreCase));
+
+        if (selectedCustomer is null && Invoice.CustomerId > 0)
+        {
+            selectedCustomer = Customers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+        }
+
+        if (selectedCustomer is null)
+        {
+            Invoice.CustomerId = 0;
+            Invoice.CustomerName = string.Empty;
+            Invoice.CustomerType = string.Empty;
+            Invoice.CustomerAddress = string.Empty;
+            Invoice.CustomerBranchId = 0;
+            FilteredCustomerBranches = new List<CustomerBranch>();
+            return;
+        }
+
+        Invoice.CustomerCode = selectedCustomer.CustomerCode;
+        Invoice.CustomerId = selectedCustomer.CustomerId;
+        Invoice.CustomerName = selectedCustomer.CustomerName;
+        Invoice.CustomerType = selectedCustomer.CustomerType;
+
+        FilteredCustomerBranches = CustomerBranches
+            .Where(branch => branch.CustomerId == selectedCustomer.CustomerId)
+            .OrderBy(branch => branch.BranchName)
+            .ToList();
+
+        if (FilteredCustomerBranches.Any())
+        {
+            if (Invoice.CustomerBranchId <= 0 || !FilteredCustomerBranches.Any(branch => branch.CustomerBranchId ==
+Invoice.CustomerBranchId))
+            {
+                Invoice.CustomerBranchId = FilteredCustomerBranches[0].CustomerBranchId;
+            }
+
+            ApplySelectedBranch(Invoice.CustomerBranchId);
+        }
+        else
+        {
+            Invoice.CustomerBranchId = 0;
+            Invoice.CustomerAddress = string.Empty;
+        }
+    }
+
+    private void ApplySelectedBranch(int branchId)
+    {
+        var selectedBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.CustomerBranchId == branchId);
+
+        if (selectedBranch is null)
+        {
+            Invoice.CustomerAddress = string.Empty;
+            return;
+        }
+
+        Invoice.CustomerAddress = FormatBranchAddress(selectedBranch);
+    }
+
+    private static string FormatBranchAddress(CustomerBranch branch)
+    {
+        var parts = new List<string> { branch.AddressLine, branch.City, branch.Province };
+
+        if (!string.IsNullOrWhiteSpace(branch.ZipCode))
+        {
+            parts.Add(branch.ZipCode);
+        }
+
+        return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
 }

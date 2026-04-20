@@ -1,16 +1,51 @@
-﻿namespace STTproject.Models
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace STTproject.Models;
+
+public partial class SalesInvoice
 {
-    public class SalesInvoice
+    public int SalesInvoiceId { get; set; }
+
+    public string SalesInvoiceCode { get; set; } = null!;
+
+    public DateOnly SalesInvoiceDate { get; set; }
+
+    public int CustomerId { get; set; }
+
+    public int CustomerBranchId { get; set; }
+
+    public int SubDistributorId { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public DateTime CreatedDate { get; set; }
+
+    public DateTime? UpdatedDate { get; set; }
+
+    public int? CreatedBy { get; set; }
+
+    public int? UpdatedBy { get; set; }
+
+    public string OrderType { get; set; } = null!;
+
+    public virtual User? CreatedByNavigation { get; set; }
+
+    public virtual Customer Customer { get; set; } = null!;
+
+    public virtual CustomerBranch CustomerBranch { get; set; } = null!;
+
+    public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
+
+    public virtual SubDistributor SubDistributor { get; set; } = null!;
+
+    public virtual User? UpdatedByNavigation { get; set; }
+
+    [NotMapped]
+    public ICollection<SalesInvoiceItem> Items
     {
-        public int SalesInvoiceId { get; set; }
-        public String SalesInvoiceCode { get; set; } = string.Empty;
-        public DateOnly SalesInvoiceDate { get; set; }
-        public String OrderType { get; set; } = string.Empty;
-        public int CustomerId { get; set; }
-        public Customer Customer { get; set; }
-        public int SubDistributorId { get; set; }
-        public SubDistributor SubDistributor { get; set; }
-        public List<SalesInvoiceItem> Items { get; set; } = new();
+        get => SalesInvoiceItems;
+        set => SalesInvoiceItems = value ?? new List<SalesInvoiceItem>();
     }
-   
 }
