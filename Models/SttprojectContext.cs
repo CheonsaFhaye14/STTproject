@@ -22,7 +22,7 @@ public partial class SttprojectContext : DbContext
     public virtual DbSet<CustomerBranch> CustomerBranches { get; set; }
 
     public virtual DbSet<ItemMapping> ItemMappings { get; set; }
-
+     
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
     public virtual DbSet<SalesInvoiceItem> SalesInvoiceItems { get; set; }
@@ -179,7 +179,6 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.OrderType)
                 .HasMaxLength(20)
                 .HasDefaultValue("Invoice", "DF_SalesInvoice_OrderType");

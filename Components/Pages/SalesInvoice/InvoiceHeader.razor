@@ -4,7 +4,7 @@
     <div class="form-grid">
         <div class="form-group">
             <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" />
+            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" @onkeydown="HandleInvoiceNumberKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceNumber")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -13,15 +13,32 @@
 
         <div class="form-group">
             <label>Sales Invoice Date</label>
-            <input type="date" @bind="DateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY" />
+            <input type="date" @bind="InvoiceDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY"
+                   @ref="invoiceDateInput"
+                   @onkeydown="HandleInvoiceDateKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceDate")
             {
                 <span class="error-text">@ErrorMessage</span>
             }
         </div>
+        
+        <div class="form-group">
+            <label>Order Date</label>
+            <input type="date" @bind="OrderDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY"
+                   @ref="orderDateInput"
+                   @onkeydown="HandleOrderDateKeyDown" />
+            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "OrderDate")
+            {
+                <span class="error-text">@ErrorMessage</span>
+            }
+        </div>
+   
         <div class="form-group">
             <label>Order Type</label>
-            <select @bind="Invoice.OrderType" disabled="@IsSaved">
+            <select @bind="Invoice.OrderType"
+                    @ref="orderTypeSelect"
+                    @onkeydown="HandleOrderTypeKeyDown"
+            disabled="@IsSaved">
                 <option value="">-- Select --</option>
                 <option value="invoice">Invoice</option>
                 <option value="credit">Credit</option>
@@ -31,9 +48,10 @@
                 <span class="error-text">@ErrorMessage</span>
             }
         </div>
+
         <div class="form-group">
             <label>Customer Code</label>
-            <input @bind="Invoice.CustomerCode" @bind:event="onchange" @bind:after="HandleCustomerCodeChanged" disabled="@IsSaved" />
+            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:event="onchange" @bind:after="HandleCustomerCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -54,7 +72,7 @@
             <label>Customer Branch</label>
             @if (FilteredCustomerBranches.Any())
             {
-                <select @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged" disabled="@IsSaved">
+                <select @ref="customerBranchSelect" @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged" disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown">
                     <option value="0">-- Select branch --</option>
                     @foreach (var branch in FilteredCustomerBranches)
                     {
@@ -94,7 +112,7 @@
 
     @if (!IsSaved)
     {
-        <button class="btn-primary" @onclick="ValidateAndSave">Save</button>
+        <button class="btn-primary" @ref="saveButton" @onclick="ValidateAndSave">Save</button>
     }
     else
     {
@@ -105,20 +123,151 @@
 </div>
 
 @code {
+    private ElementReference invoiceNumberInput;
+    private ElementReference invoiceDateInput;
+    private ElementReference orderDateInput;
+    private ElementReference orderTypeSelect;
+    private ElementReference customerCodeInput;
+    private ElementReference customerBranchSelect;
+    private ElementReference saveButton;
+
+    private async Task HandleInvoiceNumberKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+            {
+                ErrorField = "InvoiceNumber";
+                ErrorMessage = "Invoice number is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            await invoiceDateInput.FocusAsync();
+        }
+    }
+
+    private async Task HandleInvoiceDateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (Invoice.InvoiceDate == default)
+            {
+                ErrorField = "InvoiceDate";
+                ErrorMessage = "Invoice date is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            await orderDateInput.FocusAsync();
+        }
+        else if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await orderDateInput.FocusAsync();
+        }
+    }
+
+    private async Task HandleOrderDateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (Invoice.OrderDate == default)
+            {
+                ErrorField = "OrderDate";
+                ErrorMessage = "Order date is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            await orderTypeSelect.FocusAsync();
+        }
+        else if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await orderTypeSelect.FocusAsync();
+        }
+    }
+
+    private async Task HandleOrderTypeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.OrderType))
+            {
+                ErrorField = "OrderType";
+                ErrorMessage = "Order type is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            await customerCodeInput.FocusAsync();
+        }
+    }
+
+    private async Task HandleCustomerCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            // Note: Since CustomerCode onchange handles finding the customer,
+            // we just check if it successfully bound the CustomerId.
+            if (Invoice.CustomerId <= 0 && string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+            {
+                ErrorField = "CustomerCode";
+                ErrorMessage = "Customer code is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            
+            if (FilteredCustomerBranches.Any())
+            {
+                await customerBranchSelect.FocusAsync();
+            }
+            else
+            {
+                await saveButton.FocusAsync();
+            }
+        }
+    }
+
+    private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (Invoice.CustomerBranchId <= 0)
+            {
+                ErrorField = "CustomerBranchId";
+                ErrorMessage = "Customer branch is required.";
+                return;
+            }
+            ClearError();
+            await Task.Delay(10);
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private void ClearError()
+    {
+        ErrorField = string.Empty;
+        ErrorMessage = string.Empty;
+    }
+
     [Parameter] public InputInvoiceModel Invoice { get; set; } = new();
     [Parameter] public bool IsSaved { get; set; }
     [Parameter] public EventCallback OnSaveClick { get; set; }
     [Parameter] public EventCallback OnEditClick { get; set; }
-    private DateOnly? DateValue
-    {
+    private DateOnly? InvoiceDateValue
+    { 
         get => Invoice.InvoiceDate != default(DateOnly) ? Invoice.InvoiceDate : null;
-        set
-        {
-            Invoice.InvoiceDate = value ?? default;
-        }
+        set => Invoice.InvoiceDate = value ?? default;
     }
 
-    private ElementReference invoiceNumberInput;
+    private DateOnly? OrderDateValue
+    {
+        get => Invoice.OrderDate != default(DateOnly) ? Invoice.OrderDate : null;
+        set => Invoice.OrderDate = value ?? default;
+    }
 
     // Error handling state
     private string ErrorMessage = string.Empty;
@@ -151,6 +300,12 @@
             return;
         }
 
+        if (Invoice.OrderDate == default)
+        {
+            ErrorField = "OrderDate";
+            ErrorMessage = "Order date is required.";
+            return;
+        }
         if (string.IsNullOrWhiteSpace(Invoice.OrderType))
         {
             ErrorField = "OrderType";

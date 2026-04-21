@@ -21,6 +21,13 @@
     <button class="btn-primary">Import</button>
 </div>
 
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div style="color: red; margin: 10px 0;">
+        <strong>Error: </strong>@errorMessage
+    </div>
+}
+
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="ShowConfirm" OnEditClick="EnableEdit"
                Customers="customers" CustomerBranches="customerBranches" />
 
@@ -77,18 +84,19 @@
     async Task ConfirmSave()
     {
         showConfirmModal = false;
+        errorMessage = null;
 
         var result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId);
 
         if (result.IsDuplicate)
         {
-            Console.WriteLine("Duplicate invoice number!");
+            errorMessage = "Duplicate invoice number!";
             return;
         }
 
         if (!result.IsSaved)
         {
-            Console.WriteLine(result.ErrorMessage ?? "Unable to save invoice.");
+            errorMessage = result.ErrorMessage ?? "Unable to save invoice.";
             return;
         }
 
@@ -159,6 +167,7 @@
 
     bool showConfirmModal = false;
     bool isSaved = false;
+    string? errorMessage;
 
     [Parameter]
     public int SubDistributorId { get; set; }

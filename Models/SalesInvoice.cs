@@ -18,8 +18,6 @@ public partial class SalesInvoice
 
     public int SubDistributorId { get; set; }
 
-    public bool IsActive { get; set; }
-
     public DateTime CreatedDate { get; set; }
 
     public DateTime? UpdatedDate { get; set; }
@@ -30,6 +28,8 @@ public partial class SalesInvoice
 
     public string OrderType { get; set; } = null!;
 
+    public DateOnly OrderDate { get; set; }
+    
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual Customer Customer { get; set; } = null!;

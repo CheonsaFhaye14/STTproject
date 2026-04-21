@@ -1,0 +1,16 @@
+﻿.top-card {
+    margin-left: 70px;
+    background-color: #F9DFDF;
+    padding: 20px;
+    margin-right: 70px;
+    border-radius: 15px;
+}
+
+.form-grid {
+    justify-content: space-between;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+

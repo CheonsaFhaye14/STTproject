@@ -115,6 +115,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 SalesInvoiceCode = invoice.InvoiceNumber,
                 SalesInvoiceDate = invoice.InvoiceDate,
                 OrderType = invoice.OrderType,
+                OrderDate = invoice.OrderDate,
                 CustomerId = invoice.CustomerId,
                 CustomerBranchId = invoice.CustomerBranchId,
                 SubDistributorId = invoice.SubdistributorId,
@@ -151,6 +152,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         existing.SalesInvoiceCode = invoice.InvoiceNumber;
         existing.SalesInvoiceDate = invoice.InvoiceDate;
+        existing.OrderDate = invoice.OrderDate;
         existing.OrderType = invoice.OrderType;
         existing.CustomerId = invoice.CustomerId;
         existing.CustomerBranchId = invoice.CustomerBranchId;
