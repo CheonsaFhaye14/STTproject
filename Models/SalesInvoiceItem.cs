@@ -11,13 +11,23 @@ public partial class SalesInvoiceItem
 
     public int SubdItemId { get; set; }
 
+    public int SubdItemUomId { get; set; }
+
     public int Quantity { get; set; }
 
     public decimal Price { get; set; }
 
     public DateTime CreatedDate { get; set; }
 
+    public DateTime? UpdatedDate { get; set; }
+
+    public int? CreatedBy { get; set; }
+
+    public int? UpdatedBy { get; set; }
+
     public virtual SalesInvoice SalesInvoice { get; set; } = null!;
 
     public virtual SubdItem SubdItem { get; set; } = null!;
+
+    public virtual SubdItemUom SubdItemUom { get; set; } = null!;
 }

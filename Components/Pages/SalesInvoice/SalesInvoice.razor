@@ -53,7 +53,7 @@
 }
 
 <InvoiceItems ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved" OnCancelModal="CloseAddItemsModal"
-              Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+              Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" AvailableUoms="availableUoms"
               SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
 
 <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" />
@@ -182,7 +182,7 @@
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();
-
+    List<SubdItemUom> availableUoms = new();
     List<SubDistributor> subdList = new();
     List<Customer> customers = new();
     List<CustomerBranch> customerBranches = new();
@@ -194,6 +194,7 @@
         customers = pageData.Customers;
         customerBranches = pageData.CustomerBranches;
         subdItems = pageData.SubdItems;
+        availableUoms = pageData.ItemUoms;
 
         if (pageData.SelectedSubd != null)
         {
@@ -207,5 +208,6 @@
 
         var pageData = await salesInvoiceService.GetPageDataAsync(s.SubDistributorId);
         subdItems = pageData.SubdItems;
+        availableUoms = pageData.ItemUoms;
     }
 }

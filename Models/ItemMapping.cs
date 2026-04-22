@@ -16,10 +16,4 @@ public partial class ItemMapping
     public DateTime CreatedDate { get; set; }
 
     public int? CreatedBy { get; set; }
-
-    public virtual CompanyItem CompanyItem { get; set; } = null!;
-
-    public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual SubdItem SubdItem { get; set; } = null!;
 }

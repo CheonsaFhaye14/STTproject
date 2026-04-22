@@ -13,11 +13,9 @@ public partial class SubdItemUom
 
     public decimal ConversionToBase { get; set; }
 
-    public decimal Price { get; set; }
+    public decimal? Price { get; set; }
 
     public bool IsBaseUnit { get; set; }
-
-    public bool IsSellable { get; set; }
 
     public DateTime CreatedDate { get; set; }
 
@@ -27,7 +25,11 @@ public partial class SubdItemUom
 
     public DateTime? UpdatedDate { get; set; }
 
+    public bool IsSellable { get; set; }
+
     public virtual User? CreatedByNavigation { get; set; }
+
+    public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 
     public virtual SubdItem SubdItem { get; set; } = null!;
 

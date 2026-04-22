@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace STTproject.Models;
 
@@ -35,7 +34,4 @@ public partial class Customer
     public virtual SubDistributor SubDistributor { get; set; } = null!;
 
     public virtual User? UpdatedByNavigation { get; set; }
-
-    [NotMapped]
-    public string CustomerAddress => CustomerBranch?.AddressLine ?? string.Empty;
 }

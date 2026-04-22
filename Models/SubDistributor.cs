@@ -13,7 +13,7 @@ public partial class SubDistributor
 
     public string CityMunicipality { get; set; } = null!;
 
-    public string? Province { get; set; }
+    public string Province { get; set; } = null!;
 
     public int EncoderId { get; set; }
 

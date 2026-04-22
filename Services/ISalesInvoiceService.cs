@@ -37,9 +37,16 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var subdItems = await _context.SubdItems
             .AsNoTracking()
-            .Include(i => i.SubdItemUom)
             .Where(i => i.SubDistributorId == subDistributorId)
             .OrderBy(i => i.SubdItemCode)
+            .ToListAsync(cancellationToken);
+
+        var subdItemIds = subdItems.Select(s => s.SubdItemId).ToList();
+
+        var itemUoms = await _context.SubdItemUoms
+            .AsNoTracking()
+            .Where(i => subdItemIds.Contains(i.SubdItemId) && i.IsSellable)
+            .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 
         var selectedSubd = subdList.FirstOrDefault(s => s.SubDistributorId == subDistributorId);
@@ -50,6 +57,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             Customers = customers,
             CustomerBranches = customerBranches,
             SubdItems = subdItems,
+            ItemUoms = itemUoms,
             SelectedSubd = selectedSubd
         };
     }
@@ -119,12 +127,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 CustomerId = invoice.CustomerId,
                 CustomerBranchId = invoice.CustomerBranchId,
                 SubDistributorId = invoice.SubdistributorId,
-                Items = items.Select(i => new SalesInvoiceItem
-                {
-                    SubdItemId = i.SubdItemId,
-                    Quantity = i.Quantity,
-                    Price = i.Price
-                }).ToList()
             };
 
             _context.SalesInvoices.Add(salesInvoice);
@@ -191,6 +193,7 @@ public sealed class SalesInvoicePageData
     public List<Customer> Customers { get; set; } = new();
     public List<CustomerBranch> CustomerBranches { get; set; } = new();
     public List<SubdItem> SubdItems { get; set; } = new();
+    public List<SubdItemUom> ItemUoms { get; set; } = new();
     public SubDistributor? SelectedSubd { get; set; }
 }
 

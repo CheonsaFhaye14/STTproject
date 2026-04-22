@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace STTproject.Models;
 
@@ -29,7 +28,7 @@ public partial class SalesInvoice
     public string OrderType { get; set; } = null!;
 
     public DateOnly OrderDate { get; set; }
-    
+
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual Customer Customer { get; set; } = null!;
@@ -41,11 +40,4 @@ public partial class SalesInvoice
     public virtual SubDistributor SubDistributor { get; set; } = null!;
 
     public virtual User? UpdatedByNavigation { get; set; }
-
-    [NotMapped]
-    public ICollection<SalesInvoiceItem> Items
-    {
-        get => SalesInvoiceItems;
-        set => SalesInvoiceItems = value ?? new List<SalesInvoiceItem>();
-    }
 }

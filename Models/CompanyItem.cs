@@ -20,10 +20,4 @@ public partial class CompanyItem
     public int? UpdatedBy { get; set; }
 
     public DateTime? UpdatedDate { get; set; }
-
-    public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual ICollection<ItemMapping> ItemMappings { get; set; } = new List<ItemMapping>();
-
-    public virtual User? UpdatedByNavigation { get; set; }
 }

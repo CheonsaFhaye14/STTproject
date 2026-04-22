@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace STTproject.Models;
 
@@ -26,37 +25,11 @@ public partial class SubdItem
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual ItemMapping? ItemMapping { get; set; }
-
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 
     public virtual SubDistributor SubDistributor { get; set; } = null!;
 
-    public virtual SubdItemUom? SubdItemUom { get; set; }
+    public virtual ICollection<SubdItemUom> SubdItemUoms { get; set; } = new List<SubdItemUom>();
 
     public virtual User? UpdatedByNavigation { get; set; }
-
-    [NotMapped]
-    public string UOM => SubdItemUom?.UomName ?? string.Empty;
-
-    [NotMapped]
-    public int QuantityPerPiece =>
-        SubdItemUom is null
-            ? 1
-            : Math.Max(1, (int)Math.Round(SubdItemUom.ConversionToBase));
-
-    [NotMapped]
-    public int Price =>
-        SubdItemUom is null
-            ? 0
-            : (int)Math.Round(SubdItemUom.Price);
-
-    [NotMapped]
-    public int PricePerPiece =>
-        QuantityPerPiece <= 0
-            ? Price
-            : (int)Math.Round((decimal)Price / QuantityPerPiece);
-
-    [NotMapped]
-    public string UnitContent => "1";
 }

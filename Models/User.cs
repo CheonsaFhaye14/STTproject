@@ -9,7 +9,7 @@ public partial class User
 
     public string Username { get; set; } = null!;
 
-    public string Password { get; set; } = null!;
+    public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
 
@@ -21,10 +21,6 @@ public partial class User
 
     public DateTime? UpdatedDate { get; set; }
 
-    public virtual ICollection<CompanyItem> CompanyItemCreatedByNavigations { get; set; } = new List<CompanyItem>();
-
-    public virtual ICollection<CompanyItem> CompanyItemUpdatedByNavigations { get; set; } = new List<CompanyItem>();
-
     public virtual ICollection<CustomerBranch> CustomerBranchCreatedByNavigations { get; set; } = new List<CustomerBranch>();
 
     public virtual ICollection<CustomerBranch> CustomerBranchUpdatedByNavigations { get; set; } = new List<CustomerBranch>();
@@ -32,8 +28,6 @@ public partial class User
     public virtual ICollection<Customer> CustomerCreatedByNavigations { get; set; } = new List<Customer>();
 
     public virtual ICollection<Customer> CustomerUpdatedByNavigations { get; set; } = new List<Customer>();
-
-    public virtual ICollection<ItemMapping> ItemMappings { get; set; } = new List<ItemMapping>();
 
     public virtual ICollection<SalesInvoice> SalesInvoiceCreatedByNavigations { get; set; } = new List<SalesInvoice>();
 
