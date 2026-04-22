@@ -5,11 +5,11 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <div class="card-section">
-    <!-- LINE 1: SUB DISTRIBUTOR + SEARCH + LOCATION -->
+    <!-- LINE 1: SUB DISTRIBUTOR + LOCATION -->
     <div class="header-split">
         <div class="left-side">
             <label>SUB DISTRIBUTOR</label>
-            <input type="text" placeholder="Search Sub Distributor..." class="form-input" />
+            <input type="text" value="01GMA06" class="form-input" />
         </div>
         <div class="right-side">
             <label>LOCATION</label>
@@ -23,40 +23,40 @@
         <button class="btn-pink">IMPORT</button>
     </div>
 
-    <!-- LINE 3: INPUT ROW (label-card style) + ADD BUTTON -->
+    <!-- LINE 3: INPUT ROW -->
     <div class="form-row">
         <div class="label-card">
             <h5>ITEM CODE</h5>
             <div class="label-box">
-                <InputText @bind-Value="itemCode" placeholder="Enter code" />
+                <InputText @bind-Value="itemCode" placeholder="KSJ1298W" />
             </div>
         </div>
 
         <div class="label-card">
             <h5>ITEM NAME</h5>
             <div class="label-box">
-                <InputText @bind-Value="itemName" placeholder="Enter name" />
+                <InputText @bind-Value="itemName" placeholder="Ovaltine Premium" />
             </div>
         </div>
 
         <div class="label-card">
             <h5>UNIT CONTENT</h5>
             <div class="label-box">
-                <InputText @bind-Value="unitContent" placeholder="Enter unit" />
+                <InputText @bind-Value="unitContent" placeholder="400g" />
             </div>
         </div>
 
         <div class="label-card">
             <h5>UOM</h5>
             <div class="label-box">
-                <InputText @bind-Value="uom" placeholder="Enter UOM" />
+                <InputText @bind-Value="uom" placeholder="Jar" />
             </div>
         </div>
 
         <div class="label-card">
             <h5>QUANTITY PER PIECE</h5>
             <div class="label-box">
-                <InputNumber @bind-Value="qty" placeholder="Enter qty" />
+                <InputNumber @bind-Value="qty" placeholder="12" />
             </div>
         </div>
 
@@ -68,15 +68,91 @@
         </div>
 
         <div class="form-actions">
-            <!-- UPDATED MAP BUTTON -->
             <button class="btn-action" @onclick="GoToCompanyItems">MAP</button>
             <button class="btn-action" @onclick="AddItem">ADD</button>
         </div>
     </div>
 </div>
 
+<!-- DASHBOARD PANELS -->
+<div class="dashboard">
+    <!-- PRINCIPALS -->
+    <div class="card-section">
+        <h3>PRINCIPALS</h3>
+        <ul class="principal-list">
+            <li>ABF</li>
+            <li>EDGE</li>
+            <li>KELLOGGS</li>
+            <li>MPC</li>
+            <li>NIVEA</li>
+            <li>SCPG</li>
+        </ul>
+    </div>
+
+    <!-- CURRENT MAPPING -->
+    <div class="card-section">
+        <h3>CURRENT MAPPING</h3>
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th>ACTIONS</th>
+                    <th>COMPANY ITEM CODE</th>
+                    <th>SUB ITEM CODE</th>
+                    <th>DESCRIPTION</th>
+                    <th>PRICE</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var mapping in currentMappings)
+                {
+                    <tr>
+                        <td>
+                            <div class="action-icons">
+                                <button class="icon-btn edit-btn" @onclick="() => EditMapping(mapping)">
+                                    <i class="fa fa-edit"></i>
+                                </button>
+                                <button class="icon-btn delete-btn" @onclick="() => DeleteMapping(mapping)">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td>@mapping.CompanyItemCode</td>
+                        <td>@mapping.SubItemCode</td>
+                        <td>@mapping.Description</td>
+                        <td>@mapping.Price</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SUB DISTRIBUTOR ITEMS -->
+    <div class="card-section">
+        <h3>SUB DISTRIBUTOR ITEMS</h3>
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th>SUB ITEM CODE</th>
+                    <th>DESCRIPTION</th>
+                    <th>PRICE</th>
+                    <th>MAP</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>sample</td>
+                    <td>sample</td>
+                    <td>sample</td>
+                    <td>
+                        <button class="btn-action" @onclick="GoToCompanyItems">MAP</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 @code {
-    // Input fields
     private string? itemCode { get; set; }
     private string? itemName { get; set; }
     private string? unitContent { get; set; }
@@ -84,14 +160,40 @@
     private int? qty { get; set; }
     private decimal? price { get; set; }
 
+    // Sample model for current mapping
+    private List<CurrentMapping> currentMappings = new()
+    {
+        new CurrentMapping { CompanyItemCode="KSJ1298W", SubItemCode="01GMA06", Description="Ovaltine Premium 400g Jar", Price=120 },
+        new CurrentMapping { CompanyItemCode="ABC123", SubItemCode="02XYZ09", Description="Sample Item", Price=99 }
+    };
+
+    public class CurrentMapping
+    {
+        public string CompanyItemCode { get; set; } = "";
+        public string SubItemCode { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Price { get; set; }
+    }
+
     private void AddItem()
     {
         Console.WriteLine($"Added: {itemCode}, {itemName}, {unitContent}, {uom}, {qty}, {price}");
     }
 
-    // UPDATED METHOD FOR MAP BUTTON
     private void GoToCompanyItems()
     {
         Navigation.NavigateTo("/companyitems");
+    }
+
+    private void EditMapping(CurrentMapping mapping)
+    {
+        Console.WriteLine($"Editing {mapping.CompanyItemCode}");
+        // TODO: implement edit logic
+    }
+
+    private void DeleteMapping(CurrentMapping mapping)
+    {
+        currentMappings.Remove(mapping);
+        Console.WriteLine($"Deleted {mapping.CompanyItemCode}");
     }
 }

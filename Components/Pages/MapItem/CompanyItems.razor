@@ -1,60 +1,75 @@
 ﻿@page "/companyitems"
 
+<div class="card-section company-items">
+    <h3 class="title-center">COMPANY ITEMS</h3>
 
-<h2>COMPANY ITEMS</h2>
+    <!-- Search bar -->
+    <div class="search-bar center-bar">
+        <input type="text" placeholder="Search Company Item..." class="search-input" @bind="searchTerm" />
+        <button class="btn-search" @onclick="SearchCompanyItems">SEARCH</button>
+    </div>
 
-<!-- Header fields -->
-<div class="header-fields">
-    <div class="field">SUBD ITEM CODE</div>
-    <div class="field">ITEM NAME</div>
-    <div class="field">UNIT CONTENT</div>
-    <div class="field">UOM</div>
-    <div class="field">QUANTITY PER PIECE</div>
-    <div class="field">PRICE</div>
-</div>
+    <!-- Description + Price list -->
+    <div class="company-list">
+        <!-- Header row -->
+        <div class="company-header">
+            <span class="left-col">COMPANY ITEM DESCRIPTION</span>
+            <span class="right-col">PRICE</span>
+        </div>
 
-<!-- Search bar -->
-<div class="search-bar">
-    <input type="text" placeholder="Search Company Item..." class="form-input" />
-</div>
-
-<!-- Table layout for items -->
-<table class="companyitems-table">
-    <thead>
-        <tr>
-            <th>COMPANY ITEM DESCRIPTION</th>
-            <th>PRICE</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in companyitems)
+        <!-- Item rows -->
+        @foreach (var desc in companyItemDescriptions)
         {
-            <tr>
-                <td>@item.Description</td>
-                <td>@item.Price</td>
-            </tr>
+            <div class="company-row @(selectedItem == desc ? "selected-row" : "")"
+                 @onclick="() => SelectCompanyItem(desc)">
+                <span class="left-col clickable">@desc.Description</span>
+                <span class="right-col">@desc.Price</span>
+            </div>
         }
-    </tbody>
-</table>
+    </div>
+</div>
 
 @code {
-    public class CompanyItem
+    private string searchTerm { get; set; } = string.Empty;
+
+    private List<CompanyItemDescription> companyItemDescriptions = new()
     {
-        public string Description { get; set; } = string.Empty;
+        new CompanyItemDescription { Description="Ovaltine Premium 400g Jar x 12's", Price=120 },
+        new CompanyItemDescription { Description="Pringles SCO 102g Buy 2 Save 20", Price=99 }
+    };
+
+    public class CompanyItemDescription
+    {
+        public string Description { get; set; } = "";
         public decimal Price { get; set; }
     }
 
-    private List<CompanyItem> companyitems = new List<CompanyItem>
-    {
-        new CompanyItem { Description = "Ovaltine Premium 400g Jar x 12's", Price = 250 },
-        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 },
-        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 },
-        new CompanyItem { Description = "Pringles SCO 102g Buy 2 Save 20_1178646710506-B3520_CS", Price = 150 }
-    };
+    private List<CurrentMapping> currentMappings = new();
+    private CompanyItemDescription? selectedItem;
 
-    // Lifecycle method para makita kung may laman
-    protected override void OnInitialized()
+    public class CurrentMapping
     {
-        Console.WriteLine($"Items loaded: {companyitems.Count}");
+        public string CompanyItemCode { get; set; } = "";
+        public string SubItemCode { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Price { get; set; }
+    }
+
+    private void SelectCompanyItem(CompanyItemDescription desc)
+    {
+        selectedItem = desc;
+        currentMappings.Add(new CurrentMapping
+        {
+            CompanyItemCode = "AUTO-GEN",
+            SubItemCode = "01GMA06",
+            Description = desc.Description,
+            Price = desc.Price
+        });
+        Console.WriteLine($"Selected {desc.Description} and added to CURRENT MAPPING");
+    }
+
+    private void SearchCompanyItems()
+    {
+        Console.WriteLine($"Searching for {searchTerm}");
     }
 }
