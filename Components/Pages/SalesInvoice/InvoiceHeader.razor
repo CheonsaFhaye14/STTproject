@@ -50,8 +50,8 @@
         </div>
 
         <div class="form-group">
-            <label>Customer Code</label>
-            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:event="onchange" @bind:after="HandleCustomerCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
+            <label>Customer Number</label>
+            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -59,7 +59,13 @@
         </div>
         <div class="form-group">
             <label>Customer Name</label>
-            <input @bind="Invoice.CustomerName" disabled />
+            <select @bind="Invoice.CustomerId" @bind:after="HandleCustomerNameChanged" disabled="@IsSaved">
+                <option value="0">-- Select Customer --</option>
+                @foreach (var customer in FilteredCustomers)
+                {
+                    <option value="@customer.CustomerId">@customer.CustomerName</option>
+                }
+            </select>
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerId")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -357,16 +363,31 @@
 
     [Parameter] public List<Customer> Customers { get; set; } = new();
     [Parameter] public List<CustomerBranch> CustomerBranches { get; set; } = new();
+    [Parameter] public int SelectedSubdistributorId { get; set; }
 
     private List<CustomerBranch> FilteredCustomerBranches { get; set; } = new();
+
+    private IEnumerable<Customer> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId);
 
     protected override void OnParametersSet()
     {
         SyncCustomerState();
     }
 
-    private Task HandleCustomerCodeChanged()
+    private Task HandleInputCodeChanged()
     {
+        // When typing/pasting a code, clear out the ID internally so SyncCustomerState
+        // looks strictly by string instead of falling back to the old ID that hasn't changed yet.
+        Invoice.CustomerId = 0;
+        SyncCustomerState();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerNameChanged()
+    {
+        // When picking dropdown name, clear code out temporarily 
+        // to force the sync to prioritize searching by the Dropdown ID.
+        Invoice.CustomerCode = string.Empty;
         SyncCustomerState();
         return Task.CompletedTask;
     }
@@ -379,12 +400,19 @@
 
     private void SyncCustomerState()
     {
-        var selectedCustomer = Customers.FirstOrDefault(customer =>
-            customer.CustomerCode.Equals(Invoice.CustomerCode, StringComparison.OrdinalIgnoreCase));
+        var selectedCustomer = FilteredCustomers.FirstOrDefault(customer =>
+            !string.IsNullOrWhiteSpace(Invoice.CustomerCode) && customer.CustomerCode.Equals(Invoice.CustomerCode, StringComparison.OrdinalIgnoreCase));
 
-        if (selectedCustomer is null && Invoice.CustomerId > 0)
+        // Instead of falling back blindly, let's make sure the user hasn't explicitly
+        // deleted the code but the ID lingered from a prior selection.
+        if (selectedCustomer is null && Invoice.CustomerId > 0 && !string.IsNullOrWhiteSpace(Invoice.CustomerCode))
         {
-            selectedCustomer = Customers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+            selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+        }
+        else if (selectedCustomer is null && Invoice.CustomerId > 0 && string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        {
+             // If code is empty but ID was set (via dropdown), prioritize dropdown selection.
+             selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
         }
 
         if (selectedCustomer is null)

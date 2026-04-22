@@ -29,7 +29,8 @@
 }
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="ShowConfirm" OnEditClick="EnableEdit"
-               Customers="customers" CustomerBranches="customerBranches" />
+               Customers="customers" CustomerBranches="customerBranches" 
+               SelectedSubdistributorId="invoice.SubdistributorId" />
 
 @if (showConfirmModal)
 {
@@ -37,7 +38,7 @@
         <div class="modal-box">
             <h4>Are you sure you want to save?</h4>
 
-            <button class="btn-primary" @onclick="ConfirmSave">Yes</button>
+            <button class="btn-primary" @ref="yesButton" @onclick="ConfirmSave">Yes</button>
             <button class="btn-primary" @onclick="CancelSave">No</button>
         </div>
     </div>
@@ -58,6 +59,8 @@
 <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" />
 
 @code {
+    private ElementReference yesButton;
+
     private bool showAddItemsModal = false;
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<SalesInvoice>? objRef;
@@ -150,6 +153,10 @@
             objRef = DotNetObjectReference.Create(this);
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
             await jsModule.InvokeVoidAsync("registerF3", objRef);
+        }
+        if (showConfirmModal)
+        {
+            await yesButton.FocusAsync();
         }
     }
 

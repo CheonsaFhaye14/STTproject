@@ -30,6 +30,7 @@ a, .btn-link {
     color: black;
     border-radius: 10px;
     border: none;
+    box-shadow: 5px 5px 2px #888888;
 }
 
     .btn-secondary:hover {
@@ -166,7 +167,7 @@ label {
     gap: 14px;
 }
 
-.modal-field {
+.form-group {
     display: grid;
     gap: 6px;
 }

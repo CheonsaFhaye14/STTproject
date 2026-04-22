@@ -17,6 +17,8 @@ public partial class SubdItemUom
 
     public bool IsBaseUnit { get; set; }
 
+    public bool IsSellable { get; set; }
+
     public DateTime CreatedDate { get; set; }
 
     public int? CreatedBy { get; set; }

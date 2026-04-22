@@ -8,7 +8,7 @@
             <tr>
                 <th>SKU Code</th>
                 <th>Description</th>
-                <th>UOM</th>
+                <th>UOM ID</th>
                 <th>Qty</th>
                 <th>Price</th>
             </tr>
@@ -18,10 +18,10 @@
             {
                 <tr>
                     <td>@item.ItemCode</td>
-                    <td>@item.Description</td>
-                    <td>@item.Unit</td>
-                    <td>@GetDisplayedQuantity(item)</td>
-                    <td>@GetUnitPrice(item)</td>
+                    <td>@item.ItemName</td>
+                    <td>@item.UomName</td>
+                    <td>@item.Quantity</td>
+                    <td>@item.Price</td>
                 </tr>
             }
         </tbody>
@@ -40,36 +40,9 @@
     [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
 
-    private int GetDisplayedQuantity(InputItemModel item)
-    {
-        if (item.Unit.Equals("per piece", StringComparison.OrdinalIgnoreCase))
-        {
-            return item.Quantity;
-        }
-
-        var subdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
-        if (subdItem != null && !item.Unit.Equals(subdItem.UOM, StringComparison.OrdinalIgnoreCase))
-        {
-            return item.Quantity * subdItem.QuantityPerPiece;
-        }
-
-        return item.Quantity;
-    }
-
-    private int GetUnitPrice(InputItemModel item)
-    {
-        if (item.Unit.Equals("per piece", StringComparison.OrdinalIgnoreCase))
-        {
-            var subdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
-            return subdItem?.PricePerPiece ?? item.Price;
-        }
-
-        return item.Price;
-    }
-
     private int CalculateTotalPrice()
     {
-        return Items.Sum(i => GetDisplayedQuantity(i) * GetUnitPrice(i));
+        return Items.Sum(i => i.Price);
     }
 
     private async Task RemoveItem(InputItemModel item)

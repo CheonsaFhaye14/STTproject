@@ -37,7 +37,7 @@ public partial class SubdItem
     public virtual User? UpdatedByNavigation { get; set; }
 
     [NotMapped]
-    public string UOM => SubdItemUom?.UomName ?? "unit";
+    public string UOM => SubdItemUom?.UomName ?? string.Empty;
 
     [NotMapped]
     public int QuantityPerPiece =>
