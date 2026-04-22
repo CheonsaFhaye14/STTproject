@@ -35,7 +35,7 @@
                         {
                             @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId))
                             {
-                                <option value="@uom.UomName">@uom.UomName</option>
+                                <option value="@uom.SubdItemUomId">@uom.UomName</option>
                             }
                         }
                     </select>
