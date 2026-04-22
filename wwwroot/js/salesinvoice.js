@@ -10,6 +10,18 @@ export function registerF3(dotNetHelper) {
         if (event.key === 'F3') {
             event.preventDefault();
             dotNetHelper.invokeMethodAsync('OpenAddItemsModalFromShortcut');
+            return;
+        }
+
+        if (event.key === 'F4') {
+            event.preventDefault();
+            dotNetHelper.invokeMethodAsync('ToggleEditItemsModalFromShortcut');
+            return;
+        }
+
+        if (event.ctrlKey && (event.key === 's' || event.key === 'S')) {
+            event.preventDefault();
+            dotNetHelper.invokeMethodAsync('SaveOpenModalFromShortcut');
         }
     };
 

@@ -9,6 +9,8 @@ public partial class SubDistributor
 
     public string SubdCode { get; set; } = null!;
 
+    public string CompanySubdCode { get; set; } = null!;
+
     public string SubdName { get; set; } = null!;
 
     public string CityMunicipality { get; set; } = null!;

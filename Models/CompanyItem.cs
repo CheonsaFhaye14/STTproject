@@ -20,4 +20,6 @@ public partial class CompanyItem
     public int? UpdatedBy { get; set; }
 
     public DateTime? UpdatedDate { get; set; }
+
+    public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 }

@@ -1,0 +1,379 @@
+@using STTproject.Models
+@using Microsoft.AspNetCore.Components.Web
+
+@if (ShowModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h4>Edit Invoice Items</h4>
+                <button type="button" class="close-btn" @onclick="CancelModal">x</button>
+            </div>
+
+            <div class="modal-body">
+                @if (editableItems.Any())
+                {
+                    <div class="edit-form-grid">
+                        <div class="form-group form-group-full">
+                            <label>Item Name</label>
+                            <select @ref="itemNameSelectRef" value="@selectedItemIndex" @onchange="OnSelectedItemChanged"
+                                    @onkeydown="HandleItemNameKeyDown">
+                                @for (var i = 0; i < editableItems.Count; i++)
+                                {
+                                    var optionItem = editableItems[i];
+                                    <option value="@i">@optionItem.ItemName</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (SelectedItem != null)
+                        {
+                            <div class="form-group">
+                                <label>SKU</label>
+                                <input value="@SelectedItem.ItemCode" disabled />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Unit of Measure</label>
+                                <select @ref="uomSelectRef" value="@SelectedItem.UomName" @onchange="OnUomChanged"
+                                        @onkeydown="HandleUomKeyDown">
+                                    @foreach (var uom in GetSellableUoms(SelectedItem.SubdItemId))
+                                    {
+                                        <option value="@uom.SubdItemUomId">@uom.UomName</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Quantity</label>
+                                <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
+                                       @onchange="OnQuantityChanged" @onkeydown="HandleQuantityKeyDown" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Price</label>
+                                <input value="@SelectedItem.Price" disabled />
+                            </div>
+
+                            <div class="form-group form-group-full actions-row">
+                                <button @ref="removeButtonRef" type="button" class="btn remove-btn" @onclick="RemoveSelectedItem"
+                                        @onkeydown="HandleRemoveKeyDown">Remove Selected
+                                    Item</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                else
+                    {
+                        <div class="empty-state">No items to edit.</div>
+                    }
+                </div>
+
+                <div class="modal-actions">
+                    <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
+                            @onkeydown="HandleCancelKeyDown">Cancel</button>
+                    <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
+                            @onkeydown="HandleSaveKeyDown" disabled="@(!editableItems.Any())">Save
+                        Changes</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+@code {
+    [Parameter] public bool ShowModal { get; set; }
+    [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
+    [Parameter] public EventCallback OnCancelModal { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
+    [Parameter] public List<InputItemModel> Items { get; set; } = new();
+    [Parameter] public List<SubdItemUom> AvailableUoms { get; set; } = new();
+
+    private ElementReference itemNameSelectRef;
+    private ElementReference uomSelectRef;
+    private ElementReference quantityInputRef;
+    private ElementReference removeButtonRef;
+    private ElementReference cancelButtonRef;
+    private ElementReference saveButtonRef;
+
+    private bool wasShown;
+    private bool focusItemNameOnRender;
+    private List<InputItemModel> editableItems = new();
+    private int selectedItemIndex;
+
+    private InputItemModel? SelectedItem =>
+        selectedItemIndex >= 0 && selectedItemIndex < editableItems.Count
+            ? editableItems[selectedItemIndex]
+            : null;
+
+    protected override void OnParametersSet()
+    {
+        if (ShowModal && !wasShown)
+        {
+            editableItems = Items.Select(CloneItem).ToList();
+            selectedItemIndex = editableItems.Any() ? 0 : -1;
+            wasShown = true;
+            focusItemNameOnRender = true;
+        }
+        else if (!ShowModal)
+        {
+            wasShown = false;
+            focusItemNameOnRender = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ShowModal && focusItemNameOnRender && editableItems.Any())
+        {
+            focusItemNameOnRender = false;
+            await itemNameSelectRef.FocusAsync();
+        }
+    }
+
+    private IEnumerable<SubdItemUom> GetSellableUoms(int subdItemId)
+    {
+        return AvailableUoms
+            .Where(u => u.SubdItemId == subdItemId && u.IsSellable)
+            .OrderBy(u => u.UomName);
+    }
+
+    private void OnSelectedItemChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var index) && index >= 0 && index < editableItems.Count)
+        {
+            selectedItemIndex = index;
+        }
+    }
+
+    private void OnUomChanged(ChangeEventArgs e)
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        if (!int.TryParse(e.Value?.ToString(), out var uomId))
+        {
+            return;
+        }
+
+        item.UomName = uomId;
+        RecalculatePrice(item);
+    }
+
+    private void OnQuantityChanged(ChangeEventArgs e)
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        if (!int.TryParse(e.Value?.ToString(), out var quantity) || quantity <= 0)
+        {
+            item.Quantity = 1;
+        }
+        else
+        {
+            item.Quantity = quantity;
+        }
+
+        RecalculatePrice(item);
+    }
+
+    private void RecalculatePrice(InputItemModel item)
+    {
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == item.UomName && u.IsSellable);
+        if (selectedUom?.Price is null)
+        {
+            return;
+        }
+
+        item.Price = (int)(item.Quantity * selectedUom.Price.Value);
+    }
+
+    private void RemoveSelectedItem()
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        editableItems.Remove(item);
+
+        if (!editableItems.Any())
+        {
+            selectedItemIndex = -1;
+            return;
+        }
+
+        if (selectedItemIndex >= editableItems.Count)
+        {
+            selectedItemIndex = editableItems.Count - 1;
+        }
+    }
+
+    private async Task HandleItemNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            if (SelectedItem != null)
+            {
+                await uomSelectRef.FocusAsync();
+            }
+            else
+            {
+                await cancelButtonRef.FocusAsync();
+            }
+        }
+        else if (e.Key == "Tab" && e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await saveButtonRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleUomKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            await quantityInputRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleQuantityKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var item = SelectedItem;
+            if (item is null)
+            {
+                return;
+            }
+
+            if (item.Quantity <= 0)
+            {
+                item.Quantity = 1;
+                RecalculatePrice(item);
+                return;
+            }
+
+            await Task.Delay(10);
+            await removeButtonRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleRemoveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            await cancelButtonRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleCancelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            await saveButtonRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleSaveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveModal();
+            return;
+        }
+
+        if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await itemNameSelectRef.FocusAsync();
+        }
+    }
+
+    private async Task SaveModal()
+    {
+        var mergedItems = MergeMatchingItems(editableItems);
+
+        if (OnSaveEditedItems.HasDelegate)
+        {
+            await OnSaveEditedItems.InvokeAsync(mergedItems);
+        }
+
+        await CloseModal();
+    }
+
+    public async Task SaveFromShortcutAsync()
+    {
+        await SaveModal();
+    }
+
+    private async Task CancelModal()
+    {
+        if (OnCancelModal.HasDelegate)
+        {
+            await OnCancelModal.InvokeAsync();
+        }
+
+        await CloseModal();
+    }
+
+    private async Task CloseModal()
+    {
+        if (ShowModalChanged.HasDelegate)
+        {
+            await ShowModalChanged.InvokeAsync(false);
+        }
+    }
+
+    private static InputItemModel CloneItem(InputItemModel source)
+    {
+        return new InputItemModel
+        {
+            ItemCode = source.ItemCode,
+            SubdItemId = source.SubdItemId,
+            ItemName = source.ItemName,
+            UomName = source.UomName,
+            Quantity = source.Quantity,
+            Price = source.Price
+        };
+    }
+
+    private static List<InputItemModel> MergeMatchingItems(IEnumerable<InputItemModel> source)
+    {
+        var merged = source
+            .Where(item => item.Quantity > 0)
+            .GroupBy(item => new
+            {
+                item.SubdItemId,
+                item.UomName,
+                ItemCode = item.ItemCode.ToUpperInvariant(),
+                ItemName = item.ItemName.ToUpperInvariant()
+            })
+            .Select(group =>
+            {
+                var first = group.First();
+                return new InputItemModel
+                {
+                    ItemCode = first.ItemCode,
+                    SubdItemId = first.SubdItemId,
+                    ItemName = first.ItemName,
+                    UomName = first.UomName,
+                    Quantity = group.Sum(x => x.Quantity),
+                    Price = group.Sum(x => x.Price)
+                };
+            })
+            .ToList();
+
+        return merged;
+    }
+}

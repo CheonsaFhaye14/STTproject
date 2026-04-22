@@ -18,9 +18,11 @@
 
                 <div class="form-group">
                     <label>Item Name</label>
-                    <select @ref="ItemNameSelect" value="@NewItem.ItemName" @onchange="OnItemNameChanged" @onkeydown="HandleItemNameKeyDown"> 
+                    <select @ref="ItemNameSelect" value="@NewItem.ItemName" @onchange="OnItemNameChanged"
+                            @onkeydown="HandleItemNameKeyDown">
                         <option value="">-- Select --</option>
-                        @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId == SelectedSubdistributorId).DistinctBy(i => i.ItemName))
+                        @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId ==
+                                                                                                                                            SelectedSubdistributorId).DistinctBy(i => i.ItemName))
                         {
                             <option value="@subd.ItemName">@subd.ItemName</option>
                         }
@@ -29,11 +31,13 @@
 
                 <div class="form-group">
                     <label>Unit of Measure</label>
-                    <select @ref="UomSelect" value="@NewItem.UomName" @onchange="OnUomChanged" disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown">
+                    <select @ref="UomSelect" value="@NewItem.UomName" @onchange="OnUomChanged"
+                            disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown">
                         <option value="0">-- Select --</option>
                         @if (CurrentSubdItem != null)
                         {
-                            @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId))
+                            @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
+                                                                                                                                                                u.IsSellable))
                             {
                                 <option value="@uom.SubdItemUomId">@uom.UomName</option>
                             }
@@ -50,12 +54,10 @@
                 <div class="modal-actions">
                     <button type="button" class="btn-primary" @onclick="AddItemToQueue"
                             disabled="@(CurrentSubdItem == null || NewItem.UomName == 0 || NewItem.Quantity <= 0 || !HeaderIsSaved)">
-                            Add
-                        to list</button>
+                        Add</button>
                         <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel</button>
                         <button type="button" class="btn-primary" @onclick="SaveModal" disabled="@(!modalItems.Any())">
-                            Save
-                            items</button>
+                            Save items</button>
                         </div>
 
                         <div class="modal-help">Press Enter after typing quantity to add the item quickly.</div>
@@ -81,7 +83,8 @@
                                             <tr>
                                                 <td>@queuedItem.ItemCode</td>
                                                 <td>@queuedItem.ItemName</td>
-                                                <td>@(AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == queuedItem.UomName)?.UomName)</td>
+                                                <td>@(AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == queuedItem.UomName)?.UomName)
+                                                </td>
                                                 <td>@queuedItem.Quantity</td>
                                                 <td>@queuedItem.Price</td>
                                                 <td><button type="button" class="btn remove-btn"
@@ -175,7 +178,8 @@
         NewItem.ItemCode = sku;
 
         var selected = AvailableItems
-            .FirstOrDefault(i => i.SubdItemCode.Equals(sku, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId == SelectedSubdistributorId);
+            .FirstOrDefault(i => i.SubdItemCode.Equals(sku, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId ==
+SelectedSubdistributorId);
 
         if (selected != null)
         {
@@ -201,7 +205,8 @@
         NewItem.ItemName = itemName ?? string.Empty;
 
         var selected = AvailableItems
-            .FirstOrDefault(i => i.ItemName.Equals(itemName, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId == SelectedSubdistributorId);
+            .FirstOrDefault(i => i.ItemName.Equals(itemName, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId ==
+SelectedSubdistributorId);
 
         if (selected != null)
         {
@@ -226,7 +231,7 @@
         if (int.TryParse(e.Value?.ToString(), out int uomId))
         {
             NewItem.UomName = uomId;
-            CurrentUom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == uomId);
+            CurrentUom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == uomId && u.IsSellable);
         }
     }
 
@@ -237,15 +242,31 @@
             return;
         }
 
-        modalItems.Add(new InputItemModel
+        var lineTotalPrice = (int)(NewItem.Quantity * CurrentUom.Price);
+
+        var existingItem = modalItems.FirstOrDefault(item =>
+            item.SubdItemId == NewItem.SubdItemId &&
+            item.UomName == NewItem.UomName &&
+            item.ItemCode.Equals(NewItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
+            item.ItemName.Equals(NewItem.ItemName, StringComparison.OrdinalIgnoreCase));
+
+        if (existingItem != null)
         {
-            ItemCode = NewItem.ItemCode,
-            ItemName = NewItem.ItemName,
-            SubdItemId = NewItem.SubdItemId,
-            UomName = NewItem.UomName,
-            Quantity = NewItem.Quantity,
-            Price = (int)(NewItem.Quantity * CurrentUom.Price) // Price based on rules
-        });
+            existingItem.Quantity += NewItem.Quantity;
+            existingItem.Price += lineTotalPrice;
+        }
+        else
+        {
+            modalItems.Add(new InputItemModel
+            {
+                ItemCode = NewItem.ItemCode,
+                ItemName = NewItem.ItemName,
+                SubdItemId = NewItem.SubdItemId,
+                UomName = NewItem.UomName,
+                Quantity = NewItem.Quantity,
+                Price = lineTotalPrice // Price based on rules
+            });
+        }
 
         ResetNewItem();
     }
@@ -262,15 +283,13 @@
             await OnSaveModalItems.InvokeAsync(modalItems.ToList());
         }
 
-        if (ItemsChanged.HasDelegate)
-        {
-            var updatedItems = Items.ToList();
-            updatedItems.AddRange(modalItems);
-            await ItemsChanged.InvokeAsync(updatedItems);
-        }
-
         modalItems.Clear();
         await CloseModal();
+    }
+
+    public async Task SaveFromShortcutAsync()
+    {
+        await SaveModal();
     }
 
     private async Task CancelModal()

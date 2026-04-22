@@ -6,6 +6,7 @@ namespace STTproject.Services;
 public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
+    Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
     Task<SaveInvoiceResult> SaveInvoiceAsync(InputInvoiceModel invoice, List<InputItemModel> items, int currentInvoiceId, CancellationToken cancellationToken = default);
 }
 
@@ -22,22 +23,25 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     {
         var subdList = await _context.SubDistributors
             .AsNoTracking()
+            .Where(s => s.IsActive)
             .OrderBy(s => s.SubdCode)
             .ToListAsync(cancellationToken);
 
         var customers = await _context.Customers
             .AsNoTracking()
+            .Where(c => c.IsActive)
             .OrderBy(c => c.CustomerName)
             .ToListAsync(cancellationToken);
 
         var customerBranches = await _context.CustomerBranches
             .AsNoTracking()
+            .Where(b => b.IsActive)
             .OrderBy(b => b.BranchName)
             .ToListAsync(cancellationToken);
 
         var subdItems = await _context.SubdItems
             .AsNoTracking()
-            .Where(i => i.SubDistributorId == subDistributorId)
+            .Where(i => i.SubDistributorId == subDistributorId && i.IsActive)
             .OrderBy(i => i.SubdItemCode)
             .ToListAsync(cancellationToken);
 
@@ -62,14 +66,29 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         };
     }
 
+    public Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
+    {
+        return _context.SalesInvoices
+            .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+    }
+
     public async Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
         CancellationToken cancellationToken = default)
     {
-        var duplicateExists = await _context.SalesInvoices
-            .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+        if (items is null || !items.Any())
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "At least one item is required before committing the invoice."
+            };
+        }
+
+        var duplicateExists = await InvoiceNumberExistsAsync(invoice.InvoiceNumber, currentInvoiceId, cancellationToken);
 
         if (duplicateExists)
         {
@@ -80,8 +99,21 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
+        var customerExists = await _context.Customers
+            .AnyAsync(c => c.CustomerId == invoice.CustomerId && c.IsActive, cancellationToken);
+
+        if (!customerExists)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Selected customer is invalid."
+            };
+        }
+
         var customerHasBranches = await _context.CustomerBranches
-            .AnyAsync(cb => cb.CustomerId == invoice.CustomerId, cancellationToken);
+            .AnyAsync(cb => cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
 
         if (!customerHasBranches)
         {
@@ -104,7 +136,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         }
 
         var customerBranchExists = await _context.CustomerBranches
-            .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId, cancellationToken);
+            .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
 
         if (!customerBranchExists)
         {
@@ -118,25 +150,47 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         if (currentInvoiceId == 0)
         {
-            var salesInvoice = new Models.SalesInvoice
-            {
-                SalesInvoiceCode = invoice.InvoiceNumber,
-                SalesInvoiceDate = invoice.InvoiceDate,
-                OrderType = invoice.OrderType,
-                OrderDate = invoice.OrderDate,
-                CustomerId = invoice.CustomerId,
-                CustomerBranchId = invoice.CustomerBranchId,
-                SubDistributorId = invoice.SubdistributorId,
-            };
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-            _context.SalesInvoices.Add(salesInvoice);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            return new SaveInvoiceResult
+            try
             {
-                IsSaved = true,
-                InvoiceId = salesInvoice.SalesInvoiceId
-            };
+                var salesInvoice = new Models.SalesInvoice
+                {
+                    SalesInvoiceCode = invoice.InvoiceNumber,
+                    SalesInvoiceDate = invoice.InvoiceDate,
+                    OrderType = invoice.OrderType,
+                    OrderDate = invoice.OrderDate,
+                    CustomerId = invoice.CustomerId,
+                    CustomerBranchId = invoice.CustomerBranchId,
+                    SubDistributorId = invoice.SubdistributorId,
+                };
+
+                _context.SalesInvoices.Add(salesInvoice);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+                {
+                    SalesInvoiceId = salesInvoice.SalesInvoiceId,
+                    SubdItemId = i.SubdItemId,
+                    SubdItemUomId = i.UomName,
+                    Quantity = i.Quantity,
+                    Price = i.Price
+                }));
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return new SaveInvoiceResult
+                {
+                    IsSaved = true,
+                    InvoiceId = salesInvoice.SalesInvoiceId
+                };
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         var existing = await _context.SalesInvoices
@@ -152,38 +206,50 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        existing.SalesInvoiceCode = invoice.InvoiceNumber;
-        existing.SalesInvoiceDate = invoice.InvoiceDate;
-        existing.OrderDate = invoice.OrderDate;
-        existing.OrderType = invoice.OrderType;
-        existing.CustomerId = invoice.CustomerId;
-        existing.CustomerBranchId = invoice.CustomerBranchId;
-        existing.SubDistributorId = invoice.SubdistributorId;
+        await using var updateTransaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-        var existingItems = await _context.SalesInvoiceItems
-            .Where(x => x.SalesInvoiceId == currentInvoiceId)
-            .ToListAsync(cancellationToken);
-
-        if (existingItems.Any())
+        try
         {
-            _context.SalesInvoiceItems.RemoveRange(existingItems);
+            existing.SalesInvoiceCode = invoice.InvoiceNumber;
+            existing.SalesInvoiceDate = invoice.InvoiceDate;
+            existing.OrderDate = invoice.OrderDate;
+            existing.OrderType = invoice.OrderType;
+            existing.CustomerId = invoice.CustomerId;
+            existing.CustomerBranchId = invoice.CustomerBranchId;
+            existing.SubDistributorId = invoice.SubdistributorId;
+
+            var existingItems = await _context.SalesInvoiceItems
+                .Where(x => x.SalesInvoiceId == currentInvoiceId)
+                .ToListAsync(cancellationToken);
+
+            if (existingItems.Any())
+            {
+                _context.SalesInvoiceItems.RemoveRange(existingItems);
+            }
+
+            _context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+            {
+                SalesInvoiceId = currentInvoiceId,
+                SubdItemId = i.SubdItemId,
+                SubdItemUomId = i.UomName,
+                Quantity = i.Quantity,
+                Price = i.Price
+            }));
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await updateTransaction.CommitAsync(cancellationToken);
+
+            return new SaveInvoiceResult
+            {
+                IsSaved = true,
+                InvoiceId = currentInvoiceId
+            };
         }
-
-        _context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+        catch
         {
-            SalesInvoiceId = currentInvoiceId,
-            SubdItemId = i.SubdItemId,
-            Quantity = i.Quantity,
-            Price = i.Price
-        }));
-
-        await _context.SaveChangesAsync(cancellationToken);
-
-        return new SaveInvoiceResult
-        {
-            IsSaved = true,
-            InvoiceId = currentInvoiceId
-        };
+            await updateTransaction.RollbackAsync(cancellationToken);
+            throw;
+        }
     }
 }
 

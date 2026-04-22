@@ -28,40 +28,56 @@
     </div>
 }
 
-<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="ShowConfirm" OnEditClick="EnableEdit"
-               Customers="customers" CustomerBranches="customerBranches" 
-               SelectedSubdistributorId="invoice.SubdistributorId" />
-
-@if (showConfirmModal)
+@if (showCommitConfirmModal)
 {
     <div class="modal-overlay">
         <div class="modal-box">
-            <h4>Are you sure you want to save?</h4>
-
-            <button class="btn-primary" @ref="yesButton" @onclick="ConfirmSave">Yes</button>
-            <button class="btn-primary" @onclick="CancelSave">No</button>
+            <h4>Commit this invoice to the database?</h4>
+            <button class="btn-primary" @ref="commitYesButton" @onclick="ConfirmCommitInvoice">Yes</button>
+            <button class="btn-primary" @onclick="CancelCommitInvoice">No</button>
         </div>
     </div>
 }
+
+<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
+               Customers="customers" CustomerBranches="customerBranches" SelectedSubdistributorId="invoice.SubdistributorId"
+               CurrentInvoiceId="currentInvoiceId" />
 
 @if (isSaved)
 {
     <div class="item-actions">
         <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items</button>
+        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items</button>
         <span class="shortcut-hint">Press F3 to open the add-items modal</span>
+        <span class="shortcut-hint">Press F4 to open or close the edit-items modal</span>
     </div>
 }
 
-<InvoiceItems ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved" OnCancelModal="CloseAddItemsModal"
-              Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" AvailableUoms="availableUoms"
-              SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
+<InvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
+              OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+              AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
 
-<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems" />
+<EditItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
+           OnCancelModal="CloseEditItemsModal" Items="items" AvailableUoms="availableUoms" />
+
+<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                   AvailableUoms="availableUoms" />
+
+@if (isSaved)
+{
+    <div class="commit-actions">
+        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm" disabled="@(!items.Any())">Commit Invoice</button>
+        <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
+    </div>
+}
 
 @code {
-    private ElementReference yesButton;
-
+    private ElementReference commitYesButton;
     private bool showAddItemsModal = false;
+    private bool showEditItemsModal = false;
+    private bool showCommitConfirmModal = false;
+    private InvoiceItems? addItemsModalRef;
+    private EditItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<SalesInvoice>? objRef;
 
@@ -71,41 +87,13 @@
     }
 
     int currentInvoiceId = 0;
-    void ShowConfirm()
+    void SaveDraft()
     {
         if (!isSaved)
         {
-            showConfirmModal = true;
+            errorMessage = null;
+            isSaved = true;
         }
-    }
-
-    void CancelSave()
-    {
-        showConfirmModal = false;
-    }
-
-    async Task ConfirmSave()
-    {
-        showConfirmModal = false;
-        errorMessage = null;
-
-        var result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId);
-
-        if (result.IsDuplicate)
-        {
-            errorMessage = "Duplicate invoice number!";
-            return;
-        }
-
-        if (!result.IsSaved)
-        {
-            errorMessage = result.ErrorMessage ?? "Unable to save invoice.";
-            return;
-        }
-
-        currentInvoiceId = result.InvoiceId;
-
-        isSaved = true;
     }
 
     void EnableEdit()
@@ -115,6 +103,7 @@
 
     void OpenAddItemsModal()
     {
+        showEditItemsModal = false;
         showAddItemsModal = true;
     }
 
@@ -123,14 +112,54 @@
         showAddItemsModal = false;
     }
 
+    void OpenEditItemsModal()
+    {
+        if (!items.Any())
+        {
+            return;
+        }
+
+        showAddItemsModal = false;
+        showEditItemsModal = true;
+    }
+
+    void CloseEditItemsModal()
+    {
+        showEditItemsModal = false;
+    }
+
     Task OnModalItemsSaved(List<InputItemModel> savedItems)
     {
         if (savedItems?.Any() == true)
         {
-            items.AddRange(savedItems);
+            foreach (var savedItem in savedItems)
+            {
+                var existingItem = items.FirstOrDefault(item =>
+                    item.SubdItemId == savedItem.SubdItemId &&
+                    item.UomName == savedItem.UomName &&
+                    item.ItemCode.Equals(savedItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
+                    item.ItemName.Equals(savedItem.ItemName, StringComparison.OrdinalIgnoreCase));
+
+                if (existingItem != null)
+                {
+                    existingItem.Quantity += savedItem.Quantity;
+                    existingItem.Price += savedItem.Price;
+                }
+                else
+                {
+                    items.Add(savedItem);
+                }
+            }
         }
 
         showAddItemsModal = false;
+        return Task.CompletedTask;
+    }
+
+    Task OnEditedItemsSaved(List<InputItemModel> editedItems)
+    {
+        items = editedItems;
+        showEditItemsModal = false;
         return Task.CompletedTask;
     }
 
@@ -139,11 +168,143 @@
     {
         if (isSaved)
         {
-            showAddItemsModal = true;
+            if (showAddItemsModal)
+            {
+                showAddItemsModal = false;
+            }
+            else
+            {
+                showAddItemsModal = true;
+                showEditItemsModal = false;
+            }
+
             StateHasChanged();
         }
 
         return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task ToggleEditItemsModalFromShortcut()
+    {
+        if (isSaved)
+        {
+            if (!showEditItemsModal && !items.Any())
+            {
+                return Task.CompletedTask;
+            }
+
+            showEditItemsModal = !showEditItemsModal;
+            if (showEditItemsModal)
+            {
+                showAddItemsModal = false;
+            }
+
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task SaveOpenModalFromShortcut()
+    {
+        if (!isSaved)
+        {
+            return;
+        }
+
+        if (showAddItemsModal && addItemsModalRef != null)
+        {
+            await addItemsModalRef.SaveFromShortcutAsync();
+            return;
+        }
+
+        if (showEditItemsModal && editItemsModalRef != null)
+        {
+            await editItemsModalRef.SaveFromShortcutAsync();
+            return;
+        }
+
+        ShowCommitInvoiceConfirm();
+        StateHasChanged();
+    }
+
+    private void ShowCommitInvoiceConfirm()
+    {
+        if (!items.Any())
+        {
+            errorMessage = "Add at least one item before committing the invoice.";
+            return;
+        }
+
+        errorMessage = null;
+        showCommitConfirmModal = true;
+    }
+
+    private void CancelCommitInvoice()
+    {
+        showCommitConfirmModal = false;
+    }
+
+    private async Task ConfirmCommitInvoice()
+    {
+        showCommitConfirmModal = false;
+        await CommitInvoice();
+    }
+
+    private async Task CommitInvoice()
+    {
+        if (!items.Any())
+        {
+            errorMessage = "Add at least one item before committing the invoice.";
+            return;
+        }
+
+        errorMessage = null;
+
+        SaveInvoiceResult result;
+        try
+        {
+            result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId);
+        }
+        catch (Exception)
+        {
+            errorMessage = "Unable to commit invoice due to a database error.";
+            return;
+        }
+
+        if (result.IsDuplicate)
+        {
+            errorMessage = "Duplicate invoice number!";
+            return;
+        }
+
+        if (!result.IsSaved)
+        {
+            errorMessage = result.ErrorMessage ?? "Unable to commit invoice.";
+            return;
+        }
+
+        ResetAfterSuccessfulCommit();
+    }
+
+    private void ResetAfterSuccessfulCommit()
+    {
+        var selectedSubdistributorId = invoice.SubdistributorId;
+
+        invoice = new InputInvoiceModel
+        {
+            SubdistributorId = selectedSubdistributorId
+        };
+
+        items = new List<InputItemModel>();
+        currentInvoiceId = 0;
+        isSaved = false;
+        showAddItemsModal = false;
+        showEditItemsModal = false;
+        showCommitConfirmModal = false;
+        errorMessage = null;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -154,9 +315,10 @@
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
             await jsModule.InvokeVoidAsync("registerF3", objRef);
         }
-        if (showConfirmModal)
+
+        if (showCommitConfirmModal)
         {
-            await yesButton.FocusAsync();
+            await commitYesButton.FocusAsync();
         }
     }
 
@@ -172,7 +334,6 @@
         objRef?.Dispose();
     }
 
-    bool showConfirmModal = false;
     bool isSaved = false;
     string? errorMessage;
 

@@ -19,7 +19,7 @@
                 <tr>
                     <td>@item.ItemCode</td>
                     <td>@item.ItemName</td>
-                    <td>@item.UomName</td>
+                    <td>@ResolveUomName(item.UomName)</td>
                     <td>@item.Quantity</td>
                     <td>@item.Price</td>
                 </tr>
@@ -39,6 +39,13 @@
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
+    [Parameter] public List<SubdItemUom> AvailableUoms { get; set; } = new();
+
+    private string ResolveUomName(int uomId)
+    {
+        var uom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == uomId);
+        return uom?.UomName ?? string.Empty;
+    }
 
     private int CalculateTotalPrice()
     {

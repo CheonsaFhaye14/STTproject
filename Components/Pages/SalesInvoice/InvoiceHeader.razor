@@ -1,10 +1,13 @@
 @using STTproject.Models
+@using STTproject.Services
+@inject ISalesInvoiceService salesInvoiceService
 
 <div class="top-card">
     <div class="form-grid">
         <div class="form-group">
             <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved" @onkeydown="HandleInvoiceNumberKeyDown" />
+            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved"
+                   @bind:after="HandleInvoiceNumberChanged" @onkeydown="HandleInvoiceNumberKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceNumber")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -14,8 +17,7 @@
         <div class="form-group">
             <label>Sales Invoice Date</label>
             <input type="date" @bind="InvoiceDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY"
-                   @ref="invoiceDateInput"
-                   @onkeydown="HandleInvoiceDateKeyDown" />
+                   @ref="invoiceDateInput" @onkeydown="HandleInvoiceDateKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceDate")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -24,8 +26,7 @@
         
         <div class="form-group">
             <label>Order Date</label>
-            <input type="date" @bind="OrderDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY"
-                   @ref="orderDateInput"
+            <input type="date" @bind="OrderDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY" @ref="orderDateInput"
                    @onkeydown="HandleOrderDateKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "OrderDate")
             {
@@ -35,10 +36,8 @@
    
         <div class="form-group">
             <label>Order Type</label>
-            <select @bind="Invoice.OrderType"
-                    @ref="orderTypeSelect"
-                    @onkeydown="HandleOrderTypeKeyDown"
-            disabled="@IsSaved">
+            <select @bind="Invoice.OrderType" @ref="orderTypeSelect" @onkeydown="HandleOrderTypeKeyDown"
+                    disabled="@IsSaved">
                 <option value="">-- Select --</option>
                 <option value="invoice">Invoice</option>
                 <option value="credit">Credit</option>
@@ -51,7 +50,8 @@
 
         <div class="form-group">
             <label>Customer Number</label>
-            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
+            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:after="HandleInputCodeChanged"
+                   disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
             {
                 <span class="error-text">@ErrorMessage</span>
@@ -78,7 +78,8 @@
             <label>Customer Branch</label>
             @if (FilteredCustomerBranches.Any())
             {
-                <select @ref="customerBranchSelect" @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged" disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown">
+                <select @ref="customerBranchSelect" @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged"
+                        disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown">
                     <option value="0">-- Select branch --</option>
                     @foreach (var branch in FilteredCustomerBranches)
                     {
@@ -118,7 +119,7 @@
 
     @if (!IsSaved)
     {
-        <button class="btn-primary" @ref="saveButton" @onclick="ValidateAndSave">Save</button>
+        <button class="btn-primary" @ref="saveButton" @onclick="ValidateAndSave">Save Draft</button>
     }
     else
     {
@@ -147,9 +148,37 @@
                 ErrorMessage = "Invoice number is required.";
                 return;
             }
+
+            if (await InvoiceNumberExistsAsync())
+            {
+                ErrorField = "InvoiceNumber";
+                ErrorMessage = "Sales invoice number already exists.";
+                return;
+            }
+
             ClearError();
             await Task.Delay(10);
             await invoiceDateInput.FocusAsync();
+        }
+    }
+
+    private async Task HandleInvoiceNumberChanged()
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+        {
+            return;
+        }
+
+        if (await InvoiceNumberExistsAsync())
+        {
+            ErrorField = "InvoiceNumber";
+            ErrorMessage = "Sales invoice number already exists.";
+            return;
+        }
+
+        if (ErrorField == "InvoiceNumber")
+        {
+            ClearError();
         }
     }
 
@@ -261,10 +290,11 @@
 
     [Parameter] public InputInvoiceModel Invoice { get; set; } = new();
     [Parameter] public bool IsSaved { get; set; }
+    [Parameter] public int CurrentInvoiceId { get; set; }
     [Parameter] public EventCallback OnSaveClick { get; set; }
     [Parameter] public EventCallback OnEditClick { get; set; }
     private DateOnly? InvoiceDateValue
-    { 
+    {
         get => Invoice.InvoiceDate != default(DateOnly) ? Invoice.InvoiceDate : null;
         set => Invoice.InvoiceDate = value ?? default;
     }
@@ -296,6 +326,13 @@
         {
             ErrorField = "InvoiceNumber";
             ErrorMessage = "Invoice number is required.";
+            return;
+        }
+
+        if (await InvoiceNumberExistsAsync())
+        {
+            ErrorField = "InvoiceNumber";
+            ErrorMessage = "Sales invoice number already exists.";
             return;
         }
 
@@ -361,13 +398,19 @@
         IsSaved = true;
     }
 
+    private Task<bool> InvoiceNumberExistsAsync()
+    {
+        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId);
+    }
+
     [Parameter] public List<Customer> Customers { get; set; } = new();
     [Parameter] public List<CustomerBranch> CustomerBranches { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
 
     private List<CustomerBranch> FilteredCustomerBranches { get; set; } = new();
 
-    private IEnumerable<Customer> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId);
+    private IEnumerable<Customer> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId
+&& c.IsActive);
 
     protected override void OnParametersSet()
     {
@@ -385,7 +428,7 @@
 
     private Task HandleCustomerNameChanged()
     {
-        // When picking dropdown name, clear code out temporarily 
+        // When picking dropdown name, clear code out temporarily
         // to force the sync to prioritize searching by the Dropdown ID.
         Invoice.CustomerCode = string.Empty;
         SyncCustomerState();
@@ -401,7 +444,8 @@
     private void SyncCustomerState()
     {
         var selectedCustomer = FilteredCustomers.FirstOrDefault(customer =>
-            !string.IsNullOrWhiteSpace(Invoice.CustomerCode) && customer.CustomerCode.Equals(Invoice.CustomerCode, StringComparison.OrdinalIgnoreCase));
+            !string.IsNullOrWhiteSpace(Invoice.CustomerCode) && customer.CustomerCode.Equals(Invoice.CustomerCode,
+StringComparison.OrdinalIgnoreCase));
 
         // Instead of falling back blindly, let's make sure the user hasn't explicitly
         // deleted the code but the ID lingered from a prior selection.
@@ -411,8 +455,8 @@
         }
         else if (selectedCustomer is null && Invoice.CustomerId > 0 && string.IsNullOrWhiteSpace(Invoice.CustomerCode))
         {
-             // If code is empty but ID was set (via dropdown), prioritize dropdown selection.
-             selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+            // If code is empty but ID was set (via dropdown), prioritize dropdown selection.
+            selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
         }
 
         if (selectedCustomer is null)
@@ -432,7 +476,7 @@
         Invoice.CustomerType = selectedCustomer.CustomerType;
 
         FilteredCustomerBranches = CustomerBranches
-            .Where(branch => branch.CustomerId == selectedCustomer.CustomerId)
+            .Where(branch => branch.CustomerId == selectedCustomer.CustomerId && branch.IsActive)
             .OrderBy(branch => branch.BranchName)
             .ToList();
 
@@ -441,7 +485,8 @@
             if (Invoice.CustomerBranchId <= 0 || !FilteredCustomerBranches.Any(branch => branch.CustomerBranchId ==
 Invoice.CustomerBranchId))
             {
-                Invoice.CustomerBranchId = FilteredCustomerBranches[0].CustomerBranchId;
+                var defaultBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.IsDefault);
+                Invoice.CustomerBranchId = (defaultBranch ?? FilteredCustomerBranches[0]).CustomerBranchId;
             }
 
             ApplySelectedBranch(Invoice.CustomerBranchId);

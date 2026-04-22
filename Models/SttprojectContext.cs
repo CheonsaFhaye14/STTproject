@@ -21,8 +21,6 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<CustomerBranch> CustomerBranches { get; set; }
 
-    public virtual DbSet<ItemMapping> ItemMappings { get; set; }
-
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
     public virtual DbSet<SalesInvoiceItem> SalesInvoiceItems { get; set; }
@@ -40,15 +38,13 @@ public partial class SttprojectContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasDefaultSchema("ojt");
-
         modelBuilder.Entity<CompanyItem>(entity =>
         {
-            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E983839E2C7B0");
+            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E98382ABB7092");
 
             entity.ToTable("CompanyItem");
 
-            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEAA338318A").IsUnique();
+            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA6CFB0A91").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -61,11 +57,11 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<Customer>(entity =>
         {
-            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8F7607638");
+            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8556BE0E2");
 
-            entity.ToTable("Customer");
+            entity.ToTable("Customer", tb => tb.HasTrigger("trg_Customer_CascadeDeactivate"));
 
-            entity.HasIndex(e => e.CustomerCode, "UQ_ojt_Customer_Code").IsUnique();
+            entity.HasIndex(e => e.CustomerCode, "UQ_dbo_Customer_Code").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -92,13 +88,9 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<CustomerBranch>(entity =>
         {
-            entity.HasKey(e => e.CustomerBranchId).HasName("PK__Customer__6F555BBD71F361FA");
+            entity.HasKey(e => e.CustomerBranchId).HasName("PK__Customer__6F555BBDEFFE3AB0");
 
             entity.ToTable("CustomerBranch");
-
-            entity.HasIndex(e => e.CustomerId, "UX_CustomerBranch_Default")
-                .IsUnique()
-                .HasFilter("([IsDefault]=(1))");
 
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.BranchName)
@@ -118,8 +110,8 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_CustomerBranch_CreatedBy");
 
-            entity.HasOne(d => d.Customer).WithOne(p => p.CustomerBranch)
-                .HasForeignKey<CustomerBranch>(d => d.CustomerId)
+            entity.HasOne(d => d.Customer).WithMany(p => p.CustomerBranches)
+                .HasForeignKey(d => d.CustomerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_CustomerBranch_Customer");
 
@@ -128,27 +120,13 @@ public partial class SttprojectContext : DbContext
                 .HasConstraintName("FK_CustomerBranch_UpdatedBy");
         });
 
-        modelBuilder.Entity<ItemMapping>(entity =>
-        {
-            entity.HasKey(e => e.ItemMappingId).HasName("PK__ItemMapp__E4255E9B80AE4393");
-
-            entity.ToTable("ItemMapping");
-
-            entity.HasIndex(e => e.SubdItemId, "UQ_ItemMapping_SubdItem").IsUnique();
-
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-        });
-
         modelBuilder.Entity<SalesInvoice>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1A2B3DB990");
+            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1AE159E4DB");
 
             entity.ToTable("SalesInvoice");
 
-            entity.HasIndex(e => e.SalesInvoiceCode, "UQ__SalesInv__C94B6607EE7F5D76").IsUnique();
+            entity.HasIndex(e => e.SalesInvoiceCode, "UQ__SalesInv__C94B6607980D5849").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -185,7 +163,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SalesInvoiceItem>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64DF1C1337");
+            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC645D00B8C6");
 
             entity.ToTable("SalesInvoiceItem");
 
@@ -213,13 +191,16 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SubDistributor>(entity =>
         {
-            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD15E8FA9F");
+            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCDACF20B27");
 
             entity.ToTable("SubDistributor");
 
-            entity.HasIndex(e => e.SubdCode, "UQ__SubDistr__67B828E0F70364CF").IsUnique();
+            entity.HasIndex(e => e.CompanySubdCode, "UQ_SubDistributor_CompanySubdCode").IsUnique();
+
+            entity.HasIndex(e => e.SubdCode, "UQ__SubDistr__67B828E03B1D1EEA").IsUnique();
 
             entity.Property(e => e.CityMunicipality).HasMaxLength(100);
+            entity.Property(e => e.CompanySubdCode).HasMaxLength(50);
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -245,7 +226,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SubdItem>(entity =>
         {
-            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656E2CB39D1");
+            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656817A28B1");
 
             entity.ToTable("SubdItem");
 
@@ -258,6 +239,11 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.ItemName).HasMaxLength(150);
             entity.Property(e => e.SubdItemCode).HasMaxLength(50);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.CompanyItem).WithMany(p => p.SubdItems)
+                .HasForeignKey(d => d.CompanyItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SubdItem_CompanyItem");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.SubdItemCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
@@ -275,7 +261,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SubdItemUom>(entity =>
         {
-            entity.HasKey(e => e.SubdItemUomId).HasName("PK__SubdItem__6E1A39ADC8932256");
+            entity.HasKey(e => e.SubdItemUomId).HasName("PK__SubdItem__6E1A39AD7B032BDC");
 
             entity.ToTable("SubdItemUom");
 
@@ -304,9 +290,9 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4CD89976AC");
+            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C6E31FE06");
 
-            entity.HasIndex(e => e.Username, "UQ__Users__536C85E421704CE2").IsUnique();
+            entity.HasIndex(e => e.Username, "UQ__Users__536C85E4469D4D32").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")

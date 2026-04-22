@@ -23,6 +23,10 @@ public partial class SubdItem
 
     public DateTime? UpdatedDate { get; set; }
 
+    public int CompanyItemId { get; set; }
+
+    public virtual CompanyItem CompanyItem { get; set; } = null!;
+
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
