@@ -10,7 +10,7 @@
 
 
 <div class="title">
-    <h2>Hello,Catenza</h2>
+    <h2>Hello, @UserFullName</h2>
 </div>
 
 <!-- CARDS -->
@@ -40,7 +40,7 @@
     }
 </div>
 
-<!-- RECENT ACTIVITY -->
+<!-- RECENT ACTIVITY Table to be moved-->
 <div class="activity">
     <h3>Recent Activity...</h3>
 
@@ -74,25 +74,23 @@
         <span>Invoice Date</span>
     </div>
 
-    @* FOR ROW OF ACTIVITY
-        @foreach (var act in FilteredActivities)
-    {
-        <div class="activity-row">
-            <span>@act.BatchId</span>
-            <span>@act.Sub</span>
-            <span>@act.Date</span>
-        </div>
-    } *@
-
-
 </div>
 
 @code {
+    private int userid = 7; // Placeholder for user ID, to be replaced with actual user context
+    private string UserFullName = string.Empty;
+
     private List<SubDistributor> subdList = new();
 
     protected override async Task OnInitializedAsync()
     {
-        subdList = await homeService.GetSubDistributorsAsync();
+        var user = await homeService.GetUserAsync(userid);
+        if (user != null)
+        {
+            UserFullName = user.FullName;
+        }
+
+        subdList = await homeService.GetSubDistributorsAsync(userid);
     }
 
     void InputSalesInvoice(int subDistributorId)

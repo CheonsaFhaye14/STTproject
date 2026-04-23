@@ -5,7 +5,8 @@ namespace STTproject.Services;
 
 public interface IHomeService
 {
-    Task<List<SubDistributor>> GetSubDistributorsAsync(CancellationToken cancellationToken = default);
+    Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default);
+    Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default);
 }
 
 public class HomeService : IHomeService
@@ -17,11 +18,19 @@ public class HomeService : IHomeService
         _context = context;
     }
 
-    public Task<List<SubDistributor>> GetSubDistributorsAsync(CancellationToken cancellationToken = default)
+    public Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default)
     {
         return _context.SubDistributors
             .AsNoTracking()
+            .Where(s => s.EncoderId == userId && s.IsActive)
             .OrderBy(s => s.SubdCode)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        return _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
     }
 }
