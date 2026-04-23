@@ -9,6 +9,8 @@ public partial class SubDistributor
 
     public string SubdCode { get; set; } = null!;
 
+    public string CompanySubdCode { get; set; } = null!;
+
     public string SubdName { get; set; } = null!;
 
     public string CityMunicipality { get; set; } = null!;
@@ -26,8 +28,6 @@ public partial class SubDistributor
     public int? UpdatedBy { get; set; }
 
     public DateTime? UpdatedDate { get; set; }
-
-    public string CompanySubdCode { get; set; } = null!;
 
     public virtual User? CreatedByNavigation { get; set; }
 

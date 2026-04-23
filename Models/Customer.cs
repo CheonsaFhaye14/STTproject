@@ -27,7 +27,7 @@ public partial class Customer
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual CustomerBranch? CustomerBranch { get; set; }
+    public virtual ICollection<CustomerBranch> CustomerBranches { get; set; } = new List<CustomerBranch>();
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 

@@ -6,6 +6,7 @@
 @rendermode InteractiveServer
 
 @inject IHomeService homeService
+@inject IUserContextService userContext
 @inject NavigationManager Navigation
 
 
@@ -48,8 +49,12 @@
     <div class="filters">
         <div class="filter-group">
             <label>SUB DISTRIBUTOR</label>
-            <select>
+            <select @bind="selectedSubdCodeFilter">
                 <option value="">ALL</option>
+                @foreach (var subd in subdList)
+                {
+                    <option value="@subd.SubdCode">@subd.SubdCode</option>
+                }
             </select>
         </div>
 
@@ -67,23 +72,132 @@
         </div>
     </div>
 
-    <!-- HEADER -->
-    <div class="activity-header">
-        <span>BATCH ID</span>
-        <span>SubdCode</span>
-        <span>Invoice Date</span>
-    </div>
+    <table class="activity-table">
+        <thead>
+            <tr>
+                <th>BATCH ID</th>
+                <th>SubdCode</th>
+                <th>Invoice Date</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (FilteredActivityRows.Any())
+            {
+                @foreach (var row in FilteredActivityRows)
+                {
+                    <tr>
+                        <td>@row.BatchId</td>
+                        <td>@row.SubdCode</td>
+                        <td>
+                            @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
+                            {
+                                @row.LatestInvoiceDate.ToString(format: "MM-dd-yyyy")
+                            }
+                            else
+                            {
+                                @($"{row.LatestInvoiceDate:MM-dd-yyyy} - {row.OldestInvoiceDate:MM-dd-yyyy}")
+                            }
+                        </td>
+                        <td>
+                            <button class="btn-primary" @onclick="() => OpenBatchDetailsAsync(row)">View Details</button>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4">No sales invoice activity found.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
 
 </div>
 
+@if (showBatchDetailsModal)
+{
+    <div class="modal-overlay" @onclick="CloseBatchDetails">
+        <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4>Batch Details: @selectedBatchId</h4>
+            </div>
+            <div class="modal-body">
+                <table class="activity-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice Number</th>
+                            <th>Invoice Date</th>
+                            <th>Created Date</th>
+                            <th>Total Items</th>
+                            <th>Item Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (selectedBatchDetails.Any())
+                        {
+                            @foreach (var detail in selectedBatchDetails)
+                            {
+                                <tr>
+                                    <td>@detail.InvoiceNumber</td>
+                                    <td>@detail.InvoiceDate.ToString("MM-dd-yyyy")</td>
+                                    <td>@detail.CreatedDate.ToString("MM-dd-yyyy HH:mm")</td>
+                                    <td>@detail.TotalItems</td>
+                                    <td>
+                                        @if (detail.ItemDetails.Any())
+                                        {
+                                            <ul class="item-details-list">
+                                                @foreach (var item in detail.ItemDetails)
+                                                {
+                                                    <li>@item.ItemCode - @item.ItemName (@item.UomName), Qty: @item.Quantity, Price: @item.Price.ToString("N2")</li>
+                                                }
+                                            </ul>
+                                        }
+                                        else
+                                        {
+                                            <span>No item details</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="6">No invoice details found for this batch.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="CloseBatchDetails">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private int userid = 7; // Placeholder for user ID, to be replaced with actual user context
+    private int userid = 1; // Placeholder for user ID, to be replaced with actual user context
     private string UserFullName = string.Empty;
 
     private List<SubDistributor> subdList = new();
+    private List<HomeSalesInvoiceBatchRow> activityRows = new();
+    private string selectedSubdCodeFilter = string.Empty;
+    private bool showBatchDetailsModal;
+    private string selectedBatchId = string.Empty;
+    private List<HomeSalesInvoiceDetailRow> selectedBatchDetails = new();
+
+    private IEnumerable<HomeSalesInvoiceBatchRow> FilteredActivityRows =>
+        string.IsNullOrWhiteSpace(selectedSubdCodeFilter)
+            ? activityRows
+            : activityRows.Where(r => r.SubdCode.Equals(selectedSubdCodeFilter, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
+        userContext.UserId = userid;
+
         var user = await homeService.GetUserAsync(userid);
         if (user != null)
         {
@@ -91,11 +205,32 @@
         }
 
         subdList = await homeService.GetSubDistributorsAsync(userid);
+        activityRows = await homeService.GetSalesInvoiceBatchRowsAsync(userid);
     }
 
     void InputSalesInvoice(int subDistributorId)
     {
-        Navigation.NavigateTo($"/salesinvoice/{subDistributorId}");
+        Navigation.NavigateTo($"/salesinvoice/{subDistributorId}?uid={userid}");
+    }
+
+    async Task OpenBatchDetailsAsync(HomeSalesInvoiceBatchRow row)
+    {
+        selectedBatchId = row.BatchId;
+        selectedBatchDetails = await homeService.GetBatchInvoiceDetailsAsync(
+            userid,
+            row.SubDistributorId,
+            row.BatchCreatedDate,
+            row.FirstSalesInvoiceId,
+            row.LastSalesInvoiceId);
+
+        showBatchDetailsModal = true;
+    }
+
+    void CloseBatchDetails()
+    {
+        showBatchDetailsModal = false;
+        selectedBatchId = string.Empty;
+        selectedBatchDetails = new();
     }
 
 

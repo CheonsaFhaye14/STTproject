@@ -14,6 +14,7 @@ builder.Services.AddDbContext<SttprojectContext>(options =>
 
 builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
+builder.Services.AddScoped<IUserContextService, UserContextService>();
 
 var app = builder.Build();
 

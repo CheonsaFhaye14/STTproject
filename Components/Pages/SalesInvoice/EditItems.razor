@@ -1,13 +1,16 @@
 @using STTproject.Models
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 @if (ShowModal)
 {
-    <div class="modal-overlay">
+    <div class="modal-overlay" id="edit-items-modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
                 <h4>Edit Invoice Items</h4>
-                <button type="button" class="close-btn" @onclick="CancelModal">x</button>
             </div>
 
             <div class="modal-body">
@@ -18,6 +21,7 @@
                             <label>Item Name</label>
                             <select @ref="itemNameSelectRef" value="@selectedItemIndex" @onchange="OnSelectedItemChanged"
                                     @onkeydown="HandleItemNameKeyDown">
+                                <option value="-1">-- Select --</option>
                                 @for (var i = 0; i < editableItems.Count; i++)
                                 {
                                     var optionItem = editableItems[i];
@@ -47,6 +51,7 @@
                             <div class="form-group">
                                 <label>Quantity</label>
                                 <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
+                                       onbeforeinput="if (event.data && (event.data.includes('-') || (event.data === '0' && ((event.target.value === '') || (event.target.selectionStart === 0 && event.target.selectionEnd === event.target.value.length))))) event.preventDefault();"
                                        @onchange="OnQuantityChanged" @onkeydown="HandleQuantityKeyDown" />
                             </div>
 
@@ -94,6 +99,7 @@
     private ElementReference removeButtonRef;
     private ElementReference cancelButtonRef;
     private ElementReference saveButtonRef;
+    private IJSObjectReference? jsModule;
 
     private bool wasShown;
     private bool focusItemNameOnRender;
@@ -110,7 +116,12 @@
         if (ShowModal && !wasShown)
         {
             editableItems = Items.Select(CloneItem).ToList();
-            selectedItemIndex = editableItems.Any() ? 0 : -1;
+            foreach (var item in editableItems.Where(i => i.Quantity <= 0))
+            {
+                item.Quantity = 1;
+                RecalculatePrice(item);
+            }
+            selectedItemIndex = -1;
             wasShown = true;
             focusItemNameOnRender = true;
         }
@@ -123,6 +134,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        }
+
         if (ShowModal && focusItemNameOnRender && editableItems.Any())
         {
             focusItemNameOnRender = false;
@@ -219,6 +235,12 @@
     {
         if (e.Key == "Enter")
         {
+            if (selectedItemIndex < 0)
+            {
+                await OpenSelectDropdownAsync(itemNameSelectRef);
+                return;
+            }
+
             await Task.Delay(10);
             if (SelectedItem != null)
             {
@@ -229,17 +251,24 @@
                 await cancelButtonRef.FocusAsync();
             }
         }
-        else if (e.Key == "Tab" && e.ShiftKey)
-        {
-            await Task.Delay(10);
-            await saveButtonRef.FocusAsync();
-        }
     }
 
     private async Task HandleUomKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
+            var item = SelectedItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            if (item.UomName == 0)
+            {
+                await OpenSelectDropdownAsync(uomSelectRef);
+                return;
+            }
+
             await Task.Delay(10);
             await quantityInputRef.FocusAsync();
         }
@@ -292,11 +321,13 @@
             await SaveModal();
             return;
         }
+    }
 
-        if (e.Key == "Tab" && !e.ShiftKey)
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
+    {
+        if (jsModule != null)
         {
-            await Task.Delay(10);
-            await itemNameSelectRef.FocusAsync();
+            await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
         }
     }
 
@@ -375,5 +406,14 @@
             .ToList();
 
         return merged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule != null)
+        {
+            await jsModule.DisposeAsync();
+            jsModule = null;
+        }
     }
 }

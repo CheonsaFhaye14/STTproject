@@ -1,9 +1,13 @@
 ﻿@using Microsoft.AspNetCore.Components.Web
 @using STTproject.Models
+@using Microsoft.JSInterop
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 @if (ShowModal)
 {
-    <div class="modal-overlay">
+    <div class="modal-overlay" id="add-items-modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
                 <div class="invoice-header">
@@ -49,7 +53,8 @@
 
                 <div class="form-group">
                     <label>Quantity</label>
-                    <input @ref="QuantityInput" type="number" @bind="NewItem.Quantity" disabled="@(CurrentSubdItem == null)"
+                              <input @ref="QuantityInput" type="number" min="1" @bind="NewItem.Quantity" disabled="@(CurrentSubdItem == null)"
+                                  onbeforeinput="if (event.data && (event.data.includes('-') || (event.data === '0' && ((event.target.value === '') || (event.target.selectionStart === 0 && event.target.selectionEnd === event.target.value.length))))) event.preventDefault();"
                            @onkeydown="HandleQuantityKeyDown" />
                 </div>
 
@@ -107,6 +112,7 @@
     private ElementReference ItemNameSelect;
     private ElementReference UomSelect;
     private ElementReference QuantityInput;
+    private IJSObjectReference? jsModule;
 
     [Parameter] public bool ShowModal { get; set; }
     [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
@@ -148,6 +154,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        }
+
         if (ShowModal && !_wasModalShown)
         {
             _wasModalShown = true;
@@ -164,7 +175,7 @@
     }
 
     private List<InputItemModel> modalItems = new();
-    public InputItemModel NewItem { get; set; } = new();
+    public InputItemModel NewItem { get; set; } = CreateNewItem();
     private SubdItem? CurrentSubdItem { get; set; }
     private SubdItemUom? CurrentUom { get; set; }
     private string SelectedUOM { get; set; } = string.Empty;
@@ -321,9 +332,18 @@ SelectedSubdistributorId);
 
     private void ResetNewItem()
     {
-        NewItem = new InputItemModel();
+        NewItem = CreateNewItem();
+        NewItem.Quantity = 1;
         CurrentSubdItem = null;
         CurrentUom = null;
+    }
+
+    private static InputItemModel CreateNewItem()
+    {
+        return new InputItemModel
+        {
+            Quantity = 1
+        };
     }
 
     private async Task HandleSkuKeyDown(KeyboardEventArgs e)
@@ -346,6 +366,12 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
+            if (string.IsNullOrWhiteSpace(NewItem.ItemName))
+            {
+                await OpenSelectDropdownAsync(ItemNameSelect);
+                return;
+            }
+
             await Task.Delay(10);
             await UomSelect.FocusAsync();
         }
@@ -355,8 +381,31 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
+            if (NewItem.UomName == 0)
+            {
+                await OpenSelectDropdownAsync(UomSelect);
+                return;
+            }
+
             await Task.Delay(10);
             await QuantityInput.FocusAsync();
+        }
+    }
+
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
+    {
+        if (jsModule != null)
+        {
+            await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule != null)
+        {
+            await jsModule.DisposeAsync();
+            jsModule = null;
         }
     }
 

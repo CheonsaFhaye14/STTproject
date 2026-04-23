@@ -21,12 +21,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
     public async Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default)
     {
-        var subdList = await _context.SubDistributors
-            .AsNoTracking()
-            .Where(s => s.IsActive)
-            .OrderBy(s => s.SubdCode)
-            .ToListAsync(cancellationToken);
-
         var customers = await _context.Customers
             .AsNoTracking()
             .Where(c => c.IsActive)
@@ -53,16 +47,12 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 
-        var selectedSubd = subdList.FirstOrDefault(s => s.SubDistributorId == subDistributorId);
-
         return new SalesInvoicePageData
         {
-            Subdistributors = subdList,
             Customers = customers,
             CustomerBranches = customerBranches,
             SubdItems = subdItems,
-            ItemUoms = itemUoms,
-            SelectedSubd = selectedSubd
+            ItemUoms = itemUoms
         };
     }
 
@@ -255,12 +245,10 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
 public sealed class SalesInvoicePageData
 {
-    public List<SubDistributor> Subdistributors { get; set; } = new();
     public List<Customer> Customers { get; set; } = new();
     public List<CustomerBranch> CustomerBranches { get; set; } = new();
     public List<SubdItem> SubdItems { get; set; } = new();
     public List<SubdItemUom> ItemUoms { get; set; } = new();
-    public SubDistributor? SelectedSubd { get; set; }
 }
 
 public sealed class SaveInvoiceResult
