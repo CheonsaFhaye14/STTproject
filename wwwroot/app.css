@@ -139,20 +139,22 @@ label {
 }
 
 .modal-box {
-    background-color: white;
-    padding: 24px;
+    background-color: #FFFFFF;
     border-radius: 16px;
     width: min(760px, 95%);
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 5px 10px rgba(255, 182, 193, 0.5);
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 18px;
+    margin-bottom: 0px;
+    background-color: #F9DFDF;
+    color: white;
+    padding: 15px;
 }
 
 .close-btn {
@@ -165,11 +167,13 @@ label {
 .modal-body {
     display: grid;
     gap: 14px;
+    margin: 20px;
 }
 
 .form-group {
     display: grid;
     gap: 6px;
+    
 }
 
 .modal-actions {
