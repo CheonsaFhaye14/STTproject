@@ -23,6 +23,7 @@ export function registerF3(dotNetHelper) {
             event.preventDefault();
             dotNetHelper.invokeMethodAsync('SaveOpenModalFromShortcut');
         }
+
     };
 
     window.addEventListener('keydown', salesInvoiceKeydownHandler);
@@ -34,3 +35,4 @@ export function unregisterF3() {
         salesInvoiceKeydownHandler = null;
     }
 }
+
