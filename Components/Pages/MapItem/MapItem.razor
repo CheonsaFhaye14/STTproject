@@ -1,76 +1,52 @@
 ﻿@page "/mapitem"
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
-
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-<div class="card-section">
-    <!-- LINE 1: SUB DISTRIBUTOR + LOCATION -->
-    <div class="header-split">
-        <div class="left-side">
-            <label>SUB DISTRIBUTOR</label>
-            <input type="text" value="01GMA06" class="form-input" />
-        </div>
-        <div class="right-side">
-            <label>LOCATION</label>
-            <span class="badge">Warehouse A</span>
-        </div>
+<!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
+<div class="header-with-search">
+    <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
+    <input type="text" id="searchInput" placeholder="Search..." class="search-input" @oninput="UpdateLocation" />
+    <div class="location badge">
+        LOCATION: <span>@locationText</span>
     </div>
+</div>
 
-    <!-- LINE 2: DOWNLOAD TEMPLATE + IMPORT -->
-    <div class="button-group">
-        <button class="btn-pink">DOWNLOAD TEMPLATE</button>
-        <button class="btn-pink">IMPORT</button>
+<!-- DOWNLOAD TEMPLATE + IMPORT -->
+<div class="button-group">
+    <button class="btn-secondary">DOWNLOAD TEMPLATE</button>
+    <button class="btn-secondary">IMPORT</button>
+</div>
+
+<!-- INPUT ROW -->
+<div class="form-row">
+    <div class="form-group">
+        <h5>ITEM CODE</h5>
+        <InputText @bind-Value="itemCode" placeholder="KSJ1298W" />
     </div>
-
-    <!-- LINE 3: INPUT ROW -->
-    <div class="form-row">
-        <div class="label-card">
-            <h5>ITEM CODE</h5>
-            <div class="label-box">
-                <InputText @bind-Value="itemCode" placeholder="KSJ1298W" />
-            </div>
-        </div>
-
-        <div class="label-card">
-            <h5>ITEM NAME</h5>
-            <div class="label-box">
-                <InputText @bind-Value="itemName" placeholder="Ovaltine Premium" />
-            </div>
-        </div>
-
-        <div class="label-card">
-            <h5>UNIT CONTENT</h5>
-            <div class="label-box">
-                <InputText @bind-Value="unitContent" placeholder="400g" />
-            </div>
-        </div>
-
-        <div class="label-card">
-            <h5>UOM</h5>
-            <div class="label-box">
-                <InputText @bind-Value="uom" placeholder="Jar" />
-            </div>
-        </div>
-
-        <div class="label-card">
-            <h5>QUANTITY PER PIECE</h5>
-            <div class="label-box">
-                <InputNumber @bind-Value="qty" placeholder="12" />
-            </div>
-        </div>
-
-        <div class="label-card">
-            <h5>PRICE</h5>
-            <div class="label-box">
-                <InputNumber @bind-Value="price" placeholder="Enter price" />
-            </div>
-        </div>
-
-        <div class="form-actions">
-            <button class="btn-action" @onclick="GoToCompanyItems">MAP</button>
-            <button class="btn-action" @onclick="AddItem">ADD</button>
-        </div>
+    <div class="form-group">
+        <h5>ITEM NAME</h5>
+        <InputText @bind-Value="itemName" placeholder="Ovaltine Premium" />
+    </div>
+    <div class="form-group">
+        <h5>UNIT CONTENT</h5>
+        <InputText @bind-Value="unitContent" placeholder="400g" />
+    </div>
+    <div class="form-group">
+        <h5>UOM</h5>
+        <InputText @bind-Value="uom" placeholder="Jar" />
+    </div>
+    <div class="form-group">
+        <h5>QUANTITY PER PIECE</h5>
+        <InputNumber @bind-Value="qty" placeholder="12" />
+    </div>
+    <div class="form-group">
+        <h5>PRICE</h5>
+        <InputNumber @bind-Value="price" placeholder="Enter price" />
+    </div>
+    <div class="form-actions">
+        <button class="btn-primary" @onclick="GoToCompanyItems">MAP</button>
+        <button class="btn-primary" @onclick="AddItem">ADD</button>
     </div>
 </div>
 
@@ -108,10 +84,10 @@
                     <tr>
                         <td>
                             <div class="action-icons">
-                                <button class="icon-btn edit-btn" @onclick="() => EditMapping(mapping)">
+                                <button class="btn-primary" @onclick="() => EditMapping(mapping)">
                                     <i class="fa fa-edit"></i>
                                 </button>
-                                <button class="icon-btn delete-btn" @onclick="() => DeleteMapping(mapping)">
+                                <button class="btn-secondary" @onclick="() => DeleteMapping(mapping)">
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
@@ -144,7 +120,7 @@
                     <td>sample</td>
                     <td>sample</td>
                     <td>
-                        <button class="btn-action" @onclick="GoToCompanyItems">MAP</button>
+                        <button class="btn-primary" @onclick="GoToCompanyItems">MAP</button>
                     </td>
                 </tr>
             </tbody>
@@ -160,7 +136,8 @@
     private int? qty { get; set; }
     private decimal? price { get; set; }
 
-    // Sample model for current mapping
+    private string locationText = "---";
+
     private List<CurrentMapping> currentMappings = new()
     {
         new CurrentMapping { CompanyItemCode="KSJ1298W", SubItemCode="01GMA06", Description="Ovaltine Premium 400g Jar", Price=120 },
@@ -188,12 +165,17 @@
     private void EditMapping(CurrentMapping mapping)
     {
         Console.WriteLine($"Editing {mapping.CompanyItemCode}");
-        // TODO: implement edit logic
     }
 
     private void DeleteMapping(CurrentMapping mapping)
     {
         currentMappings.Remove(mapping);
         Console.WriteLine($"Deleted {mapping.CompanyItemCode}");
+    }
+
+    private void UpdateLocation(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        locationText = string.IsNullOrWhiteSpace(value) ? "---" : value;
     }
 }
