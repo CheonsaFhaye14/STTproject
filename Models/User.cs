@@ -29,6 +29,10 @@ public partial class User
 
     public virtual ICollection<Customer> CustomerUpdatedByNavigations { get; set; } = new List<Customer>();
 
+    public virtual ICollection<ItemsUom> ItemsUomCreatedByNavigations { get; set; } = new List<ItemsUom>();
+
+    public virtual ICollection<ItemsUom> ItemsUomUpdatedByNavigations { get; set; } = new List<ItemsUom>();
+
     public virtual ICollection<SalesInvoice> SalesInvoiceCreatedByNavigations { get; set; } = new List<SalesInvoice>();
 
     public virtual ICollection<SalesInvoice> SalesInvoiceUpdatedByNavigations { get; set; } = new List<SalesInvoice>();
@@ -40,10 +44,6 @@ public partial class User
     public virtual ICollection<SubDistributor> SubDistributorUpdatedByNavigations { get; set; } = new List<SubDistributor>();
 
     public virtual ICollection<SubdItem> SubdItemCreatedByNavigations { get; set; } = new List<SubdItem>();
-
-    public virtual ICollection<SubdItemUom> SubdItemUomCreatedByNavigations { get; set; } = new List<SubdItemUom>();
-
-    public virtual ICollection<SubdItemUom> SubdItemUomUpdatedByNavigations { get; set; } = new List<SubdItemUom>();
 
     public virtual ICollection<SubdItem> SubdItemUpdatedByNavigations { get; set; } = new List<SubdItem>();
 }

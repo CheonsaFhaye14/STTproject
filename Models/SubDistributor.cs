@@ -15,7 +15,7 @@ public partial class SubDistributor
 
     public string Province { get; set; } = null!;
 
-    public int EncoderId { get; set; }
+    public int? EncoderId { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -33,7 +33,7 @@ public partial class SubDistributor
 
     public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();
 
-    public virtual User Encoder { get; set; } = null!;
+    public virtual User? Encoder { get; set; }
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 

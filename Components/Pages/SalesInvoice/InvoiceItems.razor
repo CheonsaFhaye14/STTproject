@@ -1,4 +1,5 @@
 ﻿@using Microsoft.AspNetCore.Components.Web
+@using STTproject.Components.Helper
 @using STTproject.Models
 @using Microsoft.JSInterop
 
@@ -42,10 +43,9 @@
                         <option value="0">-- Select --</option>
                         @if (CurrentSubdItem != null)
                         {
-                            @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
-                                                                                                                                                                u.IsSellable))
+                            @foreach (var uom in AvailableUoms.Where(u => u.ItemsUomId == CurrentSubdItem.ItemsUomId))
                             {
-                                <option value="@uom.SubdItemUomId">@uom.UomName</option>
+                                <option value="@uom.ItemsUomId">@uom.UomName</option>
                             }
                         }
                     </select>
@@ -54,7 +54,8 @@
                 <div class="form-group">
                     <label>Quantity</label>
                               <input @ref="QuantityInput" type="number" min="1" @bind="NewItem.Quantity" disabled="@(CurrentSubdItem == null)"
-                                  onbeforeinput="if (event.data && (event.data.includes('-') || (event.data === '0' && ((event.target.value === '') || (event.target.selectionStart === 0 && event.target.selectionEnd === event.target.value.length))))) event.preventDefault();"
+                                  onbeforeinput="if (event.data && (event.data.includes('-') 
+)) event.preventDefault();"
                            @onkeydown="HandleQuantityKeyDown" />
                 </div>
 
@@ -90,10 +91,10 @@
                                             <tr>
                                                 <td>@queuedItem.ItemCode</td>
                                                 <td>@queuedItem.ItemName</td>
-                                                <td>@(AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == queuedItem.UomName)?.UomName)
+                                                <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.UomName)?.UomName)
                                                 </td>
                                                 <td>@queuedItem.Quantity</td>
-                                                <td>@queuedItem.Price</td>
+                                        <td>@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
                                                 <td><button type="button" class="btn remove-btn"
                                                                 @onclick="() => RemoveQueuedItem(queuedItem)">Remove</button></td>
                                                 </tr>
@@ -122,7 +123,7 @@
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
-    [Parameter] public List<SubdItemUom> AvailableUoms { get; set; } = new();
+    [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
     [Parameter] public bool HeaderIsSaved { get; set; } = false;
     
@@ -177,7 +178,7 @@
     private List<InputItemModel> modalItems = new();
     public InputItemModel NewItem { get; set; } = CreateNewItem();
     private SubdItem? CurrentSubdItem { get; set; }
-    private SubdItemUom? CurrentUom { get; set; }
+    private ItemsUom? CurrentUom { get; set; }
     private string SelectedUOM { get; set; } = string.Empty;
 
     private string NewSku
@@ -244,7 +245,7 @@ SelectedSubdistributorId);
         if (int.TryParse(e.Value?.ToString(), out int uomId))
         {
             NewItem.UomName = uomId;
-            CurrentUom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == uomId && u.IsSellable);
+            CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
         }
     }
 
@@ -255,7 +256,7 @@ SelectedSubdistributorId);
             return;
         }
 
-        var lineTotalPrice = (int)(NewItem.Quantity * CurrentUom.Price);
+        var lineTotalPrice = (int)(NewItem.Quantity * CurrentSubdItem.Price);
 
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
@@ -266,7 +267,7 @@ SelectedSubdistributorId);
         if (existingItem != null)
         {
             existingItem.Quantity += NewItem.Quantity;
-            existingItem.Price += lineTotalPrice;
+            existingItem.Amount += lineTotalPrice;
         }
         else
         {
@@ -277,7 +278,7 @@ SelectedSubdistributorId);
                 SubdItemId = NewItem.SubdItemId,
                 UomName = NewItem.UomName,
                 Quantity = NewItem.Quantity,
-                Price = lineTotalPrice // Price based on rules
+                Amount = lineTotalPrice // Amount based on rules
             });
         }
 

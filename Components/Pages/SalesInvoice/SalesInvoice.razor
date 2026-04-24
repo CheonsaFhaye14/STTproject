@@ -146,7 +146,7 @@
                 if (existingItem != null)
                 {
                     existingItem.Quantity += savedItem.Quantity;
-                    existingItem.Price += savedItem.Price;
+                    existingItem.Amount += savedItem.Amount;
                 }
                 else
                 {
@@ -371,7 +371,7 @@
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();
-    List<SubdItemUom> availableUoms = new();
+    List<ItemsUom> availableUoms = new();
     List<SubDistributor> subdList = new();
     List<Customer> customers = new();
     List<CustomerBranch> customerBranches = new();

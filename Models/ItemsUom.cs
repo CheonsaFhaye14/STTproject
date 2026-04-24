@@ -3,17 +3,15 @@ using System.Collections.Generic;
 
 namespace STTproject.Models;
 
-public partial class SubdItemUom
+public partial class ItemsUom
 {
-    public int SubdItemUomId { get; set; }
+    public int ItemsUomId { get; set; }
 
-    public int SubdItemId { get; set; }
+    public int CompanyItemId { get; set; }
 
     public string UomName { get; set; } = null!;
 
     public decimal ConversionToBase { get; set; }
-
-    public decimal? Price { get; set; }
 
     public bool IsBaseUnit { get; set; }
 
@@ -25,13 +23,11 @@ public partial class SubdItemUom
 
     public DateTime? UpdatedDate { get; set; }
 
-    public bool IsSellable { get; set; }
+    public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
-
-    public virtual SubdItem SubdItem { get; set; } = null!;
+    public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 
     public virtual User? UpdatedByNavigation { get; set; }
 }

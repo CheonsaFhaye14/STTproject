@@ -1,3 +1,4 @@
+@using STTproject.Components.Helper
 @using STTproject.Models
 
 <div class="card">
@@ -10,7 +11,7 @@
                 <th>Item</th>
                 <th>Unit of Measure</th>
                 <th>Quantity</th>
-                <th>Price</th>
+                <th>Line Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -21,7 +22,7 @@
                     <td>@item.ItemName</td>
                     <td>@ResolveUomName(item.UomName)</td>
                     <td>@item.Quantity</td>
-                    <td>@item.Price</td>
+                    <td>@FormatHelper.FormatPrice(@item.Amount)</td>
                 </tr>
             }
         </tbody>
@@ -39,17 +40,17 @@
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
-    [Parameter] public List<SubdItemUom> AvailableUoms { get; set; } = new();
+    [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
 
     private string ResolveUomName(int uomId)
     {
-        var uom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == uomId);
+        var uom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
         return uom?.UomName ?? string.Empty;
     }
 
     private int CalculateTotalPrice()
     {
-        return Items.Sum(i => i.Price);
+        return Items.Sum(i => i.Amount);
     }
 
     private async Task RemoveItem(InputItemModel item)

@@ -41,9 +41,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var subdItemIds = subdItems.Select(s => s.SubdItemId).ToList();
 
-        var itemUoms = await _context.SubdItemUoms
+        var itemUoms = await _context.ItemsUoms
             .AsNoTracking()
-            .Where(i => subdItemIds.Contains(i.SubdItemId) && i.IsSellable)
+            .Where(i => subdItemIds.Contains(i.CompanyItemId))
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 
@@ -162,9 +162,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 {
                     SalesInvoiceId = salesInvoice.SalesInvoiceId,
                     SubdItemId = i.SubdItemId,
-                    SubdItemUomId = i.UomName,
                     Quantity = i.Quantity,
-                    Price = i.Price
+                    Amount = i.Amount
                 }));
 
                 await _context.SaveChangesAsync(cancellationToken);
@@ -221,9 +220,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             {
                 SalesInvoiceId = currentInvoiceId,
                 SubdItemId = i.SubdItemId,
-                SubdItemUomId = i.UomName,
                 Quantity = i.Quantity,
-                Price = i.Price
+                Amount = i.Amount
             }));
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -248,7 +246,7 @@ public sealed class SalesInvoicePageData
     public List<Customer> Customers { get; set; } = new();
     public List<CustomerBranch> CustomerBranches { get; set; } = new();
     public List<SubdItem> SubdItems { get; set; } = new();
-    public List<SubdItemUom> ItemUoms { get; set; } = new();
+    public List<ItemsUom> ItemUoms { get; set; } = new();
 }
 
 public sealed class SaveInvoiceResult

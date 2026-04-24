@@ -21,5 +21,9 @@ public partial class CompanyItem
 
     public DateTime? UpdatedDate { get; set; }
 
+    public string Principal { get; set; } = null!;
+
+    public virtual ItemsUom? ItemsUom { get; set; }
+
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 }

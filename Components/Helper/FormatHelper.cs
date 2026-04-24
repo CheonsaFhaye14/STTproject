@@ -33,5 +33,10 @@ namespace STTproject.Components.Helper
 
             return $"{city}, {province}";
         }
+
+        public static string FormatPrice(decimal price)
+        {
+            return price.ToString("N2");
+        }
     }
 }

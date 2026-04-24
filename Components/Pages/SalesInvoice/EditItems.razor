@@ -43,7 +43,7 @@
                                         @onkeydown="HandleUomKeyDown">
                                     @foreach (var uom in GetSellableUoms(SelectedItem.SubdItemId))
                                     {
-                                        <option value="@uom.SubdItemUomId">@uom.UomName</option>
+                                        <option value="@uom.ItemsUomId">@uom.UomName</option>
                                     }
                                 </select>
                             </div>
@@ -57,7 +57,7 @@
 
                             <div class="form-group">
                                 <label>Price</label>
-                                <input value="@SelectedItem.Price" disabled />
+                                <input value="@SelectedItem.Amount" disabled />
                             </div>
 
                             <div class="form-group form-group-full actions-row">
@@ -91,7 +91,7 @@
     [Parameter] public EventCallback OnCancelModal { get; set; }
     [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
-    [Parameter] public List<SubdItemUom> AvailableUoms { get; set; } = new();
+    [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
 
     private ElementReference itemNameSelectRef;
     private ElementReference uomSelectRef;
@@ -146,10 +146,10 @@
         }
     }
 
-    private IEnumerable<SubdItemUom> GetSellableUoms(int subdItemId)
+    private IEnumerable<ItemsUom> GetSellableUoms(int subdItemId)
     {
         return AvailableUoms
-            .Where(u => u.SubdItemId == subdItemId && u.IsSellable)
+            .Where(u => u.ItemsUomId == subdItemId)
             .OrderBy(u => u.UomName);
     }
 
@@ -200,13 +200,13 @@
 
     private void RecalculatePrice(InputItemModel item)
     {
-        var selectedUom = AvailableUoms.FirstOrDefault(u => u.SubdItemUomId == item.UomName && u.IsSellable);
-        if (selectedUom?.Price is null)
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.UomName);
+        if (item?.Amount is null)
         {
             return;
         }
 
-        item.Price = (int)(item.Quantity * selectedUom.Price.Value);
+        item.Amount = (int)(item.Quantity * item.Amount);
     }
 
     private void RemoveSelectedItem()
@@ -375,7 +375,7 @@
             ItemName = source.ItemName,
             UomName = source.UomName,
             Quantity = source.Quantity,
-            Price = source.Price
+            Amount = source.Amount
         };
     }
 
@@ -400,7 +400,7 @@
                     ItemName = first.ItemName,
                     UomName = first.UomName,
                     Quantity = group.Sum(x => x.Quantity),
-                    Price = group.Sum(x => x.Price)
+                    Amount = group.Sum(x => x.Amount)
                 };
             })
             .ToList();

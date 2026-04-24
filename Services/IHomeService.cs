@@ -65,7 +65,9 @@ public class HomeService : IHomeService
                 si.SubDistributorId,
                 si.CreatedDate,
                 si.SalesInvoiceDate,
+                si.SubDistributor.SubdName,
                 si.SubDistributor.SubdCode
+
             })
             .ToListAsync(cancellationToken);
 
@@ -101,6 +103,7 @@ public class HomeService : IHomeService
                 {
                     BatchId = $"BATCH-{batchNumber:D4}",
                     SubDistributorId = invoice.SubDistributorId,
+                    SubdName = invoice.SubdName,
                     SubdCode = invoice.SubdCode,
                     LatestInvoiceDate = invoice.SalesInvoiceDate,
                     OldestInvoiceDate = invoice.SalesInvoiceDate,
@@ -203,9 +206,9 @@ public class HomeService : IHomeService
                 item.SalesInvoiceId,
                 item.SubdItem.SubdItemCode,
                 item.SubdItem.ItemName,
-                item.SubdItemUom.UomName,
+                item.SubdItem.ItemsUom.UomName,
                 item.Quantity,
-                item.Price
+                item.Amount
             })
             .ToListAsync(cancellationToken);
 
@@ -219,7 +222,7 @@ public class HomeService : IHomeService
                     ItemName = item.ItemName,
                     UomName = item.UomName,
                     Quantity = item.Quantity,
-                    Price = item.Price
+                    Price = item.Amount
                 }).ToList());
 
         foreach (var invoice in invoices)
@@ -238,6 +241,7 @@ public sealed class HomeSalesInvoiceBatchRow
 {
     public string BatchId { get; set; } = string.Empty;
     public int SubDistributorId { get; set; }
+    public string SubdName { get; set; } = string.Empty;
     public string SubdCode { get; set; } = string.Empty;
     public DateOnly LatestInvoiceDate { get; set; }
     public DateOnly OldestInvoiceDate { get; set; }

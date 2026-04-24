@@ -76,7 +76,7 @@
         <thead>
             <tr>
                 <th>BATCH ID</th>
-                <th>SubdCode</th>
+                <th>SubDistributor Name</th>
                 <th>Invoice Date</th>
                 <th>Action</th>
             </tr>
@@ -88,7 +88,7 @@
                 {
                     <tr>
                         <td>@row.BatchId</td>
-                        <td>@row.SubdCode</td>
+                        <td>@row.SubdName</td>
                         <td>
                             @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
                             {
@@ -150,7 +150,7 @@
                                             <ul class="item-details-list">
                                                 @foreach (var item in detail.ItemDetails)
                                                 {
-                                                    <li>@item.ItemCode - @item.ItemName (@item.UomName), Qty: @item.Quantity, Price: @item.Price.ToString("N2")</li>
+                                                    <li>@item.ItemCode - @item.ItemName (@item.UomName), Qty: @item.Quantity, Price:  @FormatHelper.FormatPrice(item.Price)</li>
                                                 }
                                             </ul>
                                         }
@@ -179,7 +179,7 @@
 }
 
 @code {
-    private int userid = 8; // Placeholder for user ID, to be replaced with actual user context
+    private int userid = 19; // Placeholder for user ID, to be replaced with actual user context
     private string UserFullName = string.Empty;
 
     private List<SubDistributor> subdList = new();
@@ -188,7 +188,7 @@
     private bool showBatchDetailsModal;
     private string selectedBatchId = string.Empty;
     private List<HomeSalesInvoiceDetailRow> selectedBatchDetails = new();
-
+      
     private IEnumerable<HomeSalesInvoiceBatchRow> FilteredActivityRows =>
         string.IsNullOrWhiteSpace(selectedSubdCodeFilter)
             ? activityRows
