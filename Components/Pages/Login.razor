@@ -1,0 +1,37 @@
+﻿@page "/login"
+@inject NavigationManager Navigation
+
+<div class="login-container">
+    <div class="login-card">
+        <h2 class="login-title">LOGIN</h2>
+
+        <div class="login-field">
+            <label>USERNAME</label>
+            <InputText @bind-Value="username" placeholder="Enter username" />
+        </div>
+
+        <div class="login-field">
+            <label>PASSWORD</label>
+            <InputText @bind-Value="password" type="password" placeholder="Enter password" />
+        </div>
+
+        <button class="login-btn" @onclick="HandleLogin">LOGIN</button>
+    </div>
+</div>
+
+@code {
+    private string? username;
+    private string? password;
+
+    private void HandleLogin()
+    {
+        if (username == "admin" && password == "1234")
+        {
+            Navigation.NavigateTo("/mapitem");
+        }
+        else
+        {
+            Console.WriteLine("Invalid login");
+        }
+    }
+}
