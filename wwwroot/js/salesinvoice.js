@@ -124,6 +124,12 @@ export function registerF3(dotNetHelper) {
         if (event.ctrlKey && (event.key === 's' || event.key === 'S')) {
             event.preventDefault();
             dotNetHelper.invokeMethodAsync('SaveOpenModalFromShortcut');
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            dotNetHelper.invokeMethodAsync('EscapeActionFromShortcut');
         }
 
     };

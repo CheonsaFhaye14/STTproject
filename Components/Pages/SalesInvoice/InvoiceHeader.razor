@@ -1,94 +1,99 @@
 @using STTproject.Models
 @using STTproject.Services
 @inject ISalesInvoiceService salesInvoiceService
+@inject IJSRuntime JS
 
 <div class="top-card">
     <div class="form-grid">
         <div class="form-group">
-            <label>Sales Invoice Number</label>
+            <label>@SalesInvoiceValidation.Header.InvoiceNumber.Label<span class="required-asterisk"> *</span></label>
             <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" @bind:event="oninput" disabled="@IsSaved"
-                   @bind:after="HandleInvoiceNumberChanged" @onkeydown="HandleInvoiceNumberKeyDown" />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceNumber")
+                   @bind:after="HandleInvoiceNumberChanged" @onkeydown="HandleInvoiceNumberKeyDown"
+                   @onblur="HandleInvoiceNumberBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key)</span>
             }
         </div>
 
         <div class="form-group">
-            <label>Sales Invoice Date</label>
-            <input type="date" @bind="InvoiceDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY"
-                   @ref="invoiceDateInput" @onkeydown="HandleInvoiceDateKeyDown" />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceDate")
+            <label>@SalesInvoiceValidation.Header.InvoiceDate.Label<span class="required-asterisk"> *</span></label>
+            <input type="date" @bind="InvoiceDateValue" @bind:event="oninput" disabled="@IsSaved"
+                   placeholder="MM/DD/YYYY" @ref="invoiceDateInput" @onkeydown="HandleInvoiceDateKeyDown"
+                   @onblur="HandleInvoiceDateBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key)</span>
             }
         </div>
         
         <div class="form-group">
-            <label>Order Date</label>
-            <input type="date" @bind="OrderDateValue" disabled="@IsSaved" placeholder="MM/DD/YYYY" @ref="orderDateInput"
-                   @onkeydown="HandleOrderDateKeyDown" />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "OrderDate")
+            <label>@SalesInvoiceValidation.Header.OrderDate.Label<span class="required-asterisk"> *</span></label>
+            <input type="date" @bind="OrderDateValue" @bind:event="oninput" disabled="@IsSaved" placeholder="MM/DD/YYYY"
+                   @ref="orderDateInput" @onkeydown="HandleOrderDateKeyDown" @onblur="HandleOrderDateBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.OrderDate.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.OrderDate.Key)</span>
             }
         </div>
    
         <div class="form-group">
-            <label>Order Type</label>
+            <label>@SalesInvoiceValidation.Header.OrderType.Label<span class="required-asterisk"> *</span></label>
             <select @bind="Invoice.OrderType" @ref="orderTypeSelect" @onkeydown="HandleOrderTypeKeyDown"
-                    disabled="@IsSaved">
+                    disabled="@IsSaved" @onblur="HandleOrderTypeBlur">
                 <option value="">-- Select --</option>
                 <option value="invoice">Invoice</option>
                 <option value="credit">Credit</option>
             </select>
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "OrderType")
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.OrderType.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.OrderType.Key)</span>
             }
         </div>
 
         <div class="form-group">
-            <label>Customer Number</label>
+            <label>@SalesInvoiceValidation.Header.CustomerCode.Label<span class="required-asterisk"> *</span></label>
             <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:event="oninput"
-                   @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
+                   @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown"
+                   @onblur="HandleCustomerCodeBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key)</span>
             }
         </div>
         <div class="form-group">
-            <label>Customer Name</label>
-            <select @bind="Invoice.CustomerId" @bind:after="HandleCustomerNameChanged" disabled="@IsSaved">
+            <label>@SalesInvoiceValidation.Header.CustomerName.Label<span class="required-asterisk"> *</span></label>
+            <select @ref="customerNameSelect" @bind="Invoice.CustomerId" @bind:after="HandleCustomerNameChanged"
+                    disabled="@IsSaved" @onkeydown="HandleCustomerNameKeyDown" @onblur="HandleCustomerNameBlur">
                 <option value="0">-- Select Customer --</option>
                 @foreach (var customer in FilteredCustomers)
                 {
                     <option value="@customer.CustomerId">@customer.CustomerName</option>
                 }
             </select>
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerId")
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)))
             {
-                <span class="error-text">@ErrorMessage</span>
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)</span>
             }
         </div>
 
 
 
         <div class="form-group">
-            <label>Customer Branch</label>
+            <label>@SalesInvoiceValidation.Header.CustomerBranch.Label<span class="required-asterisk"> *</span></label>
             @if (FilteredCustomerBranches.Any())
             {
                 <select @ref="customerBranchSelect" @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged"
-                        disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown">
+                        disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown" @onblur="HandleCustomerBranchBlur">
                     <option value="0">-- Select branch --</option>
                     @foreach (var branch in FilteredCustomerBranches)
                     {
                         <option value="@branch.CustomerBranchId">@branch.BranchName - @branch.City</option>
                     }
                 </select>
-                @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerBranchId")
+                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)))
                 {
-                    <span class="error-text">@ErrorMessage</span>
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)</span>
                 }
             }
             else
@@ -101,19 +106,11 @@
         <div class="form-group">
             <label>Customer Type</label>
             <input @bind="Invoice.CustomerType" disabled />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerType")
-            {
-                <span class="error-text">@ErrorMessage</span>
-            }
         </div>
         
         <div class="form-group">
             <label>Customer Address</label>
             <input @bind="Invoice.CustomerAddress" disabled />
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerAddress")
-            {
-                <span class="error-text">@ErrorMessage</span>
-            }
         </div>
     </div>
 
@@ -135,8 +132,12 @@
     private ElementReference orderDateInput;
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
+    private ElementReference customerNameSelect;
     private ElementReference customerBranchSelect;
     private ElementReference saveButton;
+    private IJSObjectReference? jsModule;
+    private bool customerBranchEnterPrimed;
+    private Dictionary<string, string> ValidationErrors { get; set; } = new();
 
     private async Task HandleInvoiceNumberKeyDown(KeyboardEventArgs e)
     {
@@ -144,19 +145,18 @@
         {
             if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
             {
-                ErrorField = "InvoiceNumber";
-                ErrorMessage = "Invoice number is required.";
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key,
+SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
                 return;
             }
 
             if (await InvoiceNumberExistsAsync())
             {
-                ErrorField = "InvoiceNumber";
-                ErrorMessage = "Sales invoice number already exists.";
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
                 return;
             }
 
-            ClearError();
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
             await Task.Delay(10);
             await invoiceDateInput.FocusAsync();
         }
@@ -171,15 +171,29 @@
 
         if (await InvoiceNumberExistsAsync())
         {
-            ErrorField = "InvoiceNumber";
-            ErrorMessage = "Sales invoice number already exists.";
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
             return;
         }
 
-        if (ErrorField == "InvoiceNumber")
+        ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+    }
+
+    private async Task HandleInvoiceNumberBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
         {
-            ClearError();
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key,
+SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
+            return;
         }
+
+        if (await InvoiceNumberExistsAsync())
+        {
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
+            return;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
     }
 
     private async Task HandleInvoiceDateKeyDown(KeyboardEventArgs e)
@@ -188,11 +202,10 @@
         {
             if (Invoice.InvoiceDate == default)
             {
-                ErrorField = "InvoiceDate";
-                ErrorMessage = "Invoice date is required.";
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key, SalesInvoiceValidation.Header.InvoiceDate.ErrorMessage);
                 return;
             }
-            ClearError();
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key);
             await Task.Delay(10);
             await orderDateInput.FocusAsync();
         }
@@ -201,6 +214,20 @@
             await Task.Delay(10);
             await orderDateInput.FocusAsync();
         }
+    }
+
+    private Task HandleInvoiceDateBlur(FocusEventArgs _)
+    {
+        if (Invoice.InvoiceDate == default)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key, SalesInvoiceValidation.Header.InvoiceDate.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task HandleOrderDateKeyDown(KeyboardEventArgs e)
@@ -209,11 +236,10 @@
         {
             if (Invoice.OrderDate == default)
             {
-                ErrorField = "OrderDate";
-                ErrorMessage = "Order date is required.";
+                SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
                 return;
             }
-            ClearError();
+            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
             await Task.Delay(10);
             await orderTypeSelect.FocusAsync();
         }
@@ -224,35 +250,76 @@
         }
     }
 
+    private Task HandleOrderDateBlur(FocusEventArgs _)
+    {
+        if (Invoice.OrderDate == default)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private async Task HandleOrderTypeKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
             if (string.IsNullOrWhiteSpace(Invoice.OrderType))
             {
-                ErrorField = "OrderType";
-                ErrorMessage = "Order type is required.";
+                SetFieldError(SalesInvoiceValidation.Header.OrderType.Key, SalesInvoiceValidation.Header.OrderType.ErrorMessage);
                 return;
             }
-            ClearError();
+            ClearFieldError(SalesInvoiceValidation.Header.OrderType.Key);
             await Task.Delay(10);
             await customerCodeInput.FocusAsync();
         }
+    }
+
+    private Task HandleOrderTypeBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.OrderType))
+        {
+            SetFieldError(SalesInvoiceValidation.Header.OrderType.Key, SalesInvoiceValidation.Header.OrderType.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.OrderType.Key);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task HandleCustomerCodeKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            // Note: Since CustomerCode onchange handles finding the customer,
-            // we just check if it successfully bound the CustomerId.
-            if (Invoice.CustomerId <= 0 && string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+            if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
             {
-                ErrorField = "CustomerCode";
-                ErrorMessage = "Customer code is required.";
+                ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+                ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+
+                if (FilteredCustomers.Any())
+                {
+                    await Task.Delay(10);
+                    await customerNameSelect.FocusAsync();
+                }
+
                 return;
             }
-            ClearError();
+
+            if (Invoice.CustomerId <= 0)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key, "Customer code is invalid.");
+                SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+                return;
+            }
+
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
             await Task.Delay(10);
             
             if (FilteredCustomerBranches.Any())
@@ -266,26 +333,124 @@
         }
     }
 
+    private Task HandleCustomerCodeBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+            return Task.CompletedTask;
+        }
+
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key, "Customer code is invalid.");
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return Task.CompletedTask;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        return Task.CompletedTask;
+    }
+
     private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            if (Invoice.CustomerBranchId <= 0)
+            if (!customerBranchEnterPrimed)
             {
-                ErrorField = "CustomerBranchId";
-                ErrorMessage = "Customer branch is required.";
+                customerBranchEnterPrimed = true;
+                await OpenSelectDropdownAsync(customerBranchSelect);
                 return;
             }
-            ClearError();
+
+            customerBranchEnterPrimed = false;
+
+            if (Invoice.CustomerBranchId <= 0)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+                return;
+            }
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
             await Task.Delay(10);
             await saveButton.FocusAsync();
         }
     }
 
-    private void ClearError()
+    private async Task HandleCustomerNameKeyDown(KeyboardEventArgs e)
     {
-        ErrorField = string.Empty;
-        ErrorMessage = string.Empty;
+        if (e.Key != "Enter")
+        {
+            return;
+        }
+
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        await Task.Delay(10);
+
+        if (FilteredCustomerBranches.Any())
+        {
+            await customerBranchSelect.FocusAsync();
+        }
+        else
+        {
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private Task HandleCustomerNameBlur(FocusEventArgs _)
+    {
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return Task.CompletedTask;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerBranchBlur(FocusEventArgs _)
+    {
+        if (!FilteredCustomerBranches.Any())
+        {
+            return Task.CompletedTask;
+        }
+
+        if (Invoice.CustomerBranchId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SetFieldError(string fieldKey, string message)
+    {
+        ValidationErrors[fieldKey] = message;
+    }
+
+    private void ClearFieldError(string fieldKey)
+    {
+        ValidationErrors.Remove(fieldKey);
+    }
+
+    private string GetFieldError(string fieldKey)
+    {
+        return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
     }
 
     [Parameter] public InputInvoiceModel Invoice { get; set; } = new();
@@ -305,10 +470,6 @@
         set => Invoice.OrderDate = value ?? default;
     }
 
-    // Error handling state
-    private string ErrorMessage = string.Empty;
-    private string ErrorField = string.Empty;
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -317,77 +478,21 @@
         }
     }
 
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
+    {
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
+    }
+
     private async Task ValidateAndSave()
     {
-        ErrorMessage = string.Empty;
-        ErrorField = string.Empty;
+        ValidationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
+            Invoice,
+            FilteredCustomerBranches.Any(),
+            InvoiceNumberExistsAsync);
 
-        if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+        if (ValidationErrors.Any())
         {
-            ErrorField = "InvoiceNumber";
-            ErrorMessage = "Invoice number is required.";
-            return;
-        }
-
-        if (await InvoiceNumberExistsAsync())
-        {
-            ErrorField = "InvoiceNumber";
-            ErrorMessage = "Sales invoice number already exists.";
-            return;
-        }
-
-        if (Invoice.InvoiceDate == default)
-        {
-            ErrorField = "InvoiceDate";
-            ErrorMessage = "Invoice date is required.";
-            return;
-        }
-
-        if (Invoice.OrderDate == default)
-        {
-            ErrorField = "OrderDate";
-            ErrorMessage = "Order date is required.";
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(Invoice.OrderType))
-        {
-            ErrorField = "OrderType";
-            ErrorMessage = "Order type is required.";
-            return;
-        }
-
-        if (Invoice.CustomerId <= 0)
-        {
-            ErrorField = "CustomerId";
-            ErrorMessage = "Customer is required.";
-            return;
-        }
-
-        if (FilteredCustomerBranches.Any() && Invoice.CustomerBranchId <= 0)
-        {
-            ErrorField = "CustomerBranchId";
-            ErrorMessage = "Customer branch is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(Invoice.CustomerType))
-        {
-            ErrorField = "CustomerType";
-            ErrorMessage = "Customer type is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(Invoice.CustomerName))
-        {
-            ErrorField = "CustomerName";
-            ErrorMessage = "Customer name is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(Invoice.CustomerAddress))
-        {
-            ErrorField = "CustomerAddress";
-            ErrorMessage = "Customer address is required.";
             return;
         }
 
@@ -437,6 +542,7 @@
 
     private Task HandleBranchChanged()
     {
+        customerBranchEnterPrimed = false;
         ApplySelectedBranch(Invoice.CustomerBranchId);
         return Task.CompletedTask;
     }

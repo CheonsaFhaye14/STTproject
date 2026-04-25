@@ -18,72 +18,86 @@
                 {
                     <div class="edit-form-grid">
                         <div class="form-group form-group-full">
-                            <label>Item Name</label>
-                            <select @ref="itemNameSelectRef" value="@selectedItemIndex" @onchange="OnSelectedItemChanged"
-                                    @onkeydown="HandleItemNameKeyDown">
-                                <option value="-1">-- Select --</option>
-                                @for (var i = 0; i < editableItems.Count; i++)
-                                {
-                                    var optionItem = editableItems[i];
-                                    <option value="@i">@GetItemNameOptionLabel(optionItem)</option>
-                                }
-                            </select>
-                        </div>
-
-                        @if (SelectedItem != null)
-                        {
-                            <div class="form-group">
-                                <label>SKU</label>
-                                <input value="@SelectedItem.ItemCode" disabled />
-                            </div>
-
-                            <div class="form-group">
-                                <label>Unit of Measure</label>
-                                <select @ref="uomSelectRef" value="@SelectedItem.ItemsUomId" @onchange="OnUomChanged"
-                                        @onkeydown="HandleUomKeyDown">
-                                    @foreach (var uom in GetSellableUoms(SelectedItem))
+                            <label>@SalesInvoiceValidation.EditItem.ItemName.Label<span class="required-asterisk">
+                                *</span></label>
+                                <select @ref="itemNameSelectRef" value="@selectedItemIndex" @onchange="OnSelectedItemChanged"
+                                        @onkeydown="HandleItemNameKeyDown" @onblur="HandleItemNameBlur">
+                                    <option value="-1">-- Select --</option>
+                                    @for (var i = 0; i < editableItems.Count; i++)
                                     {
-                                        <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                        var optionItem = editableItems[i];
+                                        <option value="@i">@GetItemNameOptionLabel(optionItem)</option>
                                     }
                                 </select>
+                                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.ItemName.Key)))
+                                {
+                                    <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.ItemName.Key)</span>
+                                }
                             </div>
 
-                            <div class="form-group">
-                                <label>Quantity</label>
-                                <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
-                                       onbeforeinput="if (event.data && (event.data.includes('-') || (event.data === '0' && ((event.target.value === '') || (event.target.selectionStart === 0 && event.target.selectionEnd === event.target.value.length))))) event.preventDefault();"
-                                       @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown" />
-                            </div>
+                            @if (SelectedItem != null)
+                            {
+                                <div class="form-group">
+                                    <label>SKU</label>
+                                    <input value="@SelectedItem.ItemCode" disabled />
+                                </div>
 
-                            <div class="form-group">
-                                <label>Line Amount</label>
-                                <input value="@SelectedItem.Amount" disabled />
-                            </div>
+                                <div class="form-group">
+                                    <label>@SalesInvoiceValidation.EditItem.Uom.Label<span class="required-asterisk"> *</span></label>
+                                    <select @ref="uomSelectRef" value="@SelectedItem.ItemsUomId" @onchange="OnUomChanged"
+                                            @onkeydown="HandleUomKeyDown" @onblur="HandleUomBlur">
+                                        @foreach (var uom in GetSellableUoms(SelectedItem))
+                                        {
+                                            <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                        }
+                                    </select>
+                                    @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.Uom.Key)))
+                                    {
+                                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.Uom.Key)</span>
+                                    }
+                                </div>
 
-                            <div class="form-group form-group-full actions-row">
-                                <button @ref="removeButtonRef" type="button" class="btn remove-btn" @onclick="RemoveSelectedItem"
-                                        @onkeydown="HandleRemoveKeyDown">Remove Selected
-                                    Item</button>
+                                <div class="form-group">
+                                    <label>@SalesInvoiceValidation.EditItem.Quantity.Label<span class="required-asterisk">
+                                        *</span></label>
+                                        <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
+                                               onbeforeinput="if (event.data && event.data.includes('-')) event.preventDefault();"
+                                               @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown" @onblur="HandleQuantityBlur" />
+                                        @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.Quantity.Key)))
+                                        {
+                                            <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.Quantity.Key)</span>
+                                        }
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Line Amount</label>
+                                        <input value="@SelectedItem.Amount" disabled />
+                                    </div>
+
+                                    <div class="form-group form-group-full actions-row">
+                                        <button @ref="removeButtonRef" type="button" class="btn remove-btn" @onclick="RemoveSelectedItem"
+                                                @onkeydown="HandleRemoveKeyDown">Remove Selected
+                                            Item</button>
+                                        </div>
+                                    }
                                 </div>
                             }
+                            else
+                            {
+                                <div class="empty-state">No items to edit.</div>
+                            }
                         </div>
-                    }
-                else
-                    {
-                        <div class="empty-state">No items to edit.</div>
-                    }
-                </div>
 
-                <div class="modal-actions">
-                    <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
-                            @onkeydown="HandleCancelKeyDown">Cancel</button>
-                    <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
-                            @onkeydown="HandleSaveKeyDown" disabled="@(!editableItems.Any())">Save
-                        Changes</button>
+                        <div class="modal-actions">
+                            <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
+                                    @onkeydown="HandleCancelKeyDown">Cancel</button>
+                            <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
+                                    @onkeydown="HandleSaveKeyDown" disabled="@(!editableItems.Any())">Save
+                                Changes</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        }
+                }
 
 @code {
     [Parameter] public bool ShowModal { get; set; }
@@ -100,6 +114,8 @@
     private ElementReference cancelButtonRef;
     private ElementReference saveButtonRef;
     private IJSObjectReference? jsModule;
+    private Dictionary<string, string> ValidationErrors { get; set; } = new();
+    private bool uomEnterPrimed;
 
     private bool wasShown;
     private bool focusItemNameOnRender;
@@ -121,13 +137,16 @@
                 item.Quantity = 1;
             }
             selectedItemIndex = -1;
+            ValidationErrors.Clear();
             wasShown = true;
             focusItemNameOnRender = true;
+            uomEnterPrimed = false;
         }
         else if (!ShowModal)
         {
             wasShown = false;
             focusItemNameOnRender = false;
+            uomEnterPrimed = false;
         }
     }
 
@@ -171,6 +190,8 @@
         if (int.TryParse(e.Value?.ToString(), out var index) && index >= 0 && index < editableItems.Count)
         {
             selectedItemIndex = index;
+            uomEnterPrimed = false;
+            ValidateDraft();
         }
     }
 
@@ -188,6 +209,8 @@
         }
 
         item.ItemsUomId = uomId;
+        uomEnterPrimed = false;
+        ValidateDraft();
     }
 
     private void OnQuantityInput(ChangeEventArgs e)
@@ -201,16 +224,21 @@
         var previousQuantity = item.Quantity > 0 ? item.Quantity : 1;
         var unitPrice = item.Amount / previousQuantity;
 
-        if (!int.TryParse(e.Value?.ToString(), out var quantity) || quantity <= 0)
+        if (!int.TryParse(e.Value?.ToString(), out var quantity))
         {
-            item.Quantity = 1;
-        }
-        else
-        {
-            item.Quantity = quantity;
+            item.Quantity = 0;
+            ValidateDraft();
+            return;
         }
 
-        item.Amount = unitPrice * item.Quantity;
+        item.Quantity = quantity;
+
+        if (quantity > 0)
+        {
+            item.Amount = unitPrice * item.Quantity;
+        }
+
+        ValidateDraft();
     }
 
     private void RemoveSelectedItem()
@@ -222,6 +250,7 @@
         }
 
         editableItems.Remove(item);
+        ValidationErrors.Clear();
 
         if (!editableItems.Any())
         {
@@ -241,9 +270,12 @@
         {
             if (selectedItemIndex < 0)
             {
+                ValidationErrors[SalesInvoiceValidation.EditItem.ItemName.Key] = SalesInvoiceValidation.EditItem.ItemName.ErrorMessage;
                 await OpenSelectDropdownAsync(itemNameSelectRef);
                 return;
             }
+
+            ValidateDraft();
 
             await Task.Delay(10);
             if (SelectedItem != null)
@@ -267,11 +299,23 @@
                 return;
             }
 
-            if (item.ItemsUomId == 0)
+            if (!uomEnterPrimed)
             {
+                uomEnterPrimed = true;
                 await OpenSelectDropdownAsync(uomSelectRef);
                 return;
             }
+
+            uomEnterPrimed = false;
+
+            if (item.ItemsUomId == 0)
+            {
+                ValidationErrors[SalesInvoiceValidation.EditItem.Uom.Key] = SalesInvoiceValidation.EditItem.Uom.ErrorMessage;
+                await OpenSelectDropdownAsync(uomSelectRef);
+                return;
+            }
+
+            ValidateDraft();
 
             await Task.Delay(10);
             await quantityInputRef.FocusAsync();
@@ -290,13 +334,51 @@
 
             if (item.Quantity <= 0)
             {
-                item.Quantity = 1;
+                ValidationErrors[SalesInvoiceValidation.EditItem.Quantity.Key] = SalesInvoiceValidation.EditItem.Quantity.ErrorMessage;
                 return;
             }
+
+            ValidateDraft();
 
             await Task.Delay(10);
             await removeButtonRef.FocusAsync();
         }
+    }
+
+    private Task HandleItemNameBlur(FocusEventArgs _)
+    {
+        if (selectedItemIndex < 0)
+        {
+            ValidationErrors[SalesInvoiceValidation.EditItem.ItemName.Key] = SalesInvoiceValidation.EditItem.ItemName.ErrorMessage;
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleUomBlur(FocusEventArgs _)
+    {
+        uomEnterPrimed = false;
+
+        if (SelectedItem is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleQuantityBlur(FocusEventArgs _)
+    {
+        if (SelectedItem is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
     }
 
     private async Task HandleRemoveKeyDown(KeyboardEventArgs e)
@@ -336,6 +418,13 @@
 
     private async Task SaveModal()
     {
+        ValidateDraft();
+
+        if (ValidationErrors.Any())
+        {
+            return;
+        }
+
         var mergedItems = MergeMatchingItems(editableItems);
 
         if (OnSaveEditedItems.HasDelegate)
@@ -409,6 +498,16 @@
             .ToList();
 
         return merged;
+    }
+
+    private void ValidateDraft()
+    {
+        ValidationErrors = SalesInvoiceValidation.ValidateEditItemDraft(SelectedItem, SelectedItem != null);
+    }
+
+    private string GetFieldError(string fieldKey)
+    {
+        return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
     }
 
     public async ValueTask DisposeAsync()

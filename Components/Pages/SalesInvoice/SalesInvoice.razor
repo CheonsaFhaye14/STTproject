@@ -22,6 +22,7 @@
 <div class="top-buttons">
     <button class="btn-primary">Download Template</button>
     <button class="btn-primary">Import</button>
+    <button class="btn-primary" @onclick="GoBackToHome">Esc - Back To Home</button>
 </div>
 
 @if (!string.IsNullOrEmpty(errorMessage))
@@ -231,6 +232,39 @@
 
         ShowCommitInvoiceConfirm();
         StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task EscapeActionFromShortcut()
+    {
+        if (showCommitConfirmModal)
+        {
+            showCommitConfirmModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showAddItemsModal)
+        {
+            showAddItemsModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showEditItemsModal)
+        {
+            showEditItemsModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        GoBackToHome();
+        return Task.CompletedTask;
+    }
+
+    private void GoBackToHome()
+    {
+        Navigation.NavigateTo("/");
     }
 
     private void ShowCommitInvoiceConfirm()

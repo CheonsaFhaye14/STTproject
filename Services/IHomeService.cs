@@ -39,7 +39,7 @@ public class HomeService : IHomeService
     {
         return _context.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, cancellationToken);
     }
 
     public async Task<List<HomeSalesInvoiceBatchRow>> GetSalesInvoiceBatchRowsAsync(int userId, CancellationToken cancellationToken = default)
