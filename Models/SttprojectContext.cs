@@ -34,7 +34,12 @@ public partial class SttprojectContext : DbContext
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        => optionsBuilder.UseSqlServer("Name=DefaultConnection");
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlServer("Name=DefaultConnection");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -146,8 +151,8 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.UomName).HasMaxLength(50);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.CompanyItem).WithOne(p => p.ItemsUom)
-                .HasForeignKey<ItemsUom>(d => d.CompanyItemId)
+            entity.HasOne(d => d.CompanyItem).WithMany(p => p.ItemsUoms)
+                .HasForeignKey(d => d.CompanyItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ItemsUom_CompanyItemId");
 

@@ -25,7 +25,7 @@
                                 @for (var i = 0; i < editableItems.Count; i++)
                                 {
                                     var optionItem = editableItems[i];
-                                    <option value="@i">@optionItem.ItemName</option>
+                                    <option value="@i">@GetItemNameOptionLabel(optionItem)</option>
                                 }
                             </select>
                         </div>
@@ -39,9 +39,9 @@
 
                             <div class="form-group">
                                 <label>Unit of Measure</label>
-                                <select @ref="uomSelectRef" value="@SelectedItem.UomName" @onchange="OnUomChanged"
+                                <select @ref="uomSelectRef" value="@SelectedItem.ItemsUomId" @onchange="OnUomChanged"
                                         @onkeydown="HandleUomKeyDown">
-                                    @foreach (var uom in GetSellableUoms(SelectedItem.SubdItemId))
+                                    @foreach (var uom in GetSellableUoms(SelectedItem))
                                     {
                                         <option value="@uom.ItemsUomId">@uom.UomName</option>
                                     }
@@ -52,11 +52,11 @@
                                 <label>Quantity</label>
                                 <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
                                        onbeforeinput="if (event.data && (event.data.includes('-') || (event.data === '0' && ((event.target.value === '') || (event.target.selectionStart === 0 && event.target.selectionEnd === event.target.value.length))))) event.preventDefault();"
-                                       @onchange="OnQuantityChanged" @onkeydown="HandleQuantityKeyDown" />
+                                       @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown" />
                             </div>
 
                             <div class="form-group">
-                                <label>Price</label>
+                                <label>Line Amount</label>
                                 <input value="@SelectedItem.Amount" disabled />
                             </div>
 
@@ -119,7 +119,6 @@
             foreach (var item in editableItems.Where(i => i.Quantity <= 0))
             {
                 item.Quantity = 1;
-                RecalculatePrice(item);
             }
             selectedItemIndex = -1;
             wasShown = true;
@@ -146,11 +145,25 @@
         }
     }
 
-    private IEnumerable<ItemsUom> GetSellableUoms(int subdItemId)
+    private IEnumerable<ItemsUom> GetSellableUoms(InputItemModel item)
     {
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
+        if (selectedUom is null)
+        {
+            return Enumerable.Empty<ItemsUom>();
+        }
+
         return AvailableUoms
-            .Where(u => u.ItemsUomId == subdItemId)
+            .Where(u => u.CompanyItemId == selectedUom.CompanyItemId)
             .OrderBy(u => u.UomName);
+    }
+
+    private string GetItemNameOptionLabel(InputItemModel item)
+    {
+        var uomName = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId)?.UomName;
+        return string.IsNullOrWhiteSpace(uomName)
+            ? item.ItemName
+            : $"{item.ItemName} ({uomName})";
     }
 
     private void OnSelectedItemChanged(ChangeEventArgs e)
@@ -174,17 +187,19 @@
             return;
         }
 
-        item.UomName = uomId;
-        RecalculatePrice(item);
+        item.ItemsUomId = uomId;
     }
 
-    private void OnQuantityChanged(ChangeEventArgs e)
+    private void OnQuantityInput(ChangeEventArgs e)
     {
         var item = SelectedItem;
         if (item is null)
         {
             return;
         }
+
+        var previousQuantity = item.Quantity > 0 ? item.Quantity : 1;
+        var unitPrice = item.Amount / previousQuantity;
 
         if (!int.TryParse(e.Value?.ToString(), out var quantity) || quantity <= 0)
         {
@@ -195,18 +210,7 @@
             item.Quantity = quantity;
         }
 
-        RecalculatePrice(item);
-    }
-
-    private void RecalculatePrice(InputItemModel item)
-    {
-        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.UomName);
-        if (item?.Amount is null)
-        {
-            return;
-        }
-
-        item.Amount = (int)(item.Quantity * item.Amount);
+        item.Amount = unitPrice * item.Quantity;
     }
 
     private void RemoveSelectedItem()
@@ -263,7 +267,7 @@
                 return;
             }
 
-            if (item.UomName == 0)
+            if (item.ItemsUomId == 0)
             {
                 await OpenSelectDropdownAsync(uomSelectRef);
                 return;
@@ -287,7 +291,6 @@
             if (item.Quantity <= 0)
             {
                 item.Quantity = 1;
-                RecalculatePrice(item);
                 return;
             }
 
@@ -373,7 +376,7 @@
             ItemCode = source.ItemCode,
             SubdItemId = source.SubdItemId,
             ItemName = source.ItemName,
-            UomName = source.UomName,
+            ItemsUomId = source.ItemsUomId,
             Quantity = source.Quantity,
             Amount = source.Amount
         };
@@ -386,7 +389,7 @@
             .GroupBy(item => new
             {
                 item.SubdItemId,
-                item.UomName,
+                item.ItemsUomId,
                 ItemCode = item.ItemCode.ToUpperInvariant(),
                 ItemName = item.ItemName.ToUpperInvariant()
             })
@@ -398,7 +401,7 @@
                     ItemCode = first.ItemCode,
                     SubdItemId = first.SubdItemId,
                     ItemName = first.ItemName,
-                    UomName = first.UomName,
+                    ItemsUomId = first.ItemsUomId,
                     Quantity = group.Sum(x => x.Quantity),
                     Amount = group.Sum(x => x.Amount)
                 };

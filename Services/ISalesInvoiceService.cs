@@ -39,11 +39,14 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .OrderBy(i => i.SubdItemCode)
             .ToListAsync(cancellationToken);
 
-        var subdItemIds = subdItems.Select(s => s.SubdItemId).ToList();
+        var companyItemIds = subdItems
+            .Select(s => s.CompanyItemId)
+            .Distinct()
+            .ToList();
 
         var itemUoms = await _context.ItemsUoms
             .AsNoTracking()
-            .Where(i => subdItemIds.Contains(i.CompanyItemId))
+            .Where(i => companyItemIds.Contains(i.CompanyItemId))
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 

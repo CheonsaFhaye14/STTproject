@@ -20,7 +20,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>SKU</label>
-                    <input @ref="SkuCodeInput" @bind="NewSku" @onkeydown="HandleSkuKeyDown" />
+                    <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown" />
                 </div>
 
                 <div class="form-group">
@@ -29,7 +29,7 @@
                             @onkeydown="HandleItemNameKeyDown">
                         <option value="">-- Select --</option>
                         @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId ==
-                                                                                                                                            SelectedSubdistributorId).DistinctBy(i => i.ItemName))
+                                                                                                                                                                    SelectedSubdistributorId).DistinctBy(i => i.ItemName))
                         {
                             <option value="@subd.ItemName">@subd.ItemName</option>
                         }
@@ -38,12 +38,12 @@
 
                 <div class="form-group">
                     <label>Unit of Measure</label>
-                    <select @ref="UomSelect" value="@NewItem.UomName" @onchange="OnUomChanged"
+                    <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
                             disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown">
                         <option value="0">-- Select --</option>
                         @if (CurrentSubdItem != null)
                         {
-                            @foreach (var uom in AvailableUoms.Where(u => u.ItemsUomId == CurrentSubdItem.ItemsUomId))
+                            @foreach (var uom in AvailableUoms.Where(u => u.CompanyItemId == CurrentSubdItem.CompanyItemId))
                             {
                                 <option value="@uom.ItemsUomId">@uom.UomName</option>
                             }
@@ -53,15 +53,19 @@
 
                 <div class="form-group">
                     <label>Quantity</label>
-                              <input @ref="QuantityInput" type="number" min="1" @bind="NewItem.Quantity" disabled="@(CurrentSubdItem == null)"
-                                  onbeforeinput="if (event.data && (event.data.includes('-') 
-)) event.preventDefault();"
-                           @onkeydown="HandleQuantityKeyDown" />
+                      <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
+                          disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
+                      )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown" />
+                </div>
+
+                <div class="form-group">
+                    <label>Normal Price</label>
+                    <input value="@GetNormalPriceDisplay()" disabled />
                 </div>
 
                 <div class="modal-actions">
                     <button type="button" class="btn-primary" @onclick="AddItemToQueue"
-                            disabled="@(CurrentSubdItem == null || NewItem.UomName == 0 || NewItem.Quantity <= 0 || !HeaderIsSaved)">
+                            disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || NewItem.Quantity <= 0 || !HeaderIsSaved)">
                         Add</button>
                         <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel</button>
                         <button type="button" class="btn-primary" @onclick="SaveModal" disabled="@(!modalItems.Any())">
@@ -81,7 +85,7 @@
                                             <th>Name</th>
                                             <th>UOM</th>
                                             <th>Qty</th>
-                                            <th>Price</th>
+                                            <th>Line Amount</th>
                                             <th></th>
                                         </tr>
                                     </thead>
@@ -91,10 +95,10 @@
                                             <tr>
                                                 <td>@queuedItem.ItemCode</td>
                                                 <td>@queuedItem.ItemName</td>
-                                                <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.UomName)?.UomName)
+                                                <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
                                                 </td>
                                                 <td>@queuedItem.Quantity</td>
-                                        <td>@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
+                                                <td>@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
                                                 <td><button type="button" class="btn remove-btn"
                                                                 @onclick="() => RemoveQueuedItem(queuedItem)">Remove</button></td>
                                                 </tr>
@@ -200,7 +204,7 @@ SelectedSubdistributorId);
             CurrentSubdItem = selected;
             NewItem.SubdItemId = selected.SubdItemId;
             NewItem.ItemName = selected.ItemName;
-            NewItem.UomName = 0;
+            NewItem.ItemsUomId = 0;
             CurrentUom = null;
         }
         else
@@ -208,7 +212,7 @@ SelectedSubdistributorId);
             CurrentSubdItem = null;
             NewItem.SubdItemId = 0;
             NewItem.ItemName = string.Empty;
-            NewItem.UomName = 0;
+            NewItem.ItemsUomId = 0;
             CurrentUom = null;
         }
     }
@@ -227,7 +231,7 @@ SelectedSubdistributorId);
             NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
             CurrentSubdItem = selected;
             NewItem.SubdItemId = selected.SubdItemId;
-            NewItem.UomName = 0;
+            NewItem.ItemsUomId = 0;
             CurrentUom = null;
         }
         else
@@ -235,7 +239,7 @@ SelectedSubdistributorId);
             NewItem.ItemCode = string.Empty;
             CurrentSubdItem = null;
             NewItem.SubdItemId = 0;
-            NewItem.UomName = 0;
+            NewItem.ItemsUomId = 0;
             CurrentUom = null;
         }
     }
@@ -244,9 +248,20 @@ SelectedSubdistributorId);
     {
         if (int.TryParse(e.Value?.ToString(), out int uomId))
         {
-            NewItem.UomName = uomId;
+            NewItem.ItemsUomId = uomId;
             CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
         }
+    }
+
+    private void OnQuantityInput(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var quantity))
+        {
+            NewItem.Quantity = 0;
+            return;
+        }
+
+        NewItem.Quantity = quantity;
     }
 
     private async Task AddItemToQueue()
@@ -256,11 +271,11 @@ SelectedSubdistributorId);
             return;
         }
 
-        var lineTotalPrice = (int)(NewItem.Quantity * CurrentSubdItem.Price);
+        var lineTotalPrice = NewItem.Quantity * CurrentSubdItem.Price;
 
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
-            item.UomName == NewItem.UomName &&
+            item.ItemsUomId == NewItem.ItemsUomId &&
             item.ItemCode.Equals(NewItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
             item.ItemName.Equals(NewItem.ItemName, StringComparison.OrdinalIgnoreCase));
 
@@ -276,7 +291,7 @@ SelectedSubdistributorId);
                 ItemCode = NewItem.ItemCode,
                 ItemName = NewItem.ItemName,
                 SubdItemId = NewItem.SubdItemId,
-                UomName = NewItem.UomName,
+                ItemsUomId = NewItem.ItemsUomId,
                 Quantity = NewItem.Quantity,
                 Amount = lineTotalPrice // Amount based on rules
             });
@@ -382,7 +397,7 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
-            if (NewItem.UomName == 0)
+            if (NewItem.ItemsUomId == 0)
             {
                 await OpenSelectDropdownAsync(UomSelect);
                 return;
@@ -418,5 +433,12 @@ SelectedSubdistributorId);
             await Task.Delay(10);
             await SkuCodeInput.FocusAsync();
         }
+    }
+
+    private string GetNormalPriceDisplay()
+    {
+        return CurrentSubdItem is null
+            ? string.Empty
+            : FormatHelper.FormatPrice(CurrentSubdItem.Price);
     }
 }

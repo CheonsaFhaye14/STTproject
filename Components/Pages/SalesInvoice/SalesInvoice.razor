@@ -139,7 +139,7 @@
             {
                 var existingItem = items.FirstOrDefault(item =>
                     item.SubdItemId == savedItem.SubdItemId &&
-                    item.UomName == savedItem.UomName &&
+                    item.ItemsUomId == savedItem.ItemsUomId &&
                     item.ItemCode.Equals(savedItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
                     item.ItemName.Equals(savedItem.ItemName, StringComparison.OrdinalIgnoreCase));
 

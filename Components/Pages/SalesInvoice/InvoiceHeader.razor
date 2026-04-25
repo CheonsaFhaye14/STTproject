@@ -6,7 +6,7 @@
     <div class="form-grid">
         <div class="form-group">
             <label>Sales Invoice Number</label>
-            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" disabled="@IsSaved"
+            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" @bind:event="oninput" disabled="@IsSaved"
                    @bind:after="HandleInvoiceNumberChanged" @onkeydown="HandleInvoiceNumberKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "InvoiceNumber")
             {
@@ -50,8 +50,8 @@
 
         <div class="form-group">
             <label>Customer Number</label>
-            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:after="HandleInputCodeChanged"
-                   disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
+            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:event="oninput"
+                   @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown" />
             @if (!string.IsNullOrWhiteSpace(ErrorMessage) && ErrorField == "CustomerCode")
             {
                 <span class="error-text">@ErrorMessage</span>

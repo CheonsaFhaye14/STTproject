@@ -20,7 +20,7 @@
                 <tr>
                     <td>@item.ItemCode</td>
                     <td>@item.ItemName</td>
-                    <td>@ResolveUomName(item.UomName)</td>
+                    <td>@ResolveUomName(item.ItemsUomId)</td>
                     <td>@item.Quantity</td>
                     <td>@FormatHelper.FormatPrice(@item.Amount)</td>
                 </tr>
@@ -31,7 +31,7 @@
     @if (Items.Any())
     {
         <div style="text-align: right; margin-top: 10px; font-weight: bold;">
-            Total Price: @CalculateTotalPrice()
+            Total Amount: @FormatHelper.FormatPrice(CalculateTotalLineAmount())
         </div>
     }
 </div>
@@ -48,7 +48,7 @@
         return uom?.UomName ?? string.Empty;
     }
 
-    private int CalculateTotalPrice()
+    private decimal CalculateTotalLineAmount()
     {
         return Items.Sum(i => i.Amount);
     }
