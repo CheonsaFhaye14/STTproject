@@ -166,6 +166,9 @@ label {
     color: white;
     padding: 15px;
 }
+.modal-header h4{
+    color: black;
+}
 
 .close-btn {
     background: transparent;
@@ -226,4 +229,10 @@ label {
 .shortcut-hint {
     color: #555;
     font-size: 0.95rem;
+}
+.form-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
 }

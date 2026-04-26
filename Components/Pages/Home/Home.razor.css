@@ -140,3 +140,50 @@
     .activity-row:hover {
         transform: translateY(-3px);
     }
+
+/* VIEW MODE TOGGLE */
+.view-mode-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    justify-content: center;
+}
+
+.view-toggle {
+    display: flex;
+    align-items: center;
+}
+
+.view-toggle .btn-toggle {
+    padding: 8px 20px;
+    border: 2px solid #888888;
+    background: white;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+    white-space: nowrap;
+    border: none;
+    box-shadow: 1px 1px 1px #888888;
+}
+
+.view-toggle .btn-toggle:hover {
+    background: #f0f0f0;
+}
+
+.view-toggle .btn-toggle.active {
+    background: #F5AFAF;
+    color: white;
+}
+
+/* INVOICE SUMMARY */
+.invoice-summary {
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+
+.invoice-summary p {
+    margin: 5px 0;
+}

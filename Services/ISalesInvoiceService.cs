@@ -8,6 +8,7 @@ public interface ISalesInvoiceService
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
     Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
     Task<SaveInvoiceResult> SaveInvoiceAsync(InputInvoiceModel invoice, List<InputItemModel> items, int currentInvoiceId, CancellationToken cancellationToken = default);
+    Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default);
 }
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
@@ -241,6 +242,46 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             await updateTransaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
+    {
+        var invoice = await _context.SalesInvoices
+            .AsNoTracking()
+            .Where(si => si.SalesInvoiceId == invoiceId)
+            .Select(si => new InputInvoiceModel
+            {
+                InvoiceNumber = si.SalesInvoiceCode,
+                InvoiceDate = si.SalesInvoiceDate,
+                OrderDate = si.OrderDate,
+                OrderType = si.OrderType,
+                CustomerId = si.CustomerId,
+                CustomerBranchId = si.CustomerBranchId,
+                SubdistributorId = si.SubDistributorId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (invoice == null)
+        {
+            return null;
+        }
+
+        var items = await _context.SalesInvoiceItems
+            .AsNoTracking()
+            .Where(sii => sii.SalesInvoiceId == invoiceId)
+            .Select(sii => new InputItemModel
+            {
+                SubdItemId = sii.SubdItemId,
+                ItemCode = sii.SubdItem.SubdItemCode,
+                ItemName = sii.SubdItem.ItemName,
+                ItemsUomId = sii.SubdItem.ItemsUomId,
+                UomName = sii.SubdItem.ItemsUom.UomName,
+                Quantity = sii.Quantity,
+                Amount = sii.Amount
+            })
+            .ToListAsync(cancellationToken);
+
+        return (invoice, items);
     }
 }
 

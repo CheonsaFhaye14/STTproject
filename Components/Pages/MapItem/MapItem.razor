@@ -1,12 +1,25 @@
 ﻿@page "/mapitem"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using STTproject.Components.Helper
+@using STTproject.Models
+@using STTproject.Services
 @inject NavigationManager Navigation
+@inject IHomeService homeService
+@inject IMapItemService mapItemService
+@inject IUserContextService userContext
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
 <div class="header-with-search">
     <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
-    <input type="text" id="searchInput" placeholder="Search..." class="search-input" @oninput="UpdateLocation" />
+    <select class="search-input" @ref="subdSelectRef" value="@selectedSubdId" @onchange="OnSubdChangedAsync">
+        <option value="0">-- Select Sub Distributor --</option>
+        @foreach (var subd in subdList)
+        {
+            <option value="@subd.SubDistributorId">@subd.SubdName</option>
+        }
+    </select>
     <div class="location badge">
         LOCATION: <span>@locationText</span>
     </div>
@@ -21,34 +34,51 @@
 <!-- INPUT ROW -->
 <div class="form-row">
     <div class="form-group">
-        <h5>ITEM CODE</h5>
-        <InputText @bind-Value="itemCode" placeholder="KSJ1298W" />
+        <h5>COMPANY ITEM</h5>
+        <select class="form-input" value="@selectedCompanyItemId" @onchange="OnCompanyItemChangedAsync"
+                disabled="@(!IsSubDistributorSelected)">
+            <option value="">-- Select Company Item --</option>
+            @foreach (var item in companyItemsForDropdown)
+            {
+                <option value="@item.CompanyItemId">@item.ItemName</option>
+            }
+        </select>
+    </div>
+    <div class="form-group">
+        <h5>PRINCIPAL</h5>
+        <InputText @bind-Value="selectedPrincipal" placeholder="Principal" disabled="true" />
+    </div>
+    <div class="form-group">
+        <h5>SKU CODE</h5>
+        <InputText @bind-Value="itemCode" disabled="@(!IsSubDistributorSelected)" />
     </div>
     <div class="form-group">
         <h5>ITEM NAME</h5>
-        <InputText @bind-Value="itemName" placeholder="Ovaltine Premium" />
+        <InputText @bind-Value="itemName" disabled="@(!IsSubDistributorSelected)" />
     </div>
-    <div class="form-group">
-        <h5>UNIT CONTENT</h5>
-        <InputText @bind-Value="unitContent" placeholder="400g" />
-    </div>
-    <div class="form-group">
-        <h5>UOM</h5>
-        <InputText @bind-Value="uom" placeholder="Jar" />
-    </div>
-    <div class="form-group">
-        <h5>QUANTITY PER PIECE</h5>
-        <InputNumber @bind-Value="qty" placeholder="12" />
-    </div>
-    <div class="form-group">
-        <h5>PRICE</h5>
-        <InputNumber @bind-Value="price" placeholder="Enter price" />
-    </div>
+    @if (availableUoms.Any())
+    {
+        @foreach (var uom in availableUoms)
+        {
+            <div class="form-group">
+                <h5>UOM</h5>
+                <InputText value="@uom" disabled="true" />
+            </div>
+
+            <div class="form-group">
+                <h5>PRICE</h5>
+                <InputNumber @bind-Value="uomPrices[uom]" placeholder="Price" disabled="@(!IsSubDistributorSelected)" />
+            </div>
+        }
+    }
     <div class="form-actions">
-        <button class="btn-primary" @onclick="GoToCompanyItems">MAP</button>
-        <button class="btn-primary" @onclick="AddItem">ADD</button>
+        <button class="btn-primary" @onclick="AddItem" disabled="@(!IsSubDistributorSelected)">ADD</button>
     </div>
 </div>
+
+
+
+
 
 <!-- DASHBOARD PANELS -->
 <div class="dashboard">
@@ -56,46 +86,43 @@
     <div class="card-section">
         <h3>PRINCIPALS</h3>
         <ul class="principal-list">
-            <li>ABF</li>
-            <li>EDGE</li>
-            <li>KELLOGGS</li>
-            <li>MPC</li>
-            <li>NIVEA</li>
-            <li>SCPG</li>
+            <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
+                @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
+            @foreach (var principal in principals)
+            {
+                <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
+                    @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
+            }
         </ul>
     </div>
 
-    <!-- CURRENT MAPPING -->
+    <!-- Company items -->
     <div class="card-section">
-        <h3>CURRENT MAPPING</h3>
+        <h3>COMPANY ITEMS</h3>
         <table class="mapping-table">
             <thead>
                 <tr>
-                    <th>ACTIONS</th>
                     <th>COMPANY ITEM CODE</th>
-                    <th>SUB ITEM CODE</th>
-                    <th>DESCRIPTION</th>
-                    <th>PRICE</th>
+                    <th>ITEM NAME</th>
+                    <th>UNIT OF MEASURES</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var mapping in currentMappings)
+                @if (companyItems.Any())
+                {
+                    @foreach (var item in companyItems)
+                    {
+                        <tr>
+                            <td>@item.CompanyItemCode</td>
+                            <td>@item.ItemName</td>
+                            <td>@item.UomName</td>
+                        </tr>
+                    }
+                }
+                else
                 {
                     <tr>
-                        <td>
-                            <div class="action-icons">
-                                <button class="btn-primary" @onclick="() => EditMapping(mapping)">
-                                    <i class="fa fa-edit"></i>
-                                </button>
-                                <button class="btn-secondary" @onclick="() => DeleteMapping(mapping)">
-                                    <i class="fa fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                        <td>@mapping.CompanyItemCode</td>
-                        <td>@mapping.SubItemCode</td>
-                        <td>@mapping.Description</td>
-                        <td>@mapping.Price</td>
+                        <td colspan="3">No company items found.</td>
                     </tr>
                 }
             </tbody>
@@ -109,52 +136,215 @@
             <thead>
                 <tr>
                     <th>SUB ITEM CODE</th>
-                    <th>DESCRIPTION</th>
-                    <th>PRICE</th>
-                    <th>MAP</th>
+                    <th>ITEM NAME</th>
+                    <th>UNIT OF MEASURES</th>
+                    <th>ACTIONS</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>sample</td>
-                    <td>sample</td>
-                    <td>sample</td>
-                    <td>
-                        <button class="btn-primary" @onclick="GoToCompanyItems">MAP</button>
-                    </td>
-                </tr>
+                @if (subDistributorItems.Any())
+                {
+                    @foreach (var item in subDistributorItems)
+                    {
+                        <tr>
+                            <td>@item.SubItemCode</td>
+                            <td>@item.Description</td>
+                            <td>@item.UomName</td>
+                            <td>
+                                <button class="btn-primary">EDIT</button>
+                                <button class="btn-primary">DELETE</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="5">No sub distributor items found.</td>
+                    </tr>
+                }
             </tbody>
         </table>
     </div>
 </div>
 
 @code {
-    private string? itemCode { get; set; }
-    private string? itemName { get; set; }
-    private string? unitContent { get; set; }
-    private string? uom { get; set; }
-    private int? qty { get; set; }
-    private decimal? price { get; set; }
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "uid")]
+    public int? UserIdFromQuery { get; set; }
 
+    // Form fields
+    private int? selectedCompanyItemId;
+    private string? selectedPrincipal;
+    private string? itemCode;
+    private string? itemName;
+    private List<string> availableUoms = new();
+    private Dictionary<string, decimal?> uomPrices = new();
+
+    private List<SubDistributor> subdList = new();
+    private ElementReference subdSelectRef;
+    private int selectedSubdId;
     private string locationText = "---";
+    private List<string> principals = new();
+    private string? currentPrincipal;
+    private List<MapCompanyItemViewRow> companyItems = new();
+    private List<MapSubDistributorItemRow> subDistributorItems = new();
+    private List<CompanyItemDropdownItem> companyItemsForDropdown = new();
 
-    private List<CurrentMapping> currentMappings = new()
+    private sealed class MapCompanyItemViewRow
     {
-        new CurrentMapping { CompanyItemCode="KSJ1298W", SubItemCode="01GMA06", Description="Ovaltine Premium 400g Jar", Price=120 },
-        new CurrentMapping { CompanyItemCode="ABC123", SubItemCode="02XYZ09", Description="Sample Item", Price=99 }
-    };
+        public string CompanyItemCode { get; set; } = string.Empty;
+        public string ItemName { get; set; } = string.Empty;
+        public string UomName { get; set; } = string.Empty;
+    }
 
-    public class CurrentMapping
+    private bool IsSubDistributorSelected => selectedSubdId != 0;
+
+    protected override async Task OnParametersSetAsync()
     {
-        public string CompanyItemCode { get; set; } = "";
-        public string SubItemCode { get; set; } = "";
-        public string Description { get; set; } = "";
-        public decimal Price { get; set; }
+        if (!userContext.UserId.HasValue && UserIdFromQuery.HasValue)
+        {
+            userContext.UserId = UserIdFromQuery.Value;
+        }
+
+        if (!userContext.UserId.HasValue)
+        {
+            subdList = new();
+            selectedSubdId = 0;
+            locationText = "---";
+            principals = new();
+            selectedPrincipal = null;
+            companyItems = new();
+            subDistributorItems = new();
+            return;
+        }
+
+        subdList = await homeService.GetSubDistributorsAsync(userContext.UserId.Value);
+
+        if (!subdList.Any())
+        {
+            selectedSubdId = 0;
+            locationText = "---";
+            principals = new();
+            selectedPrincipal = null;
+            companyItems = new();
+            subDistributorItems = new();
+            return;
+        }
+
+        if (selectedSubdId != 0 && !subdList.Any(s => s.SubDistributorId == selectedSubdId))
+        {
+            selectedSubdId = 0;
+        }
+
+        UpdateSelectedSubdLocation();
+        await LoadMapTablesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await subdSelectRef.FocusAsync();
+        }
+    }
+
+    private async Task OnSubdChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var subdId))
+        {
+            selectedSubdId = subdId;
+        }
+        else
+        {
+            selectedSubdId = 0;
+        }
+
+        UpdateSelectedSubdLocation();
+        selectedPrincipal = null;
+        await LoadMapTablesAsync();
+    }
+
+    private void UpdateSelectedSubdLocation()
+    {
+        var selected = subdList.FirstOrDefault(s => s.SubDistributorId == selectedSubdId);
+        locationText = selected == null
+            ? "---"
+            : FormatHelper.FormatLocation(selected.CityMunicipality, selected.Province ?? string.Empty);
+    }
+
+    private async Task LoadMapTablesAsync()
+    {
+        if (!userContext.UserId.HasValue)
+        {
+            principals = new();
+            companyItems = new();
+            subDistributorItems = new();
+            companyItemsForDropdown = new();
+            return;
+        }
+
+        // Load company items for dropdown (excluding already connected items)
+        companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
+            userContext.UserId.Value, selectedSubdId);
+
+        principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
+        var companyRows = await mapItemService.GetMapCompanyItemsAsync(
+            userContext.UserId.Value,
+            selectedSubdId,
+            currentPrincipal);
+
+        subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
+            userContext.UserId.Value,
+            selectedSubdId,
+            currentPrincipal);
+
+        companyItems = companyRows
+            .GroupBy(x => new { x.CompanyItemCode, x.Description })
+            .Select(group => new MapCompanyItemViewRow
+            {
+                CompanyItemCode = group.Key.CompanyItemCode,
+                ItemName = group.Key.Description,
+                UomName = string.Join(", ", group.Select(x => x.UomName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
+            })
+            .OrderBy(x => x.CompanyItemCode)
+            .ToList();
+    }
+
+    private async Task FilterByPrincipalAsync(string? principal)
+    {
+        currentPrincipal = principal;
+        await LoadMapTablesAsync();
+    }
+
+    private async Task OnCompanyItemChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var companyItemId) && companyItemId > 0)
+        {
+            selectedCompanyItemId = companyItemId;
+            var selectedItem = companyItemsForDropdown.FirstOrDefault(x => x.CompanyItemId == companyItemId);
+            if (selectedItem != null)
+            {
+                selectedPrincipal = selectedItem.Principal;
+                
+                // Load UOMs for the selected company item
+                availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
+                uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
+            }
+        }
+        else
+        {
+            selectedCompanyItemId = null;
+            selectedPrincipal = null;
+            availableUoms = new();
+            uomPrices = new();
+        }
     }
 
     private void AddItem()
     {
-        Console.WriteLine($"Added: {itemCode}, {itemName}, {unitContent}, {uom}, {qty}, {price}");
+        var prices = string.Join(", ", uomPrices.Where(p => p.Value.HasValue).Select(p => $"{p.Key}: {p.Value:N2}"));
+        Console.WriteLine($"Added: CompanyItemId={selectedCompanyItemId}, Principal={selectedPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
     }
 
     private void GoToCompanyItems()
@@ -162,20 +352,4 @@
         Navigation.NavigateTo("/companyitems");
     }
 
-    private void EditMapping(CurrentMapping mapping)
-    {
-        Console.WriteLine($"Editing {mapping.CompanyItemCode}");
-    }
-
-    private void DeleteMapping(CurrentMapping mapping)
-    {
-        currentMappings.Remove(mapping);
-        Console.WriteLine($"Deleted {mapping.CompanyItemCode}");
-    }
-
-    private void UpdateLocation(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString();
-        locationText = string.IsNullOrWhiteSpace(value) ? "---" : value;
-    }
 }

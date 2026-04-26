@@ -1,5 +1,7 @@
 ﻿@page "/login"
+@using STTproject.Services
 @inject NavigationManager Navigation
+@inject IUserContextService userContext
 
 <div class="login-container">
     <div class="login-card">
@@ -27,7 +29,9 @@
     {
         if (username == "admin" && password == "1234")
         {
-            Navigation.NavigateTo("/mapitem");
+            Navigation.NavigateTo(userContext.UserId.HasValue
+                ? $"/mapitem?uid={userContext.UserId.Value}"
+                : "/mapitem");
         }
         else
         {

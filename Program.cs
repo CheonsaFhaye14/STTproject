@@ -13,6 +13,7 @@ builder.Services.AddDbContext<SttprojectContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IHomeService, HomeService>();
+builder.Services.AddScoped<IMapItemService, MapItemService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 

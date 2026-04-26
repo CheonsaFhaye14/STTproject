@@ -92,7 +92,7 @@
                             <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
                                     @onkeydown="HandleCancelKeyDown">Cancel</button>
                             <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
-                                    @onkeydown="HandleSaveKeyDown" disabled="@(!editableItems.Any())">Save
+                                    @onkeydown="HandleSaveKeyDown">Save
                                 Changes</button>
                             </div>
                         </div>
@@ -105,6 +105,7 @@
     [Parameter] public EventCallback OnCancelModal { get; set; }
     [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
+    [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
 
     private ElementReference itemNameSelectRef;
@@ -209,6 +210,27 @@
         }
 
         item.ItemsUomId = uomId;
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
+        var currentSubdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
+        var matchingSubdItem = selectedUom != null && currentSubdItem != null
+            ? AvailableItems.FirstOrDefault(i =>
+                i.CompanyItemId == currentSubdItem.CompanyItemId &&
+                i.ItemsUomId == uomId)
+            : null;
+
+        if (matchingSubdItem != null)
+        {
+            item.SubdItemId = matchingSubdItem.SubdItemId;
+            item.ItemCode = matchingSubdItem.SubdItemCode;
+            item.ItemName = matchingSubdItem.ItemName;
+            item.Amount = matchingSubdItem.Price * item.Quantity;
+            item.UomName = selectedUom?.UomName ?? item.UomName;
+        }
+        else if (selectedUom != null)
+        {
+            item.UomName = selectedUom.UomName;
+        }
+
         uomEnterPrimed = false;
         ValidateDraft();
     }
@@ -235,7 +257,8 @@
 
         if (quantity > 0)
         {
-            item.Amount = unitPrice * item.Quantity;
+            var currentSubdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
+            item.Amount = (currentSubdItem?.Price ?? unitPrice) * item.Quantity;
         }
 
         ValidateDraft();

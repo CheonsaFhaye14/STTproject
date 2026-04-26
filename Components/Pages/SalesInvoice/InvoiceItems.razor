@@ -22,8 +22,8 @@
                     <label>@SalesInvoiceValidation.AddItem.Sku.Label<span class="required-asterisk"> *</span></label>
                     <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown"
                            @onblur="HandleSkuBlur" />
-                    @if (ShouldShowFieldError(SalesInvoiceValidation.AddItem.Sku.Key) &&
-                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
+                    @if (ShowValidationErrors &&
+                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)</span>
                     }
@@ -32,16 +32,16 @@
                 <div class="form-group">
                     <label>@SalesInvoiceValidation.AddItem.ItemName.Label<span class="required-asterisk"> *</span></label>
                     <select @ref="ItemNameSelect" value="@NewItem.ItemName" @onchange="OnItemNameChanged"
-                            @onkeydown="HandleItemNameKeyDown" @onblur="HandleItemNameBlur">
+                            @onkeydown="HandleItemNameKeyDown" @onblur="HandleDraftFieldBlur">
                         <option value="">-- Select --</option>
                         @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId ==
-                                                                                                                                                                                                                    SelectedSubdistributorId).DistinctBy(i => i.ItemName))
+                                                                                                                                                                                                                                                                    SelectedSubdistributorId).DistinctBy(i => i.ItemName))
                         {
                             <option value="@subd.ItemName">@subd.ItemName</option>
                         }
                     </select>
-                    @if (ShouldShowFieldError(SalesInvoiceValidation.AddItem.ItemName.Key) &&
-                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
+                    @if (ShowValidationErrors &&
+                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)</span>
                     }
@@ -50,7 +50,7 @@
                 <div class="form-group">
                     <label>@SalesInvoiceValidation.AddItem.Uom.Label<span class="required-asterisk"> *</span></label>
                     <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
-                            disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleUomBlur">
+                            disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleDraftFieldBlur">
                         <option value="0">-- Select --</option>
                         @if (CurrentSubdItem != null)
                         {
@@ -60,8 +60,8 @@
                             }
                         }
                     </select>
-                    @if (ShouldShowFieldError(SalesInvoiceValidation.AddItem.Uom.Key) &&
-                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
+                    @if (ShowValidationErrors &&
+                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
                     }
@@ -72,9 +72,9 @@
                     <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
                            disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
                     )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
-                              @onblur="HandleQuantityBlur" />
-                          @if (ShouldShowFieldError(SalesInvoiceValidation.AddItem.Quantity.Key) &&
-                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                           @onblur="HandleDraftFieldBlur" />
+                    @if (ShowValidationErrors &&
+                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
                     }
@@ -142,7 +142,6 @@
     private IJSObjectReference? jsModule;
     private bool ShowValidationErrors;
     private bool skipNextSkuBlurValidation;
-    private HashSet<string> TouchedFieldKeys { get; set; } = new();
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
 
     [Parameter] public bool ShowModal { get; set; }
@@ -280,6 +279,22 @@ SelectedSubdistributorId);
         {
             NewItem.ItemsUomId = uomId;
             CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
+
+            if (CurrentSubdItem != null && CurrentUom != null)
+            {
+                var matchingSubdItem = AvailableItems.FirstOrDefault(i =>
+                    i.CompanyItemId == CurrentSubdItem.CompanyItemId &&
+                    i.ItemsUomId == uomId);
+
+                if (matchingSubdItem != null)
+                {
+                    CurrentSubdItem = matchingSubdItem;
+                    NewItem.SubdItemId = matchingSubdItem.SubdItemId;
+                    NewItem.ItemCode = matchingSubdItem.SubdItemCode;
+                    NewItem.ItemName = matchingSubdItem.ItemName;
+                    NewItem.Amount = matchingSubdItem.Price * NewItem.Quantity;
+                }
+            }
         }
 
         RevalidateIfNeeded();
@@ -391,7 +406,6 @@ SelectedSubdistributorId);
         CurrentSubdItem = null;
         CurrentUom = null;
         ShowValidationErrors = false;
-        TouchedFieldKeys.Clear();
         ValidationErrors.Clear();
     }
 
@@ -418,7 +432,7 @@ SelectedSubdistributorId);
                 return;
             }
 
-            MarkFieldTouched(SalesInvoiceValidation.AddItem.Sku.Key);
+            ShowValidationErrors = true;
             ValidateDraft();
             await Task.Delay(10); // buffer slightly to allow bindings
             if (CurrentSubdItem != null)
@@ -436,7 +450,7 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
-            MarkFieldTouched(SalesInvoiceValidation.AddItem.ItemName.Key);
+            ShowValidationErrors = true;
             ValidateDraft();
 
             if (string.IsNullOrWhiteSpace(NewItem.ItemName))
@@ -454,7 +468,7 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
-            MarkFieldTouched(SalesInvoiceValidation.AddItem.Uom.Key);
+            ShowValidationErrors = true;
             ValidateDraft();
 
             if (NewItem.ItemsUomId == 0)
@@ -489,12 +503,19 @@ SelectedSubdistributorId);
     {
         if (e.Key == "Enter")
         {
-            MarkFieldTouched(SalesInvoiceValidation.AddItem.Quantity.Key);
+            ShowValidationErrors = true;
             ValidateDraft();
             await AddItemToQueue();
             await Task.Delay(10);
             await SkuCodeInput.FocusAsync();
         }
+    }
+
+    private Task HandleDraftFieldBlur(FocusEventArgs _)
+    {
+        ShowValidationErrors = true;
+        ValidateDraft();
+        return Task.CompletedTask;
     }
 
     private Task HandleSkuBlur(FocusEventArgs _)
@@ -505,38 +526,7 @@ SelectedSubdistributorId);
             return Task.CompletedTask;
         }
 
-        MarkFieldTouched(SalesInvoiceValidation.AddItem.Sku.Key);
-        ValidateDraft();
-        return Task.CompletedTask;
-    }
-
-    private Task HandleItemNameBlur(FocusEventArgs _)
-    {
-        MarkFieldTouched(SalesInvoiceValidation.AddItem.ItemName.Key);
-        ValidateDraft();
-        return Task.CompletedTask;
-    }
-
-    private Task HandleUomBlur(FocusEventArgs _)
-    {
-        if (CurrentSubdItem is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        MarkFieldTouched(SalesInvoiceValidation.AddItem.Uom.Key);
-        ValidateDraft();
-        return Task.CompletedTask;
-    }
-
-    private Task HandleQuantityBlur(FocusEventArgs _)
-    {
-        if (CurrentSubdItem is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        MarkFieldTouched(SalesInvoiceValidation.AddItem.Quantity.Key);
+        ShowValidationErrors = true;
         ValidateDraft();
         return Task.CompletedTask;
     }
@@ -555,20 +545,10 @@ SelectedSubdistributorId);
 
     private void RevalidateIfNeeded()
     {
-        if (ShowValidationErrors || TouchedFieldKeys.Any())
+        if (ShowValidationErrors)
         {
             ValidateDraft();
         }
-    }
-
-    private bool ShouldShowFieldError(string fieldKey)
-    {
-        return ShowValidationErrors || TouchedFieldKeys.Contains(fieldKey);
-    }
-
-    private void MarkFieldTouched(string fieldKey)
-    {
-        TouchedFieldKeys.Add(fieldKey);
     }
 
     private string GetFieldError(string fieldKey)

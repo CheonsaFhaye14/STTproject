@@ -104,6 +104,12 @@
         cursor: pointer; /* hand cursor */
     }
 
+    .principal-list li.principal-selected {
+        background-color: #AC7A7A;
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    }
+
         .principal-list li:hover {
             background-color: #AC7A7A; /* kulay highlight */
             color: #fff; /* text nagiging puti */

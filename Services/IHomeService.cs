@@ -8,12 +8,28 @@ public interface IHomeService
     Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default);
     Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default);
     Task<List<HomeSalesInvoiceBatchRow>> GetSalesInvoiceBatchRowsAsync(int userId, CancellationToken cancellationToken = default);
+    Task<List<HomeSalesInvoiceFlatRow>> GetSalesInvoiceFlatRowsAsync(int userId, CancellationToken cancellationToken = default);
+    Task<List<HomeSalesInvoiceBatchInvoiceRow>> GetBatchInvoiceSummariesAsync(
+        int userId,
+        int subDistributorId,
+        DateOnly batchCreatedDate,
+        int firstSalesInvoiceId,
+        int lastSalesInvoiceId,
+        CancellationToken cancellationToken = default);
     Task<List<HomeSalesInvoiceDetailRow>> GetBatchInvoiceDetailsAsync(
         int userId,
         int subDistributorId,
         DateOnly batchCreatedDate,
         int firstSalesInvoiceId,
         int lastSalesInvoiceId,
+        CancellationToken cancellationToken = default);
+    Task<HomeSalesInvoiceDetailRow?> GetInvoiceDetailByIdAsync(
+        int userId,
+        int salesInvoiceId,
+        CancellationToken cancellationToken = default);
+    Task<bool> DeleteInvoiceByIdAsync(
+        int userId,
+        int salesInvoiceId,
         CancellationToken cancellationToken = default);
 }
 
@@ -101,7 +117,7 @@ public class HomeService : IHomeService
 
                 currentBatch = new HomeSalesInvoiceBatchRow
                 {
-                    BatchId = $"BATCH-{batchNumber:D4}",
+                    BatchId = $"{DateOnly.FromDateTime(invoice.CreatedDate):yyyyMMdd}-{invoice.SubdCode}",
                     SubDistributorId = invoice.SubDistributorId,
                     SubdName = invoice.SubdName,
                     SubdCode = invoice.SubdCode,
@@ -140,6 +156,56 @@ public class HomeService : IHomeService
             .OrderByDescending(x => x.CreatedDate)
             .ThenByDescending(x => x.LastSalesInvoiceId)
             .ToList();
+    }
+
+    public Task<List<HomeSalesInvoiceBatchInvoiceRow>> GetBatchInvoiceSummariesAsync(
+        int userId,
+        int subDistributorId,
+        DateOnly batchCreatedDate,
+        int firstSalesInvoiceId,
+        int lastSalesInvoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        var dayStart = batchCreatedDate.ToDateTime(TimeOnly.MinValue);
+        var dayEnd = dayStart.AddDays(1);
+
+        return GetBatchInvoiceSummariesInternalAsync(
+            userId,
+            subDistributorId,
+            dayStart,
+            dayEnd,
+            firstSalesInvoiceId,
+            lastSalesInvoiceId,
+            cancellationToken);
+    }
+
+    private async Task<List<HomeSalesInvoiceBatchInvoiceRow>> GetBatchInvoiceSummariesInternalAsync(
+        int userId,
+        int subDistributorId,
+        DateTime dayStart,
+        DateTime dayEnd,
+        int firstSalesInvoiceId,
+        int lastSalesInvoiceId,
+        CancellationToken cancellationToken)
+    {
+        var invoices = await _context.SalesInvoices
+            .AsNoTracking()
+            .Where(si => si.SubDistributor.EncoderId == userId && si.SubDistributorId == subDistributorId)
+            .Where(si => si.CreatedDate >= dayStart && si.CreatedDate < dayEnd)
+            .Where(si => si.SalesInvoiceId >= firstSalesInvoiceId && si.SalesInvoiceId <= lastSalesInvoiceId)
+            .Where(si => si.SalesInvoiceItems.Any())
+            .OrderBy(si => si.SalesInvoiceId)
+            .Select(si => new HomeSalesInvoiceBatchInvoiceRow
+            {
+                SalesInvoiceId = si.SalesInvoiceId,
+                InvoiceCode = si.SalesInvoiceCode,
+                SalesInvoiceDate = si.SalesInvoiceDate,
+                SubdName = si.SubDistributor.SubdName,
+                CustomerName = si.Customer.CustomerName
+            })
+            .ToListAsync(cancellationToken);
+
+        return invoices;
     }
 
     public Task<List<HomeSalesInvoiceDetailRow>> GetBatchInvoiceDetailsAsync(
@@ -235,6 +301,114 @@ public class HomeService : IHomeService
 
         return invoices;
     }
+
+    public async Task<List<HomeSalesInvoiceFlatRow>> GetSalesInvoiceFlatRowsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var invoices = await _context.SalesInvoices
+            .AsNoTracking()
+            .Where(si => si.SubDistributor.EncoderId == userId)
+            .Where(si => si.SalesInvoiceItems.Any())
+            .OrderByDescending(si => si.CreatedDate)
+            .ThenByDescending(si => si.SalesInvoiceId)
+            .Select(si => new HomeSalesInvoiceFlatRow
+            {
+                SalesInvoiceId = si.SalesInvoiceId,
+                InvoiceCode = si.SalesInvoiceCode,
+                SalesInvoiceDate = si.SalesInvoiceDate,
+                SubdName = si.SubDistributor.SubdName,
+                CustomerName = si.Customer != null ? si.Customer.CustomerName : string.Empty
+            })
+            .ToListAsync(cancellationToken);
+
+        return invoices;
+    }
+
+    public async Task<HomeSalesInvoiceDetailRow?> GetInvoiceDetailByIdAsync(
+        int userId,
+        int salesInvoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        var invoice = await _context.SalesInvoices
+            .AsNoTracking()
+            .Where(si => si.SubDistributor.EncoderId == userId && si.SalesInvoiceId == salesInvoiceId)
+            .Where(si => si.SalesInvoiceItems.Any())
+            .Select(si => new HomeSalesInvoiceDetailRow
+            {
+                SalesInvoiceId = si.SalesInvoiceId,
+                InvoiceNumber = si.SalesInvoiceCode,
+                InvoiceDate = si.SalesInvoiceDate,
+                CreatedDate = si.CreatedDate,
+                OrderType = si.OrderType,
+                OrderDate = si.OrderDate,
+                CustomerName = si.Customer.CustomerName,
+                CustomerBranch = si.CustomerBranch.BranchName,
+                Address = si.CustomerBranch.AddressLine + ", " + si.CustomerBranch.City + ", " + si.CustomerBranch.Province,
+                TotalItems = si.SalesInvoiceItems.Count
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (invoice == null)
+        {
+            return null;
+        }
+
+        var invoiceItems = await _context.SalesInvoiceItems
+            .AsNoTracking()
+            .Where(item => item.SalesInvoiceId == salesInvoiceId)
+            .OrderBy(item => item.SalesInvoiceItemId)
+            .Select(item => new HomeSalesInvoiceItemDetailRow
+            {
+                ItemCode = item.SubdItem.SubdItemCode,
+                ItemName = item.SubdItem.ItemName,
+                UomName = item.SubdItem.ItemsUom.UomName,
+                Quantity = item.Quantity,
+                Price = item.Amount
+            })
+            .ToListAsync(cancellationToken);
+
+        invoice.ItemDetails = invoiceItems;
+        return invoice;
+    }
+
+    public async Task<bool> DeleteInvoiceByIdAsync(
+        int userId,
+        int salesInvoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        var invoice = await _context.SalesInvoices
+            .FirstOrDefaultAsync(
+                si => si.SalesInvoiceId == salesInvoiceId && si.SubDistributor.EncoderId == userId,
+                cancellationToken);
+
+        if (invoice == null)
+        {
+            return false;
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var items = await _context.SalesInvoiceItems
+                .Where(item => item.SalesInvoiceId == salesInvoiceId)
+                .ToListAsync(cancellationToken);
+
+            if (items.Any())
+            {
+                _context.SalesInvoiceItems.RemoveRange(items);
+            }
+
+            _context.SalesInvoices.Remove(invoice);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
 }
 
 public sealed class HomeSalesInvoiceBatchRow
@@ -251,12 +425,26 @@ public sealed class HomeSalesInvoiceBatchRow
     public int LastSalesInvoiceId { get; set; }
 }
 
+public sealed class HomeSalesInvoiceBatchInvoiceRow
+{
+    public int SalesInvoiceId { get; set; }
+    public string InvoiceCode { get; set; } = string.Empty;
+    public DateOnly SalesInvoiceDate { get; set; }
+    public string SubdName { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+}
+
 public sealed class HomeSalesInvoiceDetailRow
 {
     public int SalesInvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = string.Empty;
     public DateOnly InvoiceDate { get; set; }
     public DateTime CreatedDate { get; set; }
+    public string OrderType { get; set; } = string.Empty;
+    public DateOnly OrderDate { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerBranch { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
     public int TotalItems { get; set; }
     public List<HomeSalesInvoiceItemDetailRow> ItemDetails { get; set; } = new();
 }
@@ -268,4 +456,13 @@ public sealed class HomeSalesInvoiceItemDetailRow
     public string UomName { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal Price { get; set; }
+}
+
+public sealed class HomeSalesInvoiceFlatRow
+{
+    public int SalesInvoiceId { get; set; }
+    public string InvoiceCode { get; set; } = string.Empty;
+    public DateOnly SalesInvoiceDate { get; set; }
+    public string SubdName { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
 }

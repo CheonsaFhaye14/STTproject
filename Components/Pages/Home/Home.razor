@@ -47,72 +47,123 @@
 
     <!-- FILTERS -->
     <div class="filters">
+        <!-- VIEW MODE TOGGLE - Combined button -->
+        <div class="filter-group view-toggle">
+            <button class="@(currentViewMode == "batch" ? "btn-toggle active" : "btn-toggle")"
+                    @onclick="ToggleViewMode">
+                @(currentViewMode == "batch" ? "Batch View" : "Invoice List")
+            </button>
+        </div>
+
         <div class="filter-group">
             <label>SUB DISTRIBUTOR</label>
-            <select @bind="selectedSubdCodeFilter">
+            <select @bind="selectedSubdNameFilter">
                 <option value="">ALL</option>
                 @foreach (var subd in subdList)
                 {
-                    <option value="@subd.SubdCode">@subd.SubdCode</option>
+                    <option value="@subd.SubdName">@subd.SubdName</option>
                 }
             </select>
         </div>
 
         <div class="filter-group">
-            <label>DATE</label>
-            <input type="date" />
+            <label>INVOICE DATE</label>
+            <input type="date" @bind="selectedDateFilter" />
         </div>
 
         <div class="filter-group">
             <label>SORT BY</label>
-            <select>
-                <option value="">None</option>
+            <select @bind="sortByFilter">
                 <option value="date">Date</option>
+                <option value="subd">SubDistributor</option>
             </select>
         </div>
     </div>
 
-    <table class="activity-table">
-        <thead>
-            <tr>
-                <th>BATCH ID</th>
-                <th>SubDistributor Name</th>
-                <th>Invoice Date</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (FilteredActivityRows.Any())
-            {
-                @foreach (var row in FilteredActivityRows)
+    <!-- BATCH VIEW (Grouped View) -->
+    @if (currentViewMode == "batch")
+    {
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>BATCH NAME</th>
+                    <th>SubDistributor Name</th>
+                    <th>Invoice Date Range</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredBatchRows.Any())
+                {
+                    @foreach (var row in FilteredBatchRows)
+                    {
+                        <tr>
+                            <td>@row.BatchId</td>
+                            <td>@row.SubdName</td>
+                            <td>
+                                @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
+                                {
+                                    @row.LatestInvoiceDate.ToString("yyyy-MM-dd")
+                                }
+                                else
+                                {
+                                    @($"{row.OldestInvoiceDate:yyyy-MM-dd} – {row.LatestInvoiceDate:yyyy-MM-dd}")
+                                }
+                            </td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenBatchDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
                 {
                     <tr>
-                        <td>@row.BatchId</td>
-                        <td>@row.SubdName</td>
-                        <td>
-                            @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
-                            {
-                                @row.LatestInvoiceDate.ToString(format: "MM-dd-yyyy")
-                            }
-                            else
-                            {
-                                @($"{row.LatestInvoiceDate:MM-dd-yyyy} - {row.OldestInvoiceDate:MM-dd-yyyy}")
-                            }
-                        </td>
-                        <td>
-                            <button class="btn-primary" @onclick="() => OpenBatchDetailsAsync(row)">View Details</button>
-                        </td>
+                        <td colspan="4">No sales invoice activity found.</td>
                     </tr>
                 }
-            }
-            else
-            {
+            </tbody>
+        </table>
+    }
+
+    <!-- FLAT VIEW (Invoice List) -->
+    @if (currentViewMode == "flat")
+    {
+        <table class="activity-table">
+            <thead>
                 <tr>
-                    <td colspan="4">No sales invoice activity found.</td>
+                    <th>Invoice Code</th>
+                    <th>Sales Invoice Date</th>
+                    <th>SubDistributor Name</th>
+                    <th>Customer Name</th>
+                    <th>Action</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @if (FilteredFlatRows.Any())
+                {
+                    @foreach (var row in FilteredFlatRows)
+                    {
+                        <tr>
+                            <td>@row.InvoiceCode</td>
+                            <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.SubdName</td>
+                            <td>@row.CustomerName</td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="5">No sales invoice found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 
 </div>
 
@@ -127,38 +178,27 @@
                 <table class="activity-table">
                     <thead>
                         <tr>
-                            <th>Invoice Number</th>
-                            <th>Invoice Date</th>
-                            <th>Created Date</th>
-                            <th>Total Items</th>
-                            <th>Item Details</th>
+                            <th>Invoice Code</th>
+                            <th>Sales Invoice Date</th>
+                            <th>SubDistributor Name</th>
+                            <th>Customer Name</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @if (selectedBatchDetails.Any())
+                        @if (selectedBatchInvoices.Any())
                         {
-                            @foreach (var detail in selectedBatchDetails)
+                            @foreach (var invoiceRow in selectedBatchInvoices)
                             {
                                 <tr>
-                                    <td>@detail.InvoiceNumber</td>
-                                    <td>@detail.InvoiceDate.ToString("MM-dd-yyyy")</td>
-                                    <td>@detail.CreatedDate.ToString("MM-dd-yyyy HH:mm")</td>
-                                    <td>@detail.TotalItems</td>
+                                    <td>@invoiceRow.InvoiceCode</td>
+                                    <td>@invoiceRow.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@invoiceRow.SubdName</td>
+                                    <td>@invoiceRow.CustomerName</td>
                                     <td>
-                                        @if (detail.ItemDetails.Any())
-                                        {
-                                            <ul class="item-details-list">
-                                                @foreach (var item in detail.ItemDetails)
-                                                {
-                                                    <li>@item.ItemCode - @item.ItemName (@item.UomName), Qty: @item.Quantity, Line Amount:
-                                                        @FormatHelper.FormatPrice(item.Price)</li>
-                                                    }
-                                                </ul>
-                                            }
-                                        else
-                                            {
-                                                <span>No item details</span>
-                                            }
+                                        <button class="btn-primary"
+                                                @onclick="() => OpenInvoiceDetailsByIdAsync(invoiceRow.SalesInvoiceId)">View
+                                            Details</button>
                                         </td>
                                     </tr>
                                 }
@@ -166,7 +206,7 @@
                         else
                             {
                                 <tr>
-                                    <td colspan="6">No invoice details found for this batch.</td>
+                                    <td colspan="5">No invoices found for this batch.</td>
                                 </tr>
                             }
                         </tbody>
@@ -179,21 +219,205 @@
         </div>
     }
 
+    <!-- INVOICE DETAILS MODAL (for Flat View) -->
+    @if (showInvoiceDetailsModal)
+    {
+        <div class="modal-overlay" @onclick="CloseInvoiceDetails">
+            <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h4>Invoice Details: @selectedInvoiceCode</h4>
+                </div>
+                <div class="modal-body">
+                    @if (selectedInvoiceDetails != null)
+                    {
+                        <!-- Invoice Header (Read-only form) -->
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Invoice Date</label>
+                                <input type="date" value="@selectedInvoiceDetails.InvoiceDate.ToString("yyyy-MM-dd")" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Order Date</label>
+                                <input type="date" value="@selectedInvoiceDetails.OrderDate.ToString("yyyy-MM-dd")" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Order Type</label>
+                                <input value="@selectedInvoiceDetails.OrderType" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Customer Name</label>
+                                <input value="@selectedInvoiceDetails.CustomerName" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Customer Branch</label>
+                                <input value="@selectedInvoiceDetails.CustomerBranch" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Address</label>
+                                <input value="@selectedInvoiceDetails.Address" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Created Date</label>
+                                <input value="@selectedInvoiceDetails.CreatedDate.ToString("yyyy-MM-dd HH:mm")" disabled />
+                            </div>
+                        </div>
+                    
+                        <h5>Item Details</h5>
+                        <table class="activity-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Code</th>
+                                    <th>Item Name</th>
+                                    <th>UOM</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (selectedInvoiceDetails.ItemDetails.Any())
+                                {
+                                    @foreach (var item in selectedInvoiceDetails.ItemDetails)
+                                    {
+                                        <tr>
+                                            <td>@item.ItemCode</td>
+                                            <td>@item.ItemName</td>
+                                            <td>@item.UomName</td>
+                                            <td>@item.Quantity</td>
+                                            <td>@FormatHelper.FormatPrice(item.Price)</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5">No item details found.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p>No invoice details available.</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(deleteInvoiceErrorMessage))
+                    {
+                        <p style="color: red;">@deleteInvoiceErrorMessage</p>
+                    }
+                    <div class="modal-actions">
+                        <button class="btn-primary" @onclick="EditInvoiceDetails">Edit</button>
+                        <button class="btn-secondary" @onclick="ShowDeleteInvoiceConfirm">Delete</button>
+                        <button class="btn-secondary" @onclick="CloseInvoiceDetails">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (showDeleteInvoiceConfirmModal)
+    {
+        <div class="modal-overlay" @onclick="CancelDeleteInvoice">
+            <div class="modal-box" @onclick:stopPropagation="true" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h4>Delete Invoice</h4>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete invoice <strong>@selectedInvoiceCode</strong>?</p>
+                    <div class="modal-actions">
+                        <button class="btn-primary" @onclick="ConfirmDeleteInvoiceAsync">Yes, Delete</button>
+                        <button class="btn-secondary" @onclick="CancelDeleteInvoice">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 @code {
     private int userid = 1; // Placeholder for user ID, to be replaced with actual user context
     private string UserFullName = string.Empty;
 
     private List<SubDistributor> subdList = new();
-    private List<HomeSalesInvoiceBatchRow> activityRows = new();
-    private string selectedSubdCodeFilter = string.Empty;
+    private List<HomeSalesInvoiceBatchRow> batchRows = new();
+    private List<HomeSalesInvoiceFlatRow> flatRows = new();
+    private string currentViewMode = "batch"; // "batch" or "flat"
+    private string selectedSubdNameFilter = string.Empty;
+    private DateOnly? selectedDateFilter;
+    private string sortByFilter = "date";
+    
+    // Batch View Modal
     private bool showBatchDetailsModal;
     private string selectedBatchId = string.Empty;
-    private List<HomeSalesInvoiceDetailRow> selectedBatchDetails = new();
-      
-    private IEnumerable<HomeSalesInvoiceBatchRow> FilteredActivityRows =>
-        string.IsNullOrWhiteSpace(selectedSubdCodeFilter)
-            ? activityRows
-            : activityRows.Where(r => r.SubdCode.Equals(selectedSubdCodeFilter, StringComparison.OrdinalIgnoreCase));
+    private List<HomeSalesInvoiceBatchInvoiceRow> selectedBatchInvoices = new();
+    private int selectedBatchSubDistributorId;
+    private DateOnly selectedBatchCreatedDate;
+    private int selectedBatchFirstInvoiceId;
+    private int selectedBatchLastInvoiceId;
+    
+    // Flat View Modal
+    private bool showInvoiceDetailsModal;
+    private string selectedInvoiceCode = string.Empty;
+    private HomeSalesInvoiceDetailRow? selectedInvoiceDetails;
+    private bool showDeleteInvoiceConfirmModal;
+    private string? deleteInvoiceErrorMessage;
+
+    private IEnumerable<HomeSalesInvoiceBatchRow> FilteredBatchRows
+    {
+        get
+        {
+            var query = batchRows.AsEnumerable();
+            
+            // Filter by SubDistributor
+            if (!string.IsNullOrWhiteSpace(selectedSubdNameFilter))
+            {
+                query = query.Where(r => r.SubdName.Contains(selectedSubdNameFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            // Filter by Date
+            if (selectedDateFilter.HasValue)
+            {
+                query = query.Where(r => r.BatchCreatedDate == selectedDateFilter.Value);
+            }
+            
+            // Sort
+            query = sortByFilter switch
+            {
+                "subd" => query.OrderBy(r => r.SubdCode).ThenByDescending(r => r.CreatedDate),
+                _ => query.OrderByDescending(r => r.CreatedDate).ThenByDescending(r => r.LastSalesInvoiceId)
+            };
+            
+            return query;
+        }
+    }
+
+    private IEnumerable<HomeSalesInvoiceFlatRow> FilteredFlatRows
+    {
+        get
+        {
+            var query = flatRows.AsEnumerable();
+            
+            // Filter by SubDistributor
+            if (!string.IsNullOrWhiteSpace(selectedSubdNameFilter))
+            {
+                query = query.Where(r => r.SubdName.Contains(selectedSubdNameFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            // Filter by Date
+            if (selectedDateFilter.HasValue)
+            {
+                query = query.Where(r => r.SalesInvoiceDate == selectedDateFilter.Value);
+            }
+            
+            // Sort
+            query = sortByFilter switch
+            {
+                "subd" => query.OrderBy(r => r.SubdName).ThenByDescending(r => r.SalesInvoiceDate),
+                _ => query.OrderByDescending(r => r.SalesInvoiceDate)
+            };
+            
+            return query;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -206,7 +430,8 @@
         }
 
         subdList = await homeService.GetSubDistributorsAsync(userid);
-        activityRows = await homeService.GetSalesInvoiceBatchRowsAsync(userid);
+        batchRows = await homeService.GetSalesInvoiceBatchRowsAsync(userid);
+        flatRows = await homeService.GetSalesInvoiceFlatRowsAsync(userid);
     }
 
     void InputSalesInvoice(int subDistributorId)
@@ -214,10 +439,35 @@
         Navigation.NavigateTo($"/salesinvoice/{subDistributorId}?uid={userid}");
     }
 
+    void GoToMapItems()
+    {
+        Navigation.NavigateTo($"/mapitem?uid={userid}");
+    }
+
+    void SetBatchMode()
+    {
+        currentViewMode = "batch";
+    }
+
+    void SetFlatMode()
+    {
+        currentViewMode = "flat";
+    }
+
+    void ToggleViewMode()
+    {
+        currentViewMode = currentViewMode == "batch" ? "flat" : "batch";
+    }
+
+    // Batch View Methods
     async Task OpenBatchDetailsAsync(HomeSalesInvoiceBatchRow row)
     {
         selectedBatchId = row.BatchId;
-        selectedBatchDetails = await homeService.GetBatchInvoiceDetailsAsync(
+        selectedBatchSubDistributorId = row.SubDistributorId;
+        selectedBatchCreatedDate = row.BatchCreatedDate;
+        selectedBatchFirstInvoiceId = row.FirstSalesInvoiceId;
+        selectedBatchLastInvoiceId = row.LastSalesInvoiceId;
+        selectedBatchInvoices = await homeService.GetBatchInvoiceSummariesAsync(
             userid,
             row.SubDistributorId,
             row.BatchCreatedDate,
@@ -231,9 +481,110 @@
     {
         showBatchDetailsModal = false;
         selectedBatchId = string.Empty;
-        selectedBatchDetails = new();
+        selectedBatchInvoices = new();
+        selectedBatchSubDistributorId = 0;
+        selectedBatchCreatedDate = default;
+        selectedBatchFirstInvoiceId = 0;
+        selectedBatchLastInvoiceId = 0;
     }
 
+    // Flat View Methods
+    async Task OpenInvoiceDetailsAsync(HomeSalesInvoiceFlatRow row)
+    {
+        await OpenInvoiceDetailsByIdAsync(row.SalesInvoiceId, row.InvoiceCode);
+    }
 
+    async Task OpenInvoiceDetailsByIdAsync(int salesInvoiceId, string? invoiceCode = null)
+    {
+        selectedInvoiceCode = invoiceCode ?? string.Empty;
+        deleteInvoiceErrorMessage = null;
+        showDeleteInvoiceConfirmModal = false;
 
+        selectedInvoiceDetails = await homeService.GetInvoiceDetailByIdAsync(
+            userid,
+            salesInvoiceId);
+
+        if (selectedInvoiceDetails != null && string.IsNullOrWhiteSpace(selectedInvoiceCode))
+        {
+            selectedInvoiceCode = selectedInvoiceDetails.InvoiceNumber;
+        }
+
+        showInvoiceDetailsModal = true;
+    }
+
+    void CloseInvoiceDetails()
+    {
+        showInvoiceDetailsModal = false;
+        showDeleteInvoiceConfirmModal = false;
+        selectedInvoiceCode = string.Empty;
+        selectedInvoiceDetails = null;
+        deleteInvoiceErrorMessage = null;
+    }
+
+    void EditInvoiceDetails()
+    {
+        if (selectedInvoiceDetails != null)
+        {
+            Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}?uid={userid}");
+        }
+    }
+
+    void ShowDeleteInvoiceConfirm()
+    {
+        if (selectedInvoiceDetails == null)
+        {
+            return;
+        }
+
+        deleteInvoiceErrorMessage = null;
+        showDeleteInvoiceConfirmModal = true;
+    }
+
+    void CancelDeleteInvoice()
+    {
+        showDeleteInvoiceConfirmModal = false;
+    }
+
+    async Task ConfirmDeleteInvoiceAsync()
+    {
+        if (selectedInvoiceDetails == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var deleted = await homeService.DeleteInvoiceByIdAsync(userid, selectedInvoiceDetails.SalesInvoiceId);
+            if (!deleted)
+            {
+                deleteInvoiceErrorMessage = "Unable to delete invoice.";
+                return;
+            }
+
+            await ReloadRecentActivityAsync();
+
+            if (showBatchDetailsModal && selectedBatchSubDistributorId > 0)
+            {
+                selectedBatchInvoices = await homeService.GetBatchInvoiceSummariesAsync(
+                    userid,
+                    selectedBatchSubDistributorId,
+                    selectedBatchCreatedDate,
+                    selectedBatchFirstInvoiceId,
+                    selectedBatchLastInvoiceId);
+            }
+
+            showDeleteInvoiceConfirmModal = false;
+            CloseInvoiceDetails();
+        }
+        catch
+        {
+            deleteInvoiceErrorMessage = "Unable to delete invoice due to a database error.";
+        }
+    }
+
+    async Task ReloadRecentActivityAsync()
+    {
+        batchRows = await homeService.GetSalesInvoiceBatchRowsAsync(userid);
+        flatRows = await homeService.GetSalesInvoiceFlatRowsAsync(userid);
+    }
 }

@@ -1,4 +1,5 @@
 ﻿@page "/salesinvoice/{SubDistributorId:int}"
+@page "/salesinvoice/edit/{InvoiceId:int}"
 
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
@@ -15,14 +16,13 @@
 @implements IAsyncDisposable
 
 @rendermode InteractiveServer
-
+<button class="btn-primary" @onclick="GoBackToHome">Go Back</button>
 <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
              OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
 <div class="top-buttons">
     <button class="btn-primary">Download Template</button>
     <button class="btn-primary">Import</button>
-    <button class="btn-primary" @onclick="GoBackToHome">Esc - Back To Home</button>
 </div>
 
 @if (!string.IsNullOrEmpty(errorMessage))
@@ -62,7 +62,7 @@
               AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
 
 <EditItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-           OnCancelModal="CloseEditItemsModal" Items="items" AvailableUoms="availableUoms" />
+           OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms" />
 
 <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                    AvailableUoms="availableUoms" />
@@ -399,6 +399,9 @@
     public int SubDistributorId { get; set; }
 
     [Parameter]
+    public int? InvoiceId { get; set; }
+
+    [Parameter]
     [SupplyParameterFromQuery(Name = "uid")]
     public int? UserIdFromQuery { get; set; }
 
@@ -440,6 +443,21 @@
         }
 
         var selectedSubdId = SubDistributorId;
+
+        if (InvoiceId.HasValue && InvoiceId.Value > 0)
+        {
+            var invoiceData = await salesInvoiceService.GetInvoiceByIdAsync(InvoiceId.Value);
+            if (invoiceData.HasValue && invoiceData.Value.Invoice != null)
+            {
+                var loadedInvoice = invoiceData.Value.Invoice;
+                invoice = loadedInvoice;
+                items = invoiceData.Value.Items;
+                currentInvoiceId = InvoiceId.Value;
+                isSaved = true;
+                selectedSubdId = invoice.SubdistributorId;
+            }
+        }
+
         if (!subdList.Any(s => s.SubDistributorId == selectedSubdId))
         {
             selectedSubdId = subdList.FirstOrDefault()?.SubDistributorId ?? 0;
@@ -450,7 +468,32 @@
         customerBranches = pageData.CustomerBranches;
         subdItems = pageData.SubdItems;
         availableUoms = pageData.ItemUoms;
-        invoice.SubdistributorId = selectedSubdId;
+
+        if (!InvoiceId.HasValue || InvoiceId.Value == 0)
+        {
+            invoice.SubdistributorId = selectedSubdId;
+            return;
+        }
+
+        var selectedCustomer = customers.FirstOrDefault(c => c.CustomerId == invoice.CustomerId);
+        if (selectedCustomer != null)
+        {
+            invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
+            invoice.CustomerName = selectedCustomer.CustomerName;
+            invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
+        }
+
+        var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
+        if (selectedBranch != null)
+        {
+            invoice.CustomerAddress = string.Join(", ", new[]
+            {
+                selectedBranch.AddressLine,
+                selectedBranch.City,
+                selectedBranch.Province,
+                selectedBranch.ZipCode
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        }
     }
 
     async Task UpdateSubdDisplay(SubDistributor s)
