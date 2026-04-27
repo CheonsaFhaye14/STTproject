@@ -45,7 +45,7 @@
     </div>
     <div class="form-group">
         <h5>PRINCIPAL</h5>
-        <select class="form-input" value="@selectedPrincipal" @onchange="OnPrincipalChanged"
+        <select class="form-input" value="@selectedDropdownPrincipal" @onchange="OnPrincipalChanged"
                 disabled="@(!IsSubDistributorSelected)">
             <option value="">-- Select Principal --</option>
             @foreach (var principalItem in PrincipalsDropdown)
@@ -65,23 +65,7 @@
             }
         </select>
     </div>
-
-@if (availableUoms.Any())
-    {
-        @foreach (var uom in availableUoms)
-        {
-            <div class="form-group">
-                <h5>UOM</h5>
-                <InputText value="@uom" disabled="true" />
-            </div>
-
-            <div class="form-group">
-                <h5>PRICE</h5>
-                <InputNumber @bind-Value="uomPrices[uom]" placeholder="Price" disabled="@(!IsSubDistributorSelected)" />
-            </div>
-        }
-    }
-    <div class="form-actions">
+ <div class="form-actions">
         <button class="btn-primary" @onclick="AddItem" disabled="@(!IsSubDistributorSelected)">ADD</button>
     </div>
 </div>
@@ -196,7 +180,7 @@
     private int selectedSubdId;
     private string locationText = "---";
     private List<string> principals = new();
-    private string? currentPrincipal;
+    private string? selectedDropdownPrincipal;
     private List<MapCompanyItemViewRow> companyItems = new();
     private List<MapSubDistributorItemRow> subDistributorItems = new();
     private List<CompanyItemDropdownItem> companyItemsForDropdown = new();
@@ -211,9 +195,9 @@
     private bool IsSubDistributorSelected => selectedSubdId != 0;
 
     private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItemsForDropdown =>
-        string.IsNullOrWhiteSpace(selectedPrincipal)
+        string.IsNullOrWhiteSpace(selectedDropdownPrincipal)
             ? companyItemsForDropdown
-            : companyItemsForDropdown.Where(i => i.Principal == selectedPrincipal);
+            : companyItemsForDropdown.Where(i => i.Principal == selectedDropdownPrincipal);
 
     private IEnumerable<string> PrincipalsDropdown =>
         companyItemsForDropdown
@@ -224,13 +208,13 @@
 
     private void OnPrincipalChanged(ChangeEventArgs e)
     {
-        selectedPrincipal = e.Value?.ToString();
+        selectedDropdownPrincipal = e.Value?.ToString();
 
         // Optional: Reset selected company item if it doesn't belong to the newly selected principal
-        if (selectedCompanyItemId.HasValue && !string.IsNullOrWhiteSpace(selectedPrincipal))
+        if (selectedCompanyItemId.HasValue && !string.IsNullOrWhiteSpace(selectedDropdownPrincipal))
         {
             var currentSelectedItem = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
-            if (currentSelectedItem != null && currentSelectedItem.Principal != selectedPrincipal)
+            if (currentSelectedItem != null && currentSelectedItem.Principal != selectedDropdownPrincipal)
             {
                 selectedCompanyItemId = null;
                 availableUoms.Clear();
@@ -256,6 +240,7 @@
             selectedSubdId = 0;
             locationText = "---";
             principals = new();
+            selectedDropdownPrincipal = null;
             selectedPrincipal = null;
             companyItems = new();
             subDistributorItems = new();
@@ -269,6 +254,7 @@
             selectedSubdId = 0;
             locationText = "---";
             principals = new();
+            selectedDropdownPrincipal = null;
             selectedPrincipal = null;
             companyItems = new();
             subDistributorItems = new();
@@ -304,6 +290,7 @@
         }
 
         UpdateSelectedSubdLocation();
+        selectedDropdownPrincipal = null;
         selectedPrincipal = null;
         await LoadMapTablesAsync();
     }
@@ -335,12 +322,12 @@
         var companyRows = await mapItemService.GetMapCompanyItemsAsync(
             userContext.UserId.Value,
             selectedSubdId,
-            currentPrincipal);
+            selectedPrincipal);
 
         subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
             userContext.UserId.Value,
             selectedSubdId,
-            currentPrincipal);
+            selectedPrincipal);
 
         companyItems = companyRows
             .GroupBy(x => new { x.CompanyItemCode, x.Description })
@@ -348,7 +335,7 @@
             {
                 CompanyItemCode = group.Key.CompanyItemCode,
                 ItemName = group.Key.Description,
-             // Format: "Box of 12 - 120.00, Piece - 10.00"
+                // Format: "Box of 12 - 120.00, Piece - 10.00"
                 UomName = string.Join(", ", group
                     .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
                     .Select(x => $"{x.UomName} - {x.Price:N2}"))
@@ -359,7 +346,7 @@
 
     private async Task FilterByPrincipalAsync(string? principal)
     {
-        currentPrincipal = principal;
+        selectedPrincipal = principal;
         await LoadMapTablesAsync();
     }
 
@@ -371,8 +358,8 @@
             var selectedItem = companyItemsForDropdown.FirstOrDefault(x => x.CompanyItemId == companyItemId);
             if (selectedItem != null)
             {
-                selectedPrincipal = selectedItem.Principal;
-                
+                selectedDropdownPrincipal = selectedItem.Principal;
+
                 // Load UOMs for the selected company item
                 availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
                 uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
@@ -381,16 +368,47 @@
         else
         {
             selectedCompanyItemId = null;
-            selectedPrincipal = null;
+            selectedDropdownPrincipal = null;
             availableUoms = new();
             uomPrices = new();
         }
     }
 
-    private void AddItem()
+    private async Task AddItem()
     {
+        if (string.IsNullOrWhiteSpace(itemCode) || string.IsNullOrWhiteSpace(itemName) || !selectedCompanyItemId.HasValue || !userContext.UserId.HasValue)
+        {
+            return;
+        }
+
         var prices = string.Join(", ", uomPrices.Where(p => p.Value.HasValue).Select(p => $"{p.Key}: {p.Value:N2}"));
-        Console.WriteLine($"Added: CompanyItemId={selectedCompanyItemId}, Principal={selectedPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+        Console.WriteLine($"Added: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+
+        var newItem = new SubdItem
+        {
+            SubdItemCode = itemCode,
+            ItemName = itemName,
+            SubDistributorId = selectedSubdId,
+            CompanyItemId = selectedCompanyItemId.Value,
+            IsActive = true,
+            CreatedDate = DateTime.UtcNow,
+            CreatedBy = userContext.UserId.Value
+        };
+
+        var success = await mapItemService.AddSubdItemAsync(newItem);
+        if (success)
+        {
+            // Clear inputs
+            itemCode = string.Empty;
+            itemName = string.Empty;
+            selectedCompanyItemId = null;
+            selectedDropdownPrincipal = null;
+            availableUoms.Clear();
+            uomPrices.Clear();
+
+            // Refresh tables
+            await LoadMapTablesAsync();
+        }
     }
 
     private void GoToCompanyItems()

@@ -10,6 +10,7 @@ public interface IMapItemService
     Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(int userId, int subDistributorId, string? principal, CancellationToken cancellationToken = default);
     Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<string>> GetCompanyItemUomsAsync(int companyItemId, CancellationToken cancellationToken = default);
+    Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
 }
 
 public class MapItemService : IMapItemService
@@ -157,6 +158,20 @@ public class MapItemService : IMapItemService
             .OrderBy(u => u.UomName)
             .Select(u => u.UomName)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _context.SubdItems.Add(item);
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
 
