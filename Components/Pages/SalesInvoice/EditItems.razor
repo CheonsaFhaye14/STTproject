@@ -212,19 +212,13 @@
         item.ItemsUomId = uomId;
         var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
         var currentSubdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
-        var matchingSubdItem = selectedUom != null && currentSubdItem != null
-            ? AvailableItems.FirstOrDefault(i =>
-                i.CompanyItemId == currentSubdItem.CompanyItemId &&
-                i.ItemsUomId == uomId)
-            : null;
 
-        if (matchingSubdItem != null)
+        if (currentSubdItem != null && selectedUom != null)
         {
-            item.SubdItemId = matchingSubdItem.SubdItemId;
-            item.ItemCode = matchingSubdItem.SubdItemCode;
-            item.ItemName = matchingSubdItem.ItemName;
-            item.Amount = matchingSubdItem.Price * item.Quantity;
-            item.UomName = selectedUom?.UomName ?? item.UomName;
+            item.ItemCode = currentSubdItem.SubdItemCode;
+            item.ItemName = currentSubdItem.ItemName;
+            item.Amount = (selectedUom.Price ?? 0m) * item.Quantity;
+            item.UomName = selectedUom.UomName;
         }
         else if (selectedUom != null)
         {
@@ -257,8 +251,8 @@
 
         if (quantity > 0)
         {
-            var currentSubdItem = AvailableItems.FirstOrDefault(i => i.SubdItemId == item.SubdItemId);
-            item.Amount = (currentSubdItem?.Price ?? unitPrice) * item.Quantity;
+            var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
+            item.Amount = (selectedUom?.Price ?? unitPrice) * item.Quantity;
         }
 
         ValidateDraft();

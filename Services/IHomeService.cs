@@ -272,7 +272,7 @@ public class HomeService : IHomeService
                 item.SalesInvoiceId,
                 item.SubdItem.SubdItemCode,
                 item.SubdItem.ItemName,
-                item.SubdItem.ItemsUom.UomName,
+                UomName = item.SubdItem.CompanyItem.ItemsUom != null ? item.SubdItem.CompanyItem.ItemsUom.UomName : string.Empty,
                 item.Quantity,
                 item.Amount
             })
@@ -360,7 +360,7 @@ public class HomeService : IHomeService
             {
                 ItemCode = item.SubdItem.SubdItemCode,
                 ItemName = item.SubdItem.ItemName,
-                UomName = item.SubdItem.ItemsUom.UomName,
+                UomName = item.SubdItem.CompanyItem.ItemsUom != null ? item.SubdItem.CompanyItem.ItemsUom.UomName : string.Empty,
                 Quantity = item.Quantity,
                 Price = item.Amount
             })

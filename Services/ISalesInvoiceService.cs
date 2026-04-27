@@ -274,8 +274,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 SubdItemId = sii.SubdItemId,
                 ItemCode = sii.SubdItem.SubdItemCode,
                 ItemName = sii.SubdItem.ItemName,
-                ItemsUomId = sii.SubdItem.ItemsUomId,
-                UomName = sii.SubdItem.ItemsUom.UomName,
+                ItemsUomId = sii.SubdItem.CompanyItem.ItemsUom != null ? sii.SubdItem.CompanyItem.ItemsUom.ItemsUomId : 0,
+                UomName = sii.SubdItem.CompanyItem.ItemsUom != null ? sii.SubdItem.CompanyItem.ItemsUom.UomName : string.Empty,
                 Quantity = sii.Quantity,
                 Amount = sii.Amount
             })

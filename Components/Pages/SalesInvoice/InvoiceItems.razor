@@ -81,7 +81,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Normal Price</label>
+                    <label>Price</label>
                     <input value="@GetNormalPriceDisplay()" disabled />
                 </div>
 
@@ -282,18 +282,8 @@ SelectedSubdistributorId);
 
             if (CurrentSubdItem != null && CurrentUom != null)
             {
-                var matchingSubdItem = AvailableItems.FirstOrDefault(i =>
-                    i.CompanyItemId == CurrentSubdItem.CompanyItemId &&
-                    i.ItemsUomId == uomId);
-
-                if (matchingSubdItem != null)
-                {
-                    CurrentSubdItem = matchingSubdItem;
-                    NewItem.SubdItemId = matchingSubdItem.SubdItemId;
-                    NewItem.ItemCode = matchingSubdItem.SubdItemCode;
-                    NewItem.ItemName = matchingSubdItem.ItemName;
-                    NewItem.Amount = matchingSubdItem.Price * NewItem.Quantity;
-                }
+                NewItem.Amount = (CurrentUom.Price ?? 0m) * NewItem.Quantity;
+                NewItem.UomName = CurrentUom.UomName;
             }
         }
 
@@ -323,8 +313,8 @@ SelectedSubdistributorId);
             return;
         }
 
-        var selectedSubdItem = CurrentSubdItem!;
-        var lineTotalPrice = NewItem.Quantity * selectedSubdItem.Price;
+        var selectedUom = CurrentUom!;
+        var lineTotalPrice = NewItem.Quantity * (selectedUom.Price ?? 0m);
 
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
@@ -533,9 +523,9 @@ SelectedSubdistributorId);
 
     private string GetNormalPriceDisplay()
     {
-        return CurrentSubdItem is null
+        return CurrentUom is null
             ? string.Empty
-            : FormatHelper.FormatPrice(CurrentSubdItem.Price);
+            : FormatHelper.FormatPrice(CurrentUom.Price ?? 0m);
     }
 
     private void ValidateDraft()

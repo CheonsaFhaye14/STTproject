@@ -23,7 +23,7 @@ public partial class CompanyItem
 
     public string Principal { get; set; } = null!;
 
-    public virtual ICollection<ItemsUom> ItemsUoms { get; set; } = new List<ItemsUom>();
+    public virtual ItemsUom? ItemsUom { get; set; }
 
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 }

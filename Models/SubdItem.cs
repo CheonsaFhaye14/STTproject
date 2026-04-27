@@ -25,15 +25,9 @@ public partial class SubdItem
 
     public int CompanyItemId { get; set; }
 
-    public decimal Price { get; set; }
-
-    public int ItemsUomId { get; set; }
-
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual ItemsUom ItemsUom { get; set; } = null!;
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 

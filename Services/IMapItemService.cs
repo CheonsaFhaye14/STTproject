@@ -45,12 +45,13 @@ public class MapItemService : IMapItemService
         var query = _context.CompanyItems
             .AsNoTracking()
             .Where(ci => ci.IsActive)
-            .SelectMany(ci => ci.ItemsUoms.DefaultIfEmpty(), (ci, uom) => new MapCompanyItemRow
+            .Select(ci => new MapCompanyItemRow
             {
                 CompanyItemCode = ci.ItemCode,
                 Description = ci.ItemName,
+                Price = ci.ItemsUom != null ? (ci.ItemsUom.Price ?? 0m) : 0m,
                 Principal = ci.Principal,
-                UomName = uom != null ? uom.UomName : string.Empty
+                UomName = ci.ItemsUom != null ? ci.ItemsUom.UomName : string.Empty
             });
 
         if (!string.IsNullOrWhiteSpace(principal))
@@ -80,9 +81,9 @@ public class MapItemService : IMapItemService
                 si.SubDistributorId,
                 si.SubdItemCode,
                 si.ItemName,
-                si.Price,
+                Price = si.CompanyItem.ItemsUom != null ? si.CompanyItem.ItemsUom.Price : 0m,
                 Principal = si.CompanyItem.Principal,
-                UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty
+                UomName = si.CompanyItem.ItemsUom != null ? si.CompanyItem.ItemsUom.UomName : string.Empty
             });
 
         if (subDistributorId > 0)
@@ -108,7 +109,7 @@ public class MapItemService : IMapItemService
                 SubDistributorId = group.First().SubDistributorId,
                 SubItemCode = group.Key.SubdItemCode,
                 Description = group.Key.ItemName,
-                Price = group.First().Price,
+                Price = group.First().Price ?? 0m,
                 Principal = group.First().Principal,
                 // Format: "Box of 12 - 120.00, Piece - 10.00"
                 UomName = string.Join(", ", group

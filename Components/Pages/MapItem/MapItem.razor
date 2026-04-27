@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
+<button class="btn-primary" @onclick="GoBackToHome">Go Back</button>
+
 <div class="header-with-search">
     <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
     <select class="search-input" @ref="subdSelectRef" value="@selectedSubdId" @onchange="OnSubdChangedAsync">
@@ -34,21 +36,6 @@
 <!-- INPUT ROW -->
 <div class="form-row">
     <div class="form-group">
-        <h5>COMPANY ITEM</h5>
-        <select class="form-input" value="@selectedCompanyItemId" @onchange="OnCompanyItemChangedAsync"
-                disabled="@(!IsSubDistributorSelected)">
-            <option value="">-- Select Company Item --</option>
-            @foreach (var item in companyItemsForDropdown)
-            {
-                <option value="@item.CompanyItemId">@item.ItemName</option>
-            }
-        </select>
-    </div>
-    <div class="form-group">
-        <h5>PRINCIPAL</h5>
-        <InputText @bind-Value="selectedPrincipal" placeholder="Principal" disabled="true" />
-    </div>
-    <div class="form-group">
         <h5>SKU CODE</h5>
         <InputText @bind-Value="itemCode" disabled="@(!IsSubDistributorSelected)" />
     </div>
@@ -56,7 +43,30 @@
         <h5>ITEM NAME</h5>
         <InputText @bind-Value="itemName" disabled="@(!IsSubDistributorSelected)" />
     </div>
-    @if (availableUoms.Any())
+    <div class="form-group">
+        <h5>PRINCIPAL</h5>
+        <select class="form-input" value="@selectedPrincipal" @onchange="OnPrincipalChanged"
+                disabled="@(!IsSubDistributorSelected)">
+            <option value="">-- Select Principal --</option>
+            @foreach (var principalItem in PrincipalsDropdown)
+            {
+                <option value="@principalItem">@principalItem</option>
+            }
+        </select>
+    </div>
+    <div class="form-group">
+        <h5>COMPANY ITEM</h5>
+        <select class="form-input" value="@selectedCompanyItemId" @onchange="OnCompanyItemChangedAsync"
+                disabled="@(!IsSubDistributorSelected)">
+            <option value="">-- Select Company Item --</option>
+            @foreach (var item in FilteredCompanyItemsForDropdown)
+            {
+                <option value="@item.CompanyItemId">@item.ItemName</option>
+            }
+        </select>
+    </div>
+
+@if (availableUoms.Any())
     {
         @foreach (var uom in availableUoms)
         {
@@ -200,6 +210,39 @@
 
     private bool IsSubDistributorSelected => selectedSubdId != 0;
 
+    private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItemsForDropdown =>
+        string.IsNullOrWhiteSpace(selectedPrincipal)
+            ? companyItemsForDropdown
+            : companyItemsForDropdown.Where(i => i.Principal == selectedPrincipal);
+
+    private IEnumerable<string> PrincipalsDropdown =>
+        companyItemsForDropdown
+            .Select(i => i.Principal)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct()
+            .OrderBy(p => p);
+
+    private void OnPrincipalChanged(ChangeEventArgs e)
+    {
+        selectedPrincipal = e.Value?.ToString();
+
+        // Optional: Reset selected company item if it doesn't belong to the newly selected principal
+        if (selectedCompanyItemId.HasValue && !string.IsNullOrWhiteSpace(selectedPrincipal))
+        {
+            var currentSelectedItem = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
+            if (currentSelectedItem != null && currentSelectedItem.Principal != selectedPrincipal)
+            {
+                selectedCompanyItemId = null;
+                availableUoms.Clear();
+                uomPrices.Clear();
+            }
+        }
+    }
+
+    private void GoBackToHome()
+    {
+        Navigation.NavigateTo("/");
+    }
     protected override async Task OnParametersSetAsync()
     {
         if (!userContext.UserId.HasValue && UserIdFromQuery.HasValue)
@@ -305,7 +348,10 @@
             {
                 CompanyItemCode = group.Key.CompanyItemCode,
                 ItemName = group.Key.Description,
-                UomName = string.Join(", ", group.Select(x => x.UomName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
+             // Format: "Box of 12 - 120.00, Piece - 10.00"
+                UomName = string.Join(", ", group
+                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
+                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
             })
             .OrderBy(x => x.CompanyItemCode)
             .ToList();

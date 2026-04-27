@@ -23,11 +23,11 @@ public partial class ItemsUom
 
     public DateTime? UpdatedDate { get; set; }
 
+    public decimal? Price { get; set; }
+
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 
     public virtual User? UpdatedByNavigation { get; set; }
 }

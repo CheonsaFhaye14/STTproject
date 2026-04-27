@@ -34,12 +34,7 @@ public partial class SttprojectContext : DbContext
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        if (!optionsBuilder.IsConfigured)
-        {
-            optionsBuilder.UseSqlServer("Name=DefaultConnection");
-        }
-    }
+        => optionsBuilder.UseSqlServer("Name=DefaultConnection");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -148,11 +143,12 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UomName).HasMaxLength(50);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.CompanyItem).WithMany(p => p.ItemsUoms)
-                .HasForeignKey(d => d.CompanyItemId)
+            entity.HasOne(d => d.CompanyItem).WithOne(p => p.ItemsUom)
+                .HasForeignKey<ItemsUom>(d => d.CompanyItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ItemsUom_CompanyItemId");
 
@@ -267,16 +263,15 @@ public partial class SttprojectContext : DbContext
         {
             entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656E2CB39D1");
 
-            entity.ToTable("SubdItem");
+            entity.ToTable("SubdItem", tb => tb.HasTrigger("trg_SubdItem_EnforceCodeNameConsistency"));
 
-            entity.HasIndex(e => new { e.SubDistributorId, e.SubdItemCode }, "UQ_SubdItem_Code_Per_Subd").IsUnique();
+            entity.HasIndex(e => new { e.SubDistributorId, e.CompanyItemId, e.SubdItemCode }, "UQ_SubdItem_Code_Name_Per_Subd_Company").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.ItemName).HasMaxLength(150);
-            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.SubdItemCode).HasMaxLength(50);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
@@ -288,11 +283,6 @@ public partial class SttprojectContext : DbContext
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.SubdItemCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_SubdItem_CreatedBy");
-
-            entity.HasOne(d => d.ItemsUom).WithMany(p => p.SubdItems)
-                .HasForeignKey(d => d.ItemsUomId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SubdItem_ItemsUomId");
 
             entity.HasOne(d => d.SubDistributor).WithMany(p => p.SubdItems)
                 .HasForeignKey(d => d.SubDistributorId)
