@@ -71,13 +71,6 @@
             <input type="date" @bind="selectedDateFilter" />
         </div>
 
-        <div class="filter-group">
-            <label>SORT BY</label>
-            <select @bind="sortByFilter">
-                <option value="date">Date</option>
-                <option value="subd">SubDistributor</option>
-            </select>
-        </div>
     </div>
 
     <!-- BATCH VIEW (Grouped View) -->
@@ -334,7 +327,7 @@
 }
 
 @code {
-    private int userid = 1; // Placeholder for user ID, to be replaced with actual user context
+    private int userid = 11; // Placeholder for user ID, to be replaced with actual user context
     private string UserFullName = string.Empty;
 
     private List<SubDistributor> subdList = new();
