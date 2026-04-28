@@ -1,0 +1,5 @@
+.autocomplete { position: relative; display: inline-block; width: 100%; }
+.autocomplete-popup { position: absolute; z-index: 50; left: 0; right: 0; background: white; border: 1px solid #ddd; max-height: 220px; overflow: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+.autocomplete-item { padding: 8px 10px; cursor: pointer; }
+.autocomplete-item.highlighted { background: #4a90e2; color: white; font-weight: 500; }
+.autocomplete-item:hover { background: #3d7bc3; color: white; }

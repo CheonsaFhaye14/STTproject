@@ -1,13 +1,16 @@
 ﻿@page "/mapitem"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using STTproject.Components.Pages.MapItem
 @using STTproject.Components.Helper
 @using STTproject.Models
 @using STTproject.Services
+@using STTproject.Components.Shared
 @inject NavigationManager Navigation
 @inject IHomeService homeService
 @inject IMapItemService mapItemService
 @inject IUserContextService userContext
+@inject IJSRuntime JS
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
@@ -15,7 +18,8 @@
 
 <div class="header-with-search">
     <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
-    <select class="search-input" @ref="subdSelectRef" value="@selectedSubdId" @onchange="OnSubdChangedAsync">
+    <select class="search-input" @ref="subdSelectRef" @bind="selectedSubdId" @bind:after="OnSubdChangedAsync"
+            @onkeydown="HandleSubdKeyDown">
         <option value="0">-- Select Sub Distributor --</option>
         @foreach (var subd in subdList)
         {
@@ -33,147 +37,212 @@
     <button class="btn-secondary">IMPORT</button>
 </div>
 
+@if (!string.IsNullOrWhiteSpace(itemActionErrorMessage))
+{
+    <div style="color: #b00020; margin: 10px 0; font-weight: 600;">
+        @itemActionErrorMessage
+    </div>
+}
+
 <!-- INPUT ROW -->
 <div class="form-row">
     <div class="form-group">
-        <h5>SKU CODE</h5>
-        <InputText @bind-Value="itemCode" disabled="@(!IsSubDistributorSelected)" />
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
+        <input @ref="itemCodeInput" @bind="itemCode" @bind:event="oninput" disabled="@(!IsSubDistributorSelected)"
+               @onkeydown="HandleItemCodeKeyDown" @onblur="HandleFormFieldBlur" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.SkuCode.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.SkuCode.Key)</span>
+        }
     </div>
     <div class="form-group">
-        <h5>ITEM NAME</h5>
-        <InputText @bind-Value="itemName" disabled="@(!IsSubDistributorSelected)" />
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.ItemName)</h5>
+        <input @ref="itemNameInput" @bind="itemName" @bind:event="oninput" disabled="@(!IsSubDistributorSelected)"
+               @onkeydown="HandleItemNameKeyDown" @onblur="HandleFormFieldBlur" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.ItemName.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.ItemName.Key)</span>
+        }
     </div>
     <div class="form-group">
         <h5>PRINCIPAL</h5>
-        <select class="form-input" value="@selectedDropdownPrincipal" @onchange="OnPrincipalChanged"
+        <select class="form-input" @ref="principalSelect" @bind="selectedDropdownPrincipal"
+                @bind:after="OnPrincipalChanged" @onkeydown="HandlePrincipalKeyDown"
                 disabled="@(!IsSubDistributorSelected)">
             <option value="">-- Select Principal --</option>
-            @foreach (var principalItem in PrincipalsDropdown)
+            @foreach (var principalItem in DisplayPrincipalsDropdown)
             {
                 <option value="@principalItem">@principalItem</option>
             }
         </select>
     </div>
     <div class="form-group">
-        <h5>COMPANY ITEM</h5>
-        <input class="form-input" list="companyItemsList" value="@GetSelectedCompanyItemName()" @onchange="OnCompanyItemDataListChanged"
-               disabled="@(!IsSubDistributorSelected)" placeholder="-- Select Company Item --" />
-        <datalist id="companyItemsList">
-            @foreach (var item in FilteredCompanyItemsForDropdown)
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.CompanyItem)</h5>
+        <Autocomplete @ref="companyItemAutocomplete" Items="FilteredCompanyItemsForDropdown.ToList()"
+                      Value="@selectedCompanyItemDisplayName" ValueChanged="@(v => selectedCompanyItemDisplayName = v)"
+                      OnSelected="OnAutocompleteSelected" OnConfirmed="OnCompanyItemConfirmed"
+                      Placeholder="-- Select Company Item --" IsDisabled="@(!IsSubDistributorSelected)" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
+        }
+    </div>
+    <div class="form-actions">
+        <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
+                disabled="@(!IsSubDistributorSelected)">@((IsEditingItem) ?
+                                                                                                                  "UPDATE" : "ADD")</button>
+            @if (IsEditingItem)
             {
-                <option value="@item.ItemName"></option>
+                <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
             }
-        </datalist>
-    </div>
- <div class="form-actions">
-        <button class="btn-primary" @onclick="AddItem" disabled="@(!IsSubDistributorSelected)">ADD</button>
-    </div>
-</div>
-
-
-
-
-
-<!-- DASHBOARD PANELS -->
-<div class="dashboard">
-    <!-- PRINCIPALS -->
-    <div class="card-section">
-        <h3>PRINCIPALS</h3>
-        <ul class="principal-list">
-            <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
-                @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
-            @foreach (var principal in principals)
-            {
-                <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
-                    @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
-            }
-        </ul>
+        </div>
     </div>
 
-    <!-- Company items -->
-    <div class="card-section">
-        <h3>COMPANY ITEMS</h3>
-        <table class="mapping-table">
-            <thead>
-                <tr>
-                    <th>COMPANY ITEM CODE</th>
-                    <th>ITEM NAME</th>
-                    <th>UNIT OF MEASURES</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (companyItems.Any())
+    <!-- DASHBOARD PANELS -->
+    <div class="dashboard">
+        <div class="card-section">
+            <h3>PRINCIPALS</h3>
+            <ul class="principal-list">
+                <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
+                    @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
+                @foreach (var principal in principals)
                 {
-                    @foreach (var item in companyItems)
+                    <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
+                        @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
+                }
+            </ul>
+        </div>
+
+        <div class="card-section">
+            <div class="filters">
+                <h3>COMPANY ITEMS</h3>
+                <div class="form-group">
+                    <select @bind="selectedCompanyItemsFilterString" @bind:after="OnCompanyItemsFilterStringChanged"
+                            disabled="@(!IsSubDistributorSelected)">
+                        <option value="All">All company items</option>
+                        <option value="Unmapped">Only not mapped yet</option>
+                        <option value="Mapped">Already mapped only</option>
+                    </select>
+                </div>
+            </div>
+            <table class="mapping-table">
+                <thead>
+                    <tr>
+                        <th>COMPANY ITEM CODE</th>
+                        <th>ITEM NAME</th>
+                        <th>UNIT OF MEASURES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (companyItems.Any())
+                    {
+                        @foreach (var item in companyItems)
+                        {
+                            <tr>
+                                <td>@item.CompanyItemCode</td>
+                                <td>@item.ItemName</td>
+                                <td>@item.UomName</td>
+                            </tr>
+                        }
+                    }
+                    else
                     {
                         <tr>
-                            <td>@item.CompanyItemCode</td>
-                            <td>@item.ItemName</td>
-                            <td>@item.UomName</td>
+                            <td colspan="3">No company items found.</td>
                         </tr>
                     }
-                }
-                else
-                {
-                    <tr>
-                        <td colspan="3">No company items found.</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </tbody>
+            </table>
+        </div>
 
-    <!-- SUB DISTRIBUTOR ITEMS -->
-    <div class="card-section">
-        <h3>SUB DISTRIBUTOR ITEMS</h3>
-        <table class="mapping-table">
-            <thead>
-                <tr>
-                    <th>SUB ITEM CODE</th>
-                    <th>ITEM NAME</th>
-                    <th>UNIT OF MEASURES</th>
-                    <th>ACTIONS</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (subDistributorItems.Any())
-                {
-                    @foreach (var item in subDistributorItems)
+        <div class="card-section">
+            <h3>SUB DISTRIBUTOR ITEMS</h3>
+            <table class="mapping-table">
+                <thead>
+                    <tr>
+                        <th>SUB ITEM CODE</th>
+                        <th>ITEM NAME</th>
+                        <th>UNIT OF MEASURES</th>
+                        <th>ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (subDistributorItems.Any())
+                    {
+                        @foreach (var item in subDistributorItems)
+                        {
+                            <tr>
+                                <td>@item.SubItemCode</td>
+                                <td>@item.Description</td>
+                                <td>@item.UomName</td>
+                                <td>
+                                    <button class="btn-primary" type="button" @onclick="() => BeginEditItem(item)"
+                                            disabled="@(!IsSubDistributorSelected)">EDIT</button>
+                                    <button class="btn-primary" type="button" @onclick="() => DeleteItemAsync(item)"
+                                            disabled="@(!IsSubDistributorSelected)">DELETE</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
                     {
                         <tr>
-                            <td>@item.SubItemCode</td>
-                            <td>@item.Description</td>
-                            <td>@item.UomName</td>
-                            <td>
-                                <button class="btn-primary">EDIT</button>
-                                <button class="btn-primary">DELETE</button>
-                            </td>
+                            <td colspan="5">No sub distributor items found.</td>
                         </tr>
                     }
-                }
-                else
-                {
-                    <tr>
-                        <td colspan="5">No sub distributor items found.</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+
+    @if (showConfirmModal)
+    {
+        <ConfirmModal Show="showConfirmModal" Title="@modalTitle" Message="@modalMessage" OnYes="ConfirmAction"
+                      OnNo="CancelConfirmation">
+            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary))
+            {
+                <div class="modal-help">
+                    <div><strong>SKU:</strong> @itemCode</div>
+                    <div><strong>Item Name:</strong> @itemName</div>
+                    <div><strong>Principal:</strong> @selectedDropdownPrincipal</div>
+                    <div><strong>Company Item:</strong> @confirmedCompanyItemSummary</div>
+                </div>
+            }
+        </ConfirmModal>
+    }
+
+<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
+              OnErrorConfirm="CloseErrorModal" />
 
 @code {
     [Parameter]
     [SupplyParameterFromQuery(Name = "uid")]
     public int? UserIdFromQuery { get; set; }
 
-    // Form fields
     private int? selectedCompanyItemId;
     private string? selectedPrincipal;
     private string? itemCode;
     private string? itemName;
+    private ElementReference itemCodeInput;
+    private ElementReference itemNameInput;
+    private ElementReference principalSelect;
+    private Autocomplete? companyItemAutocomplete;
+    private IJSObjectReference? jsModule;
+    private bool principalEnterPrimed = false;
+    private ElementReference saveButton;
     private List<string> availableUoms = new();
     private Dictionary<string, decimal?> uomPrices = new();
+    private Dictionary<string, string> validationErrors = new();
+    private int? editingSubdItemId;
+    private bool showConfirmModal = false;
+    private string modalTitle = string.Empty;
+    private string modalMessage = string.Empty;
+    private ConfirmActionKind pendingConfirmAction = ConfirmActionKind.None;
+    private MapSubDistributorItemRow? pendingItem;
+    private string? itemActionErrorMessage;
+    private string? confirmedCompanyItemSummary;
+    private bool showErrorModal = false;
+
 
     private List<SubDistributor> subdList = new();
     private ElementReference subdSelectRef;
@@ -181,6 +250,9 @@
     private string locationText = "---";
     private List<string> principals = new();
     private string? selectedDropdownPrincipal;
+    private string? selectedCompanyItemDisplayName;
+    private string selectedCompanyItemsFilterString = "All";
+    private CompanyItemFilterMode selectedCompanyItemsFilter = CompanyItemFilterMode.All;
     private List<MapCompanyItemViewRow> companyItems = new();
     private List<MapSubDistributorItemRow> subDistributorItems = new();
     private List<CompanyItemDropdownItem> companyItemsForDropdown = new();
@@ -192,7 +264,16 @@
         public string UomName { get; set; } = string.Empty;
     }
 
+    private enum ConfirmActionKind
+    {
+        None,
+        Add,
+        Update,
+        Delete
+    }
+
     private bool IsSubDistributorSelected => selectedSubdId != 0;
+    private bool IsEditingItem => editingSubdItemId.HasValue;
 
     private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItemsForDropdown =>
         string.IsNullOrWhiteSpace(selectedDropdownPrincipal)
@@ -206,27 +287,57 @@
             .Distinct()
             .OrderBy(p => p);
 
-    private void OnPrincipalChanged(ChangeEventArgs e)
-    {
-        selectedDropdownPrincipal = e.Value?.ToString();
+    private IEnumerable<string> DisplayPrincipalsDropdown =>
+        string.IsNullOrWhiteSpace(selectedDropdownPrincipal) || PrincipalsDropdown.Contains(selectedDropdownPrincipal)
+            ? PrincipalsDropdown
+            : PrincipalsDropdown.Append(selectedDropdownPrincipal).OrderBy(p => p);
 
-        // Optional: Reset selected company item if it doesn't belong to the newly selected principal
+    private void OnPrincipalChanged()
+    {
         if (selectedCompanyItemId.HasValue && !string.IsNullOrWhiteSpace(selectedDropdownPrincipal))
         {
             var currentSelectedItem = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
             if (currentSelectedItem != null && currentSelectedItem.Principal != selectedDropdownPrincipal)
             {
-                selectedCompanyItemId = null;
-                availableUoms.Clear();
-                uomPrices.Clear();
+                ClearCompanyItemSelection();
             }
         }
+    }
+
+    private string? GetFieldError(string key)
+        => validationErrors.TryGetValue(key, out var message) ? message : null;
+
+    private void SetFieldError(string key, string message)
+        => validationErrors[key] = message;
+
+    private void ClearFieldError(string key)
+        => validationErrors.Remove(key);
+
+    private void ClearValidationErrors()
+        => validationErrors.Clear();
+
+    private void ClearItemActionError()
+        => itemActionErrorMessage = null;
+
+    private void ResetItemForm()
+    {
+        editingSubdItemId = null;
+        itemCode = string.Empty;
+        itemName = string.Empty;
+        selectedCompanyItemId = null;
+        selectedDropdownPrincipal = null;
+        selectedCompanyItemDisplayName = null;
+        availableUoms.Clear();
+        uomPrices.Clear();
+        ClearValidationErrors();
+        ClearItemActionError();
     }
 
     private void GoBackToHome()
     {
         Navigation.NavigateTo("/");
     }
+
     protected override async Task OnParametersSetAsync()
     {
         if (!userContext.UserId.HasValue && UserIdFromQuery.HasValue)
@@ -240,10 +351,12 @@
             selectedSubdId = 0;
             locationText = "---";
             principals = new();
-            selectedDropdownPrincipal = null;
             selectedPrincipal = null;
+            selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsFilter = CompanyItemFilterMode.All;
             companyItems = new();
             subDistributorItems = new();
+            ResetItemForm();
             return;
         }
 
@@ -254,16 +367,21 @@
             selectedSubdId = 0;
             locationText = "---";
             principals = new();
-            selectedDropdownPrincipal = null;
             selectedPrincipal = null;
+            selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsFilter = CompanyItemFilterMode.All;
             companyItems = new();
             subDistributorItems = new();
+            ResetItemForm();
             return;
         }
 
         if (selectedSubdId != 0 && !subdList.Any(s => s.SubDistributorId == selectedSubdId))
         {
             selectedSubdId = 0;
+            selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+            ResetItemForm();
         }
 
         UpdateSelectedSubdLocation();
@@ -278,20 +396,99 @@
         }
     }
 
-    private async Task OnSubdChangedAsync(ChangeEventArgs e)
+    private async Task HandleSubdKeyDown(KeyboardEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var subdId))
+        if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
         {
-            selectedSubdId = subdId;
+            await Task.Delay(10);
+            await itemCodeInput.FocusAsync();
         }
-        else
+    }
+
+    private async Task HandleItemCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" && e.Key != "Tab")
         {
-            selectedSubdId = 0;
+            return;
         }
 
+        if (string.IsNullOrWhiteSpace(itemCode))
+        {
+            SetFieldError(MapItemValidation.Form.SkuCode.Key, MapItemValidation.Form.SkuCode.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(MapItemValidation.Form.SkuCode.Key);
+        await Task.Delay(10);
+        await itemNameInput.FocusAsync();
+    }
+
+    private async Task HandleItemNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" && e.Key != "Tab")
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            SetFieldError(MapItemValidation.Form.ItemName.Key, MapItemValidation.Form.ItemName.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(MapItemValidation.Form.ItemName.Key);
+        await Task.Delay(10);
+        await principalSelect.FocusAsync();
+    }
+
+    private async Task HandlePrincipalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (!principalEnterPrimed)
+            {
+                principalEnterPrimed = true;
+                await OpenSelectDropdownAsync(principalSelect);
+                return;
+            }
+
+            principalEnterPrimed = false;
+            await Task.Delay(10);
+            if (companyItemAutocomplete is not null)
+            {
+                await companyItemAutocomplete.OpenPopupAsync();
+            }
+            return;
+        }
+
+        if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            if (companyItemAutocomplete is not null)
+            {
+                await companyItemAutocomplete.OpenPopupAsync();
+            }
+        }
+    }
+
+    private async Task HandleCompanyItemKeyDown(KeyboardEventArgs e)
+    {
+        // Handled by Autocomplete component; if needed, forward first-enter to open popup
+        if (e.Key == "Enter")
+        {
+            if (companyItemAutocomplete is not null)
+            {
+                await companyItemAutocomplete.OpenPopupAsync();
+                return;
+            }
+        }
+    }
+
+    private async Task OnSubdChangedAsync()
+    {
         UpdateSelectedSubdLocation();
-        selectedDropdownPrincipal = null;
         selectedPrincipal = null;
+        ResetItemForm();
         await LoadMapTablesAsync();
     }
 
@@ -314,7 +511,6 @@
             return;
         }
 
-        // Load company items for dropdown (excluding already connected items)
         companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
             userContext.UserId.Value, selectedSubdId);
 
@@ -322,7 +518,8 @@
         var companyRows = await mapItemService.GetMapCompanyItemsAsync(
             userContext.UserId.Value,
             selectedSubdId,
-            selectedPrincipal);
+            selectedPrincipal,
+            IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
 
         subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
             userContext.UserId.Value,
@@ -335,7 +532,6 @@
             {
                 CompanyItemCode = group.Key.CompanyItemCode,
                 ItemName = group.Key.Description,
-                // Format: "Box of 12 - 120.00, Piece - 10.00"
                 UomName = string.Join(", ", group
                     .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
                     .Select(x => $"{x.UomName} - {x.Price:N2}"))
@@ -350,31 +546,78 @@
         await LoadMapTablesAsync();
     }
 
-    private async Task OnCompanyItemChangedAsync(ChangeEventArgs e)
+    private async Task ValidateFormAsync()
     {
-        if (int.TryParse(e.Value?.ToString(), out var companyItemId) && companyItemId > 0)
-        {
-            await SelectCompanyItem(companyItemId);
-        }
-        else
-        {
-            ClearCompanyItemSelection();
-        }
+        validationErrors = await MapItemValidation.ValidateFormAsync(
+            itemCode,
+            itemName,
+            selectedCompanyItemId,
+            async () =>
+            {
+                if (!IsSubDistributorSelected || string.IsNullOrWhiteSpace(itemCode))
+                {
+                    return false;
+                }
+
+                return await mapItemService.SubdItemCodeExistsAsync(
+                    selectedSubdId,
+                    itemCode!,
+                    editingSubdItemId);
+            });
     }
 
-    private async Task OnCompanyItemDataListChanged(ChangeEventArgs e)
+    private Task HandleFormFieldBlur(FocusEventArgs _)
     {
-        var selectedItemName = e.Value?.ToString();
-        var selectedItem = FilteredCompanyItemsForDropdown.FirstOrDefault(i => i.ItemName == selectedItemName);
+        principalEnterPrimed = false;
+        return ValidateFormAsync();
+    }
 
-        if (selectedItem != null)
+    private Task HandlePrincipalBlur(FocusEventArgs _)
+    {
+        principalEnterPrimed = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnCompanyItemsFilterStringChanged()
+    {
+        if (Enum.TryParse<CompanyItemFilterMode>(selectedCompanyItemsFilterString, out var filterMode))
         {
-            await SelectCompanyItem(selectedItem.CompanyItemId);
+            selectedCompanyItemsFilter = filterMode;
+        }
+        else
+        {
+            selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+            selectedCompanyItemsFilterString = "All";
+        }
+
+        await LoadMapTablesAsync();
+    }
+
+    private async Task OnCompanyItemDataListChanged()
+    {
+        // legacy: not used when using Autocomplete
+        await Task.CompletedTask;
+    }
+
+    private async Task OnAutocompleteSelected(CompanyItemDropdownItem? item)
+    {
+        if (item != null)
+        {
+            await SelectCompanyItem(item.CompanyItemId);
+            ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
         }
         else
         {
             ClearCompanyItemSelection();
         }
+
+        await ValidateFormAsync();
+    }
+
+    private async Task OnCompanyItemConfirmed()
+    {
+        await Task.Delay(10);
+        await saveButton.FocusAsync();
     }
 
     private async Task SelectCompanyItem(int companyItemId)
@@ -384,61 +627,183 @@
         if (selectedItem != null)
         {
             selectedDropdownPrincipal = selectedItem.Principal;
+            selectedCompanyItemDisplayName = selectedItem.ItemName;
             availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
             uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
         }
+
+        ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
     }
 
     private void ClearCompanyItemSelection()
     {
         selectedCompanyItemId = null;
         selectedDropdownPrincipal = null;
+        selectedCompanyItemDisplayName = null;
         availableUoms = new();
         uomPrices = new();
+        ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
     }
 
     private string GetSelectedCompanyItemName()
     {
-        if (!selectedCompanyItemId.HasValue) return string.Empty;
+        if (!selectedCompanyItemId.HasValue)
+        {
+            return selectedCompanyItemDisplayName ?? string.Empty;
+        }
+
         var item = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
-        return item?.ItemName ?? string.Empty;
+        return item?.ItemName ?? selectedCompanyItemDisplayName ?? string.Empty;
     }
 
-    private async Task AddItem()
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
     {
-        if (string.IsNullOrWhiteSpace(itemCode) || string.IsNullOrWhiteSpace(itemName) || !selectedCompanyItemId.HasValue || !userContext.UserId.HasValue)
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
+    }
+
+    private async Task OpenDatalistAsync(ElementReference inputRef)
+    {
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("openDatalist", inputRef);
+    }
+
+
+
+    private async Task SaveItemAsync()
+    {
+        await ValidateFormAsync();
+
+        if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+        {
+            return;
+        }
+
+        modalTitle = IsEditingItem ? "Update Item" : "Add Item";
+        modalMessage = IsEditingItem
+            ? $"Do you want to update '{itemCode}'?"
+            : $"Do you want to add '{itemCode}'?";
+        pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
+        confirmedCompanyItemSummary = GetSelectedCompanyItemName();
+        itemActionErrorMessage = null;
+        showConfirmModal = true;
+    }
+
+    private async Task PersistItemAsync()
+    {
+        if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
         {
             return;
         }
 
         var prices = string.Join(", ", uomPrices.Where(p => p.Value.HasValue).Select(p => $"{p.Key}: {p.Value:N2}"));
-        Console.WriteLine($"Added: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+        Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
 
-        var newItem = new SubdItem
+        var item = new SubdItem
         {
-            SubdItemCode = itemCode,
-            ItemName = itemName,
+            SubdItemId = editingSubdItemId ?? 0,
+            SubdItemCode = itemCode ?? string.Empty,
+            ItemName = itemName ?? string.Empty,
             SubDistributorId = selectedSubdId,
             CompanyItemId = selectedCompanyItemId.Value,
             IsActive = true,
             CreatedDate = DateTime.UtcNow,
-            CreatedBy = userContext.UserId.Value
+            CreatedBy = userContext.UserId.Value,
+            UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
+            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
         };
 
-        var success = await mapItemService.AddSubdItemAsync(newItem);
+        if (IsEditingItem)
+        {
+            var updateResult = await mapItemService.UpdateSubdItemAsync(item);
+            if (updateResult.IsUpdated)
+            {
+                ResetItemForm();
+                await LoadMapTablesAsync();
+            }
+            else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+            {
+                itemActionErrorMessage = updateResult.ErrorMessage;
+                showErrorModal = true;
+            }
+
+            return;
+        }
+
+        var success = await mapItemService.AddSubdItemAsync(item);
+
         if (success)
         {
-            // Clear inputs
-            itemCode = string.Empty;
-            itemName = string.Empty;
-            selectedCompanyItemId = null;
-            selectedDropdownPrincipal = null;
-            availableUoms.Clear();
-            uomPrices.Clear();
-
-            // Refresh tables
+            ResetItemForm();
             await LoadMapTablesAsync();
+            await itemCodeInput.FocusAsync();
         }
+    }
+
+    private async Task BeginEditItem(MapSubDistributorItemRow item)
+    {
+        editingSubdItemId = item.SubdItemId;
+        itemCode = item.SubItemCode;
+        itemName = item.Description;
+        selectedCompanyItemId = item.CompanyItemId;
+        selectedCompanyItemDisplayName = item.CompanyItemName;
+        selectedDropdownPrincipal = item.Principal;
+        availableUoms = await mapItemService.GetCompanyItemUomsAsync(item.CompanyItemId);
+        uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
+        ClearValidationErrors();
+    }
+
+    private void DeleteItemAsync(MapSubDistributorItemRow item)
+    {
+        pendingItem = item;
+        modalTitle = "Delete Item";
+        modalMessage = $"Are you sure you want to delete '{item.SubItemCode}'? This action cannot be undone.";
+        pendingConfirmAction = ConfirmActionKind.Delete;
+        itemActionErrorMessage = null;
+        showConfirmModal = true;
+    }
+
+    private Task CancelEditAsync()
+    {
+        ResetItemForm();
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmAction()
+    {
+        if (pendingConfirmAction == ConfirmActionKind.Add || pendingConfirmAction == ConfirmActionKind.Update)
+        {
+            await PersistItemAsync();
+        }
+        else if (pendingConfirmAction == ConfirmActionKind.Delete && pendingItem is not null)
+        {
+            var deleteResult = await mapItemService.DeleteSubdItemAsync(pendingItem.SubdItemId);
+            if (deleteResult.IsDeleted)
+            {
+                if (editingSubdItemId == pendingItem.SubdItemId)
+                {
+                    ResetItemForm();
+                }
+
+                await LoadMapTablesAsync();
+            }
+            else if (!string.IsNullOrWhiteSpace(deleteResult.ErrorMessage))
+            {
+                itemActionErrorMessage = deleteResult.ErrorMessage;
+                showErrorModal = true;
+            }
+        }
+        CancelConfirmation();
+    }
+
+    private void CancelConfirmation()
+    {
+        showConfirmModal = false;
+        pendingItem = null;
+        pendingConfirmAction = ConfirmActionKind.None;
+        modalTitle = string.Empty;
+        modalMessage = string.Empty;
+        confirmedCompanyItemSummary = null;
     }
 
     private void GoToCompanyItems()
@@ -446,4 +811,9 @@
         Navigation.NavigateTo("/companyitems");
     }
 
+    private void CloseErrorModal()
+    {
+        showErrorModal = false;
+        itemActionErrorMessage = null;
+    }
 }

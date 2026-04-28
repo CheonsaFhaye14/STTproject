@@ -6,6 +6,7 @@
 @using Microsoft.JSInterop
 @using STTproject.Models
 @using STTproject.Services
+@using STTproject.Components.Shared
 
 @inject ISalesInvoiceService salesInvoiceService
 @inject IHomeService homeService
@@ -25,23 +26,19 @@
     <button class="btn-primary">Import</button>
 </div>
 
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <div style="color: red; margin: 10px 0;">
-        <strong>Error: </strong>@errorMessage
-    </div>
-}
+<ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
+              OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
 
-@if (showCommitConfirmModal)
-{
-    <div class="modal-overlay" id="commit-invoice-modal-overlay">
-        <div class="modal-box">
-            <h4>Commit this invoice to the database?</h4>
-            <button class="btn-primary" @ref="commitYesButton" @onclick="ConfirmCommitInvoice">Yes</button>
-            <button class="btn-primary" @onclick="CancelCommitInvoice">No</button>
-        </div>
-    </div>
-}
+<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
+              OnErrorConfirm="CloseErrorModal" />
+
+<ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
+              Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
+              OnNo="CancelAddItemsConfirm" />
+
+<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes"
+              Message="@($"Remove selected items and save {editItemsConfirmCount} change(s)?")" OnYes="ConfirmEditItems"
+              OnNo="CancelEditItemsConfirm" />
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                Customers="customers" CustomerBranches="customerBranches" SelectedSubdistributorId="invoice.SubdistributorId"
@@ -59,10 +56,12 @@
 
 <InvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
               OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-              AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved" />
+              AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
+              OnBeforeSave="OnAddItemsBeforeSave" />
 
 <EditItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-           OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms" />
+           OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
+           OnBeforeSave="OnEditItemsBeforeSave" />
 
 <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                    AvailableUoms="availableUoms" />
@@ -76,10 +75,13 @@
 }
 
 @code {
-    private ElementReference commitYesButton;
     private bool showAddItemsModal = false;
     private bool showEditItemsModal = false;
     private bool showCommitConfirmModal = false;
+    private bool showAddItemsConfirmModal = false;
+    private bool showEditItemsConfirmModal = false;
+    private int addItemsConfirmCount = 0;
+    private int editItemsConfirmCount = 0;
     private InvoiceItems? addItemsModalRef;
     private EditItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
@@ -165,6 +167,59 @@
         items = editedItems;
         showEditItemsModal = false;
         return Task.CompletedTask;
+    }
+
+    // Add Items Confirmation
+    async Task OnAddItemsBeforeSave(List<InputItemModel> itemsToAdd)
+    {
+        if (itemsToAdd?.Any() == true)
+        {
+            addItemsConfirmCount = itemsToAdd.Count;
+            showAddItemsConfirmModal = true;
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ConfirmAddItems()
+    {
+        showAddItemsConfirmModal = false;
+        if (addItemsModalRef != null)
+        {
+            await addItemsModalRef.SaveItemsInternal();
+        }
+    }
+
+    private void CancelAddItemsConfirm()
+    {
+        showAddItemsConfirmModal = false;
+        addItemsConfirmCount = 0;
+    }
+
+    // Edit Items Confirmation
+    async Task OnEditItemsBeforeSave(List<InputItemModel> itemsToSave)
+    {
+        if (itemsToSave?.Any() == true)
+        {
+            editItemsConfirmCount = itemsToSave.Count;
+            showEditItemsConfirmModal = true;
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ConfirmEditItems()
+    {
+        showEditItemsConfirmModal = false;
+        if (editItemsModalRef != null)
+        {
+            var mergedItems = EditItems.MergeMatchingItems(editItemsModalRef.EditableItems);
+            await editItemsModalRef.SaveItemsInternal(mergedItems);
+        }
+    }
+
+    private void CancelEditItemsConfirm()
+    {
+        showEditItemsConfirmModal = false;
+        editItemsConfirmCount = 0;
     }
 
     [JSInvokable]
@@ -272,6 +327,7 @@
         if (!items.Any())
         {
             errorMessage = "Add at least one item before committing the invoice.";
+            showErrorModal = true;
             return;
         }
 
@@ -290,11 +346,18 @@
         await CommitInvoice();
     }
 
+    private void CloseErrorModal()
+    {
+        showErrorModal = false;
+        errorMessage = null;
+    }
+
     private async Task CommitInvoice()
     {
         if (!items.Any())
         {
             errorMessage = "Add at least one item before committing the invoice.";
+            showErrorModal = true;
             return;
         }
 
@@ -303,23 +366,26 @@
         SaveInvoiceResult result;
         try
         {
-            result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId);
+            result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId, userContext.UserId ?? 0);
         }
         catch (Exception)
         {
             errorMessage = "Unable to commit invoice due to a database error.";
+            showErrorModal = true;
             return;
         }
 
         if (result.IsDuplicate)
         {
             errorMessage = "Duplicate invoice number!";
+            showErrorModal = true;
             return;
         }
 
         if (!result.IsSaved)
         {
             errorMessage = result.ErrorMessage ?? "Unable to commit invoice.";
+            showErrorModal = true;
             return;
         }
 
@@ -372,11 +438,6 @@
                 await jsModule.InvokeVoidAsync("deactivateModalFocusTrap");
             }
         }
-
-        if (showCommitConfirmModal)
-        {
-            await commitYesButton.FocusAsync();
-        }
     }
 
     public async ValueTask DisposeAsync()
@@ -394,6 +455,7 @@
 
     bool isSaved = false;
     string? errorMessage;
+    bool showErrorModal = false;
 
     [Parameter]
     public int SubDistributorId { get; set; }

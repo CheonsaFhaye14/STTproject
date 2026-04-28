@@ -183,6 +183,16 @@ label {
     margin: 20px;
 }
 
+.error-display {
+    color: #b00020;
+    background-color: #ffebee;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border-left: 4px solid #b00020;
+    margin-top: 10px;
+    font-weight: 500;
+}
+
 .form-group {
     display: grid;
     gap: 6px;

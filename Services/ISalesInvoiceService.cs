@@ -7,7 +7,12 @@ public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
     Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
-    Task<SaveInvoiceResult> SaveInvoiceAsync(InputInvoiceModel invoice, List<InputItemModel> items, int currentInvoiceId, CancellationToken cancellationToken = default);
+    Task<SaveInvoiceResult> SaveInvoiceAsync(
+        InputInvoiceModel invoice,
+        List<InputItemModel> items,
+        int currentInvoiceId,
+        int currentUserId,
+        CancellationToken cancellationToken = default);
     Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default);
 }
 
@@ -70,6 +75,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
+        int currentUserId,
         CancellationToken cancellationToken = default)
     {
         if (items is null || !items.Any())
@@ -157,6 +163,10 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                     CustomerId = invoice.CustomerId,
                     CustomerBranchId = invoice.CustomerBranchId,
                     SubDistributorId = invoice.SubdistributorId,
+                    CreatedBy = currentUserId,
+                    UpdatedBy = currentUserId,
+                    CreatedDate = DateTime.Now,
+                    UpdatedDate = DateTime.Now,
                 };
 
                 _context.SalesInvoices.Add(salesInvoice);
@@ -166,8 +176,14 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 {
                     SalesInvoiceId = salesInvoice.SalesInvoiceId,
                     SubdItemId = i.SubdItemId,
+                    ItemsUomId = i.ItemsUomId,
                     Quantity = i.Quantity,
                     Amount = i.Amount
+                    ,
+                    CreatedBy = currentUserId,
+                    UpdatedBy = currentUserId,
+                    CreatedDate = DateTime.Now,
+                    UpdatedDate = DateTime.Now
                 }));
 
                 await _context.SaveChangesAsync(cancellationToken);
@@ -210,6 +226,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             existing.CustomerId = invoice.CustomerId;
             existing.CustomerBranchId = invoice.CustomerBranchId;
             existing.SubDistributorId = invoice.SubdistributorId;
+            existing.UpdatedBy = currentUserId;
+            existing.UpdatedDate = DateTime.Now;
 
             var existingItems = await _context.SalesInvoiceItems
                 .Where(x => x.SalesInvoiceId == currentInvoiceId)
@@ -224,8 +242,14 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             {
                 SalesInvoiceId = currentInvoiceId,
                 SubdItemId = i.SubdItemId,
+                ItemsUomId = i.ItemsUomId,
                 Quantity = i.Quantity,
                 Amount = i.Amount
+                ,
+                CreatedBy = currentUserId,
+                UpdatedBy = currentUserId,
+                CreatedDate = DateTime.Now,
+                UpdatedDate = DateTime.Now
             }));
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -274,8 +298,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 SubdItemId = sii.SubdItemId,
                 ItemCode = sii.SubdItem.SubdItemCode,
                 ItemName = sii.SubdItem.ItemName,
-                ItemsUomId = sii.SubdItem.CompanyItem.ItemsUom != null ? sii.SubdItem.CompanyItem.ItemsUom.ItemsUomId : 0,
-                UomName = sii.SubdItem.CompanyItem.ItemsUom != null ? sii.SubdItem.CompanyItem.ItemsUom.UomName : string.Empty,
+                ItemsUomId = sii.ItemsUomId,
+                UomName = sii.ItemsUom != null ? sii.ItemsUom.UomName : string.Empty,
                 Quantity = sii.Quantity,
                 Amount = sii.Amount
             })

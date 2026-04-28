@@ -1,5 +1,91 @@
-﻿<h3>ConfirmModal</h3>
+﻿@using Microsoft.AspNetCore.Components
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="OnOverlayClick">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4>@Title</h4>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrWhiteSpace(Message))
+                {
+                    <p>@Message</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="error-display">
+                        <strong>Error: </strong>@ErrorMessage
+                    </div>
+                }
+                @ChildContent
+            </div>
+            <div class="modal-footer">
+                @if (ShowError)
+                {
+                    <button class="btn-secondary" @onclick="OnErrorConfirm">OK</button>
+                }
+                else
+                {
+                    <button class="btn-primary" @ref="YesButtonRef" @onclick="OnYes">Yes</button>
+                    <button class="btn-secondary" @onclick="OnNo">No</button>
+                }
+            </div>
+        </div>
+    </div>
+}
 
 @code {
+    private ElementReference YesButtonRef;
 
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Confirm Action";
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public bool ShowError { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnYes { get; set; }
+
+    [Parameter]
+    public EventCallback OnNo { get; set; }
+
+    [Parameter]
+    public EventCallback OnErrorConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback? OnClose { get; set; }
+
+    [Parameter]
+    public bool CloseOnOverlayClick { get; set; } = true;
+
+    private Task OnOverlayClick()
+    {
+        if (CloseOnOverlayClick && !ShowError)
+        {
+            return OnNo.InvokeAsync();
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnErrorConfirmHandler()
+    {
+        if (OnErrorConfirm.HasDelegate)
+        {
+            return OnErrorConfirm.InvokeAsync();
+        }
+        return OnNo.InvokeAsync();
+    }
 }

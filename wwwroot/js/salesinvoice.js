@@ -168,3 +168,17 @@ export function openSelectDropdown(selectElement) {
     selectElement.dispatchEvent(click);
 }
 
+export function openDatalist(inputElement) {
+    if (!inputElement || inputElement.disabled) {
+        return;
+    }
+
+    try {
+        inputElement.focus();
+        const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+        inputElement.dispatchEvent(ev);
+    } catch {
+        // best-effort; some browsers may ignore synthetic events
+    }
+}
+

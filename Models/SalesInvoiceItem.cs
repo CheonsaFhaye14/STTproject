@@ -23,6 +23,10 @@ public partial class SalesInvoiceItem
 
     public decimal Amount { get; set; }
 
+    public int ItemsUomId { get; set; }
+
+    public virtual ItemsUom ItemsUom { get; set; } = null!;
+
     public virtual SalesInvoice SalesInvoice { get; set; } = null!;
 
     public virtual SubdItem SubdItem { get; set; } = null!;

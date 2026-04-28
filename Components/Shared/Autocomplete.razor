@@ -1,0 +1,121 @@
+@using STTproject.Models
+@using STTproject.Services
+@namespace STTproject.Components.Shared
+
+<div class="autocomplete">
+    <input class="form-input" @ref="inputRef" value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown"
+           @onfocus="OpenOnFocus" @onblur="HandleBlur" placeholder="@Placeholder" disabled="@IsDisabled" />
+    @if (isOpen && FilteredItems.Any())
+    {
+        <div class="autocomplete-popup" @onmousedown:preventDefault>
+            @foreach (var (item, idx) in FilteredItems.Select((it, i) => (it, i)))
+            {
+                var cls = idx == highlightedIndex ? "autocomplete-item highlighted" : "autocomplete-item";
+                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">@item.ItemName</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<CompanyItemDropdownItem> Items { get; set; } = new();
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public EventCallback<CompanyItemDropdownItem?> OnSelected { get; set; }
+    [Parameter] public EventCallback OnConfirmed { get; set; }
+    [Parameter] public string Placeholder { get; set; } = string.Empty;
+    [Parameter] public bool IsDisabled { get; set; }
+
+    private ElementReference inputRef;
+    private bool isOpen = false;
+    private int highlightedIndex = -1;
+
+    private IEnumerable<CompanyItemDropdownItem> FilteredItems =>
+        string.IsNullOrWhiteSpace(Value)
+            ? Items
+            : Items.Where(i => i.ItemName.Contains(Value, StringComparison.OrdinalIgnoreCase));
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e?.Value?.ToString() ?? string.Empty;
+        highlightedIndex = -1;
+        await ValueChanged.InvokeAsync(Value);
+        isOpen = true;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowDown")
+        {
+            if (!isOpen) isOpen = true;
+            highlightedIndex = Math.Min(highlightedIndex + 1, FilteredItems.Count() - 1);
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (e.Key == "ArrowUp")
+        {
+            highlightedIndex = Math.Max(highlightedIndex - 1, 0);
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (e.Key == "Enter")
+        {
+            if (!isOpen)
+            {
+                isOpen = true;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var toSelect = highlightedIndex >= 0 ? FilteredItems.ElementAt(highlightedIndex) : FilteredItems.FirstOrDefault();
+            if (toSelect != null)
+            {
+                await SelectItem(toSelect);
+            }
+
+            await OnConfirmed.InvokeAsync();
+            return;
+        }
+
+        if (e.Key == "Escape")
+        {
+            isOpen = false;
+            highlightedIndex = -1;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+    }
+
+    private void OpenOnFocus(FocusEventArgs _)
+    {
+        isOpen = true;
+    }
+
+    private async Task SelectItem(CompanyItemDropdownItem? item)
+    {
+        if (item == null) return;
+        Value = item.ItemName;
+        await ValueChanged.InvokeAsync(Value);
+        isOpen = false;
+        highlightedIndex = -1;
+        await OnSelected.InvokeAsync(item);
+    }
+
+    private void HandleBlur(FocusEventArgs args)
+    {
+        // Delay closing so click events on popup can register
+        Task.Run(async () => { await Task.Delay(150); isOpen = false; highlightedIndex = -1; await InvokeAsync(StateHasChanged); });
+    }
+
+    public async Task OpenPopupAsync()
+    {
+        isOpen = true;
+        highlightedIndex = -1;
+        await InvokeAsync(StateHasChanged);
+        await inputRef.FocusAsync();
+    }
+
+    public ElementReference GetInputRef() => inputRef;
+}

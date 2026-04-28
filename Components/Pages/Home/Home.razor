@@ -3,6 +3,7 @@
 @using System.Linq
 @using STTproject.Models
 @using STTproject.Services
+@using STTproject.Components.Shared
 @rendermode InteractiveServer
 
 @inject IHomeService homeService
@@ -309,25 +310,17 @@
 
     @if (showDeleteInvoiceConfirmModal)
     {
-        <div class="modal-overlay" @onclick="CancelDeleteInvoice">
-            <div class="modal-box" @onclick:stopPropagation="true" style="max-width: 420px;">
-                <div class="modal-header">
-                    <h4>Delete Invoice</h4>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to delete invoice <strong>@selectedInvoiceCode</strong>?</p>
-                    <div class="modal-actions">
-                        <button class="btn-primary" @onclick="ConfirmDeleteInvoiceAsync">Yes, Delete</button>
-                        <button class="btn-secondary" @onclick="CancelDeleteInvoice">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <ConfirmModal Show="showDeleteInvoiceConfirmModal" Title="Delete Invoice"
+                      Message="@($"Are you sure you want to delete invoice {selectedInvoiceCode}?")" OnYes="ConfirmDeleteInvoiceAsync"
+                      OnNo="CancelDeleteInvoice" />
     }
+
+<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@deleteInvoiceErrorMessage" ShowError="true"
+              OnErrorConfirm="CloseErrorModal" />
 
 
 @code {
-    private int userid = 11; // Placeholder for user ID, to be replaced with actual user context
+    private int userid = 1; // Placeholder for user ID, to be replaced with actual user context
     private string UserFullName = string.Empty;
 
     private List<SubDistributor> subdList = new();
@@ -353,6 +346,7 @@
     private HomeSalesInvoiceDetailRow? selectedInvoiceDetails;
     private bool showDeleteInvoiceConfirmModal;
     private string? deleteInvoiceErrorMessage;
+    private bool showErrorModal = false;
 
     private IEnumerable<HomeSalesInvoiceBatchRow> FilteredBatchRows
     {
@@ -551,6 +545,7 @@
             if (!deleted)
             {
                 deleteInvoiceErrorMessage = "Unable to delete invoice.";
+                showErrorModal = true;
                 return;
             }
 
@@ -572,7 +567,14 @@
         catch
         {
             deleteInvoiceErrorMessage = "Unable to delete invoice due to a database error.";
+            showErrorModal = true;
         }
+    }
+
+    private void CloseErrorModal()
+    {
+        showErrorModal = false;
+        deleteInvoiceErrorMessage = null;
     }
 
     async Task ReloadRecentActivityAsync()

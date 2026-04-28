@@ -104,6 +104,7 @@
     [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
     [Parameter] public EventCallback OnCancelModal { get; set; }
     [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>>? OnBeforeSave { get; set; }
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
@@ -122,6 +123,9 @@
     private bool focusItemNameOnRender;
     private List<InputItemModel> editableItems = new();
     private int selectedItemIndex;
+
+    // Public property to expose editableItems for confirmation
+    public List<InputItemModel> EditableItems => editableItems;
 
     private InputItemModel? SelectedItem =>
         selectedItemIndex >= 0 && selectedItemIndex < editableItems.Count
@@ -217,7 +221,7 @@
         {
             item.ItemCode = currentSubdItem.SubdItemCode;
             item.ItemName = currentSubdItem.ItemName;
-            item.Amount = (selectedUom.Price ?? 0m) * item.Quantity;
+            item.Amount = selectedUom.Price * item.Quantity;
             item.UomName = selectedUom.UomName;
         }
         else if (selectedUom != null)
@@ -297,11 +301,11 @@
             await Task.Delay(10);
             if (SelectedItem != null)
             {
-                await uomSelectRef.FocusAsync();
+                try { await uomSelectRef.FocusAsync(); } catch { /* ignore focus errors */ }
             }
             else
             {
-                await cancelButtonRef.FocusAsync();
+                try { await cancelButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
             }
         }
     }
@@ -403,7 +407,7 @@
         if (e.Key == "Enter")
         {
             await Task.Delay(10);
-            await cancelButtonRef.FocusAsync();
+            try { await cancelButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
         }
     }
 
@@ -412,7 +416,7 @@
         if (e.Key == "Enter")
         {
             await Task.Delay(10);
-            await saveButtonRef.FocusAsync();
+            try { await saveButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
         }
     }
 
@@ -444,17 +448,30 @@
 
         var mergedItems = MergeMatchingItems(editableItems);
 
+        // Trigger confirmation before saving
+        if (OnBeforeSave.HasDelegate)
+        {
+            await OnBeforeSave.InvokeAsync(mergedItems);
+        }
+        else
+        {
+            await SaveItemsInternal(mergedItems);
+        }
+    }
+
+    public async Task SaveFromShortcutAsync()
+    {
+        await SaveModal();
+    }
+
+    private async Task SaveItemsInternal(List<InputItemModel> mergedItems)
+    {
         if (OnSaveEditedItems.HasDelegate)
         {
             await OnSaveEditedItems.InvokeAsync(mergedItems);
         }
 
         await CloseModal();
-    }
-
-    public async Task SaveFromShortcutAsync()
-    {
-        await SaveModal();
     }
 
     private async Task CancelModal()
@@ -488,7 +505,7 @@
         };
     }
 
-    private static List<InputItemModel> MergeMatchingItems(IEnumerable<InputItemModel> source)
+    public static List<InputItemModel> MergeMatchingItems(IEnumerable<InputItemModel> source)
     {
         var merged = source
             .Where(item => item.Quantity > 0)

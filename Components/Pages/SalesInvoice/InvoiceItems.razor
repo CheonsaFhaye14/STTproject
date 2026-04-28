@@ -23,7 +23,7 @@
                     <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown"
                            @onblur="HandleSkuBlur" />
                     @if (ShowValidationErrors &&
-                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
+                                                                                                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)</span>
                     }
@@ -35,13 +35,13 @@
                             @onkeydown="HandleItemNameKeyDown" @onblur="HandleDraftFieldBlur">
                         <option value="">-- Select --</option>
                         @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId ==
-                                                                                                                                                                                                                                                                    SelectedSubdistributorId).DistinctBy(i => i.ItemName))
+                                                                                                                                                                                                                                                                                                                    SelectedSubdistributorId).DistinctBy(i => i.ItemName))
                         {
                             <option value="@subd.ItemName">@subd.ItemName</option>
                         }
                     </select>
                     @if (ShowValidationErrors &&
-                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
+                                                                                                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)</span>
                     }
@@ -61,7 +61,7 @@
                         }
                     </select>
                     @if (ShowValidationErrors &&
-                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
+                                                                                                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
                     }
@@ -74,7 +74,7 @@
                     )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
                            @onblur="HandleDraftFieldBlur" />
                     @if (ShowValidationErrors &&
-                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                                                                                                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
                     }
@@ -148,6 +148,7 @@
     [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
     [Parameter] public EventCallback OnCancelModal { get; set; }
     [Parameter] public EventCallback<List<InputItemModel>> OnSaveModalItems { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>>? OnBeforeSave { get; set; }
 
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public EventCallback<List<InputItemModel>> ItemsChanged { get; set; }
@@ -282,7 +283,7 @@ SelectedSubdistributorId);
 
             if (CurrentSubdItem != null && CurrentUom != null)
             {
-                NewItem.Amount = (CurrentUom.Price ?? 0m) * NewItem.Quantity;
+                NewItem.Amount = CurrentUom.Price * NewItem.Quantity;
                 NewItem.UomName = CurrentUom.UomName;
             }
         }
@@ -314,7 +315,7 @@ SelectedSubdistributorId);
         }
 
         var selectedUom = CurrentUom!;
-        var lineTotalPrice = NewItem.Quantity * (selectedUom.Price ?? 0m);
+        var lineTotalPrice = NewItem.Quantity * selectedUom.Price;
 
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
@@ -350,6 +351,24 @@ SelectedSubdistributorId);
             return;
         }
 
+        // Trigger confirmation before saving
+        if (OnBeforeSave.HasDelegate)
+        {
+            await OnBeforeSave.InvokeAsync(modalItems.ToList());
+        }
+        else
+        {
+            await SaveItemsInternal();
+        }
+    }
+
+    public async Task SaveFromShortcutAsync()
+    {
+        await SaveModal();
+    }
+
+    public async Task SaveItemsInternal()
+    {
         if (OnSaveModalItems.HasDelegate)
         {
             await OnSaveModalItems.InvokeAsync(modalItems.ToList());
@@ -357,11 +376,6 @@ SelectedSubdistributorId);
 
         modalItems.Clear();
         await CloseModal();
-    }
-
-    public async Task SaveFromShortcutAsync()
-    {
-        await SaveModal();
     }
 
     private async Task CancelModal()
@@ -525,7 +539,7 @@ SelectedSubdistributorId);
     {
         return CurrentUom is null
             ? string.Empty
-            : FormatHelper.FormatPrice(CurrentUom.Price ?? 0m);
+            : FormatHelper.FormatPrice(CurrentUom.Price);
     }
 
     private void ValidateDraft()
