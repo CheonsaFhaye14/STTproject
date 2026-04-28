@@ -36,9 +36,8 @@
               Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
               OnNo="CancelAddItemsConfirm" />
 
-<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes"
-              Message="@($"Remove selected items and save {editItemsConfirmCount} change(s)?")" OnYes="ConfirmEditItems"
-              OnNo="CancelEditItemsConfirm" />
+<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
+              OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                Customers="customers" CustomerBranches="customerBranches" SelectedSubdistributorId="invoice.SubdistributorId"
@@ -69,7 +68,7 @@
 @if (isSaved)
 {
     <div class="commit-actions">
-        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm" disabled="@(!items.Any())">Commit Invoice</button>
+        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice</button>
         <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
     </div>
 }
@@ -81,7 +80,7 @@
     private bool showAddItemsConfirmModal = false;
     private bool showEditItemsConfirmModal = false;
     private int addItemsConfirmCount = 0;
-    private int editItemsConfirmCount = 0;
+    private string editItemsConfirmMessage = "";
     private InvoiceItems? addItemsModalRef;
     private EditItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
@@ -198,9 +197,27 @@
     // Edit Items Confirmation
     async Task OnEditItemsBeforeSave(List<InputItemModel> itemsToSave)
     {
-        if (itemsToSave?.Any() == true)
+        if (editItemsModalRef != null)
         {
-            editItemsConfirmCount = itemsToSave.Count;
+            // Calculate deleted and modified items
+            int deletedCount = editItemsModalRef.GetDeletedItemCount();
+            int modifiedCount = editItemsModalRef.GetModifiedItemCount();
+            
+            // Build message based on changes
+            if (deletedCount == 0 && modifiedCount == 0)
+            {
+                // No changes, don't show confirmation
+                await Task.CompletedTask;
+                return;
+            }
+            
+            var messageParts = new List<string>();
+            if (deletedCount > 0)
+                messageParts.Add($"Removed {deletedCount} item{(deletedCount != 1 ? "s" : "")}");
+            if (modifiedCount > 0)
+                messageParts.Add($"Changed {modifiedCount} item{(modifiedCount != 1 ? "s" : "")}");
+            
+            editItemsConfirmMessage = string.Join(" and ", messageParts) + "?";
             showEditItemsConfirmModal = true;
         }
         await Task.CompletedTask;
@@ -219,7 +236,7 @@
     private void CancelEditItemsConfirm()
     {
         showEditItemsConfirmModal = false;
-        editItemsConfirmCount = 0;
+        editItemsConfirmMessage = "";
     }
 
     [JSInvokable]

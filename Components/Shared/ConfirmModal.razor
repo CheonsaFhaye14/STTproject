@@ -2,7 +2,7 @@
 
 @if (Show)
 {
-    <div class="modal-overlay" @onclick="OnOverlayClick">
+    <div class="modal-overlay confirm-modal-overlay" @onclick="OnOverlayClick">
         <div class="modal-box" @onclick:stopPropagation="true">
             <div class="modal-header">
                 <h4>@Title</h4>
@@ -23,7 +23,7 @@
             <div class="modal-footer">
                 @if (ShowError)
                 {
-                    <button class="btn-secondary" @onclick="OnErrorConfirm">OK</button>
+                    <button class="btn-secondary" @ref="OkButtonRef" @onclick="OnErrorConfirm">OK</button>
                 }
                 else
                 {
@@ -37,6 +37,8 @@
 
 @code {
     private ElementReference YesButtonRef;
+    private ElementReference OkButtonRef;
+    private bool previousShow = false;
 
     [Parameter]
     public bool Show { get; set; }
@@ -87,5 +89,37 @@
             return OnErrorConfirm.InvokeAsync();
         }
         return OnNo.InvokeAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Focus Yes button when modal opens in confirmation mode
+        if (Show && !previousShow && !ShowError)
+        {
+            try
+            {
+                await YesButtonRef.FocusAsync();
+            }
+            catch
+            {
+                // Ignore focus errors
+            }
+        }
+
+        // Focus OK button when modal opens in error mode
+        if (Show && !previousShow && ShowError)
+        {
+            try
+            {
+                await OkButtonRef.FocusAsync();
+            }
+            catch
+            {
+                // Ignore focus errors
+            }
+        }
+
+        previousShow = Show;
+        await base.OnAfterRenderAsync(firstRender);
     }
 }

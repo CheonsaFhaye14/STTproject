@@ -104,7 +104,7 @@
     [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
     [Parameter] public EventCallback OnCancelModal { get; set; }
     [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
-    [Parameter] public EventCallback<List<InputItemModel>>? OnBeforeSave { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>> OnBeforeSave { get; set; }
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
@@ -276,6 +276,7 @@
         if (!editableItems.Any())
         {
             selectedItemIndex = -1;
+            StateHasChanged();
             return;
         }
 
@@ -439,11 +440,15 @@
 
     private async Task SaveModal()
     {
-        ValidateDraft();
-
-        if (ValidationErrors.Any())
+        // Only validate if there are items to save
+        if (editableItems.Any())
         {
-            return;
+            ValidateDraft();
+
+            if (ValidationErrors.Any())
+            {
+                return;
+            }
         }
 
         var mergedItems = MergeMatchingItems(editableItems);
@@ -464,7 +469,7 @@
         await SaveModal();
     }
 
-    private async Task SaveItemsInternal(List<InputItemModel> mergedItems)
+    public async Task SaveItemsInternal(List<InputItemModel> mergedItems)
     {
         if (OnSaveEditedItems.HasDelegate)
         {
@@ -532,6 +537,35 @@
             .ToList();
 
         return merged;
+    }
+
+    /// <summary>
+    /// Counts the number of items that were deleted (in original Items but not in current editableItems).
+    /// </summary>
+    public int GetDeletedItemCount()
+    {
+        return Items.Where(item =>
+            !editableItems.Any(e =>
+                e.SubdItemId == item.SubdItemId &&
+                e.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
+            )
+        ).Count();
+    }
+
+    /// <summary>
+    /// Counts the number of items that were modified (quantity or UOM changed).
+    /// </summary>
+    public int GetModifiedItemCount()
+    {
+        return editableItems.Where(item =>
+        {
+            var originalItem = Items.FirstOrDefault(i =>
+                i.SubdItemId == item.SubdItemId &&
+                i.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
+            );
+            return originalItem != null &&
+                   (item.Quantity != originalItem.Quantity || item.ItemsUomId != originalItem.ItemsUomId);
+        }).Count();
     }
 
     private void ValidateDraft()

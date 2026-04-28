@@ -37,13 +37,6 @@
     <button class="btn-secondary">IMPORT</button>
 </div>
 
-@if (!string.IsNullOrWhiteSpace(itemActionErrorMessage))
-{
-    <div style="color: #b00020; margin: 10px 0; font-weight: 600;">
-        @itemActionErrorMessage
-    </div>
-}
-
 <!-- INPUT ROW -->
 <div class="form-row">
     <div class="form-group">
@@ -90,7 +83,7 @@
     <div class="form-actions">
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected)">@((IsEditingItem) ?
-                                                                                                                  "UPDATE" : "ADD")</button>
+                                                                                                                                          "UPDATE" : "ADD")</button>
             @if (IsEditingItem)
             {
                 <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>

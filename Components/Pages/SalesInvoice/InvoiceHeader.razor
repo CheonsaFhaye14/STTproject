@@ -1,7 +1,10 @@
 @using STTproject.Models
 @using STTproject.Services
+@using Microsoft.AspNetCore.Components
 @inject ISalesInvoiceService salesInvoiceService
 @inject IJSRuntime JS
+
+@implements IAsyncDisposable
 
 <div class="top-card">
     <div class="form-grid">
@@ -138,6 +141,7 @@
     private IJSObjectReference? jsModule;
     private bool customerBranchEnterPrimed;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
+    private CancellationTokenSource? invoiceNumberCheckCts;
 
     private async Task HandleInvoiceNumberKeyDown(KeyboardEventArgs e)
     {
@@ -164,18 +168,26 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
 
     private async Task HandleInvoiceNumberChanged()
     {
-        if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
-        {
-            return;
-        }
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts = new CancellationTokenSource();
+        var cts = invoiceNumberCheckCts;
 
-        if (await InvoiceNumberExistsAsync())
+        await Task.Delay(500, cts.Token).ContinueWith(async _ =>
         {
-            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
-            return;
-        }
+            if (cts.Token.IsCancellationRequested) return;
+            if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber)) return;
 
-        ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+            try
+            {
+                if (await InvoiceNumberExistsAsync())
+                {
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
+                    return;
+                }
+                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+            }
+            catch when (cts.Token.IsCancellationRequested) { }
+        }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
     private async Task HandleInvoiceNumberBlur(FocusEventArgs _)
@@ -545,6 +557,14 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         customerBranchEnterPrimed = false;
         ApplySelectedBranch(Invoice.CustomerBranchId);
         return Task.CompletedTask;
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts?.Dispose();
+        if (jsModule is not null)
+            await jsModule.InvokeVoidAsync("dispose");
     }
 
     private void SyncCustomerState()

@@ -148,6 +148,10 @@ label {
     z-index: 1050;
 }
 
+.confirm-modal-overlay {
+    z-index: 2000;
+}
+
 .modal-box {
     background-color: #FFFFFF;
     border-radius: 16px;
