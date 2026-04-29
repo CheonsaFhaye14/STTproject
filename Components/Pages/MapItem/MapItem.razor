@@ -33,7 +33,7 @@
 
 <!-- DOWNLOAD TEMPLATE + IMPORT -->
 <div class="top-buttons">
-    <button class="btn-primary" onclick="ModalTemplate">Download Template</button>
+    <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
     <button class="btn-primary">Import Excel</button>
     <button class="btn-primary">Export Data</button>
 </div>
@@ -208,6 +208,8 @@
 <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
               OnErrorConfirm="CloseErrorModal" />
 
+<DownloadTemplateModal ShowModal="showDownloadTemplateModal" ModalTemplate="HandleDownloadTemplateSubmit" />
+
 @code {
     [Parameter]
     [SupplyParameterFromQuery(Name = "uid")]
@@ -236,6 +238,14 @@
     private string? itemActionErrorMessage;
     private string? confirmedCompanyItemSummary;
     private bool showErrorModal = false;
+    private bool showDownloadTemplateModal = false;
+
+    private Task HandleDownloadTemplateSubmit()
+    {
+        showDownloadTemplateModal = false;
+        // Additional download logic here if needed
+        return Task.CompletedTask;
+    }
 
 
     private List<SubDistributor> subdList = new();

@@ -17,7 +17,7 @@ public partial class CustomerBranch
 
     public string Province { get; set; } = null!;
 
-    public string ZipCode { get; set; } = null!;
+    public int ZipCode { get; set; }
 
     public bool IsDefault { get; set; }
 
