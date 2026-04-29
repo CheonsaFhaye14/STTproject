@@ -35,31 +35,16 @@ public interface IHomeService
 
 public class HomeService : IHomeService
 {
-    private readonly SttprojectContext _context;
+    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 
-    public HomeService(SttprojectContext context)
+    public HomeService(IDbContextFactory<SttprojectContext> contextFactory)
     {
-        _context = context;
-    }
-
-    public Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default)
-    {
-        return _context.SubDistributors
-            .AsNoTracking()
-            .Where(s => s.EncoderId == userId && s.IsActive)
-            .OrderBy(s => s.SubdCode)
-            .ToListAsync(cancellationToken);
-    }
-
-    public Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default)
-    {
-        return _context.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, cancellationToken);
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<HomeSalesInvoiceBatchRow>> GetSalesInvoiceBatchRowsAsync(int userId, CancellationToken cancellationToken = default)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var subdIds = await _context.SubDistributors
             .AsNoTracking()
             .Where(s => s.EncoderId == userId && s.IsActive)
@@ -188,6 +173,7 @@ public class HomeService : IHomeService
         int lastSalesInvoiceId,
         CancellationToken cancellationToken)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoices = await _context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SubDistributor.EncoderId == userId && si.SubDistributorId == subDistributorId)
@@ -238,6 +224,7 @@ public class HomeService : IHomeService
         int lastSalesInvoiceId,
         CancellationToken cancellationToken)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoices = await _context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SubDistributor.EncoderId == userId && si.SubDistributorId == subDistributorId)
@@ -304,6 +291,7 @@ public class HomeService : IHomeService
 
     public async Task<List<HomeSalesInvoiceFlatRow>> GetSalesInvoiceFlatRowsAsync(int userId, CancellationToken cancellationToken = default)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoices = await _context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SubDistributor.EncoderId == userId)
@@ -328,6 +316,7 @@ public class HomeService : IHomeService
         int salesInvoiceId,
         CancellationToken cancellationToken = default)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoice = await _context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SubDistributor.EncoderId == userId && si.SalesInvoiceId == salesInvoiceId)
@@ -375,6 +364,7 @@ public class HomeService : IHomeService
         int salesInvoiceId,
         CancellationToken cancellationToken = default)
     {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoice = await _context.SalesInvoices
             .FirstOrDefaultAsync(
                 si => si.SalesInvoiceId == salesInvoiceId && si.SubDistributor.EncoderId == userId,
@@ -408,6 +398,24 @@ public class HomeService : IHomeService
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    public async Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await _context.SubDistributors
+            .AsNoTracking()
+            .Where(s => s.EncoderId == userId && s.IsActive)
+            .OrderBy(s => s.SubdCode)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        using var _context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, cancellationToken);
     }
 }
 

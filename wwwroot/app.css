@@ -250,3 +250,9 @@ label {
     gap: 10px;
     margin-bottom: 10px;
 }
+.top-buttons {
+    margin-bottom: 10px;
+    justify-content: flex-end;
+    display: flex;
+    gap: 20px;
+}

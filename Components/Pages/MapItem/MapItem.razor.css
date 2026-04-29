@@ -75,7 +75,9 @@
     background-color: #F9DFDF; /* light pink background */
     padding: 16px;
     border-radius: 12px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    box-shadow: 5px 5px 2px #888888;
+    height: 65vh;
+    overflow-y: auto;
 }
 
     .company-items-toolbar {
