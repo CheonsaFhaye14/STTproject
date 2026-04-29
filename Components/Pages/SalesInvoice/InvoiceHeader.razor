@@ -564,7 +564,9 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         invoiceNumberCheckCts?.Cancel();
         invoiceNumberCheckCts?.Dispose();
         if (jsModule is not null)
-            await jsModule.InvokeVoidAsync("dispose");
+        {
+            await jsModule.DisposeAsync();
+        }
     }
 
     private void SyncCustomerState()
