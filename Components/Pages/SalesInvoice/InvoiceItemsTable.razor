@@ -7,6 +7,7 @@
     <table>
         <thead>
             <tr>
+                <th>Line Item Id</th>
                 <th>SKU Code</th>
                 <th>Item</th>
                 <th>Unit of Measure</th>
@@ -15,15 +16,21 @@
             </tr>
         </thead>
         <tbody>
+            @{
+                var index = 1;
+            }
+
             @foreach (var item in Items)
             {
                 <tr>
+                    <td>@index</td>
                     <td>@item.ItemCode</td>
                     <td>@item.ItemName</td>
                     <td>@ResolveUomName(item.ItemsUomId)</td>
                     <td>@item.Quantity</td>
                     <td>@FormatHelper.FormatPrice(@item.Amount)</td>
                 </tr>
+                index++;
             }
         </tbody>
     </table>
