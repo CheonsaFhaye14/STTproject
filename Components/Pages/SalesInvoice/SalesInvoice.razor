@@ -570,7 +570,7 @@
                 selectedBranch.AddressLine,
                 selectedBranch.City,
                 selectedBranch.Province,
-                selectedBranch.ZipCode
+                selectedBranch.ZipCode.ToString()
             }.Where(value => !string.IsNullOrWhiteSpace(value)));
         }
     }

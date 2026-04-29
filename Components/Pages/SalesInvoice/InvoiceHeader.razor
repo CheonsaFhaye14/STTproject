@@ -643,9 +643,9 @@ Invoice.CustomerBranchId))
     {
         var parts = new List<string> { branch.AddressLine, branch.City, branch.Province };
 
-        if (!string.IsNullOrWhiteSpace(branch.ZipCode))
+        if (branch.ZipCode > 0)
         {
-            parts.Add(branch.ZipCode);
+            parts.Add(branch.ZipCode.ToString());
         }
 
         return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
