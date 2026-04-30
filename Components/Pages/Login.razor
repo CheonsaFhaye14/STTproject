@@ -30,8 +30,8 @@
         if (username == "admin" && password == "1234")
         {
             Navigation.NavigateTo(userContext.UserId.HasValue
-                ? $"/mapitem?uid={userContext.UserId.Value}"
-                : "/mapitem");
+                ? $"/?uid={userContext.UserId.Value}"
+                : "/");
         }
         else
         {

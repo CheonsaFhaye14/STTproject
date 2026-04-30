@@ -143,9 +143,9 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("ItemsUom");
 
-            entity.HasIndex(e => new { e.CompanyItemId, e.UomName }, "UQ_ItemsUom_CompanyItem_Uom").IsUnique();
+            entity.HasIndex(e => new { e.SubdItemId, e.UomName }, "UQ_ItemsUom_SubdItem_Uom").IsUnique();
 
-            entity.HasIndex(e => e.CompanyItemId, "UX_ItemsUom_OneBaseUnit")
+            entity.HasIndex(e => e.SubdItemId, "UX_ItemsUom_OneBaseUnit")
                 .IsUnique()
                 .HasFilter("([IsBaseUnit]=(1))");
 
@@ -159,14 +159,14 @@ public partial class SttprojectContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.CompanyItem).WithOne(p => p.ItemsUom)
-                .HasForeignKey<ItemsUom>(d => d.CompanyItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ItemsUom_CompanyItemId");
-
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.ItemsUomCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_ItemsUom_CreatedBy");
+
+            entity.HasOne(d => d.SubdItem).WithOne(p => p.ItemsUom)
+                .HasForeignKey<ItemsUom>(d => d.SubdItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ItemsUom_SubdItemId");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)

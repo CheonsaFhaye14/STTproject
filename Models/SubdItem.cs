@@ -29,6 +29,8 @@ public partial class SubdItem
 
     public virtual User? CreatedByNavigation { get; set; }
 
+    public virtual ItemsUom? ItemsUom { get; set; }
+
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 
     public virtual SubDistributor SubDistributor { get; set; } = null!;

@@ -61,9 +61,7 @@ public class MapItemService : IMapItemService
             {
                 CompanyItemCode = ci.ItemCode,
                 Description = ci.ItemName,
-                Price = ci.ItemsUom != null ? ci.ItemsUom.Price : 0m,
                 Principal = ci.Principal,
-                UomName = ci.ItemsUom != null ? ci.ItemsUom.UomName : string.Empty,
                 CompanyItemId = ci.CompanyItemId,
             });
 
@@ -109,9 +107,9 @@ public class MapItemService : IMapItemService
                 si.ItemName,
                 si.CompanyItemId,
                 CompanyItemName = si.CompanyItem.ItemName,
-                Price = si.CompanyItem.ItemsUom != null ? si.CompanyItem.ItemsUom.Price : 0m,
+                Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
                 Principal = si.CompanyItem.Principal,
-                UomName = si.CompanyItem.ItemsUom != null ? si.CompanyItem.ItemsUom.UomName : string.Empty
+                UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty
             });
 
         if (subDistributorId > 0)
@@ -184,7 +182,7 @@ public class MapItemService : IMapItemService
     {
         return await _context.ItemsUoms
             .AsNoTracking()
-            .Where(u => u.CompanyItemId == companyItemId)
+            .Where(u => u.SubdItemId == companyItemId)
             .OrderBy(u => u.UomName)
             .Select(u => u.UomName)
             .ToListAsync(cancellationToken);

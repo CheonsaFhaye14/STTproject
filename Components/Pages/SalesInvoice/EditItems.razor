@@ -173,7 +173,7 @@
         }
 
         return AvailableUoms
-            .Where(u => u.CompanyItemId == selectedUom.CompanyItemId)
+            .Where(u => u.SubdItemId == selectedUom.SubdItemId)
             .OrderBy(u => u.UomName);
     }
 

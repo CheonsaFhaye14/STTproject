@@ -52,7 +52,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var itemUoms = await _context.ItemsUoms
             .AsNoTracking()
-            .Where(i => companyItemIds.Contains(i.CompanyItemId))
+            .Where(i => companyItemIds.Contains(i.SubdItemId))
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 

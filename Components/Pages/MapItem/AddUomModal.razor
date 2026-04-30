@@ -1,0 +1,28 @@
+﻿
+@if (showAddUomModal)
+    {
+        <div class= "modal-overlay">
+      <div class="modal-box">
+            <div class="modal-header">
+                <h4>Add UOM Modal</h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>UOM</label>
+                    <select>
+                        <option value="value">Piece</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Price</label>
+                    <input>
+                </div>
+            </div>
+      </div>
+        </div>
+
+    }
+
+@code {
+    private bool showAddUomModal;
+}

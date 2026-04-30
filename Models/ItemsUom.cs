@@ -7,8 +7,6 @@ public partial class ItemsUom
 {
     public int ItemsUomId { get; set; }
 
-    public int CompanyItemId { get; set; }
-
     public string UomName { get; set; } = null!;
 
     public decimal ConversionToBase { get; set; }
@@ -25,11 +23,13 @@ public partial class ItemsUom
 
     public decimal Price { get; set; }
 
-    public virtual CompanyItem CompanyItem { get; set; } = null!;
+    public int SubdItemId { get; set; }
 
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
+
+    public virtual SubdItem SubdItem { get; set; } = null!;
 
     public virtual User? UpdatedByNavigation { get; set; }
 }

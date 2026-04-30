@@ -81,6 +81,9 @@
             <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
         }
     </div>
+    <button class="btn-primary" onclick="AddUomModal">Add UOM</button>
+
+  
     <div class="form-actions">
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected)">@((IsEditingItem) ?
@@ -124,7 +127,6 @@
                     <tr>
                         <th>COMPANY ITEM CODE</th>
                         <th>ITEM NAME</th>
-                        <th>UNIT OF MEASURES</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,7 +137,6 @@
                             <tr>
                                 <td>@item.CompanyItemCode</td>
                                 <td>@item.ItemName</td>
-                                <td>@item.UomName</td>
                             </tr>
                         }
                     }
@@ -209,14 +210,17 @@
               OnErrorConfirm="CloseErrorModal" />
 
 <DownloadTemplateModal ShowModal="showDownloadTemplateModal" ModalTemplate="HandleDownloadTemplateSubmit" />
+<AddUomModal showAddUomModal="showAddUomModal" />
 
 @code {
     [Parameter]
     [SupplyParameterFromQuery(Name = "uid")]
     public int? UserIdFromQuery { get; set; }
 
+
+    private bool showAddUomModal = false;
     private int? selectedCompanyItemId;
-    private string? selectedPrincipal;
+    private string? selectedPrincipal; 
     private string? itemCode;
     private string? itemName;
     private ElementReference itemCodeInput;
@@ -243,6 +247,12 @@
     private Task HandleDownloadTemplateSubmit()
     {
         showDownloadTemplateModal = false;
+        // Additional download logic here if needed
+        return Task.CompletedTask;
+    }
+    private Task OpenAddUomModal()
+    {
+        showAddUomModal = false;
         // Additional download logic here if needed
         return Task.CompletedTask;
     }
