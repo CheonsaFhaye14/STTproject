@@ -11,6 +11,7 @@ public interface IMapItemService
     Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<string>> GetCompanyItemUomsAsync(int companyItemId, CancellationToken cancellationToken = default);
     Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default);
+    Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
@@ -95,13 +96,13 @@ public class MapItemService : IMapItemService
         string? principal,
         CancellationToken cancellationToken = default)
     {
-        // Get all sub-distributor items with their UOM and price
+        // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
         var query = _context.SubdItems
             .AsNoTracking()
             .Where(si => si.IsActive)
             .Where(si => si.SubDistributor.EncoderId == userId)
             .Where(si => si.SubDistributor.IsActive)
-            .Select(si => new
+            .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
             {
                 si.SubdItemId,
                 si.SubDistributorId,
@@ -109,9 +110,9 @@ public class MapItemService : IMapItemService
                 si.ItemName,
                 si.CompanyItemId,
                 CompanyItemName = si.CompanyItem.ItemName,
-                Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
+                Price = u != null ? u.Price : 0m,
                 Principal = si.CompanyItem.Principal,
-                UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty
+                UomName = u != null ? u.UomName : string.Empty
             });
 
         if (subDistributorId > 0)
@@ -189,21 +190,27 @@ public class MapItemService : IMapItemService
 
     public async Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
+        // Return the primary/base UOM if available
         return await _context.ItemsUoms
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.SubdItemId == subdItemId, cancellationToken);
+            .Where(u => u.SubdItemId == subdItemId)
+            .OrderByDescending(u => u.IsBaseUnit)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ItemsUoms
+            .AsNoTracking()
+            .Where(u => u.SubdItemId == subdItemId)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
         try
         {
-            if (item.ItemsUom != null)
-            {
-                item.ItemsUom.SubdItem = item;
-                item.ItemsUom.CreatedDate = DateTime.UtcNow;
-                item.ItemsUom.UpdatedDate = DateTime.UtcNow;
-            }
+            // Do not attach single ItemsUom here; UOM rows are saved separately via SaveSubdItemUomPricesAsync
 
             _context.SubdItems.Add(item);
             await _context.SaveChangesAsync(cancellationToken);
@@ -215,18 +222,14 @@ public class MapItemService : IMapItemService
         }
     }
 
-    public Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
-    {
-        // This method is currently not used by the MapItem flow directly.
-        return Task.FromResult(true);
-    }
+
 
     public async Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _context.SubdItems
-                .Include(si => si.ItemsUom)
+                .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == item.SubdItemId, cancellationToken);
 
             if (existing is null)
@@ -249,30 +252,7 @@ public class MapItemService : IMapItemService
             existing.UpdatedBy = item.UpdatedBy;
             existing.UpdatedDate = DateTime.UtcNow;
 
-            if (item.ItemsUom != null)
-            {
-                if (existing.ItemsUom is null)
-                {
-                    existing.ItemsUom = new ItemsUom
-                    {
-                        UomName = item.ItemsUom.UomName,
-                        ConversionToBase = item.ItemsUom.ConversionToBase,
-                        Price = item.ItemsUom.Price,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow,
-                        CreatedBy = item.UpdatedBy,
-                        UpdatedBy = item.UpdatedBy
-                    };
-                }
-                else
-                {
-                    existing.ItemsUom.UomName = item.ItemsUom.UomName;
-                    existing.ItemsUom.ConversionToBase = item.ItemsUom.ConversionToBase;
-                    existing.ItemsUom.Price = item.ItemsUom.Price;
-                    existing.ItemsUom.UpdatedBy = item.UpdatedBy;
-                    existing.ItemsUom.UpdatedDate = DateTime.UtcNow;
-                }
-            }
+            // UOM rows are updated separately by SaveSubdItemUomPricesAsync
 
             await _context.SaveChangesAsync(cancellationToken);
             return UpdateSubdItemResult.Success();
@@ -283,12 +263,79 @@ public class MapItemService : IMapItemService
         }
     }
 
+    public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
+    {
+        if (uomEntries == null) return false;
+
+        using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            // Load existing UOMs for the subd item
+            var existingUoms = await _context.ItemsUoms
+                .Where(u => u.SubdItemId == subdItemId)
+                .ToListAsync(cancellationToken);
+
+            // Determine which names to keep
+            var incomingNames = uomEntries.Keys.Select(k => k.Trim()).Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+
+            // Update or insert incoming entries
+            foreach (var kv in uomEntries)
+            {
+                var name = kv.Key.Trim();
+                var entry = kv.Value;
+
+                var existing = existingUoms.FirstOrDefault(e => string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    existing.ConversionToBase = entry.Conversion;
+                    existing.Price = entry.Price ?? 0m;
+                    existing.IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase);
+                    existing.UpdatedBy = entry.IsAutoCalculated ? null : entry.IsAutoCalculated == false ? existing.UpdatedBy : existing.UpdatedBy;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                    _context.ItemsUoms.Update(existing);
+                }
+                else
+                {
+                    var created = new ItemsUom
+                    {
+                        UomName = name,
+                        ConversionToBase = entry.Conversion,
+                        Price = entry.Price ?? 0m,
+                        IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase),
+                        SubdItemId = subdItemId,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow,
+                        CreatedBy = null,
+                        UpdatedBy = null
+                    };
+                    _context.ItemsUoms.Add(created);
+                }
+            }
+
+            // Remove any existing uom not present in incoming list
+            var toRemove = existingUoms.Where(e => !incomingNames.Any(n => string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (toRemove.Any())
+            {
+                _context.ItemsUoms.RemoveRange(toRemove);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return false;
+        }
+    }
+
     public async Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _context.SubdItems
-                .Include(si => si.ItemsUom)
+                .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == subdItemId, cancellationToken);
 
             if (existing is null)
@@ -305,9 +352,9 @@ public class MapItemService : IMapItemService
                 return DeleteSubdItemResult.InUse("This sub distributor item cannot be deleted because it is already used by one or more invoices.");
             }
 
-            if (existing.ItemsUom is not null)
+            if (existing.ItemsUoms is not null && existing.ItemsUoms.Any())
             {
-                _context.ItemsUoms.Remove(existing.ItemsUom);
+                _context.ItemsUoms.RemoveRange(existing.ItemsUoms);
             }
 
             _context.SubdItems.Remove(existing);

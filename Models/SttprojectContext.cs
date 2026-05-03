@@ -153,7 +153,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
-            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)").IsRequired();
             entity.Property(e => e.UomName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -163,9 +163,9 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_ItemsUom_CreatedBy");
 
-            entity.HasOne(d => d.SubdItem).WithOne(p => p.ItemsUom)
-                .HasForeignKey<ItemsUom>(d => d.SubdItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+            entity.HasOne(d => d.SubdItem).WithMany(p => p.ItemsUoms)
+                .HasForeignKey(d => d.SubdItemId)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_ItemsUom_SubdItemId");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)

@@ -97,7 +97,7 @@
                 disabled="@(!IsSubDistributorSelected || !selectedCompanyItemId.HasValue)">Add UOM</button>
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
-                                                                                                                                                                                          "UPDATE" : "ADD")</button>
+                                                                                                                                                                                                                  "UPDATE" : "ADD")</button>
             @if (IsEditingItem)
             {
                 <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
@@ -777,6 +777,7 @@
 
     private ItemsUom? BuildSelectedItemsUom()
     {
+        // Prefer Piece if it has a price
         if (uomEntries.TryGetValue("Piece", out var pieceEntry) && pieceEntry.Price.HasValue)
         {
             return new ItemsUom
@@ -792,6 +793,27 @@
             };
         }
 
+        // Prefer a manually-edited / explicitly set price (IsAutoCalculated == false)
+        var manualEntry = uomEntries
+            .Where(entry => entry.Value.Price.HasValue && entry.Value.IsAutoCalculated == false)
+            .FirstOrDefault();
+
+        if (manualEntry.Value != null && manualEntry.Value.Price.HasValue)
+        {
+            return new ItemsUom
+            {
+                UomName = manualEntry.Key,
+                ConversionToBase = manualEntry.Value.Conversion,
+                Price = manualEntry.Value.Price.Value,
+                IsBaseUnit = manualEntry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase),
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow,
+                CreatedBy = userContext.UserId,
+                UpdatedBy = userContext.UserId
+            };
+        }
+
+        // Fallback: pick the first priced entry (non-Piece preferred)
         var selectedEntry = uomEntries
             .Where(entry => entry.Value.Price.HasValue)
             .OrderBy(entry => !entry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase))
@@ -871,20 +893,23 @@
             CreatedDate = DateTime.UtcNow,
             CreatedBy = userContext.UserId.Value,
             UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
-            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null,
-            ItemsUom = BuildSelectedItemsUom()
+            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
         };
-
-        if (item.ItemsUom != null)
-        {
-            item.ItemsUom.SubdItem = item;
-        }
 
         if (IsEditingItem)
         {
             var updateResult = await mapItemService.UpdateSubdItemAsync(item);
             if (updateResult.IsUpdated)
             {
+                // persist all UOMs separately
+                var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
+uomEntries);
+                if (!saved)
+                {
+                    itemActionErrorMessage = "Unable to save UOM prices.";
+                    showErrorModal = true;
+                }
+
                 ResetItemForm();
                 await LoadMapTablesAsync();
                 await ClearDraftAsync();
@@ -902,6 +927,17 @@
 
         if (success)
         {
+            // item.SubdItemId is set by EF on save; use it directly to persist UOM rows
+            if (item.SubdItemId > 0)
+            {
+                var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries);
+                if (!saved)
+                {
+                    itemActionErrorMessage = "Unable to save UOM prices.";
+                    showErrorModal = true;
+                }
+            }
+
             ResetItemForm();
             await LoadMapTablesAsync();
             await itemCodeInput.FocusAsync();
@@ -918,23 +954,31 @@
         selectedCompanyItemDisplayName = item.CompanyItemName;
         selectedDropdownPrincipal = item.Principal;
 
-        var existingUom = await mapItemService.GetSubdItemUomAsync(item.SubdItemId);
-        if (existingUom is not null)
+        var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
+        if (existingUoms is not null && existingUoms.Any())
         {
-            availableUoms = new List<string> { "Piece", existingUom.UomName }
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(u => u)
-                .ToList();
+            availableUoms = new List<string>(existingUoms.Select(u =>
+u.UomName).Append("Piece").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(u => u));
 
-            uomEntries = availableUoms.ToDictionary(
-                u => u,
-                u => new UomEntry
+            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var u in availableUoms)
+            {
+                var matched = existingUoms.FirstOrDefault(e => string.Equals(e.UomName, u, StringComparison.OrdinalIgnoreCase));
+                if (string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase))
                 {
-                    Conversion = string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase) ? 1 : existingUom.ConversionToBase,
-                    Price = string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase)
-                        ? existingUom.ConversionToBase != 0 ? existingUom.Price / existingUom.ConversionToBase : existingUom.Price
-                        : existingUom.Price
-                });
+                    var price = matched != null && matched.ConversionToBase != 0 ? matched.Price / matched.ConversionToBase :
+matched?.Price;
+                    uomEntries[u] = new UomEntry { Conversion = 1, Price = price };
+                }
+                else if (matched != null)
+                {
+                    uomEntries[u] = new UomEntry { Conversion = matched.ConversionToBase, Price = matched.Price };
+                }
+                else
+                {
+                    uomEntries[u] = new UomEntry { Conversion = 1, Price = null };
+                }
+            }
         }
         else
         {
