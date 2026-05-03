@@ -182,3 +182,32 @@ export function openDatalist(inputElement) {
     }
 }
 
+export function saveSalesInvoiceDraft(storageKey, draftJson) {
+    if (!storageKey) {
+        return;
+    }
+
+    if (!draftJson) {
+        localStorage.removeItem(storageKey);
+        return;
+    }
+
+    localStorage.setItem(storageKey, draftJson);
+}
+
+export function loadSalesInvoiceDraft(storageKey) {
+    if (!storageKey) {
+        return null;
+    }
+
+    return localStorage.getItem(storageKey);
+}
+
+export function clearSalesInvoiceDraft(storageKey) {
+    if (!storageKey) {
+        return;
+    }
+
+    localStorage.removeItem(storageKey);
+}
+

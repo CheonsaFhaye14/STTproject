@@ -10,10 +10,12 @@ public interface IMapItemService
     Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(int userId, int subDistributorId, string? principal, CancellationToken cancellationToken = default);
     Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<string>> GetCompanyItemUomsAsync(int companyItemId, CancellationToken cancellationToken = default);
+    Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> SubdItemCodeExistsAsync(int subDistributorId, string subdItemCode, int? excludeSubdItemId = null, CancellationToken cancellationToken = default);
+    Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default);
 }
 
 public enum CompanyItemFilterMode
@@ -180,18 +182,29 @@ public class MapItemService : IMapItemService
         int companyItemId,
         CancellationToken cancellationToken = default)
     {
+        // Current model only stores UOM settings per saved SubdItem.
+        // For a new mapping, there is no pre-existing company item UOM list.
+        return new List<string>();
+    }
+
+    public async Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default)
+    {
         return await _context.ItemsUoms
             .AsNoTracking()
-            .Where(u => u.SubdItemId == companyItemId)
-            .OrderBy(u => u.UomName)
-            .Select(u => u.UomName)
-            .ToListAsync(cancellationToken);
+            .FirstOrDefaultAsync(u => u.SubdItemId == subdItemId, cancellationToken);
     }
 
     public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (item.ItemsUom != null)
+            {
+                item.ItemsUom.SubdItem = item;
+                item.ItemsUom.CreatedDate = DateTime.UtcNow;
+                item.ItemsUom.UpdatedDate = DateTime.UtcNow;
+            }
+
             _context.SubdItems.Add(item);
             await _context.SaveChangesAsync(cancellationToken);
             return true;
@@ -202,11 +215,18 @@ public class MapItemService : IMapItemService
         }
     }
 
+    public Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
+    {
+        // This method is currently not used by the MapItem flow directly.
+        return Task.FromResult(true);
+    }
+
     public async Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _context.SubdItems
+                .Include(si => si.ItemsUom)
                 .FirstOrDefaultAsync(si => si.SubdItemId == item.SubdItemId, cancellationToken);
 
             if (existing is null)
@@ -229,6 +249,31 @@ public class MapItemService : IMapItemService
             existing.UpdatedBy = item.UpdatedBy;
             existing.UpdatedDate = DateTime.UtcNow;
 
+            if (item.ItemsUom != null)
+            {
+                if (existing.ItemsUom is null)
+                {
+                    existing.ItemsUom = new ItemsUom
+                    {
+                        UomName = item.ItemsUom.UomName,
+                        ConversionToBase = item.ItemsUom.ConversionToBase,
+                        Price = item.ItemsUom.Price,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow,
+                        CreatedBy = item.UpdatedBy,
+                        UpdatedBy = item.UpdatedBy
+                    };
+                }
+                else
+                {
+                    existing.ItemsUom.UomName = item.ItemsUom.UomName;
+                    existing.ItemsUom.ConversionToBase = item.ItemsUom.ConversionToBase;
+                    existing.ItemsUom.Price = item.ItemsUom.Price;
+                    existing.ItemsUom.UpdatedBy = item.UpdatedBy;
+                    existing.ItemsUom.UpdatedDate = DateTime.UtcNow;
+                }
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
             return UpdateSubdItemResult.Success();
         }
@@ -243,6 +288,7 @@ public class MapItemService : IMapItemService
         try
         {
             var existing = await _context.SubdItems
+                .Include(si => si.ItemsUom)
                 .FirstOrDefaultAsync(si => si.SubdItemId == subdItemId, cancellationToken);
 
             if (existing is null)
@@ -257,6 +303,11 @@ public class MapItemService : IMapItemService
             if (inUseByInvoices)
             {
                 return DeleteSubdItemResult.InUse("This sub distributor item cannot be deleted because it is already used by one or more invoices.");
+            }
+
+            if (existing.ItemsUom is not null)
+            {
+                _context.ItemsUoms.Remove(existing.ItemsUom);
             }
 
             _context.SubdItems.Remove(existing);

@@ -7,6 +7,7 @@
 @using STTproject.Models
 @using STTproject.Services
 @using STTproject.Components.Shared
+@using System.Text.Json
 
 @inject ISalesInvoiceService salesInvoiceService
 @inject IHomeService homeService
@@ -40,8 +41,8 @@
               OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
-               Customers="customers" CustomerBranches="customerBranches" SelectedSubdistributorId="invoice.SubdistributorId"
-               CurrentInvoiceId="currentInvoiceId" />
+               OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"
+               SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />
 
 @if (isSaved)
 {
@@ -56,7 +57,7 @@
 <InvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
               OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
               AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-              OnBeforeSave="OnAddItemsBeforeSave" />
+              OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
 
 <EditItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
            OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
@@ -86,35 +87,49 @@
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<SalesInvoice>? objRef;
 
-    void OnItemsChanged(List<InputItemModel> updatedItems)
+    async Task OnItemsChanged(List<InputItemModel> updatedItems)
     {
         items = updatedItems;
+        await PersistDraftAsync();
     }
 
     int currentInvoiceId = 0;
-    void SaveDraft()
+    async Task SaveDraft()
     {
         if (!isSaved)
         {
             errorMessage = null;
             isSaved = true;
         }
+
+        await PersistDraftAsync();
     }
 
     void EnableEdit()
     {
         isSaved = false;
+        _ = PersistDraftAsync();
+    }
+
+    private static void AssignLineItemIds(List<InputItemModel> itemsToNumber)
+    {
+        for (var i = 0; i < itemsToNumber.Count; i++)
+        {
+            itemsToNumber[i].LineItemId = i + 1;
+        }
     }
 
     void OpenAddItemsModal()
     {
         showEditItemsModal = false;
         showAddItemsModal = true;
+        _ = PersistDraftAsync();
     }
 
     void CloseAddItemsModal()
     {
         showAddItemsModal = false;
+        _ = PersistDraftAsync();
     }
 
     void OpenEditItemsModal()
@@ -124,19 +139,29 @@
             return;
         }
 
+        // assign line item ids matching the table order so Edit modal shows the same numbers
+        for (var i = 0; i < items.Count; i++)
+        {
+            items[i].LineItemId = i + 1;
+        }
+
         showAddItemsModal = false;
         showEditItemsModal = true;
+        _ = PersistDraftAsync();
     }
 
     void CloseEditItemsModal()
     {
         showEditItemsModal = false;
+        _ = PersistDraftAsync();
     }
 
     Task OnModalItemsSaved(List<InputItemModel> savedItems)
     {
         if (savedItems?.Any() == true)
         {
+            var nextLineItemId = items.Count > 0 ? items.Max(i => i.LineItemId) + 1 : 1;
+            
             foreach (var savedItem in savedItems)
             {
                 var existingItem = items.FirstOrDefault(item =>
@@ -152,12 +177,15 @@
                 }
                 else
                 {
+                    savedItem.LineItemId = nextLineItemId;
+                    nextLineItemId++;
                     items.Add(savedItem);
                 }
             }
         }
 
         showAddItemsModal = false;
+        _ = PersistDraftAsync();
         return Task.CompletedTask;
     }
 
@@ -165,6 +193,7 @@
     {
         items = editedItems;
         showEditItemsModal = false;
+        _ = PersistDraftAsync();
         return Task.CompletedTask;
     }
 
@@ -237,6 +266,85 @@
     {
         showEditItemsConfirmModal = false;
         editItemsConfirmMessage = "";
+    }
+
+    private string GetDraftStorageKey()
+    {
+        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        var subDistributorId = invoice.SubdistributorId != 0 ? invoice.SubdistributorId : SubDistributorId;
+        var invoiceScope = currentInvoiceId != 0 ? $"invoice:{currentInvoiceId}" : "new";
+        return $"salesinvoice-draft:{userId}:subd:{subDistributorId}:{invoiceScope}";
+    }
+
+    private async Task PersistDraftAsync()
+    {
+        if (jsModule is null)
+        {
+            return;
+        }
+
+        var draft = new SalesInvoiceDraftState
+        {
+            Invoice = invoice,
+            Items = items,
+            AddItemsDraft = addItemsModalRef?.CaptureDraftState(),
+            IsSaved = isSaved,
+            CurrentInvoiceId = currentInvoiceId
+        };
+
+        var draftJson = JsonSerializer.Serialize(draft);
+        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetDraftStorageKey(), draftJson);
+    }
+
+    private async Task RestoreDraftAsync()
+    {
+        if (jsModule is null)
+        {
+            return;
+        }
+
+        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetDraftStorageKey());
+        if (string.IsNullOrWhiteSpace(draftJson))
+        {
+            return;
+        }
+
+        var draft = JsonSerializer.Deserialize<SalesInvoiceDraftState>(draftJson);
+        if (draft?.Invoice is null)
+        {
+            return;
+        }
+
+        invoice = draft.Invoice;
+        items = draft.Items ?? new List<InputItemModel>();
+        AssignLineItemIds(items);
+        isSaved = draft.IsSaved;
+        currentInvoiceId = draft.CurrentInvoiceId;
+        StateHasChanged();
+
+        if (addItemsModalRef is not null)
+        {
+            await addItemsModalRef.RestoreDraftStateAsync(draft.AddItemsDraft);
+        }
+    }
+
+    private async Task ClearDraftAsync()
+    {
+        if (jsModule is null)
+        {
+            return;
+        }
+
+        await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+    }
+
+    private sealed class SalesInvoiceDraftState
+    {
+        public InputInvoiceModel? Invoice { get; set; }
+        public List<InputItemModel> Items { get; set; } = new();
+        public InvoiceItemsDraftState? AddItemsDraft { get; set; }
+        public bool IsSaved { get; set; }
+        public int CurrentInvoiceId { get; set; }
     }
 
     [JSInvokable]
@@ -425,6 +533,7 @@
         showEditItemsModal = false;
         showCommitConfirmModal = false;
         errorMessage = null;
+        _ = ClearDraftAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -434,6 +543,7 @@
             objRef = DotNetObjectReference.Create(this);
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
             await jsModule.InvokeVoidAsync("registerF3", objRef);
+            await RestoreDraftAsync();
         }
 
         if (jsModule != null)
@@ -531,6 +641,7 @@
                 var loadedInvoice = invoiceData.Value.Invoice;
                 invoice = loadedInvoice;
                 items = invoiceData.Value.Items;
+                AssignLineItemIds(items);
                 currentInvoiceId = InvoiceId.Value;
                 isSaved = true;
                 selectedSubdId = invoice.SubdistributorId;
@@ -582,5 +693,6 @@
         var pageData = await salesInvoiceService.GetPageDataAsync(s.SubDistributorId);
         subdItems = pageData.SubdItems;
         availableUoms = pageData.ItemUoms;
+        await PersistDraftAsync();
     }
 }

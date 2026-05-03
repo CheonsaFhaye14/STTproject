@@ -6,6 +6,7 @@
 @using STTproject.Models
 @using STTproject.Services
 @using STTproject.Components.Shared
+@using System.Text.Json
 @inject NavigationManager Navigation
 @inject IHomeService homeService
 @inject IMapItemService mapItemService
@@ -42,8 +43,8 @@
 <div class="form-row">
     <div class="form-group">
         <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
-        <input @ref="itemCodeInput" @bind="itemCode" @bind:event="oninput" disabled="@(!IsSubDistributorSelected)"
-               @onkeydown="HandleItemCodeKeyDown" @onblur="HandleFormFieldBlur" />
+        <input @ref="itemCodeInput" @bind="itemCode" @bind:event="oninput" @bind:after="HandleItemCodeChanged"
+               disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemCodeKeyDown" @onblur="HandleFormFieldBlur" />
         @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.SkuCode.Key)))
         {
             <span class="error-text">@GetFieldError(MapItemValidation.Form.SkuCode.Key)</span>
@@ -51,8 +52,8 @@
     </div>
     <div class="form-group">
         <h5>@MapItemValidation.Label(MapItemValidation.Form.ItemName)</h5>
-        <input @ref="itemNameInput" @bind="itemName" @bind:event="oninput" disabled="@(!IsSubDistributorSelected)"
-               @onkeydown="HandleItemNameKeyDown" @onblur="HandleFormFieldBlur" />
+        <input @ref="itemNameInput" @bind="itemName" @bind:event="oninput" @bind:after="HandleItemNameChanged"
+               disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemNameKeyDown" @onblur="HandleFormFieldBlur" />
         @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.ItemName.Key)))
         {
             <span class="error-text">@GetFieldError(MapItemValidation.Form.ItemName.Key)</span>
@@ -73,7 +74,7 @@
     <div class="form-group">
         <h5>@MapItemValidation.Label(MapItemValidation.Form.CompanyItem)</h5>
         <Autocomplete @ref="companyItemAutocomplete" Items="FilteredCompanyItemsForDropdown.ToList()"
-                      Value="@selectedCompanyItemDisplayName" ValueChanged="@(v => selectedCompanyItemDisplayName = v)"
+                      Value="@selectedCompanyItemDisplayName" ValueChanged="OnCompanyItemValueChanged"
                       OnSelected="OnAutocompleteSelected" OnConfirmed="OnCompanyItemConfirmed"
                       Placeholder="-- Select Company Item --" IsDisabled="@(!IsSubDistributorSelected)" />
         @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
@@ -81,13 +82,22 @@
             <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
         }
     </div>
-    <button class="btn-primary" onclick="AddUomModal">Add UOM</button>
+    <div class="form-group">
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.UnitOfMeasure)</h5>
+        <input value="@GetUnitOfMeasureSummary()" disabled />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)</span>
+        }
+    </div>
 
   
     <div class="form-actions">
+        <button class="btn-primary" type="button" @onclick="OpenAddUomModal"
+                disabled="@(!IsSubDistributorSelected || !selectedCompanyItemId.HasValue)">Add UOM</button>
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
-                disabled="@(!IsSubDistributorSelected)">@((IsEditingItem) ?
-                                                                                                                                          "UPDATE" : "ADD")</button>
+                disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
+                                                                                                                                                                                          "UPDATE" : "ADD")</button>
             @if (IsEditingItem)
             {
                 <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
@@ -209,8 +219,10 @@
 <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
               OnErrorConfirm="CloseErrorModal" />
 
-<DownloadTemplateModal ShowModal="showDownloadTemplateModal" ModalTemplate="HandleDownloadTemplateSubmit" />
-<AddUomModal showAddUomModal="showAddUomModal" />
+    <DownloadTemplateModal ShowModal="showDownloadTemplateModal" ModalTemplate="HandleDownloadTemplateSubmit" />
+    <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
+                 OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
+                 OnCancel="@(async () => await CloseAddUomModalAsync())" />
 
 @code {
     [Parameter]
@@ -220,7 +232,7 @@
 
     private bool showAddUomModal = false;
     private int? selectedCompanyItemId;
-    private string? selectedPrincipal; 
+    private string? selectedPrincipal;
     private string? itemCode;
     private string? itemName;
     private ElementReference itemCodeInput;
@@ -231,7 +243,7 @@
     private bool principalEnterPrimed = false;
     private ElementReference saveButton;
     private List<string> availableUoms = new();
-    private Dictionary<string, decimal?> uomPrices = new();
+    private Dictionary<string, UomEntry> uomEntries = new();
     private Dictionary<string, string> validationErrors = new();
     private int? editingSubdItemId;
     private bool showConfirmModal = false;
@@ -243,6 +255,7 @@
     private string? confirmedCompanyItemSummary;
     private bool showErrorModal = false;
     private bool showDownloadTemplateModal = false;
+    [Parameter] public EventCallback OnDraftChanged { get; set; }
 
     private Task HandleDownloadTemplateSubmit()
     {
@@ -252,15 +265,59 @@
     }
     private Task OpenAddUomModal()
     {
-        showAddUomModal = false;
-        // Additional download logic here if needed
+        showAddUomModal = true;
         return Task.CompletedTask;
+    }
+
+    private Task CloseAddUomModalAsync()
+    {
+        showAddUomModal = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleAddUomModalAddAsync(Dictionary<string, UomEntry> updatedUomEntries)
+    {
+        uomEntries = updatedUomEntries
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
+
+        availableUoms = uomEntries
+            .Keys
+            .OrderBy(uom => uom)
+            .ToList();
+
+        showAddUomModal = false;
+        await PersistDraftAsync();
+    }
+
+    private string GetDraftStorageKey()
+    {
+        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        return $"mapitem-draft:{userId}";
+    }
+
+    private sealed class MapItemDraftState
+    {
+        public int SelectedSubdId { get; set; }
+        public string? ItemCode { get; set; }
+        public string? ItemName { get; set; }
+        public string? SelectedPrincipal { get; set; }
+        public string? SelectedDropdownPrincipal { get; set; }
+        public int? SelectedCompanyItemId { get; set; }
+        public string? SelectedCompanyItemDisplayName { get; set; }
+        public int? EditingSubdItemId { get; set; }
+        public string? SelectedCompanyItemsFilterString { get; set; }
+        public Dictionary<string, UomEntry> UomEntries { get; set; } = new();
+    }
+
+    private sealed class MapItemDraftStore
+    {
+        public Dictionary<string, MapItemDraftState> Drafts { get; set; } = new();
     }
 
 
     private List<SubDistributor> subdList = new();
     private ElementReference subdSelectRef;
-    private int selectedSubdId;     
+    private int selectedSubdId;
     private string locationText = "---";
     private List<string> principals = new();
     private string? selectedDropdownPrincipal;
@@ -316,6 +373,8 @@
                 ClearCompanyItemSelection();
             }
         }
+
+        _ = PersistDraftAsync();
     }
 
     private string? GetFieldError(string key)
@@ -333,7 +392,7 @@
     private void ClearItemActionError()
         => itemActionErrorMessage = null;
 
-    private void ResetItemForm()
+    private void ResetItemForm(bool persistDraft = true)
     {
         editingSubdItemId = null;
         itemCode = string.Empty;
@@ -342,9 +401,14 @@
         selectedDropdownPrincipal = null;
         selectedCompanyItemDisplayName = null;
         availableUoms.Clear();
-        uomPrices.Clear();
+        uomEntries.Clear();
         ClearValidationErrors();
         ClearItemActionError();
+
+        if (persistDraft)
+        {
+            _ = PersistDraftAsync();
+        }
     }
 
     private void GoBackToHome()
@@ -406,6 +470,8 @@
     {
         if (firstRender)
         {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            await RestoreDraftAsync();
             await subdSelectRef.FocusAsync();
         }
     }
@@ -502,8 +568,9 @@
     {
         UpdateSelectedSubdLocation();
         selectedPrincipal = null;
-        ResetItemForm();
+        ResetItemForm(persistDraft: false);
         await LoadMapTablesAsync();
+        await RestoreDraftAsync();
     }
 
     private void UpdateSelectedSubdLocation()
@@ -566,6 +633,7 @@
             itemCode,
             itemName,
             selectedCompanyItemId,
+            uomEntries.Any(),
             async () =>
             {
                 if (!IsSubDistributorSelected || string.IsNullOrWhiteSpace(itemCode))
@@ -605,6 +673,7 @@
         }
 
         await LoadMapTablesAsync();
+        await PersistDraftAsync();
     }
 
     private async Task OnCompanyItemDataListChanged()
@@ -626,12 +695,29 @@
         }
 
         await ValidateFormAsync();
+        await PersistDraftAsync();
     }
 
     private async Task OnCompanyItemConfirmed()
     {
         await Task.Delay(10);
         await saveButton.FocusAsync();
+    }
+
+    private Task HandleItemCodeChanged()
+    {
+        return PersistDraftAsync();
+    }
+
+    private Task HandleItemNameChanged()
+    {
+        return PersistDraftAsync();
+    }
+
+    private Task OnCompanyItemValueChanged(string? value)
+    {
+        selectedCompanyItemDisplayName = value;
+        return PersistDraftAsync();
     }
 
     private async Task SelectCompanyItem(int companyItemId)
@@ -643,10 +729,11 @@
             selectedDropdownPrincipal = selectedItem.Principal;
             selectedCompanyItemDisplayName = selectedItem.ItemName;
             availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
-            uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
+            uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
         }
 
         ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
+        await PersistDraftAsync();
     }
 
     private void ClearCompanyItemSelection()
@@ -655,8 +742,9 @@
         selectedDropdownPrincipal = null;
         selectedCompanyItemDisplayName = null;
         availableUoms = new();
-        uomPrices = new();
+        uomEntries = new();
         ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
+        _ = PersistDraftAsync();
     }
 
     private string GetSelectedCompanyItemName()
@@ -668,6 +756,63 @@
 
         var item = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
         return item?.ItemName ?? selectedCompanyItemDisplayName ?? string.Empty;
+    }
+
+    private string GetUnitOfMeasureSummary()
+    {
+        if (!uomEntries.Any())
+        {
+            return "No unit of measure added";
+        }
+
+        return string.Join(", ", uomEntries
+            .OrderBy(entry => entry.Value.Conversion)
+            .Select(entry =>
+            {
+                var conversionStr = entry.Value.Conversion == 1 ? "" : $" ({entry.Value.Conversion})";
+                var priceStr = entry.Value.Price.HasValue ? $" - {entry.Value.Price.Value:N2}" : "";
+                return $"{entry.Key}{conversionStr}{priceStr}";
+            }));
+    }
+
+    private ItemsUom? BuildSelectedItemsUom()
+    {
+        if (uomEntries.TryGetValue("Piece", out var pieceEntry) && pieceEntry.Price.HasValue)
+        {
+            return new ItemsUom
+            {
+                UomName = "Piece",
+                ConversionToBase = 1,
+                Price = pieceEntry.Price.Value,
+                IsBaseUnit = true,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow,
+                CreatedBy = userContext.UserId,
+                UpdatedBy = userContext.UserId
+            };
+        }
+
+        var selectedEntry = uomEntries
+            .Where(entry => entry.Value.Price.HasValue)
+            .OrderBy(entry => !entry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault();
+
+        if (selectedEntry.Value == null || !selectedEntry.Value.Price.HasValue)
+        {
+            return null;
+        }
+
+        return new ItemsUom
+        {
+            UomName = selectedEntry.Key,
+            ConversionToBase = selectedEntry.Value.Conversion,
+            Price = selectedEntry.Value.Price.Value,
+            IsBaseUnit = selectedEntry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase),
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow,
+            CreatedBy = userContext.UserId,
+            UpdatedBy = userContext.UserId
+        };
     }
 
     private async Task OpenSelectDropdownAsync(ElementReference selectRef)
@@ -688,7 +833,8 @@
     {
         await ValidateFormAsync();
 
-        if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+        if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue || !uomEntries.Any() ||
+!uomEntries.Any(x => x.Value.Price.HasValue))
         {
             return;
         }
@@ -701,6 +847,7 @@
         confirmedCompanyItemSummary = GetSelectedCompanyItemName();
         itemActionErrorMessage = null;
         showConfirmModal = true;
+        await PersistDraftAsync();
     }
 
     private async Task PersistItemAsync()
@@ -710,7 +857,7 @@
             return;
         }
 
-        var prices = string.Join(", ", uomPrices.Where(p => p.Value.HasValue).Select(p => $"{p.Key}: {p.Value:N2}"));
+        var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
         Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
 
         var item = new SubdItem
@@ -724,8 +871,14 @@
             CreatedDate = DateTime.UtcNow,
             CreatedBy = userContext.UserId.Value,
             UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
-            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
+            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null,
+            ItemsUom = BuildSelectedItemsUom()
         };
+
+        if (item.ItemsUom != null)
+        {
+            item.ItemsUom.SubdItem = item;
+        }
 
         if (IsEditingItem)
         {
@@ -734,6 +887,7 @@
             {
                 ResetItemForm();
                 await LoadMapTablesAsync();
+                await ClearDraftAsync();
             }
             else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
             {
@@ -751,6 +905,7 @@
             ResetItemForm();
             await LoadMapTablesAsync();
             await itemCodeInput.FocusAsync();
+            await ClearDraftAsync();
         }
     }
 
@@ -762,9 +917,33 @@
         selectedCompanyItemId = item.CompanyItemId;
         selectedCompanyItemDisplayName = item.CompanyItemName;
         selectedDropdownPrincipal = item.Principal;
-        availableUoms = await mapItemService.GetCompanyItemUomsAsync(item.CompanyItemId);
-        uomPrices = availableUoms.ToDictionary(u => u, u => (decimal?)null);
+
+        var existingUom = await mapItemService.GetSubdItemUomAsync(item.SubdItemId);
+        if (existingUom is not null)
+        {
+            availableUoms = new List<string> { "Piece", existingUom.UomName }
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(u => u)
+                .ToList();
+
+            uomEntries = availableUoms.ToDictionary(
+                u => u,
+                u => new UomEntry
+                {
+                    Conversion = string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase) ? 1 : existingUom.ConversionToBase,
+                    Price = string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase)
+                        ? existingUom.ConversionToBase != 0 ? existingUom.Price / existingUom.ConversionToBase : existingUom.Price
+                        : existingUom.Price
+                });
+        }
+        else
+        {
+            availableUoms = new List<string>();
+            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+
         ClearValidationErrors();
+        await PersistDraftAsync();
     }
 
     private void DeleteItemAsync(MapSubDistributorItemRow item)
@@ -780,6 +959,7 @@
     private Task CancelEditAsync()
     {
         ResetItemForm();
+        _ = ClearDraftAsync();
         return Task.CompletedTask;
     }
 
@@ -818,6 +998,133 @@
         modalTitle = string.Empty;
         modalMessage = string.Empty;
         confirmedCompanyItemSummary = null;
+    }
+
+    private async Task PersistDraftAsync()
+    {
+        if (userContext.UserId is null)
+        {
+            return;
+        }
+
+        if (selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+
+        var draftStore = await LoadDraftStoreAsync();
+        draftStore.Drafts[selectedSubdId.ToString()] = new MapItemDraftState
+        {
+            SelectedSubdId = selectedSubdId,
+            ItemCode = itemCode,
+            ItemName = itemName,
+            SelectedPrincipal = selectedPrincipal,
+            SelectedDropdownPrincipal = selectedDropdownPrincipal,
+            SelectedCompanyItemId = selectedCompanyItemId,
+            SelectedCompanyItemDisplayName = selectedCompanyItemDisplayName,
+            EditingSubdItemId = editingSubdItemId,
+            SelectedCompanyItemsFilterString = selectedCompanyItemsFilterString,
+            UomEntries = new Dictionary<string, UomEntry>(uomEntries, StringComparer.OrdinalIgnoreCase)
+        };
+
+        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetDraftStorageKey(), JsonSerializer.Serialize(draftStore));
+    }
+
+    private async Task RestoreDraftAsync()
+    {
+        if (userContext.UserId is null)
+        {
+            return;
+        }
+
+        if (selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetDraftStorageKey());
+        if (string.IsNullOrWhiteSpace(draftJson))
+        {
+            return;
+        }
+
+        var draftStore = JsonSerializer.Deserialize<MapItemDraftStore>(draftJson);
+        if (draftStore is null || !draftStore.Drafts.TryGetValue(selectedSubdId.ToString(), out var draft))
+        {
+            return;
+        }
+
+        itemCode = draft.ItemCode;
+        itemName = draft.ItemName;
+        selectedPrincipal = draft.SelectedPrincipal;
+        selectedDropdownPrincipal = draft.SelectedDropdownPrincipal;
+        selectedCompanyItemId = draft.SelectedCompanyItemId;
+        selectedCompanyItemDisplayName = draft.SelectedCompanyItemDisplayName;
+        editingSubdItemId = draft.EditingSubdItemId;
+        selectedCompanyItemsFilterString = draft.SelectedCompanyItemsFilterString ?? "All";
+        uomEntries = draft.UomEntries
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
+        availableUoms = uomEntries.Keys.OrderBy(x => x).ToList();
+
+        if (!Enum.TryParse(selectedCompanyItemsFilterString, out CompanyItemFilterMode restoredFilter))
+        {
+            restoredFilter = CompanyItemFilterMode.All;
+        }
+
+        selectedCompanyItemsFilter = restoredFilter;
+        UpdateSelectedSubdLocation();
+        await LoadMapTablesAsync();
+
+        if (selectedCompanyItemId.HasValue)
+        {
+            await SelectCompanyItem(selectedCompanyItemId.Value);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ClearDraftAsync()
+    {
+        if (userContext.UserId is null)
+        {
+            return;
+        }
+
+        if (selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+
+        var draftStore = await LoadDraftStoreAsync();
+        if (draftStore.Drafts.Remove(selectedSubdId.ToString()) && draftStore.Drafts.Count > 0)
+        {
+            await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetDraftStorageKey(), JsonSerializer.Serialize(draftStore));
+            return;
+        }
+
+        await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+    }
+
+    private async Task<MapItemDraftStore> LoadDraftStoreAsync()
+    {
+        if (userContext.UserId is null)
+        {
+            return new MapItemDraftStore();
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetDraftStorageKey());
+        if (string.IsNullOrWhiteSpace(draftJson))
+        {
+            return new MapItemDraftStore();
+        }
+
+        return JsonSerializer.Deserialize<MapItemDraftStore>(draftJson) ?? new MapItemDraftStore();
     }
 
     private void GoToCompanyItems()

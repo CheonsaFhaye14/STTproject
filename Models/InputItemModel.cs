@@ -9,5 +9,6 @@ namespace STTproject.Models
         public string UomName { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal Amount { get; set; }
+        public int LineItemId { get; set; }
     }
 }

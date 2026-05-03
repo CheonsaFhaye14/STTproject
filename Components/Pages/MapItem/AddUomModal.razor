@@ -1,28 +1,415 @@
-﻿
-@if (showAddUomModal)
-    {
-        <div class= "modal-overlay">
-      <div class="modal-box">
+﻿@if (ShowAddUomModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-box">
             <div class="modal-header">
-                <h4>Add UOM Modal</h4>
+                <h4>Add Unit of Measure</h4>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>UOM</label>
-                    <select>
-                        <option value="value">Piece</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Price</label>
-                    <input>
-                </div>
-            </div>
-      </div>
-        </div>
 
+            <div class="modal-body">
+                <!-- Display Piece as base unit -->
+                <div class="modal-queue">
+                    <h5>Base Unit</h5>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Unit of Measure</th>
+                                <th>Conversion (Pieces)</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (workingUomEntries.TryGetValue("Piece", out var pieceEntry))
+                            {
+                                <tr>
+                                    <td><strong>Piece</strong> (Base Unit)</td>
+                                    <td><strong>1</strong></td>
+                                    <td>
+                                        <input type="number" min="0" step="0.01" @bind="pieceEntry.Price" @bind:event="onchange"
+                                               @bind:after='@(async () => await HandlePriceInputChangedAsync("Piece"))'
+                                               placeholder="0.00" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add new UOM section -->
+                <div class="form-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h5>Add Additional Units</h5>
+                    
+                    <div class="form-group">
+                        <label>Unit of Measure</label>
+                        <select @bind="selectedUomOption">
+                            <option value="">-- Select Unit of Measure --</option>
+                            @foreach (var option in defaultOptions)
+                            {
+                                @if (!workingUomEntries.ContainsKey(option))
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            }
+                            <option value="__custom">Other (type custom)</option>
+                        </select>
+                        @if (!string.IsNullOrWhiteSpace(GetFieldError("uom")))
+                        {
+                            <span class="error-text">@GetFieldError("uom")</span>
+                        }
+                    </div>
+
+                    @if (selectedUomOption == "__custom")
+                    {
+                        <div class="form-group">
+                            <label>Custom Unit of Measure</label>
+                            <input @bind="customUom" @bind:event="oninput" placeholder="Enter unit name" />
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label>Conversion (How many pieces per @(GetSelectedUomName() ?? "unit")?):</label>
+                        <input type="number" min="0.01" step="0.01" @bind="conversionInput" @bind:event="oninput"
+                               placeholder="e.g., 12" />
+                        @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
+                        {
+                            <span class="error-text">@GetFieldError("conversion")</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" @bind="newUomAutoCalculate" /> Auto calculate price
+                        </label>
+                        <div class="hint">When checked, price is optional and will be derived from another priced unit.
+                            Uncheck to enter a manual price.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Price @(newUomAutoCalculate ? "(Optional - will be calculated)" : "(Required - manual price)")</label>
+                            <input type="number" min="0" step="0.01" @bind="priceInput" @bind:event="oninput"
+                                   placeholder="0.00" />
+                            @if (!string.IsNullOrWhiteSpace(GetFieldError("price")))
+                            {
+                                <span class="error-text">@GetFieldError("price")</span>
+                            }
+                        </div>
+
+                        <div class="modal-actions">
+                            <button type="button" class="btn-primary" @onclick="AddUomEntryAsync">Add UOM</button>
+                        </div>
+                    </div>
+
+                    <!-- Display all UOMs -->
+                    @if (workingUomEntries.Count > 1)
+                    {
+                        <div class="modal-queue" style="margin-top: 20px;">
+                            <h5>All Units</h5>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Unit of Measure</th>
+                                        <th>Conversion (Pieces)</th>
+                                        <th>Price</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in workingUomEntries.OrderBy(x => x.Value.Conversion))
+                                    {
+                                        @if (row.Key != "Piece")
+                                        {
+                                            <tr>
+                                                <td>@row.Key</td>
+                                                <td>
+                                                    <input type="number" min="0.01" step="0.01" @bind="row.Value.Conversion"
+                                                           @bind:event="onchange" readonly />
+                                                </td>
+                                                <td>
+                                                    <input type="number" min="0" step="0.01" @bind="row.Value.Price" @bind:event="onchange"
+                                                           @bind:after="@(async () => await HandlePriceInputChangedAsync(row.Key))"
+                                                           placeholder="0.00" />
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn remove-btn"
+                                                            @onclick="() => RemoveUomEntry(row.Key)">Remove</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    @if (!string.IsNullOrWhiteSpace(GetFieldError("prices")))
+                    {
+                        <span class="error-text">@GetFieldError("prices")</span>
+                    }
+                    <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel</button>
+                    <button type="button" class="btn-primary" @onclick="AddAsync">Save</button>
+                </div>
+            </div>
+        </div>
     }
 
+    @using STTproject.Models
+
 @code {
-    private bool showAddUomModal;
+    [Parameter] public bool ShowAddUomModal { get; set; }
+    [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
+    [Parameter] public EventCallback<Dictionary<string, UomEntry>> OnAdd { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly string[] defaultOptions = { "Piece", "Case", "Box", "Pack" };
+    private Dictionary<string, UomEntry> workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> validationErrors = new();
+    private string selectedUomOption = string.Empty;
+    private string customUom = string.Empty;
+    private string conversionInput = string.Empty;
+    private string priceInput = string.Empty;
+    private bool newUomAutoCalculate = true;
+    private bool wasShown;
+
+    protected override void OnParametersSet()
+    {
+        if (ShowAddUomModal && !wasShown)
+        {
+            // Clone existing entries
+            workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in ExistingUomEntries)
+            {
+                workingUomEntries[entry.Key] = new UomEntry
+                {
+                    Conversion = entry.Value.Conversion,
+                    Price = entry.Value.Price,
+                    IsAutoCalculated = false
+                };
+            }
+
+            // Ensure Piece exists
+            if (!workingUomEntries.ContainsKey("Piece"))
+            {
+                workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+            }
+
+            selectedUomOption = string.Empty;
+            customUom = string.Empty;
+            conversionInput = string.Empty;
+            priceInput = string.Empty;
+            newUomAutoCalculate = true;
+            validationErrors.Clear();
+            wasShown = true;
+        }
+        else if (!ShowAddUomModal)
+        {
+            wasShown = false;
+        }
+    }
+
+    private string? GetSelectedUomName()
+    {
+        if (selectedUomOption == "__custom")
+            return customUom.Trim();
+        return selectedUomOption;
+    }
+
+    private async Task AddUomEntryAsync()
+    {
+        validationErrors.Clear();
+
+        var uomName = selectedUomOption == "__custom"
+            ? customUom.Trim()
+            : selectedUomOption.Trim();
+
+        if (string.IsNullOrWhiteSpace(uomName))
+        {
+            validationErrors["uom"] = "Unit of measure is required.";
+        }
+
+        if (!decimal.TryParse(conversionInput, out var conversion) || conversion <= 0)
+        {
+            validationErrors["conversion"] = "Conversion must be a positive number.";
+        }
+        else if (workingUomEntries.Values.Any(entry => entry.Conversion == conversion))
+        {
+            validationErrors["conversion"] = "Conversion value must be unique.";
+        }
+
+        decimal? price = null;
+        if (!string.IsNullOrWhiteSpace(priceInput))
+        {
+            if (!decimal.TryParse(priceInput, out var parsedPrice) || parsedPrice <= 0)
+            {
+                validationErrors["price"] = "Price must be greater than zero.";
+            }
+            else
+            {
+                price = parsedPrice;
+            }
+        }
+
+        if (!newUomAutoCalculate && !price.HasValue)
+        {
+            validationErrors["price"] = "Manual price is required when auto-calculate is disabled.";
+        }
+
+        if (validationErrors.Any())
+        {
+            return;
+        }
+
+        if (workingUomEntries.ContainsKey(uomName))
+        {
+            validationErrors["uom"] = $"'{uomName}' already exists.";
+            return;
+        }
+
+        workingUomEntries[uomName] = new UomEntry
+        {
+            Conversion = conversion,
+            Price = price,
+            IsAutoCalculated = !price.HasValue
+        };
+
+        selectedUomOption = string.Empty;
+        customUom = string.Empty;
+        conversionInput = string.Empty;
+        priceInput = string.Empty;
+        newUomAutoCalculate = true;
+
+        if (workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            entry.IsAutoCalculated = !price.HasValue;
+        }
+
+        await RecalculatePricesAsync(uomName);
+    }
+
+    private async Task HandlePriceInputChangedAsync(string uomName)
+    {
+        if (workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            entry.IsAutoCalculated = false;
+        }
+
+        await RecalculatePricesAsync(uomName);
+    }
+
+    private async Task RecalculatePricesAsync(string? sourceUom = null)
+    {
+        var sourceKey = sourceUom;
+        UomEntry? sourceEntry = null;
+
+        if (!string.IsNullOrWhiteSpace(sourceUom) && workingUomEntries.TryGetValue(sourceUom, out var specifiedEntry) &&
+    specifiedEntry.Price.HasValue)
+        {
+            sourceEntry = new UomEntry
+            {
+                Conversion = specifiedEntry.Conversion,
+                Price = specifiedEntry.Price.Value
+            };
+        }
+
+        if (sourceEntry == null)
+        {
+            var firstEntry = workingUomEntries.FirstOrDefault(x => x.Value.Price.HasValue);
+            if (firstEntry.Value == null)
+            {
+                return;
+            }
+
+            sourceEntry = new UomEntry
+            {
+                Conversion = firstEntry.Value.Conversion,
+                Price = firstEntry.Value.Price!.Value
+            };
+            sourceKey = firstEntry.Key;
+        }
+
+        var sourcePrice = sourceEntry.Price;
+        var sourceConversion = sourceEntry.Conversion;
+
+        foreach (var entry in workingUomEntries)
+        {
+            if (!string.IsNullOrWhiteSpace(sourceKey) && entry.Key.Equals(sourceKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (entry.Value.Price.HasValue && !entry.Value.IsAutoCalculated)
+            {
+                continue;
+            }
+
+            entry.Value.Price = (sourcePrice / sourceConversion) * entry.Value.Conversion;
+            entry.Value.IsAutoCalculated = true;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void RemoveUomEntry(string uomName)
+    {
+        if (uomName != "Piece") // Don't allow removing Piece
+        {
+            workingUomEntries.Remove(uomName);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (!workingUomEntries.TryGetValue("Piece", out var pieceEntry))
+        {
+            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+            pieceEntry = workingUomEntries["Piece"];
+        }
+
+        pieceEntry.Conversion = 1;
+
+        if (!workingUomEntries.Any(x => x.Value.Price.HasValue))
+        {
+            validationErrors["prices"] = "At least one unit of measure must have a price set for calculation.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (workingUomEntries.Any(x => x.Value.Price.HasValue && x.Value.Price <= 0))
+        {
+            validationErrors["prices"] = "All prices must be greater than zero.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!pieceEntry.Price.HasValue)
+        {
+            var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry => entry != pieceEntry && entry.Price.HasValue);
+            if (sourceEntry != null)
+            {
+                pieceEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion) * 1;
+                pieceEntry.IsAutoCalculated = true;
+            }
+        }
+
+        if (!pieceEntry.Price.HasValue || pieceEntry.Price <= 0)
+        {
+            validationErrors["prices"] = "Base unit price must be provided or derivable from another priced unit.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        validationErrors.Clear();
+        await OnAdd.InvokeAsync(new Dictionary<string, UomEntry>(workingUomEntries, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private async Task CancelAsync()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    private string GetFieldError(string fieldKey)
+    {
+        return validationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
+    }
 }

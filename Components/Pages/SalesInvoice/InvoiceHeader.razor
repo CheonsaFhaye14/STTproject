@@ -1,5 +1,6 @@
 @using STTproject.Models
 @using STTproject.Services
+@using STTproject.Components.Shared
 @using Microsoft.AspNetCore.Components
 @inject ISalesInvoiceService salesInvoiceService
 @inject IJSRuntime JS
@@ -21,7 +22,7 @@
 
         <div class="form-group">
             <label>@SalesInvoiceValidation.Header.InvoiceDate.Label<span class="required-asterisk"> *</span></label>
-            <input type="date" @bind="InvoiceDateValue" @bind:event="oninput" disabled="@IsSaved"
+                 <input type="date" @bind="InvoiceDateValue" @bind:event="oninput" @bind:after="HandleInvoiceDateChanged" disabled="@IsSaved"
                    placeholder="MM/DD/YYYY" @ref="invoiceDateInput" @onkeydown="HandleInvoiceDateKeyDown"
                    @onblur="HandleInvoiceDateBlur" />
             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key)))
@@ -32,7 +33,7 @@
         
         <div class="form-group">
             <label>@SalesInvoiceValidation.Header.OrderDate.Label<span class="required-asterisk"> *</span></label>
-            <input type="date" @bind="OrderDateValue" @bind:event="oninput" disabled="@IsSaved" placeholder="MM/DD/YYYY"
+                 <input type="date" @bind="OrderDateValue" @bind:event="oninput" @bind:after="HandleOrderDateChanged" disabled="@IsSaved" placeholder="MM/DD/YYYY"
                    @ref="orderDateInput" @onkeydown="HandleOrderDateKeyDown" @onblur="HandleOrderDateBlur" />
             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.OrderDate.Key)))
             {
@@ -42,7 +43,7 @@
    
         <div class="form-group">
             <label>@SalesInvoiceValidation.Header.OrderType.Label<span class="required-asterisk"> *</span></label>
-            <select @bind="Invoice.OrderType" @ref="orderTypeSelect" @onkeydown="HandleOrderTypeKeyDown"
+                <select @bind="Invoice.OrderType" @bind:after="HandleOrderTypeChanged" @ref="orderTypeSelect" @onkeydown="HandleOrderTypeKeyDown"
                     disabled="@IsSaved" @onblur="HandleOrderTypeBlur">
                 <option value="">-- Select --</option>
                 <option value="invoice">Invoice</option>
@@ -66,14 +67,10 @@
         </div>
         <div class="form-group">
             <label>@SalesInvoiceValidation.Header.CustomerName.Label<span class="required-asterisk"> *</span></label>
-            <select @ref="customerNameSelect" @bind="Invoice.CustomerId" @bind:after="HandleCustomerNameChanged"
-                    disabled="@IsSaved" @onkeydown="HandleCustomerNameKeyDown" @onblur="HandleCustomerNameBlur">
-                <option value="0">-- Select Customer --</option>
-                @foreach (var customer in FilteredCustomers)
-                {
-                    <option value="@customer.CustomerId">@customer.CustomerName</option>
-                }
-            </select>
+            <GenericAutocomplete TItem="Customer" @ref="customerNameAutocomplete" Items="FilteredCustomers.ToList()"
+                                 Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameValueChanged"
+                                 ItemLabel="@(c => c.CustomerName)" OnSelected="HandleCustomerAutocompleteSelected"
+                                 Placeholder="-- Select Customer --" IsDisabled="@IsSaved" />
             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)))
             {
                 <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)</span>
@@ -86,14 +83,12 @@
             <label>@SalesInvoiceValidation.Header.CustomerBranch.Label<span class="required-asterisk"> *</span></label>
             @if (FilteredCustomerBranches.Any())
             {
-                <select @ref="customerBranchSelect" @bind="Invoice.CustomerBranchId" @bind:after="HandleBranchChanged"
-                        disabled="@IsSaved" @onkeydown="HandleCustomerBranchKeyDown" @onblur="HandleCustomerBranchBlur">
-                    <option value="0">-- Select branch --</option>
-                    @foreach (var branch in FilteredCustomerBranches)
-                    {
-                        <option value="@branch.CustomerBranchId">@branch.BranchName - @branch.City</option>
-                    }
-                </select>
+                <GenericAutocomplete TItem="CustomerBranch" @ref="customerBranchAutocomplete"
+                                     Items="FilteredCustomerBranches" Value="@(FilteredCustomerBranches.FirstOrDefault(cb => cb.CustomerBranchId == Invoice.CustomerBranchId) is CustomerBranch sb ?
+                                                                                                                                      $"{sb.BranchName} - {sb.City}" : Invoice.CustomerAddress)"
+                                     ValueChanged="HandleCustomerBranchValueChanged" ItemLabel="@(b => $"{b.BranchName} - {b.City}")"
+                                     OnSelected="HandleCustomerBranchAutocompleteSelected" Placeholder="-- Select branch --"
+                                     IsDisabled="@IsSaved" />
                 @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)))
                 {
                     <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)</span>
@@ -135,10 +130,11 @@
     private ElementReference orderDateInput;
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
-    private ElementReference customerNameSelect;
-    private ElementReference customerBranchSelect;
+    private GenericAutocomplete<Customer>? customerNameAutocomplete;
+    private GenericAutocomplete<CustomerBranch>? customerBranchAutocomplete;
     private ElementReference saveButton;
     private IJSObjectReference? jsModule;
+    [Parameter] public EventCallback OnDraftChanged { get; set; }
     private bool customerBranchEnterPrimed;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
     private CancellationTokenSource? invoiceNumberCheckCts;
@@ -185,6 +181,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
                     return;
                 }
                 ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+                await OnDraftChanged.InvokeAsync();
             }
             catch when (cts.Token.IsCancellationRequested) { }
         }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -242,6 +239,11 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return Task.CompletedTask;
     }
 
+    private Task HandleInvoiceDateChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
     private async Task HandleOrderDateKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -276,6 +278,11 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return Task.CompletedTask;
     }
 
+    private Task HandleOrderDateChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
     private async Task HandleOrderTypeKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -305,6 +312,11 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return Task.CompletedTask;
     }
 
+    private Task HandleOrderTypeChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
     private async Task HandleCustomerCodeKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -317,7 +329,8 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
                 if (FilteredCustomers.Any())
                 {
                     await Task.Delay(10);
-                    await customerNameSelect.FocusAsync();
+                    if (customerNameAutocomplete != null)
+                        await customerNameAutocomplete.GetInputRef().FocusAsync();
                 }
 
                 return;
@@ -336,7 +349,8 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             
             if (FilteredCustomerBranches.Any())
             {
-                await customerBranchSelect.FocusAsync();
+                if (customerBranchAutocomplete != null)
+                    await customerBranchAutocomplete.GetInputRef().FocusAsync();
             }
             else
             {
@@ -365,6 +379,12 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return Task.CompletedTask;
     }
 
+    private Task HandleCustomerNameValueChanged(string? value)
+    {
+        Invoice.CustomerName = value ?? string.Empty;
+        return OnDraftChanged.InvokeAsync();
+    }
+
     private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -372,7 +392,8 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             if (!customerBranchEnterPrimed)
             {
                 customerBranchEnterPrimed = true;
-                await OpenSelectDropdownAsync(customerBranchSelect);
+                if (customerBranchAutocomplete != null)
+                    await customerBranchAutocomplete.OpenPopupAsync();
                 return;
             }
 
@@ -409,7 +430,8 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
         if (FilteredCustomerBranches.Any())
         {
-            await customerBranchSelect.FocusAsync();
+            if (customerBranchAutocomplete != null)
+                await customerBranchAutocomplete.GetInputRef().FocusAsync();
         }
         else
         {
@@ -448,6 +470,11 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         }
 
         return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerBranchValueChanged(string? value)
+    {
+        return OnDraftChanged.InvokeAsync();
     }
 
     private void SetFieldError(string fieldKey, string message)
@@ -540,7 +567,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         // looks strictly by string instead of falling back to the old ID that hasn't changed yet.
         Invoice.CustomerId = 0;
         SyncCustomerState();
-        return Task.CompletedTask;
+        return OnDraftChanged.InvokeAsync();
     }
 
     private Task HandleCustomerNameChanged()
@@ -549,14 +576,47 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         // to force the sync to prioritize searching by the Dropdown ID.
         Invoice.CustomerCode = string.Empty;
         SyncCustomerState();
-        return Task.CompletedTask;
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleCustomerAutocompleteSelected(Customer? customer)
+    {
+        if (customer is null)
+        {
+            Invoice.CustomerId = 0;
+            SyncCustomerState();
+            return OnDraftChanged.InvokeAsync();
+        }
+
+        Invoice.CustomerId = customer.CustomerId;
+        Invoice.CustomerCode = customer.CustomerCode;
+        Invoice.CustomerName = customer.CustomerName;
+        Invoice.CustomerType = customer.CustomerType;
+        SyncCustomerState();
+        return OnDraftChanged.InvokeAsync();
     }
 
     private Task HandleBranchChanged()
     {
         customerBranchEnterPrimed = false;
         ApplySelectedBranch(Invoice.CustomerBranchId);
-        return Task.CompletedTask;
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleCustomerBranchAutocompleteSelected(CustomerBranch? branch)
+    {
+        customerBranchEnterPrimed = false;
+
+        if (branch is null)
+        {
+            Invoice.CustomerBranchId = 0;
+            Invoice.CustomerAddress = string.Empty;
+            return OnDraftChanged.InvokeAsync();
+        }
+
+        Invoice.CustomerBranchId = branch.CustomerBranchId;
+        ApplySelectedBranch(branch.CustomerBranchId);
+        return OnDraftChanged.InvokeAsync();
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

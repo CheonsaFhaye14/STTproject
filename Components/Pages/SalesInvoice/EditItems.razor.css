@@ -12,6 +12,14 @@
     gap: 12px;
 }
 
+.modal-header {
+    margin-bottom: 16px;
+}
+
+.modal-body {
+    padding-top: 4px;
+}
+
 .form-group {
     display: flex;
     flex-direction: column;

@@ -45,14 +45,14 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .OrderBy(i => i.SubdItemCode)
             .ToListAsync(cancellationToken);
 
-        var companyItemIds = subdItems
-            .Select(s => s.CompanyItemId)
+        var subdItemIds = subdItems
+            .Select(s => s.SubdItemId)
             .Distinct()
             .ToList();
 
         var itemUoms = await _context.ItemsUoms
             .AsNoTracking()
-            .Where(i => companyItemIds.Contains(i.SubdItemId))
+            .Where(i => subdItemIds.Contains(i.SubdItemId))
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 

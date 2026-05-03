@@ -7,6 +7,7 @@ public static class MapItemValidation
         public static readonly MapItemField SkuCode = new(nameof(SkuCode), "SKU Code", true, "SKU code is required.");
         public static readonly MapItemField ItemName = new(nameof(ItemName), "Item Name", true, "Item name is required.");
         public static readonly MapItemField CompanyItem = new(nameof(CompanyItem), "Company Item", true, "Company item is required.");
+        public static readonly MapItemField UnitOfMeasure = new(nameof(UnitOfMeasure), "Unit of Measure", true, "Unit of measure is required.");
     }
 
     public static string Label(MapItemField field)
@@ -18,6 +19,7 @@ public static class MapItemValidation
         string? skuCode,
         string? itemName,
         int? selectedCompanyItemId,
+        bool hasAnyUom,
         Func<Task<bool>> skuExistsAsync)
     {
         var errors = new Dictionary<string, string>();
@@ -39,6 +41,11 @@ public static class MapItemValidation
         if (!selectedCompanyItemId.HasValue || selectedCompanyItemId.Value <= 0)
         {
             errors[Form.CompanyItem.Key] = Form.CompanyItem.ErrorMessage;
+        }
+
+        if (!hasAnyUom)
+        {
+            errors[Form.UnitOfMeasure.Key] = Form.UnitOfMeasure.ErrorMessage;
         }
 
         return errors;

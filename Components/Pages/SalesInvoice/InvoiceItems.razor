@@ -2,6 +2,7 @@
 @using STTproject.Components.Helper
 @using STTproject.Models
 @using Microsoft.JSInterop
+@using STTproject.Components.Shared
 
 @implements IAsyncDisposable
 @inject IJSRuntime JS
@@ -23,7 +24,7 @@
                     <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown"
                            @onblur="HandleSkuBlur" />
                     @if (ShowValidationErrors &&
-                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
+                                                                                                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)</span>
                     }
@@ -31,17 +32,13 @@
 
                 <div class="form-group">
                     <label>@SalesInvoiceValidation.AddItem.ItemName.Label<span class="required-asterisk"> *</span></label>
-                    <select @ref="ItemNameSelect" value="@NewItem.ItemName" @onchange="OnItemNameChanged"
-                            @onkeydown="HandleItemNameKeyDown" @onblur="HandleDraftFieldBlur">
-                        <option value="">-- Select --</option>
-                        @foreach (var subd in AvailableItems.Where(i => i.SubDistributorId ==
-                                                                                                                                                                                                                                                                                                                                            SelectedSubdistributorId).DistinctBy(i => i.ItemName))
-                        {
-                            <option value="@subd.ItemName">@subd.ItemName</option>
-                        }
-                    </select>
+                    <GenericAutocomplete TItem="SubdItem" @ref="itemNameAutocomplete"
+                                         Items="AvailableItems.Where(i => i.SubDistributorId == SelectedSubdistributorId).DistinctBy(i => i.ItemName).ToList()"
+                                         Value="@NewItem.ItemName" ValueChanged="@(v => NewItem.ItemName = v ?? string.Empty)"
+                                         ItemLabel="@(i => i.ItemName)" OnSelected="HandleItemAutocompleteSelected"
+                                         Placeholder="-- Select --" />
                     @if (ShowValidationErrors &&
-                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
+                                                                                                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)</span>
                     }
@@ -61,7 +58,7 @@
                         }
                     </select>
                     @if (ShowValidationErrors &&
-                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
+                                                                                                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
                     }
@@ -74,7 +71,7 @@
                     )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
                            @onblur="HandleDraftFieldBlur" />
                     @if (ShowValidationErrors &&
-                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                                                                                                                                                                                                                                            !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
                     {
                         <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
                     }
@@ -136,7 +133,7 @@
 
 @code {
     private ElementReference SkuCodeInput;
-    private ElementReference ItemNameSelect;
+    private GenericAutocomplete<SubdItem>? itemNameAutocomplete;
     private ElementReference UomSelect;
     private ElementReference QuantityInput;
     private IJSObjectReference? jsModule;
@@ -156,29 +153,7 @@
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
     [Parameter] public bool HeaderIsSaved { get; set; } = false;
-    
-    // Error handling state
-    private string ErrorMessage = string.Empty;
-    private string ErrorField = string.Empty;
-    private async Task ValidateAndSave()
-    {
-        ErrorMessage = string.Empty;
-        ErrorField = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(NewSku))
-        {
-            ErrorField = "NewSku";
-            ErrorMessage = "SKU is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(NewItem.ItemName))
-        {
-            ErrorField = "ItemName";
-            ErrorMessage = "Item Name is required.";
-            return;
-        }
-    }
+    [Parameter] public EventCallback OnDraftChanged { get; set; }
 
     private bool _wasModalShown;
 
@@ -217,6 +192,33 @@
         set => OnSkuChanged(value);
     }
 
+    public InvoiceItemsDraftState CaptureDraftState()
+    {
+        return new InvoiceItemsDraftState
+        {
+            NewItem = CloneItem(NewItem),
+            ModalItems = modalItems.Select(CloneItem).ToList()
+        };
+    }
+
+    public Task RestoreDraftStateAsync(InvoiceItemsDraftState? draft)
+    {
+        if (draft is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        NewItem = draft.NewItem is null ? CreateNewItem() : CloneItem(draft.NewItem);
+        modalItems = draft.ModalItems.Select(CloneItem).ToList();
+        CurrentSubdItem = AvailableItems.FirstOrDefault(i =>
+            i.SubdItemId == NewItem.SubdItemId && i.SubDistributorId == SelectedSubdistributorId);
+        CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == NewItem.ItemsUomId);
+        ShowValidationErrors = false;
+        skipNextSkuBlurValidation = false;
+        ValidationErrors.Clear();
+        return Task.CompletedTask;
+    }
+
     private void OnSkuChanged(string sku)
     {
         NewItem.ItemCode = sku;
@@ -243,6 +245,7 @@ SelectedSubdistributorId);
         }
 
         RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
     }
 
     private void OnItemNameChanged(ChangeEventArgs e)
@@ -272,6 +275,32 @@ SelectedSubdistributorId);
         }
 
         RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleItemAutocompleteSelected(SubdItem? selected)
+    {
+        if (selected is null)
+        {
+            NewItem.ItemCode = string.Empty;
+            CurrentSubdItem = null;
+            NewItem.SubdItemId = 0;
+            NewItem.ItemsUomId = 0;
+            CurrentUom = null;
+            RevalidateIfNeeded();
+            _ = OnDraftChanged.InvokeAsync();
+            return Task.CompletedTask;
+        }
+
+        NewItem.ItemName = selected.ItemName;
+        NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
+        CurrentSubdItem = selected;
+        NewItem.SubdItemId = selected.SubdItemId;
+        NewItem.ItemsUomId = 0;
+        CurrentUom = null;
+        RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
+        return Task.CompletedTask;
     }
 
     private void OnUomChanged(ChangeEventArgs e)
@@ -289,6 +318,7 @@ SelectedSubdistributorId);
         }
 
         RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
     }
 
     private void OnQuantityInput(ChangeEventArgs e)
@@ -297,11 +327,13 @@ SelectedSubdistributorId);
         {
             NewItem.Quantity = 0;
             RevalidateIfNeeded();
+            _ = OnDraftChanged.InvokeAsync();
             return;
         }
 
         NewItem.Quantity = quantity;
         RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
     }
 
     private async Task AddItemToQueue()
@@ -342,6 +374,7 @@ SelectedSubdistributorId);
         }
 
         ResetNewItem();
+        await OnDraftChanged.InvokeAsync();
     }
 
     private async Task SaveModal()
@@ -375,13 +408,12 @@ SelectedSubdistributorId);
         }
 
         modalItems.Clear();
+        await OnDraftChanged.InvokeAsync();
         await CloseModal();
     }
 
     private async Task CancelModal()
     {
-        modalItems.Clear();
-
         if (OnCancelModal.HasDelegate)
         {
             await OnCancelModal.InvokeAsync();
@@ -401,6 +433,7 @@ SelectedSubdistributorId);
     private void RemoveQueuedItem(InputItemModel item)
     {
         modalItems.Remove(item);
+        _ = OnDraftChanged.InvokeAsync();
     }
 
     private void ResetNewItem()
@@ -421,6 +454,21 @@ SelectedSubdistributorId);
         };
     }
 
+    private static InputItemModel CloneItem(InputItemModel source)
+    {
+        return new InputItemModel
+        {
+            ItemCode = source.ItemCode,
+            SubdItemId = source.SubdItemId,
+            ItemName = source.ItemName,
+            ItemsUomId = source.ItemsUomId,
+            UomName = source.UomName,
+            Quantity = source.Quantity,
+            Amount = source.Amount,
+            LineItemId = source.LineItemId
+        };
+    }
+
     private async Task HandleSkuKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -432,7 +480,8 @@ SelectedSubdistributorId);
                 skipNextSkuBlurValidation = true;
 
                 await Task.Delay(10);
-                await ItemNameSelect.FocusAsync();
+                if (itemNameAutocomplete != null)
+                    await itemNameAutocomplete.GetInputRef().FocusAsync();
                 return;
             }
 
@@ -445,7 +494,8 @@ SelectedSubdistributorId);
             }
             else
             {
-                await ItemNameSelect.FocusAsync();
+                if (itemNameAutocomplete != null)
+                    await itemNameAutocomplete.GetInputRef().FocusAsync();
             }
         }
     }
@@ -459,7 +509,8 @@ SelectedSubdistributorId);
 
             if (string.IsNullOrWhiteSpace(NewItem.ItemName))
             {
-                await OpenSelectDropdownAsync(ItemNameSelect);
+                if (itemNameAutocomplete != null)
+                    await itemNameAutocomplete.OpenPopupAsync();
                 return;
             }
 

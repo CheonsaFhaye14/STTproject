@@ -16,21 +16,16 @@
             </tr>
         </thead>
         <tbody>
-            @{
-                var index = 1;
-            }
-
             @foreach (var item in Items)
             {
                 <tr>
-                    <td>@index</td>
+                    <td>@item.LineItemId</td>
                     <td>@item.ItemCode</td>
                     <td>@item.ItemName</td>
-                    <td>@ResolveUomName(item.ItemsUomId)</td>
+                    <td>@GetUomName(item)</td>
                     <td>@item.Quantity</td>
                     <td>@FormatHelper.FormatPrice(@item.Amount)</td>
                 </tr>
-                index++;
             }
         </tbody>
     </table>
@@ -49,15 +44,19 @@
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
 
-    private string ResolveUomName(int uomId)
-    {
-        var uom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
-        return uom?.UomName ?? string.Empty;
-    }
-
     private decimal CalculateTotalLineAmount()
     {
         return Items.Sum(i => i.Amount);
+    }
+
+    private string GetUomName(InputItemModel item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.UomName))
+        {
+            return item.UomName;
+        }
+
+        return AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId)?.UomName ?? string.Empty;
     }
 
     private async Task RemoveItem(InputItemModel item)
