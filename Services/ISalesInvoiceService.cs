@@ -18,45 +18,30 @@ public interface ISalesInvoiceService
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
 {
-    // Static semaphore coordinates DbContext access across all service method calls
-    // This prevents concurrent database operations that EF Core cannot handle
-    private static readonly SemaphoreSlim _contextAccessLock = new(1, 1);
+    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 
-    private readonly SttprojectContext _context;
-
-    public SalesInvoiceService(SttprojectContext context)
+    public SalesInvoiceService(IDbContextFactory<SttprojectContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _GetPageDataAsyncInternal(subDistributorId, cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
-    }
-
-    private async Task<SalesInvoicePageData> _GetPageDataAsyncInternal(int subDistributorId, CancellationToken cancellationToken = default)
-    {
-        var customers = await _context.Customers
+        await using var context = _contextFactory.CreateDbContext();
+        
+        var customers = await context.Customers
             .AsNoTracking()
             .Where(c => c.IsActive)
             .OrderBy(c => c.CustomerName)
             .ToListAsync(cancellationToken);
 
-        var customerBranches = await _context.CustomerBranches
+        var customerBranches = await context.CustomerBranches
             .AsNoTracking()
             .Where(b => b.IsActive)
             .OrderBy(b => b.BranchName)
             .ToListAsync(cancellationToken);
 
-        var subdItems = await _context.SubdItems
+        var subdItems = await context.SubdItems
             .AsNoTracking()
             .Where(i => i.SubDistributorId == subDistributorId && i.IsActive)
             .OrderBy(i => i.SubdItemCode)
@@ -67,7 +52,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .Distinct()
             .ToList();
 
-        var itemUoms = await _context.ItemsUoms
+        var itemUoms = await context.ItemsUoms
             .AsNoTracking()
             .Where(i => subdItemIds.Contains(i.SubdItemId))
             .OrderBy(i => i.UomName)
@@ -84,16 +69,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
     public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _context.SalesInvoices
-                .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
+        await using var context = _contextFactory.CreateDbContext();
+        return await context.SalesInvoices
+            .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
     }
 
     public async Task<SaveInvoiceResult> SaveInvoiceAsync(
@@ -103,18 +81,12 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _SaveInvoiceAsyncInternal(invoice, items, currentInvoiceId, currentUserId, cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
+        await using var context = _contextFactory.CreateDbContext();
+        return await SaveInvoiceAsyncInternal(context, invoice, items, currentInvoiceId, currentUserId, cancellationToken);
     }
 
-    private async Task<SaveInvoiceResult> _SaveInvoiceAsyncInternal(
+    private async Task<SaveInvoiceResult> SaveInvoiceAsyncInternal(
+        SttprojectContext context,
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
@@ -131,7 +103,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var duplicateExists = await InvoiceNumberExistsAsync(invoice.InvoiceNumber, currentInvoiceId, cancellationToken);
+        var duplicateExists = await context.SalesInvoices
+            .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
 
         if (duplicateExists)
         {
@@ -142,7 +115,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var customerExists = await _context.Customers
+        var customerExists = await context.Customers
             .AnyAsync(c => c.CustomerId == invoice.CustomerId && c.IsActive, cancellationToken);
 
         if (!customerExists)
@@ -155,7 +128,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var customerHasBranches = await _context.CustomerBranches
+        var customerHasBranches = await context.CustomerBranches
             .AnyAsync(cb => cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
 
         if (!customerHasBranches)
@@ -178,7 +151,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var customerBranchExists = await _context.CustomerBranches
+        var customerBranchExists = await context.CustomerBranches
             .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
 
         if (!customerBranchExists)
@@ -193,7 +166,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         if (currentInvoiceId == 0)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
@@ -212,10 +185,10 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                     UpdatedDate = DateTime.Now,
                 };
 
-                _context.SalesInvoices.Add(salesInvoice);
-                await _context.SaveChangesAsync(cancellationToken);
+                context.SalesInvoices.Add(salesInvoice);
+                await context.SaveChangesAsync(cancellationToken);
 
-                _context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+                context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
                 {
                     SalesInvoiceId = salesInvoice.SalesInvoiceId,
                     SubdItemId = i.SubdItemId,
@@ -229,7 +202,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                     UpdatedDate = DateTime.Now
                 }));
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
                 return new SaveInvoiceResult
@@ -245,7 +218,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             }
         }
 
-        var existing = await _context.SalesInvoices
+        var existing = await context.SalesInvoices
             .FirstOrDefaultAsync(x => x.SalesInvoiceId == currentInvoiceId, cancellationToken);
 
         if (existing is null)
@@ -258,7 +231,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        await using var updateTransaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await using var updateTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -272,16 +245,16 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             existing.UpdatedBy = currentUserId;
             existing.UpdatedDate = DateTime.Now;
 
-            var existingItems = await _context.SalesInvoiceItems
+            var existingItems = await context.SalesInvoiceItems
                 .Where(x => x.SalesInvoiceId == currentInvoiceId)
                 .ToListAsync(cancellationToken);
 
             if (existingItems.Any())
             {
-                _context.SalesInvoiceItems.RemoveRange(existingItems);
+                context.SalesInvoiceItems.RemoveRange(existingItems);
             }
 
-            _context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+            context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
             {
                 SalesInvoiceId = currentInvoiceId,
                 SubdItemId = i.SubdItemId,
@@ -295,7 +268,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 UpdatedDate = DateTime.Now
             }));
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
             await updateTransaction.CommitAsync(cancellationToken);
 
             return new SaveInvoiceResult
@@ -313,20 +286,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
     public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _GetInvoiceByIdAsyncInternal(invoiceId, cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
-    }
-
-    private async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> _GetInvoiceByIdAsyncInternal(int invoiceId, CancellationToken cancellationToken = default)
-    {
-        var invoice = await _context.SalesInvoices
+        await using var context = _contextFactory.CreateDbContext();
+        
+        var invoice = await context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SalesInvoiceId == invoiceId)
             .Select(si => new InputInvoiceModel
@@ -346,7 +308,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             return null;
         }
 
-        var items = await _context.SalesInvoiceItems
+        var items = await context.SalesInvoiceItems
             .AsNoTracking()
             .Where(sii => sii.SalesInvoiceId == invoiceId)
             .Select(sii => new InputItemModel

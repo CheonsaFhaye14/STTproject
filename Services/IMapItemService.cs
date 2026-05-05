@@ -29,15 +29,11 @@ public enum CompanyItemFilterMode
 
 public class MapItemService : IMapItemService
 {
-    // Static semaphore coordinates DbContext access across all service method calls
-    // This prevents concurrent database operations that EF Core cannot handle
-    private static readonly SemaphoreSlim _contextAccessLock = new(1, 1);
+    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 
-    private readonly SttprojectContext _context;
-
-    public MapItemService(SttprojectContext context)
+    public MapItemService(IDbContextFactory<SttprojectContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<string>> GetMapItemPrincipalsAsync(
@@ -45,22 +41,15 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _context.CompanyItems
-                .AsNoTracking()
-                .Where(ci => ci.IsActive)
-                .Select(ci => ci.Principal)
-                .Where(principal => !string.IsNullOrWhiteSpace(principal))
-                .Distinct()
-                .OrderBy(principal => principal)
-                .ToListAsync(cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
+        await using var context = _contextFactory.CreateDbContext();
+        return await context.CompanyItems
+            .AsNoTracking()
+            .Where(ci => ci.IsActive)
+            .Select(ci => ci.Principal)
+            .Where(principal => !string.IsNullOrWhiteSpace(principal))
+            .Distinct()
+            .OrderBy(principal => principal)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<MapCompanyItemRow>> GetMapCompanyItemsAsync(
@@ -70,45 +59,39 @@ public class MapItemService : IMapItemService
         CompanyItemFilterMode filterMode = CompanyItemFilterMode.All,
         CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
+        await using var context = _contextFactory.CreateDbContext();
+        
+        var query = context.CompanyItems
+            .AsNoTracking()
+            .Where(ci => ci.IsActive)
+            .Select(ci => new MapCompanyItemRow
+            {
+                CompanyItemCode = ci.ItemCode,
+                Description = ci.ItemName,
+                Principal = ci.Principal,
+                CompanyItemId = ci.CompanyItemId,
+            });
+
+        if (!string.IsNullOrWhiteSpace(principal))
         {
-            var query = _context.CompanyItems
+            query = query.Where(item => item.Principal == principal);
+        }
+
+        if (subDistributorId > 0 && filterMode != CompanyItemFilterMode.All)
+        {
+            var mappedCompanyItemIds = context.SubdItems
                 .AsNoTracking()
-                .Where(ci => ci.IsActive)
-                .Select(ci => new MapCompanyItemRow
-                {
-                    CompanyItemCode = ci.ItemCode,
-                    Description = ci.ItemName,
-                    Principal = ci.Principal,
-                    CompanyItemId = ci.CompanyItemId,
-                });
+                .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
+                .Select(si => si.CompanyItemId);
 
-            if (!string.IsNullOrWhiteSpace(principal))
-            {
-                query = query.Where(item => item.Principal == principal);
-            }
-
-            if (subDistributorId > 0 && filterMode != CompanyItemFilterMode.All)
-            {
-                var mappedCompanyItemIds = _context.SubdItems
-                    .AsNoTracking()
-                    .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
-                    .Select(si => si.CompanyItemId);
-
-                query = filterMode == CompanyItemFilterMode.Mapped
-                    ? query.Where(item => mappedCompanyItemIds.Contains(item.CompanyItemId))
-                    : query.Where(item => !mappedCompanyItemIds.Contains(item.CompanyItemId));
-            }
-
-            return await query
-                .OrderBy(item => item.CompanyItemCode)
-                .ToListAsync(cancellationToken);
+            query = filterMode == CompanyItemFilterMode.Mapped
+                ? query.Where(item => mappedCompanyItemIds.Contains(item.CompanyItemId))
+                : query.Where(item => !mappedCompanyItemIds.Contains(item.CompanyItemId));
         }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
+
+        return await query
+            .OrderBy(item => item.CompanyItemCode)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(
@@ -117,68 +100,62 @@ public class MapItemService : IMapItemService
         string? principal,
         CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
-            var query = _context.SubdItems
-                .AsNoTracking()
-                .Where(si => si.IsActive)
-                .Where(si => si.SubDistributor.EncoderId == userId)
-                .Where(si => si.SubDistributor.IsActive)
-                .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
-                {
-                    si.SubdItemId,
-                    si.SubDistributorId,
-                    si.SubdItemCode,
-                    si.ItemName,
-                    si.CompanyItemId,
-                    CompanyItemName = si.CompanyItem.ItemName,
-                    Price = u != null ? u.Price : 0m,
-                    Principal = si.CompanyItem.Principal,
-                    UomName = u != null ? u.UomName : string.Empty
-                });
-
-            if (subDistributorId > 0)
+        await using var context = _contextFactory.CreateDbContext();
+        
+        // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
+        var query = context.SubdItems
+            .AsNoTracking()
+            .Where(si => si.IsActive)
+            .Where(si => si.SubDistributor.EncoderId == userId)
+            .Where(si => si.SubDistributor.IsActive)
+            .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
             {
-                query = query.Where(item => item.SubDistributorId == subDistributorId);
-            }
+                si.SubdItemId,
+                si.SubDistributorId,
+                si.SubdItemCode,
+                si.ItemName,
+                si.CompanyItemId,
+                CompanyItemName = si.CompanyItem.ItemName,
+                Price = u != null ? u.Price : 0m,
+                Principal = si.CompanyItem.Principal,
+                UomName = u != null ? u.UomName : string.Empty
+            });
 
-            if (!string.IsNullOrWhiteSpace(principal))
-            {
-                query = query.Where(item => item.Principal == principal);
-            }
-
-            var results = await query
-                .OrderBy(item => item.SubdItemCode)
-                .ThenBy(item => item.UomName)
-                .ToListAsync(cancellationToken);
-
-            // Group by SubItemCode and ItemName - show each UOM with its price
-            return results
-                .GroupBy(x => new { x.SubdItemCode, x.ItemName })
-                .Select(group => new MapSubDistributorItemRow
-                {
-                    SubdItemId = group.First().SubdItemId,
-                    SubDistributorId = group.First().SubDistributorId,
-                    SubItemCode = group.Key.SubdItemCode,
-                    Description = group.Key.ItemName,
-                    Price = group.First().Price,
-                    Principal = group.First().Principal,
-                    CompanyItemId = group.First().CompanyItemId,
-                    CompanyItemName = group.First().CompanyItemName,
-                    // Format: "Box of 12 - 120.00, Piece - 10.00"
-                    UomName = string.Join(", ", group
-                        .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
-                        .Select(x => $"{x.UomName} - {x.Price:N2}"))
-                })
-                .OrderBy(x => x.SubItemCode)
-                .ToList();
-        }
-        finally
+        if (subDistributorId > 0)
         {
-            _contextAccessLock.Release();
+            query = query.Where(item => item.SubDistributorId == subDistributorId);
         }
+
+        if (!string.IsNullOrWhiteSpace(principal))
+        {
+            query = query.Where(item => item.Principal == principal);
+        }
+
+        var results = await query
+            .OrderBy(item => item.SubdItemCode)
+            .ThenBy(item => item.UomName)
+            .ToListAsync(cancellationToken);
+
+        // Group by SubItemCode and ItemName - show each UOM with its price
+        return results
+            .GroupBy(x => new { x.SubdItemCode, x.ItemName })
+            .Select(group => new MapSubDistributorItemRow
+            {
+                SubdItemId = group.First().SubdItemId,
+                SubDistributorId = group.First().SubDistributorId,
+                SubItemCode = group.Key.SubdItemCode,
+                Description = group.Key.ItemName,
+                Price = group.First().Price,
+                Principal = group.First().Principal,
+                CompanyItemId = group.First().CompanyItemId,
+                CompanyItemName = group.First().CompanyItemName,
+                // Format: "Box of 12 - 120.00, Piece - 10.00"
+                UomName = string.Join(", ", group
+                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
+                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
+            })
+            .OrderBy(x => x.SubItemCode)
+            .ToList();
     }
 
     public async Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(
@@ -186,26 +163,12 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await _GetCompanyItemsForDropdownAsyncInternal(userId, subDistributorId, cancellationToken);
-        }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
-    }
-
-    private async Task<List<CompanyItemDropdownItem>> _GetCompanyItemsForDropdownAsyncInternal(
-        int userId,
-        int subDistributorId,
-        CancellationToken cancellationToken = default)
-    {
+        await using var context = _contextFactory.CreateDbContext();
+        
         try
         {
             // First, materialize the list of already-connected company item IDs
-            var connectedIds = await _context.SubdItems
+            var connectedIds = await context.SubdItems
                 .AsNoTracking()
                 .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
                 .Select(si => si.CompanyItemId)
@@ -216,7 +179,7 @@ public class MapItemService : IMapItemService
                 return new();
 
             // Then query company items not in that list (this is now LINQ to Objects, not DbContext)
-            var result = await _context.CompanyItems
+            var result = await context.CompanyItems
                 .AsNoTracking()
                 .Where(ci => ci.IsActive)
                 .Where(ci => !connectedIds.Contains(ci.CompanyItemId))
@@ -249,8 +212,9 @@ public class MapItemService : IMapItemService
 
     public async Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
+        await using var context = _contextFactory.CreateDbContext();
         // Return the primary/base UOM if available
-        return await _context.ItemsUoms
+        return await context.ItemsUoms
             .AsNoTracking()
             .Where(u => u.SubdItemId == subdItemId)
             .OrderByDescending(u => u.IsBaseUnit)
@@ -259,7 +223,8 @@ public class MapItemService : IMapItemService
 
     public async Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
-        return await _context.ItemsUoms
+        await using var context = _contextFactory.CreateDbContext();
+        return await context.ItemsUoms
             .AsNoTracking()
             .Where(u => u.SubdItemId == subdItemId)
             .ToListAsync(cancellationToken);
@@ -267,22 +232,16 @@ public class MapItemService : IMapItemService
 
     public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
+        await using var context = _contextFactory.CreateDbContext();
         try
         {
-            // Do not attach single ItemsUom here; UOM rows are saved separately via SaveSubdItemUomPricesAsync
-
-            _context.SubdItems.Add(item);
-            await _context.SaveChangesAsync(cancellationToken);
+            context.SubdItems.Add(item);
+            await context.SaveChangesAsync(cancellationToken);
             return true;
         }
         catch
         {
             return false;
-        }
-        finally
-        {
-            _contextAccessLock.Release();
         }
     }
 
@@ -290,10 +249,10 @@ public class MapItemService : IMapItemService
 
     public async Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
+        await using var context = _contextFactory.CreateDbContext();
         try
         {
-            var existing = await _context.SubdItems
+            var existing = await context.SubdItems
                 .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == item.SubdItemId, cancellationToken);
 
@@ -302,7 +261,7 @@ public class MapItemService : IMapItemService
                 return UpdateSubdItemResult.NotFound();
             }
 
-            var inUseByInvoices = await _context.SalesInvoiceItems
+            var inUseByInvoices = await context.SalesInvoiceItems
                 .AsNoTracking()
                 .AnyAsync(sii => sii.SubdItemId == item.SubdItemId, cancellationToken);
 
@@ -317,102 +276,96 @@ public class MapItemService : IMapItemService
             existing.UpdatedBy = item.UpdatedBy;
             existing.UpdatedDate = DateTime.UtcNow;
 
-            // UOM rows are updated separately by SaveSubdItemUomPricesAsync
-
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
             return UpdateSubdItemResult.Success();
         }
         catch
         {
             return UpdateSubdItemResult.Failed("Unable to update the sub distributor item.");
         }
-        finally
-        {
-            _contextAccessLock.Release();
-        }
     }
 
     public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
+        await using var context = _contextFactory.CreateDbContext();
         try
         {
             if (uomEntries == null) return false;
 
-            using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+            await using var tx = await context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-            // Load existing UOMs for the subd item
-            var existingUoms = await _context.ItemsUoms
-                .Where(u => u.SubdItemId == subdItemId)
-                .ToListAsync(cancellationToken);
+                // Load existing UOMs for the subd item
+                var existingUoms = await context.ItemsUoms
+                    .Where(u => u.SubdItemId == subdItemId)
+                    .ToListAsync(cancellationToken);
 
-            // Determine which names to keep
-            var incomingNames = uomEntries.Keys.Select(k => k.Trim()).Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+                // Determine which names to keep
+                var incomingNames = uomEntries.Keys.Select(k => k.Trim()).Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
 
-            // Update or insert incoming entries
-            foreach (var kv in uomEntries)
-            {
-                var name = kv.Key.Trim();
-                var entry = kv.Value;
-
-                var existing = existingUoms.FirstOrDefault(e => string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
-                if (existing != null)
+                // Update or insert incoming entries
+                foreach (var kv in uomEntries)
                 {
-                    existing.ConversionToBase = entry.Conversion;
-                    existing.Price = entry.Price ?? 0m;
-                    existing.IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase);
-                    existing.UpdatedBy = entry.IsAutoCalculated ? null : entry.IsAutoCalculated == false ? existing.UpdatedBy : existing.UpdatedBy;
-                    existing.UpdatedDate = DateTime.UtcNow;
-                    _context.ItemsUoms.Update(existing);
-                }
-                else
-                {
-                    var created = new ItemsUom
+                    var name = kv.Key.Trim();
+                    var entry = kv.Value;
+
+                    var existing = existingUoms.FirstOrDefault(e => string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
                     {
-                        UomName = name,
-                        ConversionToBase = entry.Conversion,
-                        Price = entry.Price ?? 0m,
-                        IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase),
-                        SubdItemId = subdItemId,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow,
-                        CreatedBy = null,
-                        UpdatedBy = null
-                    };
-                    _context.ItemsUoms.Add(created);
+                        existing.ConversionToBase = entry.Conversion;
+                        existing.Price = entry.Price ?? 0m;
+                        existing.IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase);
+                        existing.UpdatedBy = entry.IsAutoCalculated ? null : entry.IsAutoCalculated == false ? existing.UpdatedBy : existing.UpdatedBy;
+                        existing.UpdatedDate = DateTime.UtcNow;
+                        context.ItemsUoms.Update(existing);
+                    }
+                    else
+                    {
+                        var created = new ItemsUom
+                        {
+                            UomName = name,
+                            ConversionToBase = entry.Conversion,
+                            Price = entry.Price ?? 0m,
+                            IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase),
+                            SubdItemId = subdItemId,
+                            CreatedDate = DateTime.UtcNow,
+                            UpdatedDate = DateTime.UtcNow,
+                            CreatedBy = null,
+                            UpdatedBy = null
+                        };
+                        context.ItemsUoms.Add(created);
+                    }
                 }
-            }
 
-            // Remove any existing uom not present in incoming list
-            var toRemove = existingUoms.Where(e => !incomingNames.Any(n => string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase))).ToList();
-            if (toRemove.Any())
+                // Remove any existing uom not present in incoming list
+                var toRemove = existingUoms.Where(e => !incomingNames.Any(n => string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase))).ToList();
+                if (toRemove.Any())
+                {
+                    context.ItemsUoms.RemoveRange(toRemove);
+                }
+
+                await context.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch
             {
-                _context.ItemsUoms.RemoveRange(toRemove);
+                await tx.RollbackAsync(cancellationToken);
+                return false;
             }
-
-            await _context.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-            return true;
         }
         catch
         {
-            await tx.RollbackAsync(cancellationToken);
             return false;
-        }
-        }
-        finally
-        {
-            _contextAccessLock.Release();
         }
     }
 
     public async Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
-        await _contextAccessLock.WaitAsync(cancellationToken);
+        await using var context = _contextFactory.CreateDbContext();
         try
         {
-            var existing = await _context.SubdItems
+            var existing = await context.SubdItems
                 .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == subdItemId, cancellationToken);
 
@@ -421,7 +374,7 @@ public class MapItemService : IMapItemService
                 return DeleteSubdItemResult.NotFound();
             }
 
-            var inUseByInvoices = await _context.SalesInvoiceItems
+            var inUseByInvoices = await context.SalesInvoiceItems
                 .AsNoTracking()
                 .AnyAsync(sii => sii.SubdItemId == subdItemId, cancellationToken);
 
@@ -432,20 +385,16 @@ public class MapItemService : IMapItemService
 
             if (existing.ItemsUoms is not null && existing.ItemsUoms.Any())
             {
-                _context.ItemsUoms.RemoveRange(existing.ItemsUoms);
+                context.ItemsUoms.RemoveRange(existing.ItemsUoms);
             }
 
-            _context.SubdItems.Remove(existing);
-            await _context.SaveChangesAsync(cancellationToken);
+            context.SubdItems.Remove(existing);
+            await context.SaveChangesAsync(cancellationToken);
             return DeleteSubdItemResult.Success();
         }
         catch
         {
             return DeleteSubdItemResult.Failed("Unable to delete the sub distributor item.");
-        }
-        finally
-        {
-            _contextAccessLock.Release();
         }
     }
 
@@ -455,9 +404,10 @@ public class MapItemService : IMapItemService
         int? excludeSubdItemId = null,
         CancellationToken cancellationToken = default)
     {
+        await using var context = _contextFactory.CreateDbContext();
         var normalizedCode = subdItemCode.Trim();
 
-        return await _context.SubdItems
+        return await context.SubdItems
             .AsNoTracking()
             .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
             .Where(si => si.SubdItemCode == normalizedCode)
