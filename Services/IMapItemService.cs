@@ -420,59 +420,94 @@ public class MapItemService : IMapItemService
     {
         await using var context = _contextFactory.CreateDbContext();
         
-        IQueryable<int> mappedCompanyItemIds;
-        string? subdCode = null;
-
-        // If subDistributorId is 0, get all unmapped items; otherwise, get unmapped items for specific subdistributor
         if (subDistributorId == 0)
         {
-            // Get all company items that are never mapped to any subdistributor
-            mappedCompanyItemIds = context.SubdItems
+            // For "All Sub Distributors": generate rows for each subdistributor with their unmapped items
+            var subdistributors = await context.SubDistributors
                 .AsNoTracking()
-                .Where(si => si.IsActive)
-                .Select(si => si.CompanyItemId)
-                .Distinct();
+                .Where(s => s.IsActive)
+                .Select(s => new { s.SubDistributorId, s.SubdCode })
+                .ToListAsync(cancellationToken);
+
+            var results = new List<TemplateRow>();
+
+            foreach (var subd in subdistributors)
+            {
+                // Get company items already mapped to this specific subdistributor
+                var mappedItemIds = context.SubdItems
+                    .AsNoTracking()
+                    .Where(si => si.SubDistributorId == subd.SubDistributorId && si.IsActive)
+                    .Select(si => si.CompanyItemId)
+                    .ToList();
+
+                // Get company items NOT mapped to this subdistributor
+                var query = context.CompanyItems
+                    .AsNoTracking()
+                    .Where(ci => ci.IsActive)
+                    .Where(ci => !mappedItemIds.Contains(ci.CompanyItemId));
+
+                if (!string.IsNullOrWhiteSpace(principal))
+                {
+                    query = query.Where(ci => ci.Principal == principal);
+                }
+
+                var items = await query
+                    .OrderBy(ci => ci.ItemCode)
+                    .Select(ci => new TemplateRow
+                    {
+                        CompanyItemCode = ci.ItemCode,
+                        CompanyItemName = ci.ItemName,
+                        Principal = ci.Principal,
+                        SubDistributorCode = subd.SubdCode,
+                        SubdItemName = string.Empty,
+                        SubdItemCode = string.Empty
+                    })
+                    .ToListAsync(cancellationToken);
+
+                results.AddRange(items);
+            }
+
+            return results;
         }
         else
         {
-            // Get unmapped items for specific subdistributor
-            mappedCompanyItemIds = context.SubdItems
+            // For specific subdistributor: get only items not mapped to that subdistributor
+            var mappedCompanyItemIds = context.SubdItems
                 .AsNoTracking()
                 .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
                 .Select(si => si.CompanyItemId)
-                .Distinct();
+                .ToList();
 
-            // Get the subdistributor code
-            subdCode = await context.SubDistributors
+            var subdCode = await context.SubDistributors
                 .Where(s => s.SubDistributorId == subDistributorId)
                 .Select(s => s.SubdCode)
                 .FirstOrDefaultAsync(cancellationToken);
-        }
 
-        var query = context.CompanyItems
-            .AsNoTracking()
-            .Where(ci => ci.IsActive)
-            .Where(ci => !mappedCompanyItemIds.Contains(ci.CompanyItemId));
+            var query = context.CompanyItems
+                .AsNoTracking()
+                .Where(ci => ci.IsActive)
+                .Where(ci => !mappedCompanyItemIds.Contains(ci.CompanyItemId));
 
-        if (!string.IsNullOrWhiteSpace(principal))
-        {
-            query = query.Where(ci => ci.Principal == principal);
-        }
-
-        var results = await query
-            .OrderBy(ci => ci.ItemCode)
-            .Select(ci => new TemplateRow
+            if (!string.IsNullOrWhiteSpace(principal))
             {
-                CompanyItemCode = ci.ItemCode,
-                CompanyItemName = ci.ItemName,
-                Principal = ci.Principal,
-                SubDistributorCode = subdCode ?? string.Empty,
-                SubdItemName = string.Empty,
-                SubdItemCode = string.Empty
-            })
-            .ToListAsync(cancellationToken);
+                query = query.Where(ci => ci.Principal == principal);
+            }
 
-        return results;
+            var results = await query
+                .OrderBy(ci => ci.ItemCode)
+                .Select(ci => new TemplateRow
+                {
+                    CompanyItemCode = ci.ItemCode,
+                    CompanyItemName = ci.ItemName,
+                    Principal = ci.Principal,
+                    SubDistributorCode = subdCode ?? string.Empty,
+                    SubdItemName = string.Empty,
+                    SubdItemCode = string.Empty
+                })
+                .ToListAsync(cancellationToken);
+
+            return results;
+        }
     }
 }
 

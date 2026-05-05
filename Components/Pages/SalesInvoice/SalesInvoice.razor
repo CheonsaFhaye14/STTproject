@@ -18,7 +18,7 @@
 @implements IAsyncDisposable
 
 @rendermode InteractiveServer
-<button class="btn-primary" @onclick="GoBackToHome">Go Back</button>
+<button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
 <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
              OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
@@ -47,10 +47,8 @@
 @if (isSaved)
 {
     <div class="item-actions">
-        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items</button>
-        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items</button>
-        <span class="shortcut-hint">Press F3 to open the add-items modal</span>
-        <span class="shortcut-hint">Press F4 to open or close the edit-items modal</span>
+        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
+        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
     </div>
 }
 
@@ -69,7 +67,7 @@
 @if (isSaved)
 {
     <div class="commit-actions">
-        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice</button>
+        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
         <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
     </div>
 }
