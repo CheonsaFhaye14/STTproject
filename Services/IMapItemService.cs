@@ -206,9 +206,15 @@ public class MapItemService : IMapItemService
         int companyItemId,
         CancellationToken cancellationToken = default)
     {
-        // Current model only stores UOM settings per saved SubdItem.
-        // For a new mapping, there is no pre-existing company item UOM list.
-        return new List<string>();
+        await using var context = _contextFactory.CreateDbContext();
+
+        return await context.ItemsUoms
+            .AsNoTracking()
+            .Where(u => !string.IsNullOrWhiteSpace(u.UomName))
+            .Select(u => u.UomName)
+            .Distinct()
+            .OrderBy(u => u)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default)
@@ -453,18 +459,29 @@ public class MapItemService : IMapItemService
 
                 var items = await query
                     .OrderBy(ci => ci.ItemCode)
-                    .Select(ci => new TemplateRow
+                    .Select(ci => new
                     {
-                        CompanyItemCode = ci.ItemCode,
-                        CompanyItemName = ci.ItemName,
-                        Principal = ci.Principal,
-                        SubDistributorCode = subd.SubdCode,
-                        SubdItemName = string.Empty,
-                        SubdItemCode = string.Empty
+                        ci.ItemCode,
+                        ci.ItemName,
+                        ci.Principal
                     })
                     .ToListAsync(cancellationToken);
 
-                results.AddRange(items);
+                foreach (var item in items)
+                {
+                    results.Add(new TemplateRow
+                    {
+                        CompanyItemCode = item.ItemCode,
+                        CompanyItemName = item.ItemName,
+                        Principal = item.Principal,
+                        SubDistributorCode = subd.SubdCode,
+                        SubdItemName = string.Empty,
+                        SubdItemCode = string.Empty,
+                        UOM = string.Empty,
+                        Conversion = null,
+                        Price = null
+                    });
+                }
             }
 
             return results;
@@ -495,18 +512,32 @@ public class MapItemService : IMapItemService
 
             var results = await query
                 .OrderBy(ci => ci.ItemCode)
-                .Select(ci => new TemplateRow
+                .Select(ci => new
                 {
-                    CompanyItemCode = ci.ItemCode,
-                    CompanyItemName = ci.ItemName,
-                    Principal = ci.Principal,
-                    SubDistributorCode = subdCode ?? string.Empty,
-                    SubdItemName = string.Empty,
-                    SubdItemCode = string.Empty
+                    ci.ItemCode,
+                    ci.ItemName,
+                    ci.Principal
                 })
                 .ToListAsync(cancellationToken);
 
-            return results;
+            var finalResults = new List<TemplateRow>();
+            foreach (var item in results)
+            {
+                finalResults.Add(new TemplateRow
+                {
+                    CompanyItemCode = item.ItemCode,
+                    CompanyItemName = item.ItemName,
+                    Principal = item.Principal,
+                    SubDistributorCode = subdCode ?? string.Empty,
+                    SubdItemName = string.Empty,
+                    SubdItemCode = string.Empty,
+                    UOM = string.Empty,
+                    Conversion = null,
+                    Price = null
+                });
+            }
+
+            return finalResults;
         }
     }
 }
@@ -551,6 +582,9 @@ public sealed class TemplateRow
     public string SubDistributorCode { get; set; } = string.Empty;
     public string SubdItemName { get; set; } = string.Empty;
     public string SubdItemCode { get; set; } = string.Empty;
+    public string UOM { get; set; } = string.Empty;
+    public decimal? Conversion { get; set; }
+    public decimal? Price { get; set; }
 }
 
 public sealed class DeleteSubdItemResult
