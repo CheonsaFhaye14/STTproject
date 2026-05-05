@@ -29,9 +29,9 @@ public enum CompanyItemFilterMode
 
 public class MapItemService : IMapItemService
 {
-    // Static semaphore ensures all MapItemService instances share the same lock
-    // This prevents concurrent DbContext access from multiple components
-    private static readonly SemaphoreSlim _dbAccessLock = new(1, 1);
+    // Static semaphore coordinates DbContext access across all service method calls
+    // This prevents concurrent database operations that EF Core cannot handle
+    private static readonly SemaphoreSlim _contextAccessLock = new(1, 1);
 
     private readonly SttprojectContext _context;
 
@@ -45,14 +45,22 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        return await _context.CompanyItems
-            .AsNoTracking()
-            .Where(ci => ci.IsActive)
-            .Select(ci => ci.Principal)
-            .Where(principal => !string.IsNullOrWhiteSpace(principal))
-            .Distinct()
-            .OrderBy(principal => principal)
-            .ToListAsync(cancellationToken);
+        await _contextAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _context.CompanyItems
+                .AsNoTracking()
+                .Where(ci => ci.IsActive)
+                .Select(ci => ci.Principal)
+                .Where(principal => !string.IsNullOrWhiteSpace(principal))
+                .Distinct()
+                .OrderBy(principal => principal)
+                .ToListAsync(cancellationToken);
+        }
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
     public async Task<List<MapCompanyItemRow>> GetMapCompanyItemsAsync(
@@ -62,37 +70,45 @@ public class MapItemService : IMapItemService
         CompanyItemFilterMode filterMode = CompanyItemFilterMode.All,
         CancellationToken cancellationToken = default)
     {
-        var query = _context.CompanyItems
-            .AsNoTracking()
-            .Where(ci => ci.IsActive)
-            .Select(ci => new MapCompanyItemRow
-            {
-                CompanyItemCode = ci.ItemCode,
-                Description = ci.ItemName,
-                Principal = ci.Principal,
-                CompanyItemId = ci.CompanyItemId,
-            });
-
-        if (!string.IsNullOrWhiteSpace(principal))
+        await _contextAccessLock.WaitAsync(cancellationToken);
+        try
         {
-            query = query.Where(item => item.Principal == principal);
-        }
-
-        if (subDistributorId > 0 && filterMode != CompanyItemFilterMode.All)
-        {
-            var mappedCompanyItemIds = _context.SubdItems
+            var query = _context.CompanyItems
                 .AsNoTracking()
-                .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
-                .Select(si => si.CompanyItemId);
+                .Where(ci => ci.IsActive)
+                .Select(ci => new MapCompanyItemRow
+                {
+                    CompanyItemCode = ci.ItemCode,
+                    Description = ci.ItemName,
+                    Principal = ci.Principal,
+                    CompanyItemId = ci.CompanyItemId,
+                });
 
-            query = filterMode == CompanyItemFilterMode.Mapped
-                ? query.Where(item => mappedCompanyItemIds.Contains(item.CompanyItemId))
-                : query.Where(item => !mappedCompanyItemIds.Contains(item.CompanyItemId));
+            if (!string.IsNullOrWhiteSpace(principal))
+            {
+                query = query.Where(item => item.Principal == principal);
+            }
+
+            if (subDistributorId > 0 && filterMode != CompanyItemFilterMode.All)
+            {
+                var mappedCompanyItemIds = _context.SubdItems
+                    .AsNoTracking()
+                    .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
+                    .Select(si => si.CompanyItemId);
+
+                query = filterMode == CompanyItemFilterMode.Mapped
+                    ? query.Where(item => mappedCompanyItemIds.Contains(item.CompanyItemId))
+                    : query.Where(item => !mappedCompanyItemIds.Contains(item.CompanyItemId));
+            }
+
+            return await query
+                .OrderBy(item => item.CompanyItemCode)
+                .ToListAsync(cancellationToken);
         }
-
-        return await query
-            .OrderBy(item => item.CompanyItemCode)
-            .ToListAsync(cancellationToken);
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
     public async Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(
@@ -101,60 +117,68 @@ public class MapItemService : IMapItemService
         string? principal,
         CancellationToken cancellationToken = default)
     {
-        // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
-        var query = _context.SubdItems
-            .AsNoTracking()
-            .Where(si => si.IsActive)
-            .Where(si => si.SubDistributor.EncoderId == userId)
-            .Where(si => si.SubDistributor.IsActive)
-            .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
-            {
-                si.SubdItemId,
-                si.SubDistributorId,
-                si.SubdItemCode,
-                si.ItemName,
-                si.CompanyItemId,
-                CompanyItemName = si.CompanyItem.ItemName,
-                Price = u != null ? u.Price : 0m,
-                Principal = si.CompanyItem.Principal,
-                UomName = u != null ? u.UomName : string.Empty
-            });
-
-        if (subDistributorId > 0)
+        await _contextAccessLock.WaitAsync(cancellationToken);
+        try
         {
-            query = query.Where(item => item.SubDistributorId == subDistributorId);
-        }
+            // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
+            var query = _context.SubdItems
+                .AsNoTracking()
+                .Where(si => si.IsActive)
+                .Where(si => si.SubDistributor.EncoderId == userId)
+                .Where(si => si.SubDistributor.IsActive)
+                .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
+                {
+                    si.SubdItemId,
+                    si.SubDistributorId,
+                    si.SubdItemCode,
+                    si.ItemName,
+                    si.CompanyItemId,
+                    CompanyItemName = si.CompanyItem.ItemName,
+                    Price = u != null ? u.Price : 0m,
+                    Principal = si.CompanyItem.Principal,
+                    UomName = u != null ? u.UomName : string.Empty
+                });
 
-        if (!string.IsNullOrWhiteSpace(principal))
-        {
-            query = query.Where(item => item.Principal == principal);
-        }
-
-        var results = await query
-            .OrderBy(item => item.SubdItemCode)
-            .ThenBy(item => item.UomName)
-            .ToListAsync(cancellationToken);
-
-        // Group by SubItemCode and ItemName - show each UOM with its price
-        return results
-            .GroupBy(x => new { x.SubdItemCode, x.ItemName })
-            .Select(group => new MapSubDistributorItemRow
+            if (subDistributorId > 0)
             {
-                SubdItemId = group.First().SubdItemId,
-                SubDistributorId = group.First().SubDistributorId,
-                SubItemCode = group.Key.SubdItemCode,
-                Description = group.Key.ItemName,
-                Price = group.First().Price,
-                Principal = group.First().Principal,
-                CompanyItemId = group.First().CompanyItemId,
-                CompanyItemName = group.First().CompanyItemName,
-                // Format: "Box of 12 - 120.00, Piece - 10.00"
-                UomName = string.Join(", ", group
-                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
-                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
-            })
-            .OrderBy(x => x.SubItemCode)
-            .ToList();
+                query = query.Where(item => item.SubDistributorId == subDistributorId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(principal))
+            {
+                query = query.Where(item => item.Principal == principal);
+            }
+
+            var results = await query
+                .OrderBy(item => item.SubdItemCode)
+                .ThenBy(item => item.UomName)
+                .ToListAsync(cancellationToken);
+
+            // Group by SubItemCode and ItemName - show each UOM with its price
+            return results
+                .GroupBy(x => new { x.SubdItemCode, x.ItemName })
+                .Select(group => new MapSubDistributorItemRow
+                {
+                    SubdItemId = group.First().SubdItemId,
+                    SubDistributorId = group.First().SubDistributorId,
+                    SubItemCode = group.Key.SubdItemCode,
+                    Description = group.Key.ItemName,
+                    Price = group.First().Price,
+                    Principal = group.First().Principal,
+                    CompanyItemId = group.First().CompanyItemId,
+                    CompanyItemName = group.First().CompanyItemName,
+                    // Format: "Box of 12 - 120.00, Piece - 10.00"
+                    UomName = string.Join(", ", group
+                        .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
+                        .Select(x => $"{x.UomName} - {x.Price:N2}"))
+                })
+                .OrderBy(x => x.SubItemCode)
+                .ToList();
+        }
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
     public async Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(
@@ -162,22 +186,17 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        // Acquire lock to ensure sequential DbContext access
-        await _dbAccessLock.WaitAsync(cancellationToken);
+        await _contextAccessLock.WaitAsync(cancellationToken);
         try
         {
             return await _GetCompanyItemsForDropdownAsyncInternal(userId, subDistributorId, cancellationToken);
         }
         finally
         {
-            _dbAccessLock.Release();
+            _contextAccessLock.Release();
         }
     }
 
-    /// <summary>
-    /// Internal method that retrieves company items for dropdown without acquiring the lock.
-    /// Only call this when you already hold the _dbAccessLock.
-    /// </summary>
     private async Task<List<CompanyItemDropdownItem>> _GetCompanyItemsForDropdownAsyncInternal(
         int userId,
         int subDistributorId,
@@ -248,6 +267,7 @@ public class MapItemService : IMapItemService
 
     public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
+        await _contextAccessLock.WaitAsync(cancellationToken);
         try
         {
             // Do not attach single ItemsUom here; UOM rows are saved separately via SaveSubdItemUomPricesAsync
@@ -260,12 +280,17 @@ public class MapItemService : IMapItemService
         {
             return false;
         }
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
 
 
     public async Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
     {
+        await _contextAccessLock.WaitAsync(cancellationToken);
         try
         {
             var existing = await _context.SubdItems
@@ -301,15 +326,22 @@ public class MapItemService : IMapItemService
         {
             return UpdateSubdItemResult.Failed("Unable to update the sub distributor item.");
         }
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
     public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
     {
-        if (uomEntries == null) return false;
-
-        using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await _contextAccessLock.WaitAsync(cancellationToken);
         try
         {
+            if (uomEntries == null) return false;
+
+            using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
             // Load existing UOMs for the subd item
             var existingUoms = await _context.ItemsUoms
                 .Where(u => u.SubdItemId == subdItemId)
@@ -368,10 +400,16 @@ public class MapItemService : IMapItemService
             await tx.RollbackAsync(cancellationToken);
             return false;
         }
+        }
+        finally
+        {
+            _contextAccessLock.Release();
+        }
     }
 
     public async Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
+        await _contextAccessLock.WaitAsync(cancellationToken);
         try
         {
             var existing = await _context.SubdItems
@@ -404,6 +442,10 @@ public class MapItemService : IMapItemService
         catch
         {
             return DeleteSubdItemResult.Failed("Unable to delete the sub distributor item.");
+        }
+        finally
+        {
+            _contextAccessLock.Release();
         }
     }
 

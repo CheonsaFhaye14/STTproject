@@ -639,8 +639,29 @@
     List<SubDistributor> subdList = new();
     List<Customer> customers = new();
     List<CustomerBranch> customerBranches = new();
+    private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
 
     protected override async Task OnParametersSetAsync()
+    {
+        // Use semaphore to ensure only one OnParametersSetAsync execution at a time
+        // This prevents concurrent DbContext access when parameters change rapidly
+        if (!await onParametersSetLock.WaitAsync(0))
+        {
+            // Another execution is already in progress, skip this one
+            return;
+        }
+
+        try
+        {
+            await _OnParametersSetAsyncInternal();
+        }
+        finally
+        {
+            onParametersSetLock.Release();
+        }
+    }
+
+    private async Task _OnParametersSetAsyncInternal()
     {
         if (!userContext.UserId.HasValue)
         {
