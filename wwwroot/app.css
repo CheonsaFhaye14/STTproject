@@ -148,6 +148,10 @@ label {
     z-index: 1050;
 }
 
+.add-uom-modal-overlay {
+    z-index: 2100;
+}
+
 .confirm-modal-overlay {
     z-index: 2000;
 }

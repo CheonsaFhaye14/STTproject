@@ -13,7 +13,7 @@
             {
                 var label = ItemLabel(item!);
                 var cls = idx == highlightedIndex ? "autocomplete-item highlighted" : "autocomplete-item";
-                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="async () => { highlightedIndex = idx; await ScrollToHighlighted(); }">@label</div>
+                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">@label</div>
             }
         </div>
     }
@@ -60,16 +60,18 @@
         {
             if (!isOpen) isOpen = true;
             highlightedIndex = Math.Min(highlightedIndex + 1, FilteredItems.Count() - 1);
-            await ScrollToHighlighted();
             await InvokeAsync(StateHasChanged);
+            await Task.Delay(10);
+            await ScrollToHighlighted();
             return;
         }
 
         if (e.Key == "ArrowUp")
         {
             highlightedIndex = Math.Max(highlightedIndex - 1, 0);
-            await ScrollToHighlighted();
             await InvokeAsync(StateHasChanged);
+            await Task.Delay(10);
+            await ScrollToHighlighted();
             return;
         }
 
@@ -114,7 +116,14 @@
     {
         if (highlightedIndex >= 0)
         {
-            await JSRuntime.InvokeVoidAsync("eval", "document.querySelector('.autocomplete-popup .highlighted')?.scrollIntoView({block: 'nearest'});");
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("scrollHighlightedIntoView");
+            }
+            catch
+            {
+                // Fallback if JS function not available
+            }
         }
     }
 

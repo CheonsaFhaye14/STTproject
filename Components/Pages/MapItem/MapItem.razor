@@ -14,6 +14,7 @@
 @inject IJSRuntime JS
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
+<div @onkeydown="HandlePageKeyDown">
 <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
 <button class="btn-primary" @onclick="GoBackToHome">Go Back</button>
 
@@ -93,7 +94,7 @@
 
   
     <div class="form-actions">
-        <button class="btn-primary" type="button" @onclick="OpenAddUomModal"
+        <button class="btn-primary" type="button" @ref="addUomButton" @onclick="OpenAddUomModal"
                 disabled="@(!IsSubDistributorSelected || !selectedCompanyItemId.HasValue)">Add UOM</button>
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
@@ -223,6 +224,7 @@
     <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
                  OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
                  OnCancel="@(async () => await CloseAddUomModalAsync())" />
+</div>
 
 @code {
     [Parameter]
@@ -241,6 +243,7 @@
     private Autocomplete? companyItemAutocomplete;
     private IJSObjectReference? jsModule;
     private bool principalEnterPrimed = false;
+    private ElementReference addUomButton;
     private ElementReference saveButton;
     private List<string> availableUoms = new();
     private Dictionary<string, UomEntry> uomEntries = new();
@@ -416,6 +419,19 @@
     private void GoBackToHome()
     {
         Navigation.NavigateTo("/");
+    }
+
+    private async Task HandlePageKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "s")
+        {
+            e.PreventDefault();
+            await SaveItemAsync();
+        }
+        else if (e.Key == "Escape")
+        {
+            GoBackToHome();
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -744,7 +760,7 @@
     private async Task OnCompanyItemConfirmed()
     {
         await Task.Delay(10);
-        await saveButton.FocusAsync();
+        await addUomButton.FocusAsync();
     }
 
     private Task HandleItemCodeChanged()

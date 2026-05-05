@@ -1,6 +1,6 @@
 ﻿@if (ShowAddUomModal)
 {
-    <div class="modal-overlay">
+    <div class="modal-overlay add-uom-modal-overlay" @onkeydown="HandleModalKeyDown">
         <div class="modal-box">
             <div class="modal-header">
                 <h4>Add Unit of Measure</h4>
@@ -15,7 +15,7 @@
                     
                 <div class="form-group">
                     <label>Unit of Measure</label>
-                    <select @bind="selectedUomOption">
+                    <select @ref="uomSelectRef" @bind="SelectedUomOption" @onkeydown="HandleUomSelectKeyDown" @onkeydown:preventDefault="@(selectedUomOption != string.Empty)">
                         <option value="">-- Select Unit of Measure --</option>
                         @foreach (var option in defaultOptions)
                         {
@@ -42,8 +42,8 @@
 
                 <div class="form-group">
                     <label>Conversion (How many pieces per @(GetSelectedUomName() ?? "unit")?):</label>
-                    <input type="number" min="0.01" step="0.01" @bind="conversionInput" @bind:event="oninput"
-                           placeholder="e.g., 12" />
+                    <input @ref="conversionInputRef" type="number" min="0.01" step="0.01" @bind="ConversionInput" @bind:event="oninput"
+                           placeholder="e.g., 12" @onkeydown="HandleConversionKeyDown" />
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
                     {
                         <span class="error-text">@GetFieldError("conversion")</span>
@@ -52,7 +52,7 @@
 
                 <div class="form-group">
                     <label>Price (Optional - will be calculated if left empty)</label>
-                    <input type="number" min="0" step="0.01" @bind="priceInput" @bind:event="oninput" placeholder="0.00" />
+                    <input @ref="priceInputRef" type="number" min="0" step="0.01" @bind="PriceInput" @bind:event="oninput" placeholder="0.00" @onkeydown="HandlePriceKeyDown" />
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("price")))
                     {
                         <span class="error-text">@GetFieldError("price")</span>
@@ -60,7 +60,7 @@
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn-primary" @onclick="() => AddUomEntryAsync(false)">Add UOM</button>
+                    <button @ref="addUomButtonRef" type="button" class="btn-primary" @onclick="() => AddUomEntryAsync(false)" @onkeydown="HandleAddUomButtonKeyDown">Add UOM</button>
                 </div>
 
                 
@@ -128,6 +128,8 @@
 }
 
 @using STTproject.Models
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
 
 @code {
     [Parameter] public bool ShowAddUomModal { get; set; }
@@ -139,11 +141,53 @@
     private Dictionary<string, UomEntry> workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> validationErrors = new();
     private string selectedUomOption = string.Empty;
+    private string SelectedUomOption
+    {
+        get => selectedUomOption;
+        set
+        {
+            if (selectedUomOption != value)
+            {
+                selectedUomOption = value;
+                validationErrors.Remove("uom");
+                if (selectedUomOption != "__custom")
+                {
+                    customUom = string.Empty;
+                }
+            }
+        }
+    }
+
     private string customUom = string.Empty;
     private string conversionInput = string.Empty;
+    private string ConversionInput
+    {
+        get => conversionInput;
+        set
+        {
+            conversionInput = value;
+            validationErrors.Remove("conversion");
+        }
+    }
+
     private string priceInput = string.Empty;
+    private string PriceInput
+    {
+        get => priceInput;
+        set
+        {
+            priceInput = value;
+            validationErrors.Remove("price");
+        }
+    }
+
     private bool wasShown;
+    private bool shouldFocusUomSelect;
     private string? lastEditedUom = null;
+    private ElementReference uomSelectRef;
+    private ElementReference conversionInputRef;
+    private ElementReference priceInputRef;
+    private ElementReference addUomButtonRef;
 
     protected override void OnParametersSet()
     {
@@ -172,6 +216,7 @@
             conversionInput = string.Empty;
             priceInput = string.Empty;
             validationErrors.Clear();
+            shouldFocusUomSelect = true;
             wasShown = true;
         }
         else if (!ShowAddUomModal)
@@ -252,6 +297,33 @@
         }
 
         await RecalculatePricesAsync(uomName);
+        shouldFocusUomSelect = true;
+        await InvokeAsync(StateHasChanged);
+        await FocusUomSelectAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ShowAddUomModal && shouldFocusUomSelect)
+        {
+            shouldFocusUomSelect = false;
+            await FocusUomSelectAsync();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task FocusUomSelectAsync()
+    {
+        await Task.Yield();
+        try
+        {
+            await uomSelectRef.FocusAsync();
+        }
+        catch
+        {
+            // Ignore focus errors when element is not ready
+        }
     }
 
     private async Task HandlePriceInputChangedAsync(string uomName)
@@ -379,5 +451,92 @@
     private string GetFieldError(string fieldKey)
     {
         return validationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
+    }
+
+    private async Task HandleModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "s" && e.CtrlKey)
+        {
+            await AddAsync();
+        }
+        else if (e.Key == "Escape")
+        {
+            await CancelAsync();
+        }
+    }
+
+    private async Task HandleUomSelectKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(selectedUomOption))
+            {
+                // First Enter opens the dropdown by default when nothing is selected.
+                return;
+            }
+
+            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(customUom))
+            {
+                validationErrors["uom"] = "Custom unit of measure is required.";
+                return;
+            }
+
+            await conversionInputRef.FocusAsync();
+            return;
+        }
+
+        if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(customUom))
+            {
+                validationErrors["uom"] = "Custom unit of measure is required.";
+                return;
+            }
+
+            await conversionInputRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleConversionKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
+        {
+            if (string.IsNullOrWhiteSpace(conversionInput))
+            {
+                validationErrors["conversion"] = "Conversion must be entered.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            await priceInputRef.FocusAsync();
+        }
+        else if (e.Key == "Tab" && e.ShiftKey)
+        {
+            await uomSelectRef.FocusAsync();
+        }
+    }
+
+    private async Task HandlePriceKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
+        {
+            await addUomButtonRef.FocusAsync();
+        }
+        else if (e.Key == "Tab" && e.ShiftKey)
+        {
+            await conversionInputRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleAddUomButtonKeyDown(KeyboardEventArgs e)
+    {
+        if ((e.Key == "Tab" && !e.ShiftKey) || (e.Key == "Enter" && e.CtrlKey))
+        {
+            await uomSelectRef.FocusAsync();
+        }
+        else if (e.Key == "Tab" && e.ShiftKey)
+        {
+            await priceInputRef.FocusAsync();
+        }
     }
 }
