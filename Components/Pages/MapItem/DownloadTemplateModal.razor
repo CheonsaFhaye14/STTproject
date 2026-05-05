@@ -1,4 +1,7 @@
-﻿@if (     ShowModal)
+﻿@using STTproject.Models
+@using STTproject.Services
+
+@if (     ShowModal)
 {
     <div class="modal-overlay">
         <div class="modal-box">
@@ -8,9 +11,13 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label>SubDistributor</label>
-                        <select>
-                            <option value="value">All</option>
-                        </select>
+                    <select>
+                        <option value="0">-- Select Sub Distributor --</option>
+                        @foreach (var subd in subdList)
+                        {
+                            <option value="@subd.SubDistributorId">@subd.SubdName</option>
+                        }
+                    </select>
                     </div>
                     <div class="form-group">
                         <label>Principal</label>
@@ -22,13 +29,14 @@
                 </div>
         </div>
     </div>
-
+     
 }
 
-    @code {
-        [Parameter]
-        public bool ShowModal { get; set; }
-
-        [Parameter]
-        public EventCallback ModalTemplate { get; set; }
+@code {
+    [Parameter]
+    public bool ShowModal { get; set; }
+    private List<SubDistributor> subdList = new();
+    [Parameter]
+    public EventCallback ModalTemplate { get; set; }
+ 
     }
