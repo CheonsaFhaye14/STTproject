@@ -29,6 +29,7 @@
     private ElementReference inputRef;
     private bool isOpen = false;
     private int highlightedIndex = -1;
+    private bool hasSelectedItem = false;
 
     private IEnumerable<CompanyItemDropdownItem> FilteredItems =>
         string.IsNullOrWhiteSpace(Value)
@@ -39,6 +40,7 @@
     {
         Value = e?.Value?.ToString() ?? string.Empty;
         highlightedIndex = -1;
+        hasSelectedItem = false;
         await ValueChanged.InvokeAsync(Value);
         isOpen = true;
     }
@@ -62,21 +64,30 @@
 
         if (e.Key == "Enter")
         {
-            if (!isOpen)
+            if (!isOpen && !hasSelectedItem)
             {
                 isOpen = true;
                 await InvokeAsync(StateHasChanged);
                 return;
             }
 
-            var toSelect = highlightedIndex >= 0 ? FilteredItems.ElementAt(highlightedIndex) : FilteredItems.FirstOrDefault();
-            if (toSelect != null)
+            if (isOpen)
             {
-                await SelectItem(toSelect);
+                var toSelect = highlightedIndex >= 0 ? FilteredItems.ElementAt(highlightedIndex) : FilteredItems.FirstOrDefault();
+                if (toSelect != null)
+                {
+                    await SelectItem(toSelect);
+                }
+
+                await OnConfirmed.InvokeAsync();
+                return;
             }
 
-            await OnConfirmed.InvokeAsync();
-            return;
+            if (hasSelectedItem)
+            {
+                // Allow Enter to move focus to next element
+                return;
+            }
         }
 
         if (e.Key == "Escape")
@@ -100,6 +111,7 @@
         await ValueChanged.InvokeAsync(Value);
         isOpen = false;
         highlightedIndex = -1;
+        hasSelectedItem = true;
         await OnSelected.InvokeAsync(item);
     }
 

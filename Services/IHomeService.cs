@@ -19,7 +19,7 @@ public interface IHomeService
     Task<List<HomeSalesInvoiceDetailRow>> GetBatchInvoiceDetailsAsync(
         int userId,
         int subDistributorId,
-        DateOnly batchCreatedDate,
+        DateOnly batchCreatedDate, 
         int firstSalesInvoiceId,
         int lastSalesInvoiceId,
         CancellationToken cancellationToken = default);

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Internal;
 using STTproject.Models;
 
 namespace STTproject.Services;
@@ -157,14 +158,15 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        // Get all company items that are NOT already connected to the selected sub-distributor
+        // First, get all connected company item IDs
         var connectedCompanyItemIds = await _context.SubdItems
             .AsNoTracking()
             .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
             .Select(si => si.CompanyItemId)
             .ToListAsync(cancellationToken);
 
-        return await _context.CompanyItems
+        // Then query company items (now LINQ to Objects after ToListAsync)
+        var result = await _context.CompanyItems
             .AsNoTracking()
             .Where(ci => ci.IsActive)
             .Where(ci => !connectedCompanyItemIds.Contains(ci.CompanyItemId))
@@ -177,6 +179,8 @@ public class MapItemService : IMapItemService
                 Principal = ci.Principal
             })
             .ToListAsync(cancellationToken);
+
+        return result;
     }
 
     public async Task<List<string>> GetCompanyItemUomsAsync(

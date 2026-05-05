@@ -8,4 +8,4 @@ public interface IUserContextService
 public sealed class UserContextService : IUserContextService
 {
     public int? UserId { get; set; }
-}
+} 

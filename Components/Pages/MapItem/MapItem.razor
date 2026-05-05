@@ -471,7 +471,8 @@
         if (firstRender)
         {
             jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-            await RestoreDraftAsync();
+            // Only restore draft state without reloading tables (already loaded in OnParametersSetAsync)
+            await RestoreDraftStateOnlyAsync();
             await subdSelectRef.FocusAsync();
         }
     }
@@ -569,8 +570,10 @@
         UpdateSelectedSubdLocation();
         selectedPrincipal = null;
         ResetItemForm(persistDraft: false);
+        // Load tables for the selected sub-distributor
         await LoadMapTablesAsync();
-        await RestoreDraftAsync();
+        // Then restore the draft state for this sub-distributor
+        await RestoreDraftStateOnlyAsync();
     }
 
     private void UpdateSelectedSubdLocation()
@@ -1101,6 +1104,36 @@ matched?.Price;
             return;
         }
 
+        // Restore state and reload tables
+        await RestoreDraftStateOnlyAsync();
+        await LoadMapTablesAsync();
+    }
+
+    private async Task RestoreDraftStateOnlyAsync()
+    {
+        if (userContext.UserId is null)
+        {
+            return;
+        }
+
+        if (selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetDraftStorageKey());
+        if (string.IsNullOrWhiteSpace(draftJson))
+        {
+            return;
+        }
+
+        var draftStore = JsonSerializer.Deserialize<MapItemDraftStore>(draftJson);
+        if (draftStore is null || !draftStore.Drafts.TryGetValue(selectedSubdId.ToString(), out var draft))
+        {
+            return;
+        }
+
         itemCode = draft.ItemCode;
         itemName = draft.ItemName;
         selectedPrincipal = draft.SelectedPrincipal;
@@ -1120,7 +1153,6 @@ matched?.Price;
 
         selectedCompanyItemsFilter = restoredFilter;
         UpdateSelectedSubdLocation();
-        await LoadMapTablesAsync();
 
         if (selectedCompanyItemId.HasValue)
         {
