@@ -18,6 +18,7 @@ public interface IMapItemService
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> SubdItemCodeExistsAsync(int subDistributorId, string subdItemCode, int? excludeSubdItemId = null, CancellationToken cancellationToken = default);
     Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default);
+    Task<List<TemplateRow>> GetTemplateDataAsync(int subDistributorId, string? principal, CancellationToken cancellationToken = default);
 }
 
 public enum CompanyItemFilterMode
@@ -414,6 +415,65 @@ public class MapItemService : IMapItemService
             .Where(si => !excludeSubdItemId.HasValue || si.SubdItemId != excludeSubdItemId.Value)
             .AnyAsync(cancellationToken);
     }
+
+    public async Task<List<TemplateRow>> GetTemplateDataAsync(int subDistributorId, string? principal, CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        
+        IQueryable<int> mappedCompanyItemIds;
+        string? subdCode = null;
+
+        // If subDistributorId is 0, get all unmapped items; otherwise, get unmapped items for specific subdistributor
+        if (subDistributorId == 0)
+        {
+            // Get all company items that are never mapped to any subdistributor
+            mappedCompanyItemIds = context.SubdItems
+                .AsNoTracking()
+                .Where(si => si.IsActive)
+                .Select(si => si.CompanyItemId)
+                .Distinct();
+        }
+        else
+        {
+            // Get unmapped items for specific subdistributor
+            mappedCompanyItemIds = context.SubdItems
+                .AsNoTracking()
+                .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
+                .Select(si => si.CompanyItemId)
+                .Distinct();
+
+            // Get the subdistributor code
+            subdCode = await context.SubDistributors
+                .Where(s => s.SubDistributorId == subDistributorId)
+                .Select(s => s.SubdCode)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var query = context.CompanyItems
+            .AsNoTracking()
+            .Where(ci => ci.IsActive)
+            .Where(ci => !mappedCompanyItemIds.Contains(ci.CompanyItemId));
+
+        if (!string.IsNullOrWhiteSpace(principal))
+        {
+            query = query.Where(ci => ci.Principal == principal);
+        }
+
+        var results = await query
+            .OrderBy(ci => ci.ItemCode)
+            .Select(ci => new TemplateRow
+            {
+                CompanyItemCode = ci.ItemCode,
+                CompanyItemName = ci.ItemName,
+                Principal = ci.Principal,
+                SubDistributorCode = subdCode ?? string.Empty,
+                SubdItemName = string.Empty,
+                SubdItemCode = string.Empty
+            })
+            .ToListAsync(cancellationToken);
+
+        return results;
+    }
 }
 
 public sealed class CompanyItemDropdownItem
@@ -446,6 +506,16 @@ public sealed class MapSubDistributorItemRow
     public int CompanyItemId { get; set; }
     public string CompanyItemName { get; set; } = string.Empty;
     public string UomName { get; set; } = string.Empty;
+}
+
+public sealed class TemplateRow
+{
+    public string CompanyItemCode { get; set; } = string.Empty;
+    public string CompanyItemName { get; set; } = string.Empty;
+    public string Principal { get; set; } = string.Empty;
+    public string SubDistributorCode { get; set; } = string.Empty;
+    public string SubdItemName { get; set; } = string.Empty;
+    public string SubdItemCode { get; set; } = string.Empty;
 }
 
 public sealed class DeleteSubdItemResult

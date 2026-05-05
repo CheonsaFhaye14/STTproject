@@ -7,6 +7,7 @@
 @using STTproject.Services
 @using STTproject.Components.Shared
 @using System.Text.Json
+@using ClosedXML.Excel
 @inject NavigationManager Navigation
 @inject IHomeService homeService
 @inject IMapItemService mapItemService
@@ -220,7 +221,8 @@
 <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
               OnErrorConfirm="CloseErrorModal" />
 
-    <DownloadTemplateModal ShowModal="showDownloadTemplateModal" ModalTemplate="HandleDownloadTemplateSubmit" />
+    <DownloadTemplateModal ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
+                           OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
     <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
                  OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
                  OnCancel="@(async () => await CloseAddUomModalAsync())" />
@@ -260,11 +262,79 @@
     private bool showDownloadTemplateModal = false;
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
-    private Task HandleDownloadTemplateSubmit()
+    private async Task HandleDownloadTemplateSubmit((int SubdistributorId, string? Principal) filters)
     {
         showDownloadTemplateModal = false;
-        // Additional download logic here if needed
+        try
+        {
+            var templateData = await mapItemService.GetTemplateDataAsync(filters.SubdistributorId, filters.Principal);
+            await GenerateAndDownloadExcelAsync(templateData);
+        }
+        catch (Exception ex)
+        {
+            itemActionErrorMessage = $"Failed to generate template: {ex.Message}";
+            showErrorModal = true;
+        }
+    }
+
+    private Task HandleDownloadTemplateCancel()
+    {
+        showDownloadTemplateModal = false;
         return Task.CompletedTask;
+    }
+
+    private async Task GenerateAndDownloadExcelAsync(List<TemplateRow> templateData)
+    {
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Template");
+            
+            // Add headers
+            worksheet.Cell(1, 1).Value = "CompanyItemCode";
+            worksheet.Cell(1, 2).Value = "CompanyItemName";
+            worksheet.Cell(1, 3).Value = "Principal";
+            worksheet.Cell(1, 4).Value = "SubDistributorCode";
+            worksheet.Cell(1, 5).Value = "SubdItemCode";
+            worksheet.Cell(1, 6).Value = "SubdItemName";
+
+            // Style headers
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Add data rows
+            for (int i = 0; i < templateData.Count; i++)
+            {
+                var row = i + 2;
+                var item = templateData[i];
+                
+                worksheet.Cell(row, 1).Value = item.CompanyItemCode;
+                worksheet.Cell(row, 2).Value = item.CompanyItemName;
+                worksheet.Cell(row, 3).Value = item.Principal;
+                worksheet.Cell(row, 4).Value = item.SubDistributorCode;
+                worksheet.Cell(row, 5).Value = item.SubdItemCode;
+                worksheet.Cell(row, 6).Value = item.SubdItemName;
+
+                // Make company item columns read-only (will be enforced on import)
+                worksheet.Cell(row, 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+                worksheet.Cell(row, 2).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+                worksheet.Cell(row, 3).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+                worksheet.Cell(row, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            // Auto-fit column widths
+            worksheet.Columns().AdjustToContents();
+
+            // Download
+            using (var stream = new MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                stream.Position = 0;
+
+                var fileName = $"MapItemTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                await jsModule!.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            }
+        }
     }
     private Task OpenAddUomModal()
     {
