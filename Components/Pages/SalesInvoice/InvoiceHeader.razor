@@ -168,23 +168,22 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         invoiceNumberCheckCts = new CancellationTokenSource();
         var cts = invoiceNumberCheckCts;
 
-        await Task.Delay(500, cts.Token).ContinueWith(async _ =>
+        try
         {
+            await Task.Delay(500, cts.Token);
+            
             if (cts.Token.IsCancellationRequested) return;
             if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber)) return;
 
-            try
+            if (await InvoiceNumberExistsAsync())
             {
-                if (await InvoiceNumberExistsAsync())
-                {
-                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
-                    return;
-                }
-                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
-                await OnDraftChanged.InvokeAsync();
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                return;
             }
-            catch when (cts.Token.IsCancellationRequested) { }
-        }, TaskScheduler.FromCurrentSynchronizationContext());
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+            await OnDraftChanged.InvokeAsync();
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
     }
 
     private async Task HandleInvoiceNumberBlur(FocusEventArgs _)

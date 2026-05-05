@@ -315,6 +315,7 @@
     }
 
 
+    private bool isLoadingMapTables = false;
     private List<SubDistributor> subdList = new();
     private ElementReference subdSelectRef;
     private int selectedSubdId;
@@ -586,42 +587,56 @@
 
     private async Task LoadMapTablesAsync()
     {
-        if (!userContext.UserId.HasValue)
+        // Prevent concurrent executions that could cause DbContext threading issues
+        if (isLoadingMapTables)
         {
-            principals = new();
-            companyItems = new();
-            subDistributorItems = new();
-            companyItemsForDropdown = new();
             return;
         }
 
-        companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
-            userContext.UserId.Value, selectedSubdId);
-
-        principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
-        var companyRows = await mapItemService.GetMapCompanyItemsAsync(
-            userContext.UserId.Value,
-            selectedSubdId,
-            selectedPrincipal,
-            IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
-
-        subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
-            userContext.UserId.Value,
-            selectedSubdId,
-            selectedPrincipal);
-
-        companyItems = companyRows
-            .GroupBy(x => new { x.CompanyItemCode, x.Description })
-            .Select(group => new MapCompanyItemViewRow
+        isLoadingMapTables = true;
+        try
+        {
+            if (!userContext.UserId.HasValue)
             {
-                CompanyItemCode = group.Key.CompanyItemCode,
-                ItemName = group.Key.Description,
-                UomName = string.Join(", ", group
-                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
-                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
-            })
-            .OrderBy(x => x.CompanyItemCode)
-            .ToList();
+                principals = new();
+                companyItems = new();
+                subDistributorItems = new();
+                companyItemsForDropdown = new();
+                return;
+            }
+
+            companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
+                userContext.UserId.Value, selectedSubdId);
+
+            principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
+            var companyRows = await mapItemService.GetMapCompanyItemsAsync(
+                userContext.UserId.Value,
+                selectedSubdId,
+                selectedPrincipal,
+                IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
+
+            subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
+                userContext.UserId.Value,
+                selectedSubdId,
+                selectedPrincipal);
+
+            companyItems = companyRows
+                .GroupBy(x => new { x.CompanyItemCode, x.Description })
+                .Select(group => new MapCompanyItemViewRow
+                {
+                    CompanyItemCode = group.Key.CompanyItemCode,
+                    ItemName = group.Key.Description,
+                    UomName = string.Join(", ", group
+                        .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
+                        .Select(x => $"{x.UomName} - {x.Price:N2}"))
+                })
+                .OrderBy(x => x.CompanyItemCode)
+                .ToList();
+        }
+        finally
+        {
+            isLoadingMapTables = false;
+        }
     }
 
     private async Task FilterByPrincipalAsync(string? principal)

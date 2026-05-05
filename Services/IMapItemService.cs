@@ -158,29 +158,40 @@ public class MapItemService : IMapItemService
         int subDistributorId,
         CancellationToken cancellationToken = default)
     {
-        // First, get all connected company item IDs
-        var connectedCompanyItemIds = await _context.SubdItems
-            .AsNoTracking()
-            .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
-            .Select(si => si.CompanyItemId)
-            .ToListAsync(cancellationToken);
+        try
+        {
+            // First, materialize the list of already-connected company item IDs
+            var connectedIds = await _context.SubdItems
+                .AsNoTracking()
+                .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
+                .Select(si => si.CompanyItemId)
+                .ToListAsync(cancellationToken);
 
-        // Then query company items (now LINQ to Objects after ToListAsync)
-        var result = await _context.CompanyItems
-            .AsNoTracking()
-            .Where(ci => ci.IsActive)
-            .Where(ci => !connectedCompanyItemIds.Contains(ci.CompanyItemId))
-            .OrderBy(ci => ci.ItemName)
-            .Select(ci => new CompanyItemDropdownItem
-            {
-                CompanyItemId = ci.CompanyItemId,
-                ItemCode = ci.ItemCode,
-                ItemName = ci.ItemName,
-                Principal = ci.Principal
-            })
-            .ToListAsync(cancellationToken);
+            // Ensure the first query is fully complete before starting the second
+            if (cancellationToken.IsCancellationRequested)
+                return new();
 
-        return result;
+            // Then query company items not in that list (this is now LINQ to Objects, not DbContext)
+            var result = await _context.CompanyItems
+                .AsNoTracking()
+                .Where(ci => ci.IsActive)
+                .Where(ci => !connectedIds.Contains(ci.CompanyItemId))
+                .OrderBy(ci => ci.ItemName)
+                .Select(ci => new CompanyItemDropdownItem
+                {
+                    CompanyItemId = ci.CompanyItemId,
+                    ItemCode = ci.ItemCode,
+                    ItemName = ci.ItemName,
+                    Principal = ci.Principal
+                })
+                .ToListAsync(cancellationToken);
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            return new();
+        }
     }
 
     public async Task<List<string>> GetCompanyItemUomsAsync(
