@@ -87,7 +87,7 @@
 
             if (hasSelectedItem)
             {
-                // Allow Enter to move focus to next element
+                await OnConfirmed.InvokeAsync();
                 return;
             }
         }

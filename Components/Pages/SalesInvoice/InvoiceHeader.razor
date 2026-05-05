@@ -70,7 +70,8 @@
             <GenericAutocomplete TItem="Customer" @ref="customerNameAutocomplete" Items="FilteredCustomers.ToList()"
                                  Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameValueChanged"
                                  ItemLabel="@(c => c.CustomerName)" OnSelected="HandleCustomerAutocompleteSelected"
-                                 Placeholder="-- Select Customer --" IsDisabled="@IsSaved" />
+                                 OnConfirmed="HandleCustomerNameConfirmed" Placeholder="-- Select Customer --"
+                                 IsDisabled="@IsSaved" />
             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)))
             {
                 <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)</span>
@@ -625,6 +626,14 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         Invoice.CustomerCode = string.Empty;
         SyncCustomerState();
         return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerNameConfirmed()
+    {
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        await Task.Delay(10);
+        await saveButton.FocusAsync();
     }
 
     private Task HandleCustomerAutocompleteSelected(Customer? customer)

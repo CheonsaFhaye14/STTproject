@@ -10,7 +10,7 @@ public static class SalesInvoiceValidation
         public static readonly SalesInvoiceField InvoiceDate = new(nameof(InvoiceDate), "Sales Invoice Date", true, "Invoice date is required.");
         public static readonly SalesInvoiceField OrderDate = new(nameof(OrderDate), "Order Date", true, "Order date is required.");
         public static readonly SalesInvoiceField OrderType = new(nameof(OrderType), "Order Type", true, "Order type is required.");
-        public static readonly SalesInvoiceField CustomerCode = new(nameof(CustomerCode), "Customer Number", true, "Customer code is required.");
+        public static readonly SalesInvoiceField CustomerCode = new(nameof(CustomerCode), "Customer Code", true, "Customer code is required.");
         public static readonly SalesInvoiceField CustomerName = new(nameof(CustomerName), "Customer Name", true, "Customer name is required.");
         public static readonly SalesInvoiceField CustomerBranch = new(nameof(CustomerBranch), "Customer Branch", true, "Customer branch is required.");
     }
