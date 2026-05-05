@@ -100,6 +100,8 @@
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
                                                                                                                                                                                                                   "UPDATE" : "ADD")</button>
+        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+                disabled="@(!IsSubDistributorSelected)">Clear Draft</button>
             @if (IsEditingItem)
             {
                 <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
@@ -218,12 +220,20 @@
         </ConfirmModal>
     }
 
+    @if (showClearConfirmModal)
+    {
+        <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
+                      Message="Clear all unsaved changes for this sub-distributor?"
+                      OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
+    }
+
 <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
               OnErrorConfirm="CloseErrorModal" />
 
     <DownloadTemplateModal ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
                            OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
     <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
+                 DraftStorageKey="@GetAddUomDraftStorageKey()"
                  OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
                  OnCancel="@(async () => await CloseAddUomModalAsync())" />
 </div>
@@ -260,6 +270,7 @@
     private string? confirmedCompanyItemSummary;
     private bool showErrorModal = false;
     private bool showDownloadTemplateModal = false;
+    private bool showClearConfirmModal = false;
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
     private async Task HandleDownloadTemplateSubmit((int SubdistributorId, string? Principal) filters)
@@ -486,12 +497,20 @@
 
         showAddUomModal = false;
         await PersistDraftAsync();
+        StateHasChanged();
     }
 
     private string GetDraftStorageKey()
     {
         var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
         return $"mapitem-draft:{userId}";
+    }
+
+    private string GetAddUomDraftStorageKey()
+    {
+        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        var companyItemId = selectedCompanyItemId ?? 0;
+        return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}";
     }
 
     private sealed class MapItemDraftState
@@ -986,8 +1005,29 @@
             {
                 selectedDropdownPrincipal = selectedItem.Principal;
                 selectedCompanyItemDisplayName = selectedItem.ItemName;
+                // Load possible UOMs for this company item (used as dropdown/source)
                 availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
-                uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
+
+                // If there's an add-uom draft for this subd+companyItem, don't overwrite uomEntries
+                jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+                var addDraftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetAddUomDraftStorageKey());
+
+                if (string.IsNullOrWhiteSpace(addDraftJson))
+                {
+                    // No modal draft present. For a new item, show only Piece as base unit by default.
+                    if (!editingSubdItemId.HasValue)
+                    {
+                        uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["Piece"] = new UomEntry { Conversion = 1, Price = null }
+                        };
+                    }
+                    else
+                    {
+                        // If editing an existing subd item, preserve existing available UOMs fetched from DB
+                        uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
+                    }
+                }
             }
 
             ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
@@ -1277,6 +1317,44 @@ matched?.Price;
         ResetItemForm();
         _ = ClearDraftAsync();
         return Task.CompletedTask;
+    }
+
+    private void ShowClearConfirmModal()
+    {
+        showClearConfirmModal = true;
+    }
+
+    private async Task ConfirmClearDraft()
+    {
+        showClearConfirmModal = false;
+
+        ResetItemForm(persistDraft: false);
+        selectedPrincipal = null;
+        selectedCompanyItemsFilterString = "All";
+        selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+
+        StateHasChanged();
+
+        if (userContext.UserId is null || selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+
+        await LoadMapTablesAsync();
+    }
+
+    private void CancelClearConfirm()
+    {
+        showClearConfirmModal = false;
+    }
+
+    private async Task ClearAllDraftsAsync()
+    {
+        ShowClearConfirmModal();
+        await Task.CompletedTask;
     }
 
     private async Task ConfirmAction()

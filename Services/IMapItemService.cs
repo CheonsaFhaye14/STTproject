@@ -61,7 +61,7 @@ public class MapItemService : IMapItemService
         CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         var query = context.CompanyItems
             .AsNoTracking()
             .Where(ci => ci.IsActive)
@@ -102,7 +102,7 @@ public class MapItemService : IMapItemService
         CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
         var query = context.SubdItems
             .AsNoTracking()
@@ -165,7 +165,7 @@ public class MapItemService : IMapItemService
         CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         try
         {
             // First, materialize the list of already-connected company item IDs
@@ -208,10 +208,18 @@ public class MapItemService : IMapItemService
     {
         await using var context = _contextFactory.CreateDbContext();
 
-        return await context.ItemsUoms
+        var query = context.ItemsUoms
             .AsNoTracking()
             .Where(u => !string.IsNullOrWhiteSpace(u.UomName))
-            .Select(u => u.UomName)
+            .Select(u => new { u.UomName, CompanyItemId = u.SubdItem.CompanyItemId });
+
+        if (companyItemId > 0)
+        {
+            query = query.Where(x => x.CompanyItemId == companyItemId);
+        }
+
+        return await query
+            .Select(x => x.UomName)
             .Distinct()
             .OrderBy(u => u)
             .ToListAsync(cancellationToken);
@@ -425,7 +433,7 @@ public class MapItemService : IMapItemService
     public async Task<List<TemplateRow>> GetTemplateDataAsync(int subDistributorId, string? principal, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         if (subDistributorId == 0)
         {
             // For "All Sub Distributors": generate rows for each subdistributor with their unmapped items

@@ -1,4 +1,11 @@
-﻿@if (ShowAddUomModal)
+﻿@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using STTproject.Models
+@inject IJSRuntime JSRuntime
+
+@if (ShowAddUomModal)
 {
     <div class="modal-overlay add-uom-modal-overlay" @onkeydown="HandleModalKeyDown">
         <div class="modal-box">
@@ -15,7 +22,9 @@
                     
                 <div class="form-group">
                     <label>Unit of Measure</label>
-                    <select @ref="uomSelectRef" @bind="SelectedUomOption" @onkeydown="HandleUomSelectKeyDown" @onkeydown:preventDefault="@(selectedUomOption != string.Empty)">
+                    <select @ref="uomSelectRef" @bind="SelectedUomOption" @bind:after="PersistDraftAsync"
+                            @onkeydown="HandleUomSelectKeyDown"
+                            @onkeydown:preventDefault="@(selectedUomOption != string.Empty)">
                         <option value="">-- Select Unit of Measure --</option>
                         @foreach (var option in defaultOptions)
                         {
@@ -36,14 +45,16 @@
                 {
                     <div class="form-group">
                         <label>Custom Unit of Measure</label>
-                        <input @bind="customUom" @bind:event="oninput" placeholder="Enter unit name" />
+                        <input @bind="customUom" @bind:event="oninput" @bind:after="PersistDraftAsync"
+                               placeholder="Enter unit name" />
                     </div>
                 }
 
                 <div class="form-group">
                     <label>Conversion (How many pieces per @(GetSelectedUomName() ?? "unit")?):</label>
-                    <input @ref="conversionInputRef" type="number" min="0.01" step="0.01" @bind="ConversionInput" @bind:event="oninput"
-                           placeholder="e.g., 12" @onkeydown="HandleConversionKeyDown" />
+                    <input @ref="conversionInputRef" type="number" min="0.01" step="0.01" @bind="ConversionInput"
+                           @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
+                           @onkeydown="HandleConversionKeyDown" />
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
                     {
                         <span class="error-text">@GetFieldError("conversion")</span>
@@ -52,7 +63,8 @@
 
                 <div class="form-group">
                     <label>Price (Optional - will be calculated if left empty)</label>
-                    <input @ref="priceInputRef" type="number" min="0" step="0.01" @bind="PriceInput" @bind:event="oninput" placeholder="0.00" @onkeydown="HandlePriceKeyDown" />
+                    <input @ref="priceInputRef" type="number" min="0" step="0.01" @bind="PriceInput" @bind:event="oninput"
+                           @bind:after="PersistDraftAsync" placeholder="0.00" @onkeydown="HandlePriceKeyDown" />
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("price")))
                     {
                         <span class="error-text">@GetFieldError("price")</span>
@@ -60,7 +72,8 @@
                 </div>
 
                 <div class="modal-actions">
-                    <button @ref="addUomButtonRef" type="button" class="btn-primary" @onclick="() => AddUomEntryAsync(false)" @onkeydown="HandleAddUomButtonKeyDown">Add UOM</button>
+                    <button @ref="addUomButtonRef" type="button" class="btn-primary"
+                            @onclick="() => AddUomEntryAsync(false)" @onkeydown="HandleAddUomButtonKeyDown">Add UOM</button>
                 </div>
 
                 
@@ -121,19 +134,17 @@
                     <span class="error-text">@GetFieldError("prices")</span>
                 }
                 <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel</button>
+                <button type="button" class="btn-secondary" @onclick="ClearDraftAsync">Clear Draft</button>
                 <button type="button" class="btn-primary" @onclick="AddAsync">Save</button>
             </div>
         </div>
     </div>
 }
 
-@using STTproject.Models
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Web
-
 @code {
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
+    [Parameter] public string? DraftStorageKey { get; set; }
     [Parameter] public EventCallback<Dictionary<string, UomEntry>> OnAdd { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
@@ -184,40 +195,37 @@
     private bool wasShown;
     private bool shouldFocusUomSelect;
     private string? lastEditedUom = null;
+    private AddUomModalDraftState? loadedDraft;
+    private IJSObjectReference? jsModule;
     private ElementReference uomSelectRef;
     private ElementReference conversionInputRef;
     private ElementReference priceInputRef;
     private ElementReference addUomButtonRef;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (ShowAddUomModal && !wasShown)
         {
-            // Clone existing entries
-            workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in ExistingUomEntries)
+            loadedDraft = await LoadDraftAsync();
+
+            if (loadedDraft is not null)
             {
-                workingUomEntries[entry.Key] = new UomEntry
-                {
-                    Conversion = entry.Value.Conversion,
-                    Price = entry.Value.Price,
-                    IsAutoCalculated = false
-                };
+                ApplyDraftState(loadedDraft);
+            }
+            else
+            {
+                CloneExistingEntries();
+                selectedUomOption = string.Empty;
+                customUom = string.Empty;
+                conversionInput = string.Empty;
+                priceInput = string.Empty;
+                validationErrors.Clear();
             }
 
-            // Ensure Piece exists
-            if (!workingUomEntries.ContainsKey("Piece"))
-            {
-                workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
-            }
-
-            selectedUomOption = string.Empty;
-            customUom = string.Empty;
-            conversionInput = string.Empty;
-            priceInput = string.Empty;
-            validationErrors.Clear();
+            lastEditedUom = null;
             shouldFocusUomSelect = true;
             wasShown = true;
+            await PersistDraftAsync();
         }
         else if (!ShowAddUomModal)
         {
@@ -297,6 +305,7 @@
         }
 
         await RecalculatePricesAsync(uomName);
+        await PersistDraftAsync();
         shouldFocusUomSelect = true;
         await InvokeAsync(StateHasChanged);
         await FocusUomSelectAsync();
@@ -335,6 +344,7 @@
         }
 
         await RecalculatePricesAsync(uomName);
+        await PersistDraftAsync();
     }
 
     private async Task RecalculatePricesAsync(string? sourceUom = null)
@@ -390,11 +400,12 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private void RemoveUomEntry(string uomName)
+    private async Task RemoveUomEntry(string uomName)
     {
         if (uomName != "Piece") // Don't allow removing Piece
         {
             workingUomEntries.Remove(uomName);
+            await PersistDraftAsync();
         }
     }
 
@@ -440,6 +451,10 @@
         }
 
         validationErrors.Clear();
+
+        // Persist the modal draft so the modal state and the parent draft remain in sync
+        await PersistDraftAsync();
+
         await OnAdd.InvokeAsync(new Dictionary<string, UomEntry>(workingUomEntries, StringComparer.OrdinalIgnoreCase));
     }
 
@@ -538,5 +553,112 @@
         {
             await priceInputRef.FocusAsync();
         }
+    }
+
+    private sealed class AddUomModalDraftState
+    {
+        public Dictionary<string, UomEntry> WorkingUomEntries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string SelectedUomOption { get; set; } = string.Empty;
+        public string CustomUom { get; set; } = string.Empty;
+        public string ConversionInput { get; set; } = string.Empty;
+        public string PriceInput { get; set; } = string.Empty;
+    }
+
+    private void CloneExistingEntries()
+    {
+        workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in ExistingUomEntries)
+        {
+            workingUomEntries[entry.Key] = new UomEntry
+            {
+                Conversion = entry.Value.Conversion,
+                Price = entry.Value.Price,
+                IsAutoCalculated = false
+            };
+        }
+
+        if (!workingUomEntries.ContainsKey("Piece"))
+        {
+            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+        }
+    }
+
+    private void ApplyDraftState(AddUomModalDraftState draft)
+    {
+        workingUomEntries = draft.WorkingUomEntries.Count > 0
+            ? new Dictionary<string, UomEntry>(draft.WorkingUomEntries, StringComparer.OrdinalIgnoreCase)
+            : new(StringComparer.OrdinalIgnoreCase);
+
+        if (!workingUomEntries.ContainsKey("Piece"))
+        {
+            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+        }
+
+        selectedUomOption = draft.SelectedUomOption;
+        customUom = draft.CustomUom;
+        conversionInput = draft.ConversionInput;
+        priceInput = draft.PriceInput;
+        validationErrors.Clear();
+    }
+
+    private async Task PersistDraftAsync()
+    {
+        if (string.IsNullOrWhiteSpace(DraftStorageKey))
+        {
+            return;
+        }
+
+        jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+
+        var draftState = new AddUomModalDraftState
+        {
+            WorkingUomEntries = new Dictionary<string, UomEntry>(workingUomEntries, StringComparer.OrdinalIgnoreCase),
+            SelectedUomOption = selectedUomOption,
+            CustomUom = customUom,
+            ConversionInput = conversionInput,
+            PriceInput = priceInput
+        };
+
+        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", DraftStorageKey, JsonSerializer.Serialize(draftState));
+    }
+
+    private async Task<AddUomModalDraftState?> LoadDraftAsync()
+    {
+        if (string.IsNullOrWhiteSpace(DraftStorageKey))
+        {
+            return null;
+        }
+
+        jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", DraftStorageKey);
+        if (string.IsNullOrWhiteSpace(draftJson))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<AddUomModalDraftState>(draftJson);
+    }
+
+    private async Task ClearDraftAsync()
+    {
+        if (string.IsNullOrWhiteSpace(DraftStorageKey))
+        {
+            return;
+        }
+
+        jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", DraftStorageKey);
+
+        workingUomEntries.Clear();
+        workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+        selectedUomOption = string.Empty;
+        customUom = string.Empty;
+        conversionInput = string.Empty;
+        priceInput = string.Empty;
+        validationErrors.Clear();
+        lastEditedUom = null;
+        shouldFocusUomSelect = true;
+
+        await InvokeAsync(StateHasChanged);
     }
 }

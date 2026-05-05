@@ -25,6 +25,8 @@
 <div class="top-buttons">
     <button class="btn-primary">Download Template</button>
     <button class="btn-primary">Import</button>
+    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+            disabled="@(invoice.SubdistributorId <= 0)">Clear Draft</button>
 </div>
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
@@ -39,6 +41,9 @@
 
 <ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
               OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
+
+<ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
+              Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"
@@ -78,6 +83,7 @@
     private bool showCommitConfirmModal = false;
     private bool showAddItemsConfirmModal = false;
     private bool showEditItemsConfirmModal = false;
+    private bool showClearConfirmModal = false;
     private int addItemsConfirmCount = 0;
     private string editItemsConfirmMessage = "";
     private InvoiceItems? addItemsModalRef;
@@ -324,6 +330,45 @@
         {
             await addItemsModalRef.RestoreDraftStateAsync(draft.AddItemsDraft);
         }
+    }
+
+    private void ShowClearConfirmModal()
+    {
+        showClearConfirmModal = true;
+    }
+
+    private async Task ConfirmClearDraft()
+    {
+        showClearConfirmModal = false;
+        
+        if (jsModule is null)
+        {
+            return;
+        }
+
+        // Clear localStorage
+        await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+
+        // Reset UI state
+        invoice = new InputInvoiceModel
+        {
+            SubdistributorId = invoice.SubdistributorId
+        };
+        items = new List<InputItemModel>();
+        isSaved = false;
+        currentInvoiceId = 0;
+        
+        if (addItemsModalRef is not null)
+        {
+            await addItemsModalRef.RestoreDraftStateAsync(null);
+        }
+        
+        StateHasChanged();
+    }
+
+    private void CancelClearConfirm()
+    {
+        showClearConfirmModal = false;
     }
 
     private async Task ClearDraftAsync()

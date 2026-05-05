@@ -12,7 +12,7 @@
             @foreach (var (item, idx) in FilteredItems.Select((it, i) => (it, i)))
             {
                 var cls = idx == highlightedIndex ? "autocomplete-item highlighted" : "autocomplete-item";
-                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">@item.ItemName</div>
+                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">@GetDisplayText(item)</div>
             }
         </div>
     }
@@ -33,6 +33,11 @@
     private bool isOpen = false;
     private int highlightedIndex = -1;
     private bool hasSelectedItem = false;
+
+    private static string GetDisplayText(CompanyItemDropdownItem item)
+        => string.IsNullOrWhiteSpace(item.ItemCode)
+            ? item.ItemName
+            : $"({item.ItemCode}) {item.ItemName}";
 
     private IEnumerable<CompanyItemDropdownItem> FilteredItems =>
         string.IsNullOrWhiteSpace(Value)
