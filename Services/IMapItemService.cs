@@ -29,6 +29,10 @@ public enum CompanyItemFilterMode
 
 public class MapItemService : IMapItemService
 {
+    // Static semaphore ensures all MapItemService instances share the same lock
+    // This prevents concurrent DbContext access from multiple components
+    private static readonly SemaphoreSlim _dbAccessLock = new(1, 1);
+
     private readonly SttprojectContext _context;
 
     public MapItemService(SttprojectContext context)
@@ -154,6 +158,27 @@ public class MapItemService : IMapItemService
     }
 
     public async Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(
+        int userId,
+        int subDistributorId,
+        CancellationToken cancellationToken = default)
+    {
+        // Acquire lock to ensure sequential DbContext access
+        await _dbAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _GetCompanyItemsForDropdownAsyncInternal(userId, subDistributorId, cancellationToken);
+        }
+        finally
+        {
+            _dbAccessLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Internal method that retrieves company items for dropdown without acquiring the lock.
+    /// Only call this when you already hold the _dbAccessLock.
+    /// </summary>
+    private async Task<List<CompanyItemDropdownItem>> _GetCompanyItemsForDropdownAsyncInternal(
         int userId,
         int subDistributorId,
         CancellationToken cancellationToken = default)

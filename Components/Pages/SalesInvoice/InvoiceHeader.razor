@@ -138,6 +138,7 @@
     private bool customerBranchEnterPrimed;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
     private CancellationTokenSource? invoiceNumberCheckCts;
+    private readonly SemaphoreSlim invoiceNumberCheckLock = new(1, 1);
 
     private async Task HandleInvoiceNumberKeyDown(KeyboardEventArgs e)
     {
@@ -150,15 +151,30 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
                 return;
             }
 
-            if (await InvoiceNumberExistsAsync())
-            {
-                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
-                return;
-            }
+            // Cancel any pending delayed check from HandleInvoiceNumberChanged
+            invoiceNumberCheckCts?.Cancel();
+            invoiceNumberCheckCts = new CancellationTokenSource();
+            var cts = invoiceNumberCheckCts;
 
-            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
-            await Task.Delay(10);
-            await invoiceDateInput.FocusAsync();
+            // Acquire lock to ensure sequential execution
+            await invoiceNumberCheckLock.WaitAsync();
+            try
+            {
+                if (await InvoiceNumberExistsAsync(cts.Token))
+                {
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    return;
+                }
+
+                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+                await Task.Delay(10);
+                await invoiceDateInput.FocusAsync();
+            }
+            catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
+            finally
+            {
+                invoiceNumberCheckLock.Release();
+            }
         }
     }
 
@@ -175,13 +191,22 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             if (cts.Token.IsCancellationRequested) return;
             if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber)) return;
 
-            if (await InvoiceNumberExistsAsync())
+            // Acquire lock to ensure sequential execution
+            await invoiceNumberCheckLock.WaitAsync();
+            try
             {
-                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
-                return;
+                if (await InvoiceNumberExistsAsync(cts.Token))
+                {
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    return;
+                }
+                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+                await OnDraftChanged.InvokeAsync();
             }
-            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
-            await OnDraftChanged.InvokeAsync();
+            finally
+            {
+                invoiceNumberCheckLock.Release();
+            }
         }
         catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
     }
@@ -195,13 +220,28 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             return;
         }
 
-        if (await InvoiceNumberExistsAsync())
-        {
-            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
-            return;
-        }
+        // Cancel any pending delayed check from HandleInvoiceNumberChanged
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts = new CancellationTokenSource();
+        var cts = invoiceNumberCheckCts;
 
-        ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+        // Acquire lock to ensure sequential execution
+        await invoiceNumberCheckLock.WaitAsync();
+        try
+        {
+            if (await InvoiceNumberExistsAsync(cts.Token))
+            {
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                return;
+            }
+
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
+        finally
+        {
+            invoiceNumberCheckLock.Release();
+        }
     }
 
     private async Task HandleInvoiceDateKeyDown(KeyboardEventArgs e)
@@ -524,26 +564,35 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
     private async Task ValidateAndSave()
     {
-        ValidationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
-            Invoice,
-            FilteredCustomerBranches.Any(),
-            InvoiceNumberExistsAsync);
-
-        if (ValidationErrors.Any())
+        // Acquire lock to ensure sequential execution with other invoice number checks
+        await invoiceNumberCheckLock.WaitAsync();
+        try
         {
-            return;
-        }
+            ValidationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
+                Invoice,
+                FilteredCustomerBranches.Any(),
+                () => InvoiceNumberExistsAsync());
 
-        // ✅ If all checks pass, trigger parent save
-        await OnSaveClick.InvokeAsync();
+            if (ValidationErrors.Any())
+            {
+                return;
+            }
+
+            // ✅ If all checks pass, trigger parent save
+            await OnSaveClick.InvokeAsync();
+        }
+        finally
+        {
+            invoiceNumberCheckLock.Release();
+        }
 
         // 👇 Mark as saved so Edit button appears
         IsSaved = true;
     }
 
-    private Task<bool> InvoiceNumberExistsAsync()
+    private Task<bool> InvoiceNumberExistsAsync(CancellationToken cancellationToken = default)
     {
-        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId);
+        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId, cancellationToken);
     }
 
     [Parameter] public List<Customer> Customers { get; set; } = new();

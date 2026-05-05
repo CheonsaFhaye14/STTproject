@@ -18,6 +18,10 @@ public interface ISalesInvoiceService
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
 {
+    // Static semaphore ensures all SalesInvoiceService instances share the same lock
+    // This prevents concurrent DbContext access from multiple components
+    private static readonly SemaphoreSlim _dbAccessLock = new(1, 1);
+
     private readonly SttprojectContext _context;
 
     public SalesInvoiceService(SttprojectContext context)
@@ -26,6 +30,24 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     }
 
     public async Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default)
+    {
+        // Acquire lock to ensure sequential DbContext access
+        await _dbAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _GetPageDataAsyncInternal(subDistributorId, cancellationToken);
+        }
+        finally
+        {
+            _dbAccessLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Internal method that retrieves page data without acquiring the lock.
+    /// Only call this when you already hold the _dbAccessLock.
+    /// </summary>
+    private async Task<SalesInvoicePageData> _GetPageDataAsyncInternal(int subDistributorId, CancellationToken cancellationToken = default)
     {
         var customers = await _context.Customers
             .AsNoTracking()
@@ -65,13 +87,53 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         };
     }
 
-    public Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
+    public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
+    {
+        await _dbAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _InvoiceNumberExistsAsyncInternal(invoiceNumber, currentInvoiceId, cancellationToken);
+        }
+        finally
+        {
+            _dbAccessLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Internal method that checks if invoice number exists without acquiring the lock.
+    /// Only call this when you already hold the _dbAccessLock.
+    /// </summary>
+    private Task<bool> _InvoiceNumberExistsAsyncInternal(string invoiceNumber, int currentInvoiceId, CancellationToken cancellationToken)
     {
         return _context.SalesInvoices
             .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
     }
 
     public async Task<SaveInvoiceResult> SaveInvoiceAsync(
+        InputInvoiceModel invoice,
+        List<InputItemModel> items,
+        int currentInvoiceId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        // Acquire lock to ensure sequential DbContext access
+        await _dbAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _SaveInvoiceAsyncInternal(invoice, items, currentInvoiceId, currentUserId, cancellationToken);
+        }
+        finally
+        {
+            _dbAccessLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Internal method that saves invoice without acquiring the lock.
+    /// Only call this when you already hold the _dbAccessLock.
+    /// </summary>
+    private async Task<SaveInvoiceResult> _SaveInvoiceAsyncInternal(
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
@@ -88,7 +150,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var duplicateExists = await InvoiceNumberExistsAsync(invoice.InvoiceNumber, currentInvoiceId, cancellationToken);
+        var duplicateExists = await _InvoiceNumberExistsAsyncInternal(invoice.InvoiceNumber, currentInvoiceId, cancellationToken);
 
         if (duplicateExists)
         {
@@ -269,6 +331,24 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     }
 
     public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
+    {
+        // Acquire lock to ensure sequential DbContext access
+        await _dbAccessLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await _GetInvoiceByIdAsyncInternal(invoiceId, cancellationToken);
+        }
+        finally
+        {
+            _dbAccessLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Internal method that retrieves invoice by ID without acquiring the lock.
+    /// Only call this when you already hold the _dbAccessLock.
+    /// </summary>
+    private async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> _GetInvoiceByIdAsyncInternal(int invoiceId, CancellationToken cancellationToken = default)
     {
         var invoice = await _context.SalesInvoices
             .AsNoTracking()

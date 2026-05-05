@@ -315,7 +315,7 @@
     }
 
 
-    private bool isLoadingMapTables = false;
+    private readonly SemaphoreSlim mapTablesLoadLock = new(1, 1);
     private List<SubDistributor> subdList = new();
     private ElementReference subdSelectRef;
     private int selectedSubdId;
@@ -587,56 +587,60 @@
 
     private async Task LoadMapTablesAsync()
     {
-        // Prevent concurrent executions that could cause DbContext threading issues
-        if (isLoadingMapTables)
-        {
-            return;
-        }
-
-        isLoadingMapTables = true;
+        // Acquire lock to ensure only one execution at a time, preventing DbContext threading issues
+        await mapTablesLoadLock.WaitAsync();
         try
         {
-            if (!userContext.UserId.HasValue)
-            {
-                principals = new();
-                companyItems = new();
-                subDistributorItems = new();
-                companyItemsForDropdown = new();
-                return;
-            }
-
-            companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
-                userContext.UserId.Value, selectedSubdId);
-
-            principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
-            var companyRows = await mapItemService.GetMapCompanyItemsAsync(
-                userContext.UserId.Value,
-                selectedSubdId,
-                selectedPrincipal,
-                IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
-
-            subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
-                userContext.UserId.Value,
-                selectedSubdId,
-                selectedPrincipal);
-
-            companyItems = companyRows
-                .GroupBy(x => new { x.CompanyItemCode, x.Description })
-                .Select(group => new MapCompanyItemViewRow
-                {
-                    CompanyItemCode = group.Key.CompanyItemCode,
-                    ItemName = group.Key.Description,
-                    UomName = string.Join(", ", group
-                        .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
-                        .Select(x => $"{x.UomName} - {x.Price:N2}"))
-                })
-                .OrderBy(x => x.CompanyItemCode)
-                .ToList();
+            await _LoadMapTablesAsyncInternal();
         }
         finally
         {
-            isLoadingMapTables = false;
+            mapTablesLoadLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Internal method that performs the database load without lock acquisition.
+    /// Only call this when you already hold the mapTablesLoadLock.
+    /// </summary>
+    private async Task _LoadMapTablesAsyncInternal()
+    {
+        if (!userContext.UserId.HasValue)
+        {
+            principals = new();
+            companyItems = new();
+            subDistributorItems = new();
+            companyItemsForDropdown = new();
+            return;
+        }
+
+        companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
+            userContext.UserId.Value, selectedSubdId);
+
+        principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
+        var companyRows = await mapItemService.GetMapCompanyItemsAsync(
+            userContext.UserId.Value,
+            selectedSubdId,
+            selectedPrincipal,
+            IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
+
+        subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
+            userContext.UserId.Value,
+            selectedSubdId,
+            selectedPrincipal);
+
+        companyItems = companyRows
+            .GroupBy(x => new { x.CompanyItemCode, x.Description })
+            .Select(group => new MapCompanyItemViewRow
+            {
+                CompanyItemCode = group.Key.CompanyItemCode,
+                ItemName = group.Key.Description,
+                UomName = string.Join(", ", group
+                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
+                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
+            })
+            .OrderBy(x => x.CompanyItemCode)
+            .ToList();
     }
 
     private async Task FilterByPrincipalAsync(string? principal)
@@ -740,18 +744,27 @@
 
     private async Task SelectCompanyItem(int companyItemId)
     {
-        selectedCompanyItemId = companyItemId;
-        var selectedItem = companyItemsForDropdown.FirstOrDefault(x => x.CompanyItemId == companyItemId);
-        if (selectedItem != null)
+        // Acquire lock to ensure sequential DbContext access
+        await mapTablesLoadLock.WaitAsync();
+        try
         {
-            selectedDropdownPrincipal = selectedItem.Principal;
-            selectedCompanyItemDisplayName = selectedItem.ItemName;
-            availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
-            uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
-        }
+            selectedCompanyItemId = companyItemId;
+            var selectedItem = companyItemsForDropdown.FirstOrDefault(x => x.CompanyItemId == companyItemId);
+            if (selectedItem != null)
+            {
+                selectedDropdownPrincipal = selectedItem.Principal;
+                selectedCompanyItemDisplayName = selectedItem.ItemName;
+                availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
+                uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
+            }
 
-        ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
-        await PersistDraftAsync();
+            ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
+            await PersistDraftAsync();
+        }
+        finally
+        {
+            mapTablesLoadLock.Release();
+        }
     }
 
     private void ClearCompanyItemSelection()
@@ -892,74 +905,83 @@
 
     private async Task PersistItemAsync()
     {
-        if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+        // Acquire lock to ensure sequential DbContext access for all database operations
+        await mapTablesLoadLock.WaitAsync();
+        try
         {
-            return;
-        }
-
-        var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
-        Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
-
-        var item = new SubdItem
-        {
-            SubdItemId = editingSubdItemId ?? 0,
-            SubdItemCode = itemCode ?? string.Empty,
-            ItemName = itemName ?? string.Empty,
-            SubDistributorId = selectedSubdId,
-            CompanyItemId = selectedCompanyItemId.Value,
-            IsActive = true,
-            CreatedDate = DateTime.UtcNow,
-            CreatedBy = userContext.UserId.Value,
-            UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
-            UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
-        };
-
-        if (IsEditingItem)
-        {
-            var updateResult = await mapItemService.UpdateSubdItemAsync(item);
-            if (updateResult.IsUpdated)
+            if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
             {
-                // persist all UOMs separately
-                var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
-uomEntries);
-                if (!saved)
+                return;
+            }
+
+            var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
+            Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+
+            var item = new SubdItem
+            {
+                SubdItemId = editingSubdItemId ?? 0,
+                SubdItemCode = itemCode ?? string.Empty,
+                ItemName = itemName ?? string.Empty,
+                SubDistributorId = selectedSubdId,
+                CompanyItemId = selectedCompanyItemId.Value,
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow,
+                CreatedBy = userContext.UserId.Value,
+                UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
+                UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
+            };
+
+            if (IsEditingItem)
+            {
+                var updateResult = await mapItemService.UpdateSubdItemAsync(item);
+                if (updateResult.IsUpdated)
                 {
-                    itemActionErrorMessage = "Unable to save UOM prices.";
+                    // persist all UOMs separately
+                    var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
+uomEntries);
+                    if (!saved)
+                    {
+                        itemActionErrorMessage = "Unable to save UOM prices.";
+                        showErrorModal = true;
+                    }
+
+                    ResetItemForm();
+                    await _LoadMapTablesAsyncInternal();
+                    await ClearDraftAsync();
+                }
+                else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+                {
+                    itemActionErrorMessage = updateResult.ErrorMessage;
                     showErrorModal = true;
+                }
+
+                return;
+            }
+
+            var success = await mapItemService.AddSubdItemAsync(item);
+
+            if (success)
+            {
+                // item.SubdItemId is set by EF on save; use it directly to persist UOM rows
+                if (item.SubdItemId > 0)
+                {
+                    var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries);
+                    if (!saved)
+                    {
+                        itemActionErrorMessage = "Unable to save UOM prices.";
+                        showErrorModal = true;
+                    }
                 }
 
                 ResetItemForm();
-                await LoadMapTablesAsync();
+                await _LoadMapTablesAsyncInternal();
+                await itemCodeInput.FocusAsync();
                 await ClearDraftAsync();
             }
-            else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
-            {
-                itemActionErrorMessage = updateResult.ErrorMessage;
-                showErrorModal = true;
-            }
-
-            return;
         }
-
-        var success = await mapItemService.AddSubdItemAsync(item);
-
-        if (success)
+        finally
         {
-            // item.SubdItemId is set by EF on save; use it directly to persist UOM rows
-            if (item.SubdItemId > 0)
-            {
-                var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries);
-                if (!saved)
-                {
-                    itemActionErrorMessage = "Unable to save UOM prices.";
-                    showErrorModal = true;
-                }
-            }
-
-            ResetItemForm();
-            await LoadMapTablesAsync();
-            await itemCodeInput.FocusAsync();
-            await ClearDraftAsync();
+            mapTablesLoadLock.Release();
         }
     }
 
@@ -1029,24 +1051,34 @@ matched?.Price;
     {
         if (pendingConfirmAction == ConfirmActionKind.Add || pendingConfirmAction == ConfirmActionKind.Update)
         {
+            // PersistItemAsync handles its own lock
             await PersistItemAsync();
         }
         else if (pendingConfirmAction == ConfirmActionKind.Delete && pendingItem is not null)
         {
-            var deleteResult = await mapItemService.DeleteSubdItemAsync(pendingItem.SubdItemId);
-            if (deleteResult.IsDeleted)
+            // Acquire lock for Delete operation and subsequent LoadMapTables
+            await mapTablesLoadLock.WaitAsync();
+            try
             {
-                if (editingSubdItemId == pendingItem.SubdItemId)
+                var deleteResult = await mapItemService.DeleteSubdItemAsync(pendingItem.SubdItemId);
+                if (deleteResult.IsDeleted)
                 {
-                    ResetItemForm();
-                }
+                    if (editingSubdItemId == pendingItem.SubdItemId)
+                    {
+                        ResetItemForm();
+                    }
 
-                await LoadMapTablesAsync();
+                    await _LoadMapTablesAsyncInternal();
+                }
+                else if (!string.IsNullOrWhiteSpace(deleteResult.ErrorMessage))
+                {
+                    itemActionErrorMessage = deleteResult.ErrorMessage;
+                    showErrorModal = true;
+                }
             }
-            else if (!string.IsNullOrWhiteSpace(deleteResult.ErrorMessage))
+            finally
             {
-                itemActionErrorMessage = deleteResult.ErrorMessage;
-                showErrorModal = true;
+                mapTablesLoadLock.Release();
             }
         }
         CancelConfirmation();

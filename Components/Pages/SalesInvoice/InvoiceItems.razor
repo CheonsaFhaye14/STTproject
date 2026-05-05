@@ -549,7 +549,14 @@ SelectedSubdistributorId);
     {
         if (jsModule != null)
         {
-            await jsModule.DisposeAsync();
+            try
+            {
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit disconnected, JS cleanup not possible
+            }
             jsModule = null;
         }
     }
