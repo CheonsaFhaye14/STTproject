@@ -152,7 +152,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
 
             if (await InvoiceNumberExistsAsync())
             {
-                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
                 return;
             }
 
@@ -177,7 +177,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             {
                 if (await InvoiceNumberExistsAsync())
                 {
-                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
                     return;
                 }
                 ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
@@ -198,7 +198,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
 
         if (await InvoiceNumberExistsAsync())
         {
-            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice number already exists.");
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
             return;
         }
 

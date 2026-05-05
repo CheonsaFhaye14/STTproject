@@ -502,7 +502,7 @@
 
         if (result.IsDuplicate)
         {
-            errorMessage = "Duplicate invoice number!";
+            errorMessage = "Duplicate sales invoice code!";
             showErrorModal = true;
             return;
         }
@@ -541,9 +541,24 @@
         if (firstRender)
         {
             objRef = DotNetObjectReference.Create(this);
-            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-            await jsModule.InvokeVoidAsync("registerF3", objRef);
-            await RestoreDraftAsync();
+            try
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+                await jsModule.InvokeVoidAsync("registerF3", objRef);
+                await RestoreDraftAsync();
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+            catch (JSException)
+            {
+                return;
+            }
         }
 
         if (jsModule != null)
@@ -556,13 +571,24 @@
                         ? "#commit-invoice-modal-overlay .modal-box"
                         : string.Empty;
 
-            if (!string.IsNullOrWhiteSpace(activeModalSelector))
+            try
             {
-                await jsModule.InvokeVoidAsync("activateModalFocusTrap", activeModalSelector);
+                if (!string.IsNullOrWhiteSpace(activeModalSelector))
+                {
+                    await jsModule.InvokeVoidAsync("activateModalFocusTrap", activeModalSelector);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("deactivateModalFocusTrap");
+                }
             }
-            else
+            catch (TaskCanceledException)
             {
-                await jsModule.InvokeVoidAsync("deactivateModalFocusTrap");
+                return;
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
             }
         }
     }
@@ -571,10 +597,22 @@
     {
         if (jsModule != null)
         {
-            await jsModule.InvokeVoidAsync("deactivateModalFocusTrap");
-            await jsModule.InvokeVoidAsync("unregisterF3");
-            await jsModule.DisposeAsync();
-            jsModule = null;
+            try
+            {
+                await jsModule.InvokeVoidAsync("deactivateModalFocusTrap");
+                await jsModule.InvokeVoidAsync("unregisterF3");
+                await jsModule.DisposeAsync();
+            }
+            catch (TaskCanceledException)
+            {
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            finally
+            {
+                jsModule = null;
+            }
         }
 
         objRef?.Dispose();

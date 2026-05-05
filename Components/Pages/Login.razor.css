@@ -1,65 +1,83 @@
-﻿/* FULL PAGE CENTER */
-.login-container {
+﻿/* Background */
+.login-page {
     height: 100vh;
+    background: linear-gradient(135deg, #f8dede, #f3cfcf);
     display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: #f3f3f3;
+    flex-direction: column;
 }
 
-/* LOGIN CARD */
-.login-card {
-    background: #f8dede;
-    padding: 30px 40px;
-    border-radius: 20px;
-    width: 320px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+/* Top bar */
+.top-bar {
+    background-color: #e7a9a9;
+    text-align: center;
+    padding: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* Center container */
+.login-container {
+    margin: auto;
+    width: 350px;
+    padding: 30px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     text-align: center;
 }
 
-/* TITLE */
-.login-title {
-    margin-bottom: 20px;
-    font-weight: bold;
-    letter-spacing: 2px;
-}
+    /* Title */
+    .login-container h2 {
+        margin-bottom: 20px;
+    }
 
-/* INPUT FIELD */
-.login-field {
+/* Inputs */
+.input-group {
     text-align: left;
     margin-bottom: 15px;
 }
 
-    .login-field label {
-        font-size: 12px;
-        font-weight: bold;
-        display: block;
-        margin-bottom: 5px;
-    }
-
-    /* INPUT STYLE */
-    .login-field input {
+    .input-group input {
         width: 100%;
-        height: 35px;
-        border-radius: 20px;
+        padding: 10px;
+        border-radius: 6px;
         border: none;
-        padding: 5px 15px;
-        background: white;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        background: #d3d3d3;
     }
 
-/* BUTTON */
+/* Remember */
+.remember {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+/* Button */
 .login-btn {
     width: 100%;
-    height: 35px;
-    border-radius: 20px;
+    padding: 10px;
+    background: #2c2c2c;
+    color: white;
     border: none;
-    background: #d9a3a3;
-    font-weight: bold;
+    border-radius: 6px;
     cursor: pointer;
-    margin-top: 10px;
 }
 
     .login-btn:hover {
-        background: #c78f8f;
+        background: #444;
     }
+
+/* Links */
+.links {
+    margin-top: 15px;
+    font-size: 12px;
+    color: #333;
+}
+
+/* Error */
+.error {
+    color: red;
+    margin-top: 10px;
+}

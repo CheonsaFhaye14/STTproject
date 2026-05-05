@@ -6,7 +6,7 @@ public static class SalesInvoiceValidation
 {
     public static class Header
     {
-        public static readonly SalesInvoiceField InvoiceNumber = new(nameof(InvoiceNumber), "Sales Invoice Number", true, "Invoice number is required.");
+        public static readonly SalesInvoiceField InvoiceNumber = new(nameof(InvoiceNumber), "Sales Invoice Code", true, "Sales Invoice Code is required.");
         public static readonly SalesInvoiceField InvoiceDate = new(nameof(InvoiceDate), "Sales Invoice Date", true, "Invoice date is required.");
         public static readonly SalesInvoiceField OrderDate = new(nameof(OrderDate), "Order Date", true, "Order date is required.");
         public static readonly SalesInvoiceField OrderType = new(nameof(OrderType), "Order Type", true, "Order type is required.");
@@ -18,7 +18,7 @@ public static class SalesInvoiceValidation
     public static class AddItem
     {
         public static readonly SalesInvoiceField Sku = new(nameof(Sku), "SKU", true, "SKU is required.");
-        public const string InvalidSkuErrorMessage = "SKU Code is invalid.";
+        public const string InvalidSkuErrorMessage = "SKU Code does not exist.";
         public static readonly SalesInvoiceField ItemName = new(nameof(ItemName), "Item Name", true, "Item name is required.");
         public static readonly SalesInvoiceField Uom = new(nameof(Uom), "Unit of Measure", true, "Unit of measure is required.");
         public static readonly SalesInvoiceField Quantity = new(nameof(Quantity), "Quantity", true, "Quantity is required.");
@@ -49,7 +49,7 @@ public static class SalesInvoiceValidation
         }
         else if (await invoiceNumberExistsAsync())
         {
-            errors[Header.InvoiceNumber.Key] = "Sales invoice number already exists.";
+            errors[Header.InvoiceNumber.Key] = "Sales invoice code already exists.";
         }
 
         if (invoice.InvoiceDate == default)

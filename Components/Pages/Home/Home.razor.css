@@ -96,14 +96,29 @@
     box-shadow: 2px 2px 2px #888888;
 }
 
-    .activity-table tbody td {
-        background: white;
-        padding: 10px;
-        font-weight: bold;
-        text-align: center;
-        box-shadow: 2px 2px 2px #888888;
-        
-    }
+.activity-table thead th:first-child {
+    border-radius: 10px 0 0 10px;
+}
+
+.activity-table thead th:last-child {
+    border-radius: 0 10px 10px 0;
+}
+
+.activity-table tbody td {
+    background: white;
+    padding: 10px;
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 2px 2px 2px #888888;
+}
+
+.activity-table tbody td:first-child {
+    border-radius: 10px 0 0 10px;
+}
+
+.activity-table tbody td:last-child {
+    border-radius: 0 10px 10px 0;
+}
 
 .activity-table .btn-primary {
     width: 120px;
