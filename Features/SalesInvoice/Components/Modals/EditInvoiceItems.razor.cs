@@ -1,101 +1,18 @@
-@using STTproject.Models
-@using Microsoft.AspNetCore.Components.Web
-@using Microsoft.JSInterop
-@using STTproject.Models.Tables
-@implements IAsyncDisposable
-@inject IJSRuntime JS
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using STTproject.Features.SalesInvoice.Validators;
+using STTproject.Models;
+using STTproject.Models.Tables;
 
-@if (ShowModal)
+namespace STTproject.Features.SalesInvoice.Components.Modals;
+
+public partial class EditInvoiceItems
 {
-    <div class="modal-overlay" id="edit-items-modal-overlay">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h4>Edit Invoice Items</h4>
-            </div>
-
-            <div class="modal-body">
-                @if (editableItems.Any())
-                {
-                    <div class="edit-form-grid">
-                        <div class="form-group form-group-full">
-                            <label>@SalesInvoiceValidation.EditItem.ItemName.Label<span class="required-asterisk">
-                                *</span></label>
-                                <select @ref="itemNameSelectRef" value="@selectedItemIndex" @onchange="OnSelectedItemChanged"
-                                        @onkeydown="HandleItemNameKeyDown" @onblur="HandleItemNameBlur">
-                                    <option value="-1">-- Select --</option>
-                                    @for (var i = 0; i < editableItems.Count; i++)
-                                    {
-                                        var optionItem = editableItems[i];
-                                        <option value="@i">@GetItemNameOptionLabel(optionItem)</option>
-                                    }
-                                </select>
-                                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.ItemName.Key)))
-                                {
-                                    <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.ItemName.Key)</span>
-                                }
-                            </div>
-
-                            @if (SelectedItem != null)
-                            {
-                                <div class="form-group">
-                                    <label>SKU</label>
-                                    <input value="@SelectedItem.ItemCode" disabled />
-                                </div>
-
-                                <div class="form-group">
-                                    <label>@SalesInvoiceValidation.EditItem.Uom.Label<span class="required-asterisk"> *</span></label>
-                                    <select @ref="uomSelectRef" value="@SelectedItem.ItemsUomId" @onchange="OnUomChanged"
-                                            @onkeydown="HandleUomKeyDown" @onblur="HandleUomBlur">
-                                        @foreach (var uom in GetSellableUoms(SelectedItem))
-                                        {
-                                            <option value="@uom.ItemsUomId">@uom.UomName</option>
-                                        }
-                                    </select>
-                                    @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.Uom.Key)))
-                                    {
-                                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.Uom.Key)</span>
-                                    }
-                                </div>
-
-                                <div class="form-group">
-                                    <label>@SalesInvoiceValidation.EditItem.Quantity.Label<span class="required-asterisk">
-                                        *</span></label>
-                                        <input @ref="quantityInputRef" type="number" min="1" value="@SelectedItem.Quantity"
-                                               onbeforeinput="if (event.data && event.data.includes('-')) event.preventDefault();"
-                                               @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown" @onblur="HandleQuantityBlur" />
-                                        @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.Quantity.Key)))
-                                        {
-                                            <span class="error-text">@GetFieldError(SalesInvoiceValidation.EditItem.Quantity.Key)</span>
-                                        }
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label>Line Amount</label>
-                                        <input value="@SelectedItem.Amount" disabled />
-                                    </div>
-                                }
-                            </div>
-
-                            <div class="modal-actions">
-                                <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
-                                        @onkeydown="HandleCancelKeyDown">Cancel (Esc)</button>
-                                <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
-                                        @onkeydown="HandleSaveKeyDown">Save Changes (Ctrl+S)</button>
-                                <button @ref="removeButtonRef" type="button" class="btn-secondary" @onclick="RemoveSelectedItem"
-                                        @onkeydown="HandleRemoveKeyDown">Remove Selected Item</button>
-                            </div>
-                        }
-                else
-                        {
-                            <div class="empty-state">No items to edit.</div>
-                            <div class="empty-state">No items to edit.</div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-
-@code {
     [Parameter] public bool ShowModal { get; set; }
     [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
     [Parameter] public EventCallback OnCancelModal { get; set; }
@@ -582,4 +499,6 @@
             jsModule = null;
         }
     }
+
 }
+

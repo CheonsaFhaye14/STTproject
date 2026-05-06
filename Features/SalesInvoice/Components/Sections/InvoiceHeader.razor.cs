@@ -1,132 +1,21 @@
-@using STTproject.Models
-@using STTproject.Models.Tables
-@using STTproject.Services
-@using STTproject.Components.Shared
-@using Microsoft.AspNetCore.Components
-@inject ISalesInvoiceService salesInvoiceService
-@inject IJSRuntime JS
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using STTproject.Components.Shared;
+using STTproject.Features.SalesInvoice.Validators;
+using STTproject.Models;
+using STTproject.Models.Tables;
+using STTproject.Services;
 
-@implements IAsyncDisposable
+namespace STTproject.Features.SalesInvoice.Components.Sections;
 
-<div class="top-card">
-    <div class="form-grid">
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.InvoiceNumber.Label<span class="required-asterisk"> *</span></label>
-            <input @ref="invoiceNumberInput" @bind="Invoice.InvoiceNumber" @bind:event="oninput" disabled="@IsSaved"
-                   @bind:after="HandleInvoiceNumberChanged" @onkeydown="HandleInvoiceNumberKeyDown"
-                   @onblur="HandleInvoiceNumberBlur" />
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key)</span>
-            }
-        </div>
-
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.InvoiceDate.Label<span class="required-asterisk"> *</span></label>
-                 <input type="date" @bind="InvoiceDateValue" @bind:event="oninput" @bind:after="HandleInvoiceDateChanged" disabled="@IsSaved"
-                   placeholder="MM/DD/YYYY" @ref="invoiceDateInput" @onkeydown="HandleInvoiceDateKeyDown"
-                   @onblur="HandleInvoiceDateBlur" />
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key)</span>
-            }
-        </div>
-        
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.OrderDate.Label<span class="required-asterisk"> *</span></label>
-                 <input type="date" @bind="OrderDateValue" @bind:event="oninput" @bind:after="HandleOrderDateChanged" disabled="@IsSaved" placeholder="MM/DD/YYYY"
-                   @ref="orderDateInput" @onkeydown="HandleOrderDateKeyDown" @onblur="HandleOrderDateBlur" />
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.OrderDate.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.OrderDate.Key)</span>
-            }
-        </div>
-   
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.OrderType.Label<span class="required-asterisk"> *</span></label>
-                <select @bind="Invoice.OrderType" @bind:after="HandleOrderTypeChanged" @ref="orderTypeSelect" @onkeydown="HandleOrderTypeKeyDown"
-                    disabled="@IsSaved" @onblur="HandleOrderTypeBlur">
-                <option value="">-- Select --</option>
-                <option value="invoice">Invoice</option>
-                <option value="credit">Credit</option>
-            </select>
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.OrderType.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.OrderType.Key)</span>
-            }
-        </div>
-
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.CustomerCode.Label<span class="required-asterisk"> *</span></label>
-            <input @ref="customerCodeInput" @bind="Invoice.CustomerCode" @bind:event="oninput"
-                   @bind:after="HandleInputCodeChanged" disabled="@IsSaved" @onkeydown="HandleCustomerCodeKeyDown"
-                   @onblur="HandleCustomerCodeBlur" />
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key)</span>
-            }
-        </div>
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.CustomerName.Label<span class="required-asterisk"> *</span></label>
-            <GenericAutocomplete TItem="Customer" @ref="customerNameAutocomplete" Items="FilteredCustomers.ToList()"
-                                 Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameValueChanged"
-                                 ItemLabel="@(c => c.CustomerName)" OnSelected="HandleCustomerAutocompleteSelected"
-                                 OnConfirmed="HandleCustomerNameConfirmed" Placeholder="-- Select Customer --"
-                                 IsDisabled="@IsSaved" ShowAllOnOpen="true" />
-            @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)</span>
-            }
-        </div>
-
-
-
-        <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.CustomerBranch.Label<span class="required-asterisk"> *</span></label>
-            @if (FilteredCustomerBranches.Any())
-            {
-                <GenericAutocomplete TItem="CustomerBranch" @ref="customerBranchAutocomplete"
-                                     Items="FilteredCustomerBranches" Value="@(FilteredCustomerBranches.FirstOrDefault(cb => cb.CustomerBranchId == Invoice.CustomerBranchId) is CustomerBranch sb ?
-                                                                                                                                      $"{sb.BranchName} - {sb.City}" : Invoice.CustomerAddress)"
-                                     ValueChanged="HandleCustomerBranchValueChanged" ItemLabel="@(b => $"{b.BranchName} - {b.City}")"
-                                         OnSelected="HandleCustomerBranchAutocompleteSelected" OnConfirmed="HandleCustomerBranchConfirmed" Placeholder="-- Select branch --"
-                                     IsDisabled="@IsSaved" ShowAllOnOpen="true" />
-                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)</span>
-                }
-            }
-            else
-            {
-                <input value="No branches available" disabled />
-            }
-        </div>
-
-
-        <div class="form-group">
-            <label>Customer Type</label>
-            <input @bind="Invoice.CustomerType" disabled />
-        </div>
-        
-        <div class="form-group">
-            <label>Customer Address</label>
-            <input @bind="Invoice.CustomerAddress" disabled />
-        </div>
-    </div>
-
-    @if (!IsSaved)
-    {
-        <button class="btn-primary" @ref="saveButton" @onclick="ValidateAndSave">Save</button>
-    }
-    else
-    {
-        <button class="btn-primary" @onclick="OnEditClick">Edit</button>
-    }
-
-
-</div>
-
-@code {
+public partial class InvoiceHeader
+{
     private ElementReference invoiceNumberInput;
     private ElementReference invoiceDateInput;
     private ElementReference orderDateInput;
@@ -189,7 +78,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         try
         {
             await Task.Delay(500, cts.Token);
-            
+
             if (cts.Token.IsCancellationRequested) return;
             if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber)) return;
 
@@ -387,7 +276,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
             ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
             await Task.Delay(10);
-            
+
             if (FilteredCustomerBranches.Any())
             {
                 if (customerBranchAutocomplete != null)
@@ -439,7 +328,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
                 if (customerBranchAutocomplete != null)
                     await customerBranchAutocomplete.OpenPopupAsync();
                 return;
-            } 
+            }
 
             customerBranchEnterPrimed = false;
 
@@ -765,7 +654,7 @@ Invoice.CustomerBranchId))
             {
                 var defaultBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.IsDefault);
                 Invoice.CustomerBranchId = (defaultBranch ?? FilteredCustomerBranches[0]).CustomerBranchId;
-            }  
+            }
         }
         else
         {
@@ -798,6 +687,7 @@ Invoice.CustomerBranchId))
 
         return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
+
 
 }
 

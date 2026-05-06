@@ -1,7 +1,7 @@
 using STTproject.Models;
 using STTproject.Models.Tables;
 
-namespace STTproject.Components.Pages.SalesInvoice;
+namespace STTproject.Features.SalesInvoice.Validators;
 
 public static class SalesInvoiceValidation
 {

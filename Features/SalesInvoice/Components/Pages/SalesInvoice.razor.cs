@@ -1,88 +1,21 @@
-﻿@page "/salesinvoice/{SubDistributorId:int}"
-@page "/salesinvoice/edit/{InvoiceId:int}"
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using STTproject.Features.SalesInvoice.Components.Modals;
+using STTproject.Models;
+using STTproject.Models.Tables;
+using STTproject.Services;
 
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Web
-@using Microsoft.JSInterop
-@using STTproject.Models
-@using STTproject.Services
-@using STTproject.Components.Shared
-@using System.Text.Json
-@using STTproject.Models.Tables
-@inject ISalesInvoiceService salesInvoiceService
-@inject IHomeService homeService
-@inject IUserContextService userContext
-@inject NavigationManager Navigation
-@inject IJSRuntime JS
+namespace STTproject.Features.SalesInvoice.Components.Pages;
 
-@implements IAsyncDisposable
-
-@rendermode InteractiveServer
-<button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
-<TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
-             OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
-
-<div class="top-buttons">
-    <button class="btn-primary">Download Template</button>
-    <button class="btn-primary">Import</button>
-</div>
-
-<ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
-              OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
-
-<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
-              OnErrorConfirm="CloseErrorModal" />
-
-<ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
-              Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
-              OnNo="CancelAddItemsConfirm" />
-
-<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
-              OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
-
-<ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
-              Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
-
-<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
-               OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"
-               SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />
-
-@if (isSaved)
+public partial class SalesInvoice
 {
-    <div class="item-actions">
-        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
-        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
-    </div>
-}
-
-<InvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
-              OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-              AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-              OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
-
-<EditItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-           OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
-           OnBeforeSave="OnEditItemsBeforeSave" />
-
-<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-                   AvailableUoms="availableUoms" />
-
-
-
-    <div class="commit-actions">
-        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-        disabled="@(invoice.SubdistributorId <= 0)">
-    Clear Draft
-</button>
-        @if (isSaved)
-        {
-            <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
-            <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
-        }
-    </div>
-
-
-@code {
     private bool showAddItemsModal = false;
     private bool showEditItemsModal = false;
     private bool showCommitConfirmModal = false;
@@ -91,8 +24,8 @@
     private bool showClearConfirmModal = false;
     private int addItemsConfirmCount = 0;
     private string editItemsConfirmMessage = "";
-    private InvoiceItems? addItemsModalRef;
-    private EditItems? editItemsModalRef;
+    private AddInvoiceItems? addItemsModalRef;
+    private EditInvoiceItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<SalesInvoice>? objRef;
 
@@ -170,7 +103,7 @@
         if (savedItems?.Any() == true)
         {
             var nextLineItemId = items.Count > 0 ? items.Max(i => i.LineItemId) + 1 : 1;
-            
+
             foreach (var savedItem in savedItems)
             {
                 var existingItem = items.FirstOrDefault(item =>
@@ -240,7 +173,7 @@
             // Calculate deleted and modified items
             int deletedCount = editItemsModalRef.GetDeletedItemCount();
             int modifiedCount = editItemsModalRef.GetModifiedItemCount();
-            
+
             // Build message based on changes
             if (deletedCount == 0 && modifiedCount == 0)
             {
@@ -248,13 +181,13 @@
                 await Task.CompletedTask;
                 return;
             }
-            
+
             var messageParts = new List<string>();
             if (deletedCount > 0)
                 messageParts.Add($"Removed {deletedCount} item{(deletedCount != 1 ? "s" : "")}");
             if (modifiedCount > 0)
                 messageParts.Add($"Changed {modifiedCount} item{(modifiedCount != 1 ? "s" : "")}");
-            
+
             editItemsConfirmMessage = string.Join(" and ", messageParts) + "?";
             showEditItemsConfirmModal = true;
         }
@@ -266,7 +199,7 @@
         showEditItemsConfirmModal = false;
         if (editItemsModalRef != null)
         {
-            var mergedItems = EditItems.MergeMatchingItems(editItemsModalRef.EditableItems);
+            var mergedItems = EditInvoiceItems.MergeMatchingItems(editItemsModalRef.EditableItems);
             await editItemsModalRef.SaveItemsInternal(mergedItems);
         }
     }
@@ -345,7 +278,7 @@
     private async Task ConfirmClearDraft()
     {
         showClearConfirmModal = false;
-        
+
         if (jsModule is null)
         {
             return;
@@ -362,12 +295,12 @@
         items = new List<InputItemModel>();
         isSaved = false;
         currentInvoiceId = 0;
-        
+
         if (addItemsModalRef is not null)
         {
             await addItemsModalRef.RestoreDraftStateAsync(null);
         }
-        
+
         StateHasChanged();
     }
 
@@ -802,4 +735,6 @@
         availableUoms = pageData.ItemUoms;
         await PersistDraftAsync();
     }
+
 }
+

@@ -1,7 +1,7 @@
 ﻿@page "/mapitem"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
-@using STTproject.Components.Pages.MapItem
+@using STTproject.Components.Pages.Validation
 @using STTproject.Components.Helper
 @using STTproject.Models
 @using STTproject.Models.Tables
@@ -18,246 +18,247 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <div>
-<!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
-<button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
+    <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
+    <button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
 
-<div class="header-with-search">
-    <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
-    <select class="search-input" @ref="subdSelectRef" @bind="selectedSubdId" @bind:after="OnSubdChangedAsync"
-            @onkeydown="HandleSubdKeyDown">
-        <option value="0">-- Select Sub Distributor --</option>
-        @foreach (var subd in subdList)
-        {
-            <option value="@subd.SubDistributorId">@subd.SubdName</option>
-        }
-    </select>
-    <div class="location badge">
-        LOCATION: <span>@locationText</span>
-    </div>
-</div>
-
-<!-- DOWNLOAD TEMPLATE + IMPORT -->
-<div class="top-buttons">
-    <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
-    <button class="btn-primary">Import Excel</button>
-    <button class="btn-primary">Export Data</button>
-</div>
-
-<!-- INPUT ROW -->
-<div class="form-row">
-    <div class="form-group">
-        <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
-        <input @ref="itemCodeInput" @bind="itemCode" @bind:event="oninput" @bind:after="HandleItemCodeChanged"
-               disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemCodeKeyDown" @onblur="HandleFormFieldBlur" />
-        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.SkuCode.Key)))
-        {
-            <span class="error-text">@GetFieldError(MapItemValidation.Form.SkuCode.Key)</span>
-        }
-    </div>
-    <div class="form-group">
-        <h5>@MapItemValidation.Label(MapItemValidation.Form.ItemName)</h5>
-        <input @ref="itemNameInput" @bind="itemName" @bind:event="oninput" @bind:after="HandleItemNameChanged"
-               disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemNameKeyDown" @onblur="HandleFormFieldBlur" />
-        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.ItemName.Key)))
-        {
-            <span class="error-text">@GetFieldError(MapItemValidation.Form.ItemName.Key)</span>
-        }
-    </div>
-    <div class="form-group">
-        <h5>PRINCIPAL</h5>
-        <select class="form-input" @ref="principalSelect" @bind="selectedDropdownPrincipal"
-                @bind:after="OnPrincipalChanged" @onkeydown="HandlePrincipalKeyDown"
-                disabled="@(!IsSubDistributorSelected)">
-            <option value="">-- Select Principal --</option>
-            @foreach (var principalItem in DisplayPrincipalsDropdown)
+    <div class="header-with-search">
+        <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
+        <select class="search-input" @ref="subdSelectRef" @bind="selectedSubdId" @bind:after="OnSubdChangedAsync"
+                @onkeydown="HandleSubdKeyDown">
+            <option value="0">-- Select Sub Distributor --</option>
+            @foreach (var subd in subdList)
             {
-                <option value="@principalItem">@principalItem</option>
+                <option value="@subd.SubDistributorId">@subd.SubdName</option>
             }
         </select>
+        <div class="location badge">
+            LOCATION: <span>@locationText</span>
+        </div>
     </div>
-    <div class="form-group">
-        <h5>@MapItemValidation.Label(MapItemValidation.Form.CompanyItem)</h5>
-        <Autocomplete @ref="companyItemAutocomplete" Items="FilteredCompanyItemsForDropdown.ToList()"
-                      Value="@selectedCompanyItemDisplayName" ValueChanged="OnCompanyItemValueChanged"
-                      OnSelected="OnAutocompleteSelected" OnConfirmed="OnCompanyItemConfirmed"
-                      Placeholder="-- Select Company Item --" IsDisabled="@(!IsSubDistributorSelected)" />
-        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
-        {
-            <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
-        }
+
+    <!-- DOWNLOAD TEMPLATE + IMPORT -->
+    <div class="top-buttons">
+        <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
+        <button class="btn-primary">Import Excel</button>
+        <button class="btn-primary">Export Data</button>
     </div>
-    <div class="form-group">
-        <h5>@MapItemValidation.Label(MapItemValidation.Form.UnitOfMeasure)</h5>
-        <input value="@GetUnitOfMeasureSummary()" disabled />
-        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)))
-        {
-            <span class="error-text">@GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)</span>
-        }
-    </div>
+
+    <!-- INPUT ROW -->
+    <div class="form-row">
+        <div class="form-group">
+            <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
+            <input @ref="itemCodeInput" @bind="itemCode" @bind:event="oninput" @bind:after="HandleItemCodeChanged"
+                   disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemCodeKeyDown"
+                   @onblur="HandleFormFieldBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.SkuCode.Key)))
+            {
+                <span class="error-text">@GetFieldError(MapItemValidation.Form.SkuCode.Key)</span>
+            }
+        </div>
+        <div class="form-group">
+            <h5>@MapItemValidation.Label(MapItemValidation.Form.ItemName)</h5>
+            <input @ref="itemNameInput" @bind="itemName" @bind:event="oninput" @bind:after="HandleItemNameChanged"
+                   disabled="@(!IsSubDistributorSelected)" @onkeydown="HandleItemNameKeyDown"
+                   @onblur="HandleFormFieldBlur" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.ItemName.Key)))
+            {
+                <span class="error-text">@GetFieldError(MapItemValidation.Form.ItemName.Key)</span>
+            }
+        </div>
+        <div class="form-group">
+            <h5>PRINCIPAL</h5>
+            <select class="form-input" @ref="principalSelect" @bind="selectedDropdownPrincipal"
+                    @bind:after="OnPrincipalChanged" @onkeydown="HandlePrincipalKeyDown"
+                    disabled="@(!IsSubDistributorSelected)">
+                <option value="">-- Select Principal --</option>
+                @foreach (var principalItem in DisplayPrincipalsDropdown)
+                {
+                    <option value="@principalItem">@principalItem</option>
+                }
+            </select>
+        </div>
+        <div class="form-group">
+            <h5>@MapItemValidation.Label(MapItemValidation.Form.CompanyItem)</h5>
+            <Autocomplete @ref="companyItemAutocomplete" Items="FilteredCompanyItemsForDropdown.ToList()"
+                          Value="@selectedCompanyItemDisplayName" ValueChanged="OnCompanyItemValueChanged"
+                          OnSelected="OnAutocompleteSelected" OnConfirmed="OnCompanyItemConfirmed"
+                          Placeholder="-- Select Company Item --" IsDisabled="@(!IsSubDistributorSelected)" />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
+            {
+                <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
+            }
+        </div>
+        <div class="form-group">
+            <h5>@MapItemValidation.Label(MapItemValidation.Form.UnitOfMeasure)</h5>
+            <input value="@GetUnitOfMeasureSummary()" disabled />
+            @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)))
+            {
+                <span class="error-text">@GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)</span>
+            }
+        </div>
 
   
-    <div class="form-actions">
-        <button class="btn-primary" type="button" @ref="addUomButton" @onclick="OpenAddUomModal"
-                disabled="@(!IsSubDistributorSelected || !selectedCompanyItemId.HasValue)">Add UOM</button>
-        <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
-                disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
-                                                                                                                                                                                                                  "UPDATE" : "ADD")</button>
-            @if (!IsEditingItem)
-            {
-                <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-                        disabled="@(!IsSubDistributorSelected)">
-                    Clear Draft
-                </button>
-            }
-
-            @if (IsEditingItem)
-            {
-                <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
-            }
-        </div>
-    </div>
-
-    <!-- DASHBOARD PANELS -->
-    <div class="dashboard">
-        <div class="card-section">
-            <h3>PRINCIPALS</h3>
-            <ul class="principal-list">
-                <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
-                    @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
-                @foreach (var principal in principals)
+        <div class="form-actions">
+            <button class="btn-primary" type="button" @ref="addUomButton" @onclick="OpenAddUomModal"
+                    disabled="@(!IsSubDistributorSelected || !selectedCompanyItemId.HasValue)">Add UOM</button>
+            <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
+                    disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
+                                                                                                                                                                                                                                  "UPDATE" : "ADD")</button>
+                @if (!IsEditingItem)
                 {
-                    <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
-                        @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
+                    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+                            disabled="@(!IsSubDistributorSelected)">
+                        Clear Draft
+                    </button>
                 }
-            </ul>
-        </div>
 
-        <div class="card-section">
-            <div class="filters">
-                <h3>COMPANY ITEMS</h3>
-               <div class="form-group">
-                    <select @bind="selectedCompanyItemsCategoryString" @bind:after="OnCompanyItemsCategoryChanged"
-                            disabled="@(!IsSubDistributorSelected)">
-                        <option value="All">All categories</option>
-                        @foreach (var category in CompanyItemCategories)
-                        {
-                            <option value="@category">@category</option>
-                        }
-                    </select>
-                </div>
-                <div class="form-group">
-                    <select @bind="selectedCompanyItemsFilterString" @bind:after="OnCompanyItemsFilterStringChanged"
-                            disabled="@(!IsSubDistributorSelected)">
-                        <option value="All">All company items</option>
-                        <option value="Unmapped">Items for Mapping </option>
-                        <option value="Mapped">Already Mapped</option>
-                    </select>
-                </div>
-   
+                @if (IsEditingItem)
+                {
+                    <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>
+                }
             </div>
-            <table class="mapping-table"> 
-                <thead>
-                    <tr>
-                        <th>COMPANY ITEM CODE</th>
-                        <th>CATEGORY</th>
-                        <th>ITEM NAME</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (companyItems.Any())
-                    {
-                        @foreach (var item in companyItems)
-                        {
-                            <tr>
-                                <td>@item.CompanyItemCode</td>
-                                <td>@item.Category</td>
-                                <td>@item.ItemName</td>
-                            </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="3">No company items found.</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
         </div>
 
-        <div class="card-section">
-            <h3>SUB DISTRIBUTOR ITEMS</h3>
-            <table class="mapping-table">
-                <thead>
-                    <tr>
-                        <th>SUB ITEM CODE</th>
-                        <th>ITEM NAME</th>
-                        <th>UNIT OF MEASURES</th>
-                        <th>ACTIONS</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (subDistributorItems.Any())
+        <!-- DASHBOARD PANELS -->
+        <div class="dashboard">
+            <div class="card-section">
+                <h3>PRINCIPALS</h3>
+                <ul class="principal-list">
+                    <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
+                        @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
+                    @foreach (var principal in principals)
                     {
-                        @foreach (var item in subDistributorItems)
-                        {
-                            <tr>
-                                <td>@item.SubItemCode</td>
-                                <td>@item.Description</td>
-                                <td>@item.UomName</td>
-                                <td>
-                                    <button class="btn-primary" type="button" @onclick="() => BeginEditItem(item)"
-                                            disabled="@(!IsSubDistributorSelected)">EDIT</button>
-                                    <button class="btn-primary" type="button" @onclick="() => DeleteItemAsync(item)"
-                                            disabled="@(!IsSubDistributorSelected)">DELETE</button>
-                                </td>
-                            </tr>
-                        }
+                        <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
+                            @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
                     }
-                    else
-                    {
-                        <tr>
-                            <td colspan="5">No sub distributor items found.</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
+                </ul>
+            </div>
 
-    @if (showConfirmModal)
-    {
-        <ConfirmModal Show="showConfirmModal" Title="@modalTitle" Message="@modalMessage" OnYes="ConfirmAction"
-                      OnNo="CancelConfirmation">
-            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary))
-            {
-                <div class="modal-help">
-                    <div><strong>SKU:</strong> @itemCode</div>
-                    <div><strong>Item Name:</strong> @itemName</div>
-                    <div><strong>Principal:</strong> @selectedDropdownPrincipal</div>
-                    <div><strong>Company Item:</strong> @confirmedCompanyItemSummary</div>
+            <div class="card-section">
+                <div class="filters">
+                    <h3>COMPANY ITEMS</h3>
+                    <div class="form-group">
+                        <select @bind="selectedCompanyItemsCategoryString" @bind:after="OnCompanyItemsCategoryChanged"
+                                disabled="@(!IsSubDistributorSelected)">
+                            <option value="All">All categories</option>
+                            @foreach (var category in CompanyItemCategories)
+                            {
+                                <option value="@category">@category</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <select @bind="selectedCompanyItemsFilterString" @bind:after="OnCompanyItemsFilterStringChanged"
+                                disabled="@(!IsSubDistributorSelected)">
+                            <option value="All">All company items</option>
+                            <option value="Unmapped">Items for Mapping </option>
+                            <option value="Mapped">Already Mapped</option>
+                        </select>
+                    </div>
+   
                 </div>
-            }
-        </ConfirmModal>
-    }
+                <table class="mapping-table">
+                    <thead>
+                        <tr>
+                            <th>COMPANY ITEM CODE</th>
+                            <th>CATEGORY</th>
+                            <th>ITEM NAME</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (companyItems.Any())
+                        {
+                            @foreach (var item in companyItems)
+                            {
+                                <tr>
+                                    <td>@item.CompanyItemCode</td>
+                                    <td>@item.Category</td>
+                                    <td>@item.ItemName</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="3">No company items found.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
 
-    @if (showClearConfirmModal)
-    {
-        <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
-                      Message="Clear all unsaved changes for this sub-distributor?"
-                      OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
-    }
+            <div class="card-section">
+                <h3>SUB DISTRIBUTOR ITEMS</h3>
+                <table class="mapping-table">
+                    <thead>
+                        <tr>
+                            <th>SUB ITEM CODE</th>
+                            <th>ITEM NAME</th>
+                            <th>UNIT OF MEASURES</th>
+                            <th>ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (subDistributorItems.Any())
+                        {
+                            @foreach (var item in subDistributorItems)
+                            {
+                                <tr>
+                                    <td>@item.SubItemCode</td>
+                                    <td>@item.Description</td>
+                                    <td>@item.UomName</td>
+                                    <td>
+                                        <button class="btn-primary" type="button" @onclick="() => BeginEditItem(item)"
+                                                disabled="@(!IsSubDistributorSelected)">EDIT</button>
+                                        <button class="btn-primary" type="button" @onclick="() => DeleteItemAsync(item)"
+                                                disabled="@(!IsSubDistributorSelected)">DELETE</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5">No sub distributor items found.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
-              OnErrorConfirm="CloseErrorModal" />
+        @if (showConfirmModal)
+        {
+            <ConfirmModal Show="showConfirmModal" Title="@modalTitle" Message="@modalMessage" OnYes="ConfirmAction"
+                          OnNo="CancelConfirmation">
+                @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary))
+                {
+                    <div class="modal-help">
+                        <div><strong>SKU:</strong> @itemCode</div>
+                        <div><strong>Item Name:</strong> @itemName</div>
+                        <div><strong>Principal:</strong> @selectedDropdownPrincipal</div>
+                        <div><strong>Company Item:</strong> @confirmedCompanyItemSummary</div>
+                    </div>
+                }
+            </ConfirmModal>
+        }
 
-    <DownloadTemplateModal ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
-                           OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
-    <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
-                 DraftStorageKey="@GetAddUomDraftStorageKey()"
-                 OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
-                 OnCancel="@(async () => await CloseAddUomModalAsync())" />
-</div>
+        @if (showClearConfirmModal)
+        {
+            <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
+                          Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft"
+                          OnNo="CancelClearConfirm" />
+        }
+
+        <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
+                      OnErrorConfirm="CloseErrorModal" />
+
+        <DownloadTemplateModal ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
+                               OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
+        <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
+                     DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
+                     OnCancel="@(async () => await CloseAddUomModalAsync())" />
+    </div>
 
 @code {
     [Parameter]
@@ -451,7 +452,8 @@
                 stream.Position = 0;
 
                 var fileName = $"MapItemTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
-                await jsModule!.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                await jsModule!.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             }
         }
     }
@@ -1023,7 +1025,7 @@
             .OrderBy(x => x.CompanyItemCode)
             .ToList();
 
-            ApplyCompanyItemFilters();
+        ApplyCompanyItemFilters();
     }
 
     private async Task FilterByPrincipalAsync(string? principal)
@@ -1713,7 +1715,8 @@ matched?.Price;
             SelectedSubdId = selectedSubdId
         };
 
-        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetLastSelectedSubdStorageKey(), JsonSerializer.Serialize(selectionState));
+        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetLastSelectedSubdStorageKey(),
+JsonSerializer.Serialize(selectionState));
     }
 
     private async Task RestoreLastSelectedSubdAsync()
