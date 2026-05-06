@@ -70,6 +70,7 @@ public class MapItemService : IMapItemService
                 CompanyItemCode = ci.ItemCode,
                 Description = ci.ItemName,
                 Principal = ci.Principal,
+                Category = ci.Category,
                 CompanyItemId = ci.CompanyItemId,
             });
 
@@ -565,6 +566,7 @@ public sealed class MapCompanyItemRow
     public string Description { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string Principal { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
     public int CompanyItemId { get; set; }
     public string UomName { get; set; } = string.Empty;
 }

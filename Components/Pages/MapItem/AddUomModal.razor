@@ -7,7 +7,7 @@
 
 @if (ShowAddUomModal)
 {
-    <div class="modal-overlay add-uom-modal-overlay" @onkeydown="HandleModalKeyDown">
+    <div class="modal-overlay add-uom-modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
                 <h4>Add Unit of Measure</h4>
@@ -133,7 +133,7 @@
                 {
                     <span class="error-text">@GetFieldError("prices")</span>
                 }
-                <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel</button>
+                <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel (Esc)</button>
                 <button type="button" class="btn-secondary" @onclick="ClearDraftAsync">Clear Draft</button>
                 <button type="button" class="btn-primary" @onclick="AddAsync">Save</button>
             </div>
@@ -466,18 +466,6 @@
     private string GetFieldError(string fieldKey)
     {
         return validationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
-    }
-
-    private async Task HandleModalKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "s" && e.CtrlKey)
-        {
-            await AddAsync();
-        }
-        else if (e.Key == "Escape")
-        {
-            await CancelAsync();
-        }
     }
 
     private async Task HandleUomSelectKeyDown(KeyboardEventArgs e)

@@ -36,6 +36,7 @@
                                          Items="AvailableItems.Where(i => i.SubDistributorId == SelectedSubdistributorId).DistinctBy(i => i.ItemName).ToList()"
                                          Value="@NewItem.ItemName" ValueChanged="@(v => NewItem.ItemName = v ?? string.Empty)"
                                          ItemLabel="@(i => i.ItemName)" OnSelected="HandleItemAutocompleteSelected"
+                                         OnConfirmed="HandleItemNameConfirmed"
                                          Placeholder="-- Select --" />
                     @if (ShowValidationErrors &&
                                                                                                                                                                                                                                             !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
@@ -515,6 +516,20 @@ SelectedSubdistributorId);
             await Task.Delay(10);
             await UomSelect.FocusAsync();
         }
+    }
+
+    private async Task HandleItemNameConfirmed()
+    {
+        ShowValidationErrors = true;
+        ValidateDraft();
+
+        if (string.IsNullOrWhiteSpace(NewItem.ItemName))
+        {
+            return;
+        }
+
+        await Task.Delay(10);
+        await UomSelect.FocusAsync();
     }
 
     private async Task HandleUomKeyDown(KeyboardEventArgs e)

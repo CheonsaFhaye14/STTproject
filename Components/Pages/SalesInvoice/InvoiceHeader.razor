@@ -71,7 +71,7 @@
                                  Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameValueChanged"
                                  ItemLabel="@(c => c.CustomerName)" OnSelected="HandleCustomerAutocompleteSelected"
                                  OnConfirmed="HandleCustomerNameConfirmed" Placeholder="-- Select Customer --"
-                                 IsDisabled="@IsSaved" />
+                                 IsDisabled="@IsSaved" ShowAllOnOpen="true" />
             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)))
             {
                 <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerName.Key)</span>
@@ -422,6 +422,9 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
     private Task HandleCustomerNameValueChanged(string? value)
     {
         Invoice.CustomerName = value ?? string.Empty;
+        Invoice.CustomerId = 0;
+        Invoice.CustomerCode = string.Empty;
+        SyncCustomerState();
         return OnDraftChanged.InvokeAsync();
     }
 

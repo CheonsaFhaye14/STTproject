@@ -8,6 +8,7 @@
 @using STTproject.Components.Shared
 @using System.Text.Json
 @using ClosedXML.Excel
+@implements IAsyncDisposable
 @inject NavigationManager Navigation
 @inject IHomeService homeService
 @inject IMapItemService mapItemService
@@ -15,7 +16,7 @@
 @inject IJSRuntime JS
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-<div @onkeydown="HandlePageKeyDown">
+<div>
 <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
 <button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
 
@@ -133,6 +134,16 @@
         <div class="card-section">
             <div class="filters">
                 <h3>COMPANY ITEMS</h3>
+               <div class="form-group">
+                    <select @bind="selectedCompanyItemsCategoryString" @bind:after="OnCompanyItemsCategoryChanged"
+                            disabled="@(!IsSubDistributorSelected)">
+                        <option value="All">All categories</option>
+                        @foreach (var category in CompanyItemCategories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
                 <div class="form-group">
                     <select @bind="selectedCompanyItemsFilterString" @bind:after="OnCompanyItemsFilterStringChanged"
                             disabled="@(!IsSubDistributorSelected)">
@@ -141,11 +152,13 @@
                         <option value="Mapped">Already mapped only</option>
                     </select>
                 </div>
+   
             </div>
             <table class="mapping-table">
                 <thead>
                     <tr>
                         <th>COMPANY ITEM CODE</th>
+                        <th>CATEGORY</th>
                         <th>ITEM NAME</th>
                     </tr>
                 </thead>
@@ -156,6 +169,7 @@
                         {
                             <tr>
                                 <td>@item.CompanyItemCode</td>
+                                <td>@item.Category</td>
                                 <td>@item.ItemName</td>
                             </tr>
                         }
@@ -260,6 +274,8 @@
     private ElementReference principalSelect;
     private Autocomplete? companyItemAutocomplete;
     private IJSObjectReference? jsModule;
+    private IJSObjectReference? mapItemJsModule;
+    private DotNetObjectReference<MapItem>? objRef;
     private bool principalEnterPrimed = false;
     private ElementReference addUomButton;
     private ElementReference saveButton;
@@ -538,6 +554,7 @@
         public string? SelectedCompanyItemDisplayName { get; set; }
         public int? EditingSubdItemId { get; set; }
         public string? SelectedCompanyItemsFilterString { get; set; }
+        public string? SelectedCompanyItemsCategoryString { get; set; }
         public Dictionary<string, UomEntry> UomEntries { get; set; } = new();
     }
 
@@ -561,7 +578,9 @@
     private string? selectedDropdownPrincipal;
     private string? selectedCompanyItemDisplayName;
     private string selectedCompanyItemsFilterString = "All";
+    private string selectedCompanyItemsCategoryString = "All";
     private CompanyItemFilterMode selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+    private List<MapCompanyItemViewRow> companyItemsAll = new();
     private List<MapCompanyItemViewRow> companyItems = new();
     private List<MapSubDistributorItemRow> subDistributorItems = new();
     private List<CompanyItemDropdownItem> companyItemsForDropdown = new();
@@ -569,6 +588,7 @@
     private sealed class MapCompanyItemViewRow
     {
         public string CompanyItemCode { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
         public string ItemName { get; set; } = string.Empty;
         public string UomName { get; set; } = string.Empty;
     }
@@ -588,6 +608,13 @@
         string.IsNullOrWhiteSpace(selectedDropdownPrincipal)
             ? companyItemsForDropdown
             : companyItemsForDropdown.Where(i => i.Principal == selectedDropdownPrincipal);
+
+    private IEnumerable<string> CompanyItemCategories =>
+        companyItemsAll
+            .Select(item => item.Category)
+            .Where(category => !string.IsNullOrWhiteSpace(category))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(category => category);
 
     private IEnumerable<string> PrincipalsDropdown =>
         companyItemsForDropdown
@@ -654,17 +681,72 @@
         Navigation.NavigateTo("/");
     }
 
-    private async Task HandlePageKeyDown(KeyboardEventArgs e)
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
-        if (e.CtrlKey && e.Key == "s")
+        if (mapItemJsModule is not null)
         {
-            await SaveItemAsync();
+            try
+            {
+                await mapItemJsModule.InvokeVoidAsync("unregisterMapItemKeyHandler");
+                await mapItemJsModule.DisposeAsync();
+            }
+            catch
+            {
+                // Best effort
+            }
         }
-        else if (e.Key == "Escape")
-        {
-            GoBackToHome();
-        }
+
+        objRef?.Dispose();
     }
+
+    [JSInvokable]
+    public Task EscapeActionFromShortcut()
+    {
+        if (showAddUomModal)
+        {
+            showAddUomModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showConfirmModal)
+        {
+            showConfirmModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showClearConfirmModal)
+        {
+            showClearConfirmModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showErrorModal)
+        {
+            showErrorModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        if (showDownloadTemplateModal)
+        {
+            showDownloadTemplateModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        GoBackToHome();
+        return Task.CompletedTask;
+    }
+
+    private bool IsAnyModalOpen =>
+        showAddUomModal ||
+        showConfirmModal ||
+        showClearConfirmModal ||
+        showErrorModal ||
+        showDownloadTemplateModal;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -701,7 +783,9 @@
             principals = new();
             selectedPrincipal = null;
             selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsCategoryString = "All";
             selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+            companyItemsAll = new();
             companyItems = new();
             subDistributorItems = new();
             ResetItemForm();
@@ -722,7 +806,9 @@
             principals = new();
             selectedPrincipal = null;
             selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsCategoryString = "All";
             selectedCompanyItemsFilter = CompanyItemFilterMode.All;
+            companyItemsAll = new();
             companyItems = new();
             subDistributorItems = new();
             ResetItemForm();
@@ -733,6 +819,7 @@
         {
             selectedSubdId = 0;
             selectedCompanyItemsFilterString = "All";
+            selectedCompanyItemsCategoryString = "All";
             selectedCompanyItemsFilter = CompanyItemFilterMode.All;
             ResetItemForm();
         }
@@ -747,6 +834,24 @@
         if (firstRender)
         {
             jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            objRef = DotNetObjectReference.Create(this);
+            try
+            {
+                mapItemJsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/mapitem.js");
+                await mapItemJsModule.InvokeVoidAsync("registerMapItemKeyHandler", objRef);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+            catch (JSException)
+            {
+                return;
+            }
             await subdSelectRef.FocusAsync();
         }
     }
@@ -903,18 +1008,21 @@
             selectedSubdId,
             selectedPrincipal);
 
-        companyItems = companyRows
-            .GroupBy(x => new { x.CompanyItemCode, x.Description })
+        companyItemsAll = companyRows
+            .GroupBy(x => new { x.CompanyItemCode, x.Description, x.Category })
             .Select(group => new MapCompanyItemViewRow
             {
                 CompanyItemCode = group.Key.CompanyItemCode,
                 ItemName = group.Key.Description,
+                Category = group.Key.Category,
                 UomName = string.Join(", ", group
                     .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
                     .Select(x => $"{x.UomName} - {x.Price:N2}"))
             })
             .OrderBy(x => x.CompanyItemCode)
             .ToList();
+
+            ApplyCompanyItemFilters();
     }
 
     private async Task FilterByPrincipalAsync(string? principal)
@@ -970,6 +1078,18 @@
 
         await LoadMapTablesAsync();
         await PersistDraftAsync();
+    }
+
+    private Task OnCompanyItemsCategoryChanged()
+    {
+        if (!selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
+            !CompanyItemCategories.Contains(selectedCompanyItemsCategoryString, StringComparer.OrdinalIgnoreCase))
+        {
+            selectedCompanyItemsCategoryString = "All";
+        }
+
+        ApplyCompanyItemFilters();
+        return PersistDraftAsync();
     }
 
     private async Task OnCompanyItemDataListChanged()
@@ -1354,6 +1474,7 @@ matched?.Price;
         ResetItemForm(persistDraft: false);
         selectedPrincipal = null;
         selectedCompanyItemsFilterString = "All";
+        selectedCompanyItemsCategoryString = "All";
         selectedCompanyItemsFilter = CompanyItemFilterMode.All;
 
         StateHasChanged();
@@ -1454,6 +1575,7 @@ matched?.Price;
             SelectedCompanyItemDisplayName = selectedCompanyItemDisplayName,
             EditingSubdItemId = editingSubdItemId,
             SelectedCompanyItemsFilterString = selectedCompanyItemsFilterString,
+            SelectedCompanyItemsCategoryString = selectedCompanyItemsCategoryString,
             UomEntries = new Dictionary<string, UomEntry>(uomEntries, StringComparer.OrdinalIgnoreCase)
         };
 
@@ -1524,6 +1646,7 @@ matched?.Price;
         selectedCompanyItemDisplayName = draft.SelectedCompanyItemDisplayName;
         editingSubdItemId = draft.EditingSubdItemId;
         selectedCompanyItemsFilterString = draft.SelectedCompanyItemsFilterString ?? "All";
+        selectedCompanyItemsCategoryString = draft.SelectedCompanyItemsCategoryString ?? "All";
         uomEntries = draft.UomEntries
             .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
         availableUoms = uomEntries.Keys.OrderBy(x => x).ToList();
@@ -1535,6 +1658,14 @@ matched?.Price;
 
         selectedCompanyItemsFilter = restoredFilter;
         UpdateSelectedSubdLocation();
+
+        if (!selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
+            !CompanyItemCategories.Contains(selectedCompanyItemsCategoryString, StringComparer.OrdinalIgnoreCase))
+        {
+            selectedCompanyItemsCategoryString = "All";
+        }
+
+        ApplyCompanyItemFilters();
 
         if (selectedCompanyItemId.HasValue)
         {
@@ -1627,6 +1758,15 @@ matched?.Price;
         }
 
         return JsonSerializer.Deserialize<MapItemDraftStore>(draftJson) ?? new MapItemDraftStore();
+    }
+
+    private void ApplyCompanyItemFilters()
+    {
+        companyItems = companyItemsAll
+            .Where(item => selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase)
+                || item.Category.Equals(selectedCompanyItemsCategoryString, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.CompanyItemCode)
+            .ToList();
     }
 
     private void GoToCompanyItems()

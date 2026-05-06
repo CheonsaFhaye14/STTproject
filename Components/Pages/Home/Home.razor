@@ -43,7 +43,7 @@
 </div>
 
 <!-- RECENT ACTIVITY Table to be moved-->
-<div class="activity">
+<div class="activity" @onkeydown="HandlePageKeyDown">
     <h3>Recent Activity...</h3>
 
     <!-- FILTERS -->
@@ -163,7 +163,7 @@
 
 @if (showBatchDetailsModal)
 {
-    <div class="modal-overlay" @onclick="CloseBatchDetails">
+    <div class="modal-overlay" tabindex="0" @onclick="CloseBatchDetails" @onkeydown="HandlePageKeyDown">
         <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
             <div class="modal-header">
                 <h4>Batch Details: @selectedBatchId</h4>
@@ -207,7 +207,7 @@
                     </table>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn-secondary" @onclick="CloseBatchDetails">Close</button>
+                    <button class="btn-secondary" @onclick="CloseBatchDetails">Close (Esc)</button>
                 </div>
             </div>
         </div>
@@ -216,7 +216,7 @@
     <!-- INVOICE DETAILS MODAL (for Flat View) -->
     @if (showInvoiceDetailsModal)
     {
-        <div class="modal-overlay" @onclick="CloseInvoiceDetails">
+        <div class="modal-overlay" tabindex="0" @onclick="CloseInvoiceDetails" @onkeydown="HandlePageKeyDown">
             <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
                 <div class="modal-header">
                     <h4>Invoice Details: @selectedInvoiceCode</h4>
@@ -301,7 +301,7 @@
                     <div class="modal-actions">
                         <button class="btn-primary" @onclick="EditInvoiceDetails">Edit</button>
                         <button class="btn-secondary" @onclick="ShowDeleteInvoiceConfirm">Delete</button>
-                        <button class="btn-secondary" @onclick="CloseInvoiceDetails">Close</button>
+                        <button class="btn-secondary" @onclick="CloseInvoiceDetails">Close (Esc)</button>
                     </div>
                 </div>
             </div>
@@ -575,6 +575,25 @@
     {
         showErrorModal = false;
         deleteInvoiceErrorMessage = null;
+    }
+
+    private void HandlePageKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape")
+        {
+            return;
+        }
+
+        if (showInvoiceDetailsModal)
+        {
+            CloseInvoiceDetails();
+            return;
+        }
+
+        if (showBatchDetailsModal)
+        {
+            CloseBatchDetails();
+        }
     }
 
     async Task ReloadRecentActivityAsync()
