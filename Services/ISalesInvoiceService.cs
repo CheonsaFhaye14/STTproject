@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Models;
+using STTproject.Models.Context;
+using STTproject.Models.Tables;
 
 namespace STTproject.Services;
 
@@ -170,7 +172,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
             try
             {
-                var salesInvoice = new Models.SalesInvoice
+                var salesInvoice = new SalesInvoice
                 {
                     SalesInvoiceCode = invoice.InvoiceNumber,
                     SalesInvoiceDate = invoice.InvoiceDate,

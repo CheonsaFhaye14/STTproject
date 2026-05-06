@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Models;
+namespace STTproject.Models.Tables;
 
 public partial class SalesInvoiceItem
 {

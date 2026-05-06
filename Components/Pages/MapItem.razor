@@ -4,6 +4,7 @@
 @using STTproject.Components.Pages.MapItem
 @using STTproject.Components.Helper
 @using STTproject.Models
+@using STTproject.Models.Tables
 @using STTproject.Services
 @using STTproject.Components.Shared
 @using System.Text.Json
@@ -148,13 +149,13 @@
                     <select @bind="selectedCompanyItemsFilterString" @bind:after="OnCompanyItemsFilterStringChanged"
                             disabled="@(!IsSubDistributorSelected)">
                         <option value="All">All company items</option>
-                        <option value="Unmapped">Only not mapped yet</option>
-                        <option value="Mapped">Already mapped only</option>
+                        <option value="Unmapped">Items for Mapping </option>
+                        <option value="Mapped">Already Mapped</option>
                     </select>
                 </div>
    
             </div>
-            <table class="mapping-table">
+            <table class="mapping-table"> 
                 <thead>
                     <tr>
                         <th>COMPANY ITEM CODE</th>

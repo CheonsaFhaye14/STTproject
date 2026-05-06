@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using STTproject.Models;
+using STTproject.Models.Context;
+using STTproject.Models.Tables;
 
 namespace STTproject.Services;
 

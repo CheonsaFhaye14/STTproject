@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using STTproject.Models.Tables;
 
-namespace STTproject.Models;
+namespace STTproject.Models.Context;
 
 public partial class SttprojectContext : DbContext
 {

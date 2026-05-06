@@ -1,4 +1,5 @@
 using STTproject.Models;
+using STTproject.Models.Tables;
 
 namespace STTproject.Components.Pages.SalesInvoice;
 

@@ -1,4 +1,5 @@
 @using STTproject.Models
+@using STTproject.Models.Tables
 @using STTproject.Services
 @using STTproject.Components.Shared
 @using Microsoft.AspNetCore.Components
@@ -764,9 +765,7 @@ Invoice.CustomerBranchId))
             {
                 var defaultBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.IsDefault);
                 Invoice.CustomerBranchId = (defaultBranch ?? FilteredCustomerBranches[0]).CustomerBranchId;
-            }
-
-            ApplySelectedBranch(Invoice.CustomerBranchId);
+            }  
         }
         else
         {
