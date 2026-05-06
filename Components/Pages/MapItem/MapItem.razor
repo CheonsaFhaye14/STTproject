@@ -100,8 +100,14 @@
         <button class="btn-primary" @ref="saveButton" @onclick="SaveItemAsync"
                 disabled="@(!IsSubDistributorSelected || !uomEntries.Any())">@((IsEditingItem) ?
                                                                                                                                                                                                                   "UPDATE" : "ADD")</button>
-        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-                disabled="@(!IsSubDistributorSelected)">Clear Draft</button>
+            @if (!IsEditingItem)
+            {
+                <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+                        disabled="@(!IsSubDistributorSelected)">
+                    Clear Draft
+                </button>
+            }
+
             @if (IsEditingItem)
             {
                 <button class="btn-secondary" type="button" @onclick="CancelEditAsync">CANCEL</button>

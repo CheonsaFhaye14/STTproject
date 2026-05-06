@@ -25,8 +25,6 @@
 <div class="top-buttons">
     <button class="btn-primary">Download Template</button>
     <button class="btn-primary">Import</button>
-    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-            disabled="@(invoice.SubdistributorId <= 0)">Clear Draft</button>
 </div>
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
@@ -72,6 +70,10 @@
 @if (isSaved)
 {
     <div class="commit-actions">
+        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+                disabled="@(invoice.SubdistributorId <= 0)">
+            Clear Draft
+        </button>
         <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
         <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
     </div>

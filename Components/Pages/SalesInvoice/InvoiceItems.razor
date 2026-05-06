@@ -84,11 +84,9 @@
 
                 <div class="modal-actions">
                     <button type="button" class="btn-primary" @onclick="AddItemToQueue"
-                            disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || !HeaderIsSaved)">
-                        Add</button>
-                        <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel</button>
-                        <button type="button" class="btn-primary" @onclick="SaveModal" disabled="@(!modalItems.Any())">
-                            Save items</button>
+                            disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || !HeaderIsSaved)">Add</button>
+                        <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel (Esc)</button>
+                        <button type="button" class="btn-primary" @onclick="SaveModal" disabled="@(!modalItems.Any())">Save items (Ctrl+S)</button>
                         </div>
 
                         <div class="modal-help">Press Enter after typing quantity to add the item quickly.</div>

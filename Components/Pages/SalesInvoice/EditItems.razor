@@ -78,15 +78,16 @@
 
                             <div class="modal-actions">
                                 <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
-                                        @onkeydown="HandleCancelKeyDown">Cancel</button>
+                                        @onkeydown="HandleCancelKeyDown">Cancel (Esc)</button>
                                 <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
-                                        @onkeydown="HandleSaveKeyDown">Save Changes</button>
+                                        @onkeydown="HandleSaveKeyDown">Save Changes (Ctrl+S)</button>
                                 <button @ref="removeButtonRef" type="button" class="btn-secondary" @onclick="RemoveSelectedItem"
                                         @onkeydown="HandleRemoveKeyDown">Remove Selected Item</button>
                             </div>
                         }
                 else
                         {
+                            <div class="empty-state">No items to edit.</div>
                             <div class="empty-state">No items to edit.</div>
                         }
                     </div>
