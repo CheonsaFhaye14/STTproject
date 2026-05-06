@@ -5,6 +5,9 @@ using STTproject.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Ensure the app has an HTTPS endpoint for redirection when launched outside the https profile.
+builder.WebHost.UseUrls("https://sttproject.dev.localhost:7105;http://sttproject.dev.localhost:5165");
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
