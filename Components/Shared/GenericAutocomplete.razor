@@ -27,6 +27,7 @@
     [Parameter] public EventCallback<string?> ValueChanged { get; set; }
     [Parameter] public EventCallback<TItem?> OnSelected { get; set; }
     [Parameter] public EventCallback OnConfirmed { get; set; }
+    [Parameter] public bool ShowAllOnOpen { get; set; } = false;
     [Parameter] public string Placeholder { get; set; } = string.Empty;
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public Func<TItem, string> ItemLabel { get; set; } = item => item?.ToString() ?? string.Empty;
@@ -35,15 +36,19 @@
     private bool isOpen = false;
     private int highlightedIndex = -1;
     private bool hasSelectedItem = false;
+    private bool showAllForOpen = false;
 
     private IEnumerable<TItem> FilteredItems =>
-        string.IsNullOrWhiteSpace(Value)
+        showAllForOpen
             ? Items
-            : Items.Where(i => ItemLabel(i).Contains(Value ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+            : string.IsNullOrWhiteSpace(Value)
+                ? Items
+                : Items.Where(i => ItemLabel(i).Contains(Value ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
     private async Task OnInput(ChangeEventArgs e)
     {
         Value = e?.Value?.ToString() ?? string.Empty;
+        showAllForOpen = false;
         highlightedIndex = -1;
         hasSelectedItem = false;
         await ValueChanged.InvokeAsync(Value);
@@ -79,6 +84,7 @@
         {
             if (!isOpen && !hasSelectedItem)
             {
+                showAllForOpen = ShowAllOnOpen;
                 isOpen = true;
                 await InvokeAsync(StateHasChanged);
                 return;
@@ -93,6 +99,7 @@
                 }
 
                 await OnConfirmed.InvokeAsync();
+                showAllForOpen = false;
                 return;
             }
 
@@ -107,6 +114,7 @@
         {
             isOpen = false;
             highlightedIndex = -1;
+            showAllForOpen = false;
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -129,6 +137,7 @@
 
     private void OpenOnFocus(FocusEventArgs _)
     {
+        showAllForOpen = ShowAllOnOpen;
         isOpen = true;
         if (FilteredItems.Any() && highlightedIndex == -1)
         {
@@ -144,6 +153,7 @@
         isOpen = false;
         highlightedIndex = -1;
         hasSelectedItem = true;
+        showAllForOpen = false;
         await OnSelected.InvokeAsync(item);
     }
 
@@ -157,6 +167,7 @@
 
     public async Task OpenPopupAsync()
     {
+        showAllForOpen = ShowAllOnOpen;
         isOpen = true;
         highlightedIndex = FilteredItems.Any() ? 0 : -1;
         await InvokeAsync(StateHasChanged);

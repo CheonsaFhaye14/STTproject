@@ -482,12 +482,14 @@
     private Task OpenAddUomModal()
     {
         showAddUomModal = true;
+        _ = PersistDraftAsync();
         return Task.CompletedTask;
     }
 
     private Task CloseAddUomModalAsync()
     {
         showAddUomModal = false;
+        _ = PersistDraftAsync();
         return Task.CompletedTask;
     }
 
@@ -518,10 +520,16 @@
         var companyItemId = selectedCompanyItemId ?? 0;
         return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}";
     }
+    private string GetLastSelectedSubdStorageKey()
+    {
+        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        return $"mapitem-last-selected-subd:{userId}";
+    }
 
     private sealed class MapItemDraftState
     {
         public int SelectedSubdId { get; set; }
+        public bool ShowAddUomModal { get; set; }
         public string? ItemCode { get; set; }
         public string? ItemName { get; set; }
         public string? SelectedPrincipal { get; set; }
@@ -536,6 +544,10 @@
     private sealed class MapItemDraftStore
     {
         public Dictionary<string, MapItemDraftState> Drafts { get; set; } = new();
+    }
+    private sealed class MapItemSelectionState
+    {
+        public int SelectedSubdId { get; set; }
     }
 
 
@@ -698,6 +710,11 @@
 
         subdList = await homeService.GetSubDistributorsAsync(userContext.UserId.Value);
 
+        if (selectedSubdId == 0)
+        {
+            await RestoreLastSelectedSubdAsync();
+        }
+
         if (!subdList.Any())
         {
             selectedSubdId = 0;
@@ -722,6 +739,7 @@
 
         UpdateSelectedSubdLocation();
         await LoadMapTablesAsync();
+        await RestoreDraftStateOnlyAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -729,8 +747,6 @@
         if (firstRender)
         {
             jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-            // Only restore draft state without reloading tables (already loaded in OnParametersSetAsync)
-            await RestoreDraftStateOnlyAsync();
             await subdSelectRef.FocusAsync();
         }
     }
@@ -826,6 +842,7 @@
     private async Task OnSubdChangedAsync()
     {
         UpdateSelectedSubdLocation();
+        await PersistLastSelectedSubdAsync();
         selectedPrincipal = null;
         ResetItemForm(persistDraft: false);
         // Load tables for the selected sub-distributor
@@ -1428,6 +1445,7 @@ matched?.Price;
         draftStore.Drafts[selectedSubdId.ToString()] = new MapItemDraftState
         {
             SelectedSubdId = selectedSubdId,
+            ShowAddUomModal = showAddUomModal,
             ItemCode = itemCode,
             ItemName = itemName,
             SelectedPrincipal = selectedPrincipal,
@@ -1499,6 +1517,7 @@ matched?.Price;
 
         itemCode = draft.ItemCode;
         itemName = draft.ItemName;
+        showAddUomModal = draft.ShowAddUomModal;
         selectedPrincipal = draft.SelectedPrincipal;
         selectedDropdownPrincipal = draft.SelectedDropdownPrincipal;
         selectedCompanyItemId = draft.SelectedCompanyItemId;
@@ -1531,7 +1550,6 @@ matched?.Price;
         {
             return;
         }
-
         if (selectedSubdId == 0)
         {
             return;
@@ -1547,6 +1565,51 @@ matched?.Price;
         }
 
         await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+    }
+
+    private async Task PersistLastSelectedSubdAsync()
+    {
+        if (userContext.UserId is null || selectedSubdId == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+
+        var selectionState = new MapItemSelectionState
+        {
+            SelectedSubdId = selectedSubdId
+        };
+
+        await jsModule.InvokeVoidAsync("saveSalesInvoiceDraft", GetLastSelectedSubdStorageKey(), JsonSerializer.Serialize(selectionState));
+    }
+
+    private async Task RestoreLastSelectedSubdAsync()
+    {
+        if (userContext.UserId is null || subdList.Count == 0)
+        {
+            return;
+        }
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        var selectionJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetLastSelectedSubdStorageKey());
+        if (string.IsNullOrWhiteSpace(selectionJson))
+        {
+            return;
+        }
+
+        var selectionState = JsonSerializer.Deserialize<MapItemSelectionState>(selectionJson);
+        if (selectionState is null || selectionState.SelectedSubdId == 0)
+        {
+            return;
+        }
+
+        if (!subdList.Any(subd => subd.SubDistributorId == selectionState.SelectedSubdId))
+        {
+            return;
+        }
+
+        selectedSubdId = selectionState.SelectedSubdId;
     }
 
     private async Task<MapItemDraftStore> LoadDraftStoreAsync()

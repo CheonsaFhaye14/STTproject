@@ -1,6 +1,4 @@
-using STTproject.Models;
-
-namespace STTproject.Components.Pages.SalesInvoice;
+namespace STTproject.Models;
 
 public sealed class InvoiceItemsDraftState
 {

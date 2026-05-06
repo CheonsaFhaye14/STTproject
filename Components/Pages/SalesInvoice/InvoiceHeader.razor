@@ -88,8 +88,8 @@
                                      Items="FilteredCustomerBranches" Value="@(FilteredCustomerBranches.FirstOrDefault(cb => cb.CustomerBranchId == Invoice.CustomerBranchId) is CustomerBranch sb ?
                                                                                                                                       $"{sb.BranchName} - {sb.City}" : Invoice.CustomerAddress)"
                                      ValueChanged="HandleCustomerBranchValueChanged" ItemLabel="@(b => $"{b.BranchName} - {b.City}")"
-                                     OnSelected="HandleCustomerBranchAutocompleteSelected" Placeholder="-- Select branch --"
-                                     IsDisabled="@IsSaved" />
+                                         OnSelected="HandleCustomerBranchAutocompleteSelected" OnConfirmed="HandleCustomerBranchConfirmed" Placeholder="-- Select branch --"
+                                     IsDisabled="@IsSaved" ShowAllOnOpen="true" />
                 @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)))
                 {
                     <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)</span>
@@ -466,6 +466,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
         ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
         ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        customerBranchEnterPrimed = false;
         await Task.Delay(10);
 
         if (FilteredCustomerBranches.Any())
@@ -632,8 +633,20 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
     {
         ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
         ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        customerBranchEnterPrimed = false;
         await Task.Delay(10);
-        await saveButton.FocusAsync();
+
+        if (FilteredCustomerBranches.Any())
+        {
+            if (customerBranchAutocomplete != null)
+            {
+                await customerBranchAutocomplete.GetInputRef().FocusAsync();
+            }
+        }
+        else
+        {
+            await saveButton.FocusAsync();
+        }
     }
 
     private Task HandleCustomerAutocompleteSelected(Customer? customer)
@@ -674,6 +687,22 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         Invoice.CustomerBranchId = branch.CustomerBranchId;
         ApplySelectedBranch(branch.CustomerBranchId);
         return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerBranchConfirmed()
+    {
+        customerBranchEnterPrimed = false;
+
+        if (Invoice.CustomerBranchId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+                SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+        await Task.Delay(10);
+        await saveButton.FocusAsync();
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
