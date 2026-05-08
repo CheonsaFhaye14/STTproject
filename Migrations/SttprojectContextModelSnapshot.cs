@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System;
 using System.Net.NetworkInformation;
-using STTproject.Data.Entities;
+using STTproject.Data;
 
 #nullable disable
 

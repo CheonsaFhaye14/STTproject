@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-namespace STTproject.Data.Entities;
+namespace STTproject.Data;
 
 public partial class SttprojectContext : DbContext
 {

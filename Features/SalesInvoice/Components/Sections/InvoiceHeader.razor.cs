@@ -9,7 +9,7 @@ using Microsoft.JSInterop;
 using STTproject.Components.Shared;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
-using STTproject.Data.Entities;
+using STTproject.Data;
 using STTproject.Services;
 
 namespace STTproject.Features.SalesInvoice.Components.Sections;

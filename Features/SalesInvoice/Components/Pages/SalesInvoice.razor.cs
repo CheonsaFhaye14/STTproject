@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Features.SalesInvoice.Components.Modals;
 using STTproject.Models;
-using STTproject.Data.Entities;
+using STTproject.Data;
 using STTproject.Services;
 
 namespace STTproject.Features.SalesInvoice.Components.Pages;

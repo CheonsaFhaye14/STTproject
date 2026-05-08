@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Data.Entities;
+namespace STTproject.Data;
 
 public partial class ItemsUomPriceHistory
 {

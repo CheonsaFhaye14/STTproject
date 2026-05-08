@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
-using STTproject.Data.Entities;
+using STTproject.Data;
 namespace STTproject.Features.SalesInvoice.Components.Modals;
 
 public partial class EditInvoiceItems

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using STTproject.Models;
-using STTproject.Data.Entities;
+using STTproject.Data;
 namespace STTproject.Features.SalesInvoice.Components.Sections;
 
 public partial class InvoiceItemsTable

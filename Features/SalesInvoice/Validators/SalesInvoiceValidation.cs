@@ -1,5 +1,5 @@
 using STTproject.Models;
-using STTproject.Data.Entities;
+using STTproject.Data;
 namespace STTproject.Features.SalesInvoice.Validators;
 
 public static class SalesInvoiceValidation
