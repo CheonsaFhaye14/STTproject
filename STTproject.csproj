@@ -18,9 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Components\Feature\" />
-    <Folder Include="Validators\" />
+    <Folder Include="Features\MapItem\DTOs\" />
+    <Folder Include="Features\MapItem\Validators\" />
+    <Folder Include="Features\MapItem\Services\" />
+    <Folder Include="Features\SalesInvoice\Services\" />
     <Folder Include="Services\NewFolder\" />
+    <Folder Include="Shared\Layout\" />
+    <Folder Include="wwwroot\js\components\" />
+    <Folder Include="wwwroot\js\utils\" />
   </ItemGroup>
 
 </Project>

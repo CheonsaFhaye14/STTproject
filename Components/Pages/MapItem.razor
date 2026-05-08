@@ -4,9 +4,10 @@
 @using STTproject.Components.Pages.Validation
 @using STTproject.Components.Helper
 @using STTproject.Models
-@using STTproject.Data;
+@using STTproject.Data
 @using STTproject.Services
 @using STTproject.Components.Shared
+@using STTproject.Shared.Components
 @using System.Text.Json
 @using ClosedXML.Excel
 @implements IAsyncDisposable
@@ -170,7 +171,10 @@
                         {
                             @foreach (var item in companyItems)
                             {
-                                <tr>
+                                var isSelected = selectedCompanyItemIdForFilter == item.CompanyItemId;
+                                <tr @onclick="() => OnCompanyItemRowClicked(item)" 
+                                    style="@(isSelected ? "background-color: #e3f2fd; cursor: pointer; font-weight: bold;" : "cursor: pointer;")"
+                                    class="@(isSelected ? "selected-row" : "")">
                                     <td>@item.CompanyItemCode</td>
                                     <td>@item.Category</td>
                                     <td>@item.ItemName</td>
@@ -188,10 +192,27 @@
             </div>
 
             <div class="card-section">
-                <h3>SUB DISTRIBUTOR ITEMS</h3>
+                <h3>SUB DISTRIBUTOR ITEMS
+                    @if (selectedCompanyItemIdForFilter.HasValue)
+                    {
+                        var selectedItem = companyItems.FirstOrDefault(x => x.CompanyItemId == selectedCompanyItemIdForFilter);
+                        if (selectedItem != null)
+                        {
+                            <span style="font-size: 0.8em; font-weight: normal; margin-left: 10px;">
+                                (Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
+                            </span>
+                        }
+                        <button @onclick="() => { selectedCompanyItemIdForFilter = null; UpdateFilteredSubDistributorItems(); }" 
+                                style="font-size: 0.8em; margin-left: 10px;" class="btn-primary">Clear Filter</button>
+                    }
+                </h3>
                 <table class="mapping-table">
                     <thead>
                         <tr>
+                            @if (!IsSubDistributorSelected)
+                            {
+                                <th>SUB DISTRIBUTOR NAME</th>
+                            }
                             <th>SUB ITEM CODE</th>
                             <th>ITEM NAME</th>
                             <th>UNIT OF MEASURES</th>
@@ -199,11 +220,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (subDistributorItems.Any())
+                        @if (filteredSubDistributorItems.Any())
                         {
-                            @foreach (var item in subDistributorItems)
+                            @foreach (var item in filteredSubDistributorItems)
                             {
                                 <tr>
+                                    @if (!IsSubDistributorSelected)
+                                    {
+                                        <td>@item.SubdName</td>
+                                    }
                                     <td>@item.SubItemCode</td>
                                     <td>@item.Description</td>
                                     <td>@item.UomName</td>
@@ -219,7 +244,7 @@
                         else
                         {
                             <tr>
-                                <td colspan="5">No sub distributor items found.</td>
+                                <td colspan="@(IsSubDistributorSelected ? 4 : 5)">No sub distributor items found.@(selectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")</td>
                             </tr>
                         }
                     </tbody>
@@ -256,8 +281,9 @@
         <DownloadTemplateModal ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
                                OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
         <AddUomModal ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
-                     DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
-                     OnCancel="@(async () => await CloseAddUomModalAsync())" />
+                 DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="@(async (dict) => await HandleAddUomModalAddAsync(dict))"
+                 OnCancel="@(async () => await CloseAddUomModalAsync())"
+                 ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" />
     </div>
 
 @code {
@@ -267,6 +293,8 @@
 
 
     private bool showAddUomModal = false;
+    private string? modalCompanyItemCode;
+    private string? modalCompanyItemName;
     private int? selectedCompanyItemId;
     private string? selectedPrincipal;
     private string? itemCode;
@@ -500,6 +528,18 @@
     }
     private Task OpenAddUomModal()
     {
+        if (selectedCompanyItemId.HasValue)
+        {
+            var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
+            modalCompanyItemCode = ci?.ItemCode;
+            modalCompanyItemName = ci?.ItemName;
+        }
+        else
+        {
+            modalCompanyItemCode = null;
+            modalCompanyItemName = null;
+        }
+
         showAddUomModal = true;
         _ = PersistDraftAsync();
         return Task.CompletedTask;
@@ -586,10 +626,13 @@
     private List<MapCompanyItemViewRow> companyItemsAll = new();
     private List<MapCompanyItemViewRow> companyItems = new();
     private List<MapSubDistributorItemRow> subDistributorItems = new();
+    private List<MapSubDistributorItemRow> filteredSubDistributorItems = new();
     private List<CompanyItemDropdownItem> companyItemsForDropdown = new();
+    private int? selectedCompanyItemIdForFilter = null;
 
     private sealed class MapCompanyItemViewRow
     {
+        public int CompanyItemId { get; set; }
         public string CompanyItemCode { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
         public string ItemName { get; set; } = string.Empty;
@@ -1012,9 +1055,10 @@
             selectedPrincipal);
 
         companyItemsAll = companyRows
-            .GroupBy(x => new { x.CompanyItemCode, x.Description, x.Category })
+            .GroupBy(x => new { x.CompanyItemId, x.CompanyItemCode, x.Description, x.Category })
             .Select(group => new MapCompanyItemViewRow
             {
+                CompanyItemId = group.Key.CompanyItemId,
                 CompanyItemCode = group.Key.CompanyItemCode,
                 ItemName = group.Key.Description,
                 Category = group.Key.Category,
@@ -1026,12 +1070,41 @@
             .ToList();
 
         ApplyCompanyItemFilters();
+        UpdateFilteredSubDistributorItems();
     }
 
     private async Task FilterByPrincipalAsync(string? principal)
     {
         selectedPrincipal = principal;
+        selectedCompanyItemIdForFilter = null;
         await LoadMapTablesAsync();
+    }
+
+    private void OnCompanyItemRowClicked(MapCompanyItemViewRow item)
+    {
+        if (selectedCompanyItemIdForFilter == item.CompanyItemId)
+        {
+            selectedCompanyItemIdForFilter = null;
+        }
+        else
+        {
+            selectedCompanyItemIdForFilter = item.CompanyItemId;
+        }
+        UpdateFilteredSubDistributorItems();
+    }
+
+    private void UpdateFilteredSubDistributorItems()
+    {
+        if (selectedCompanyItemIdForFilter.HasValue)
+        {
+            filteredSubDistributorItems = subDistributorItems
+                .Where(item => item.CompanyItemId == selectedCompanyItemIdForFilter.Value)
+                .ToList();
+        }
+        else
+        {
+            filteredSubDistributorItems = subDistributorItems;
+        }
     }
 
     private async Task ValidateFormAsync()
@@ -1079,6 +1152,7 @@
             selectedCompanyItemsFilterString = "All";
         }
 
+        selectedCompanyItemIdForFilter = null;
         await LoadMapTablesAsync();
         await PersistDraftAsync();
     }
@@ -1091,6 +1165,7 @@
             selectedCompanyItemsCategoryString = "All";
         }
 
+        selectedCompanyItemIdForFilter = null;
         ApplyCompanyItemFilters();
         return PersistDraftAsync();
     }
@@ -1771,6 +1846,7 @@ JsonSerializer.Serialize(selectionState));
                 || item.Category.Equals(selectedCompanyItemsCategoryString, StringComparison.OrdinalIgnoreCase))
             .OrderBy(item => item.CompanyItemCode)
             .ToList();
+        UpdateFilteredSubDistributorItems();
     }
 
     private void GoToCompanyItems()

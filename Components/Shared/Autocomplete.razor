@@ -1,8 +1,9 @@
 @using STTproject.Models
 @using STTproject.Services
 @using Microsoft.JSInterop
-@using STTproject.Data;
+@using STTproject.Data
 @namespace STTproject.Components.Shared
+
 
 <div class="autocomplete">
     <input class="form-input" @ref="inputRef" value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown"

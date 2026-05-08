@@ -12,6 +12,20 @@
         <div class="modal-box">
             <div class="modal-header">
                 <h4>Add Unit of Measure</h4>
+                @if (!string.IsNullOrWhiteSpace(ItemName) || !string.IsNullOrWhiteSpace(ItemCode))
+                {
+                    <div class="modal-item" style="margin-top:6px;font-size:0.95em;color:#444;">
+                        @if (!string.IsNullOrWhiteSpace(ItemCode))
+                        {
+                            <strong>@ItemCode</strong>
+                            @if (!string.IsNullOrWhiteSpace(ItemName)) { <text> - </text> }
+                        }
+                        @if (!string.IsNullOrWhiteSpace(ItemName))
+                        {
+                            <span>@ItemName</span>
+                        }
+                    </div>
+                }
             </div>
 
             <div class="modal-body">
@@ -146,6 +160,8 @@
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
     [Parameter] public string? DraftStorageKey { get; set; }
+    [Parameter] public string? ItemCode { get; set; }
+    [Parameter] public string? ItemName { get; set; }
     [Parameter] public EventCallback<Dictionary<string, UomEntry>> OnAdd { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
