@@ -7,7 +7,7 @@
 @using STTproject.Data
 @using STTproject.Services
 @using STTproject.Components.Shared
-@using STTproject.Shared.Components
+@using STTproject.Features.MapItem.Components.Sections
 @using System.Text.Json
 @using ClosedXML.Excel
 @implements IAsyncDisposable
@@ -122,18 +122,9 @@
 
         <!-- DASHBOARD PANELS -->
         <div class="dashboard">
-            <div class="card-section">
-                <h3>PRINCIPALS</h3>
-                <ul class="principal-list">
-                    <li class="@(string.IsNullOrWhiteSpace(selectedPrincipal) ? "principal-selected" : string.Empty)"
-                        @onclick="() => FilterByPrincipalAsync(null)">ALL</li>
-                    @foreach (var principal in principals)
-                    {
-                        <li class="@(principal == selectedPrincipal ? "principal-selected" : string.Empty)"
-                            @onclick="() => FilterByPrincipalAsync(principal)">@principal</li>
-                    }
-                </ul>
-            </div>
+            <PrincipalTable Principals="principals" SelectedPrincipal="selectedPrincipal"
+                            SelectedPrincipalChanged="@(p => selectedPrincipal = p)"
+                            OnPrincipalSelected="FilterByPrincipalAsync" />
 
             <div class="card-section">
                 <div class="filters">

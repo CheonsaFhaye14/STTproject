@@ -1,0 +1,46 @@
+.card-section {
+    background-color: #f9dfdf;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 5px 5px 2px #888888;
+    height: 65vh;
+    overflow-y: auto;
+}
+
+.card-section h3 {
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+
+.principal-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.principal-list li {
+    background: #fff;
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 500;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: 0.3s ease;
+    cursor: pointer;
+}
+
+.principal-list li.principal-selected {
+    background-color: #ac7a7a;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.principal-list li:hover {
+    background-color: #ac7a7a;
+    color: #fff;
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}

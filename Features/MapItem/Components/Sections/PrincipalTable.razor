@@ -1,5 +1,16 @@
-﻿<h3>PrincipalTable</h3>
-
-@code {
-
-}
+﻿<div class="card-section">
+	<h3>PRINCIPALS</h3>
+	<ul class="principal-list">
+		<li class="@(string.IsNullOrWhiteSpace(SelectedPrincipal) ? "principal-selected" : string.Empty)"
+			@onclick="() => SelectPrincipalAsync(null)">
+			ALL
+		</li>
+		@foreach (var principal in Principals)
+		{
+			<li class="@(principal == SelectedPrincipal ? "principal-selected" : string.Empty)"
+				@onclick="() => SelectPrincipalAsync(principal)">
+				@principal
+			</li>
+		}
+	</ul>
+</div>

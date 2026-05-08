@@ -5,7 +5,6 @@ using STTproject.Features.SalesInvoice.Components.Modals;
 using STTproject.Models;
 using STTproject.Services;
 using System.Text.Json;
-
 namespace STTproject.Features.SalesInvoice.Components.Pages;
 
 public partial class SalesInvoice

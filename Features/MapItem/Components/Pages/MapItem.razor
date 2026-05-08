@@ -1,5 +1,29 @@
-﻿<h3>MapItem</h3>
+﻿@using STTproject.Features.MapItem.Components.Sections
+
+<h3>MapItem</h3>
+
+<PrincipalTable Principals="principals" SelectedPrincipal="selectedPrincipal"
+				SelectedPrincipalChanged="OnSelectedPrincipalChanged" />
+
+@if (!string.IsNullOrWhiteSpace(selectedPrincipal))
+{
+	<p>Selected principal: @selectedPrincipal</p>
+}
 
 @code {
+	private IReadOnlyList<string> principals = new[]
+	{
+		"Principal A",
+		"Principal B",
+		"Principal C"
+	};
+
+	private string? selectedPrincipal;
+
+	private Task OnSelectedPrincipalChanged(string? principal)
+	{
+		selectedPrincipal = principal;
+		return Task.CompletedTask;
+	}
 
 }
