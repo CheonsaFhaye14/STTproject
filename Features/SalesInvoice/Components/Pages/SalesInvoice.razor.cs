@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Features.SalesInvoice.Components.Modals;
 using STTproject.Models;
-using STTproject.Models.Tables;
+using STTproject.Data.Entities;
 using STTproject.Services;
 
 namespace STTproject.Features.SalesInvoice.Components.Pages;

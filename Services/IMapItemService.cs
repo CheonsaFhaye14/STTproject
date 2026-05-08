@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
-using STTproject.Models;
-using STTproject.Models.Context;
-using STTproject.Models.Tables;
 
+using STTproject.Models;
+using STTproject.Data.Entities;
 namespace STTproject.Services;
 
 public interface IMapItemService
@@ -112,7 +110,7 @@ public class MapItemService : IMapItemService
             .Where(si => si.IsActive)
             .Where(si => si.SubDistributor.EncoderId == userId)
             .Where(si => si.SubDistributor.IsActive)
-            .SelectMany(si => si.ItemsUoms.DefaultIfEmpty(), (si, u) => new
+            .Select(si => new
             {
                 si.SubdItemId,
                 si.SubDistributorId,
@@ -120,9 +118,9 @@ public class MapItemService : IMapItemService
                 si.ItemName,
                 si.CompanyItemId,
                 CompanyItemName = si.CompanyItem.ItemName,
-                Price = u != null ? u.Price : 0m,
+                Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
                 Principal = si.CompanyItem.Principal,
-                UomName = u != null ? u.UomName : string.Empty
+                UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty
             });
 
         if (subDistributorId > 0)
@@ -271,7 +269,7 @@ public class MapItemService : IMapItemService
         try
         {
             var existing = await context.SubdItems
-                .Include(si => si.ItemsUoms)
+                .Include(si => si.ItemsUom)
                 .FirstOrDefaultAsync(si => si.SubdItemId == item.SubdItemId, cancellationToken);
 
             if (existing is null)
@@ -384,7 +382,7 @@ public class MapItemService : IMapItemService
         try
         {
             var existing = await context.SubdItems
-                .Include(si => si.ItemsUoms)
+                .Include(si => si.ItemsUom)
                 .FirstOrDefaultAsync(si => si.SubdItemId == subdItemId, cancellationToken);
 
             if (existing is null)
@@ -401,9 +399,9 @@ public class MapItemService : IMapItemService
                 return DeleteSubdItemResult.InUse("This sub distributor item cannot be deleted because it is already used by one or more invoices.");
             }
 
-            if (existing.ItemsUoms is not null && existing.ItemsUoms.Any())
+            if (existing.ItemsUom is not null)
             {
-                context.ItemsUoms.RemoveRange(existing.ItemsUoms);
+                context.ItemsUoms.Remove(existing.ItemsUom);
             }
 
             context.SubdItems.Remove(existing);

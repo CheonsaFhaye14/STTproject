@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Models.Tables;
+namespace STTproject.Data.Entities;
 
 public partial class CompanyItem
 {
@@ -22,7 +22,14 @@ public partial class CompanyItem
     public DateTime? UpdatedDate { get; set; }
 
     public string Principal { get; set; } = null!;
+
     public string Category { get; set; } = null!;
+
+    public DateTime? EffectivityDate { get; set; }
+
+    public decimal? PriceIncreasePercent { get; set; }
+
+    public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
 
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 }

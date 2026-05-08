@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using STTproject.Models.Context;
-using STTproject.Models.Tables;
-
+using STTproject.Models;
+using STTproject.Data.Entities;
 namespace STTproject.Services;
 
 public interface IHomeService

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Models.Tables;
+namespace STTproject.Data.Entities;
 
 public partial class ItemsUom
 {
@@ -26,6 +26,8 @@ public partial class ItemsUom
     public int SubdItemId { get; set; }
 
     public virtual User? CreatedByNavigation { get; set; }
+
+    public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 

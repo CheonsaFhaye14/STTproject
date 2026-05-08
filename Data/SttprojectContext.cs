@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using STTproject.Models.Tables;
 
-namespace STTproject.Models.Context;
+namespace STTproject.Data.Entities;
 
 public partial class SttprojectContext : DbContext
 {
@@ -23,6 +22,8 @@ public partial class SttprojectContext : DbContext
     public virtual DbSet<CustomerBranch> CustomerBranches { get; set; }
 
     public virtual DbSet<ItemsUom> ItemsUoms { get; set; }
+
+    public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
 
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
@@ -49,14 +50,19 @@ public partial class SttprojectContext : DbContext
 
             entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA1D5CA35D").IsUnique();
 
+            entity.Property(e => e.Category)
+                .HasMaxLength(100)
+                .IsUnicode(false);
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.ItemCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.ItemName).HasMaxLength(150);
+            entity.Property(e => e.PriceIncreasePercent).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.Principal)
                 .HasMaxLength(150)
                 .IsUnicode(false);
@@ -69,7 +75,9 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("Customer", tb => tb.HasTrigger("trg_Customer_CascadeDeactivate"));
 
-            entity.HasIndex(e => e.CustomerCode, "UQ_ojt_Customer_Code").IsUnique();
+            entity.HasIndex(e => new { e.CustomerCode, e.SubDistributorId }, "UQ_ojt_Customer_Code").IsUnique();
+
+            entity.HasIndex(e => new { e.CustomerName, e.SubDistributorId }, "UQ_ojt_Customer_Name").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -105,6 +113,8 @@ public partial class SttprojectContext : DbContext
             entity.HasKey(e => e.CustomerBranchId).HasName("PK__Customer__6F555BBD71F361FA");
 
             entity.ToTable("CustomerBranch");
+
+            entity.HasIndex(e => new { e.CustomerId, e.BranchName }, "UQ_CustomerBranch_BranchName_PerCustomer").IsUnique();
 
             entity.HasIndex(e => e.CustomerId, "UX_CustomerBranch_Default")
                 .IsUnique()
@@ -154,7 +164,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
-            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)").IsRequired();
+            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UomName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -164,14 +174,42 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_ItemsUom_CreatedBy");
 
-            entity.HasOne(d => d.SubdItem).WithMany(p => p.ItemsUoms)
-                .HasForeignKey(d => d.SubdItemId)
-                .OnDelete(DeleteBehavior.Cascade)
+            entity.HasOne(d => d.SubdItem).WithOne(p => p.ItemsUom)
+                .HasForeignKey<ItemsUom>(d => d.SubdItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ItemsUom_SubdItemId");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_ItemsUom_UpdatedBy");
+        });
+
+        modelBuilder.Entity<ItemsUomPriceHistory>(entity =>
+        {
+            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA340C04A45B");
+
+            entity.ToTable("ItemsUomPriceHistory");
+
+            entity.Property(e => e.AppliedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
+            entity.Property(e => e.NewPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OldPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PriceIncreasePercent).HasColumnType("decimal(5, 2)");
+
+            entity.HasOne(d => d.CompanyItem).WithMany(p => p.ItemsUomPriceHistories)
+                .HasForeignKey(d => d.CompanyItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ItemsUomPriceHistory_CompanyItem");
+
+            entity.HasOne(d => d.ItemsUom).WithMany(p => p.ItemsUomPriceHistories)
+                .HasForeignKey(d => d.ItemsUomId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ItemsUomPriceHistory_ItemsUom");
         });
 
         modelBuilder.Entity<SalesInvoice>(entity =>
@@ -254,7 +292,7 @@ public partial class SttprojectContext : DbContext
 
             entity.HasIndex(e => e.CompanySubdCode, "UQ_SubDistributor_CompanySubdCode").IsUnique();
 
-            entity.HasIndex(e => e.SubdCode, "UQ__SubDistr__67B828E0B0F084A6").IsUnique();
+            entity.HasIndex(e => e.SubdCode, "UQ_SubDistributor_SubdCode").IsUnique();
 
             entity.Property(e => e.CityMunicipality).HasMaxLength(100);
             entity.Property(e => e.CompanySubdCode)
@@ -336,7 +374,7 @@ public partial class SttprojectContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.FullName).HasMaxLength(100);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.PasswordHash).HasMaxLength(255);
+            entity.Property(e => e.Password).HasMaxLength(255);
             entity.Property(e => e.Role)
                 .HasMaxLength(20)
                 .IsUnicode(false);

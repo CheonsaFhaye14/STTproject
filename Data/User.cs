@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Models.Tables;
+namespace STTproject.Data.Entities;
 
 public partial class User
 {
@@ -9,7 +9,7 @@ public partial class User
 
     public string Username { get; set; } = null!;
 
-    public string PasswordHash { get; set; } = null!;
+    public string Password { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
 

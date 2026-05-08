@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using STTproject.Models;
-using STTproject.Models.Tables;
-
+using STTproject.Data.Entities;
 namespace STTproject.Features.SalesInvoice.Components.Sections;
 
 public partial class InvoiceItemsTable

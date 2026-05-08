@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -10,7 +10,7 @@ using STTproject.Components.Helper;
 using STTproject.Components.Shared;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
-using STTproject.Models.Tables;
+using STTproject.Data.Entities;
 
 namespace STTproject.Features.SalesInvoice.Components.Modals;
 

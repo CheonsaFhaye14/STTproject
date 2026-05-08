@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Models;
-using STTproject.Models.Context;
-using STTproject.Models.Tables;
-
+using STTproject.Data.Entities;
 namespace STTproject.Services;
 
 public interface ISalesInvoiceService

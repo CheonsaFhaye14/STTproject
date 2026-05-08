@@ -1,25 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace STTproject.Models.Tables;
+namespace STTproject.Data.Entities;
 
-public partial class CustomerBranch
+public partial class Customer
 {
-    public int CustomerBranchId { get; set; }
-
     public int CustomerId { get; set; }
 
-    public string BranchName { get; set; } = null!;
+    public string CustomerCode { get; set; } = null!;
 
-    public string AddressLine { get; set; } = null!;
+    public string CustomerName { get; set; } = null!;
 
-    public string City { get; set; } = null!;
+    public string CustomerType { get; set; } = null!;
 
-    public string Province { get; set; } = null!;
-
-    public int ZipCode { get; set; }
-
-    public bool IsDefault { get; set; }
+    public int SubDistributorId { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -33,9 +27,11 @@ public partial class CustomerBranch
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual Customer Customer { get; set; } = null!;
+    public virtual CustomerBranch? CustomerBranch { get; set; }
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
+
+    public virtual SubDistributor SubDistributor { get; set; } = null!;
 
     public virtual User? UpdatedByNavigation { get; set; }
 }

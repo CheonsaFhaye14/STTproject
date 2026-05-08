@@ -19,7 +19,6 @@
 
   <ItemGroup>
     <Folder Include="Components\Feature\" />
-    <Folder Include="Models\DTOs\" />
     <Folder Include="Validators\" />
     <Folder Include="Services\NewFolder\" />
   </ItemGroup>

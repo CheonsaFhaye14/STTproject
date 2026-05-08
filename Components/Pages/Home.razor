@@ -1,8 +1,8 @@
-﻿@page "/"
+@page "/"
 @using STTproject.Components.Helper
 @using System.Linq
 @using STTproject.Models
-@using STTproject.Models.Tables
+@using STTproject.Data.Entities
 @using STTproject.Services
 @using STTproject.Components.Shared
 @rendermode InteractiveServer
@@ -102,7 +102,7 @@
                                 }
                                 else
                                 {
-                                    @($"{row.OldestInvoiceDate:yyyy-MM-dd} – {row.LatestInvoiceDate:yyyy-MM-dd}")
+                                    @($"{row.OldestInvoiceDate:yyyy-MM-dd} - {row.LatestInvoiceDate:yyyy-MM-dd}")
                                 }
                             </td>
                             <td>

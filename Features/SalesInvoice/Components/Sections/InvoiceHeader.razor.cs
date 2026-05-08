@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -9,7 +9,7 @@ using Microsoft.JSInterop;
 using STTproject.Components.Shared;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
-using STTproject.Models.Tables;
+using STTproject.Data.Entities;
 using STTproject.Services;
 
 namespace STTproject.Features.SalesInvoice.Components.Sections;
@@ -473,7 +473,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
                 return;
             }
 
-            // ✅ If all checks pass, trigger parent save
+            // If all checks pass, trigger parent save
             await OnSaveClick.InvokeAsync();
         }
         finally
@@ -481,7 +481,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
             invoiceNumberCheckLock.Release();
         }
 
-        // 👇 Mark as saved so Edit button appears
+        // Mark as saved so Edit button appears
         IsSaved = true;
     }
 

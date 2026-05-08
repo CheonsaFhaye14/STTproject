@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,8 +7,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
-using STTproject.Models.Tables;
-
+using STTproject.Data.Entities;
 namespace STTproject.Features.SalesInvoice.Components.Modals;
 
 public partial class EditInvoiceItems
