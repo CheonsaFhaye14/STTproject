@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using STTproject.Components;
 using STTproject.Data;
 using STTproject.Services;
+using STTproject.Features.MapItem.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,8 @@ builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IMapItemService, MapItemService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddScoped<AddUomService>();
+builder.Services.AddScoped<DownloadTemplateService>();
 
 var app = builder.Build();
 

@@ -176,7 +176,7 @@ public partial class SttprojectContext : DbContext
 
             entity.HasOne(d => d.SubdItem).WithOne(p => p.ItemsUom)
                 .HasForeignKey<ItemsUom>(d => d.SubdItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_ItemsUom_SubdItemId");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)

@@ -1,5 +1,39 @@
-﻿<h3>DownloadTemplate</h3>
-
-@code {
-
+﻿@using STTproject.Models
+@using STTproject.Data;
+@using STTproject.Services
+@if (ShowModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h4>Download Template</h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Sub Distributor</label>
+                    <select @bind="selectedSubdistributorId">
+                        <option value="0">-- All Sub Distributors --</option>
+                        @foreach (var subd in SubdList)
+                        {
+                            <option value="@subd.SubDistributorId">@subd.SubdName</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Principal (Optional)</label>
+                    <select @bind="selectedPrincipal">
+                        <option value="">-- All Principals --</option>
+                        @foreach (var principal in PrincipalList)
+                        {
+                            <option value="@principal">@principal</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-primary" @onclick="DownloadClicked">Download</button>
+                    <button class="btn-secondary" @onclick="CancelClicked">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
 }

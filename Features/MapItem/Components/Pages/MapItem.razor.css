@@ -30,32 +30,6 @@
     border: 1px solid #b87333; /* bronze accent */
 }
 
-/* Form row container */
-.form-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    background-color: #F9DFDF; /* pink background */
-    padding: 14px;
-    border-radius: 15px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    margin-top: 15px;
-}
-/* Titles above input fields */
-.form-group h5 {
-    font-size: 16px;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 6px;
-}
-/* Form actions */
-.form-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-}
-
 /* Button group */
 .button-group {
     display: flex;

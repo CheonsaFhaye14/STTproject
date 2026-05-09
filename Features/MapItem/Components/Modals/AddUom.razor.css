@@ -1,0 +1,119 @@
+.add-uom-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-box {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    width: min(860px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header,
+.modal-footer {
+    padding: 16px 20px;
+    background: #f9dfdf;
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.modal-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow: auto;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+}
+
+.form-group label,
+.modal-body h5 {
+    font-weight: 600;
+    color: #333;
+}
+
+.form-group select,
+.form-group input,
+.modal-queue input {
+    border-radius: 10px;
+    padding: 8px 10px;
+    border: none;
+    box-shadow: 2px 2px 2px #888888;
+    background: #fff;
+    color: #333;
+}
+
+.modal-queue {
+    margin-top: 20px;
+}
+
+.modal-queue table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.modal-queue th,
+.modal-queue td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.btn-primary,
+.btn-secondary,
+.remove-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: #ac7a7a;
+    color: #fff;
+}
+
+.btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.remove-btn {
+    background: #dc3545;
+    color: #fff;
+}
+
+.error-text {
+    color: #b00020;
+    font-size: 0.85rem;
+    margin-top: 6px;
+}

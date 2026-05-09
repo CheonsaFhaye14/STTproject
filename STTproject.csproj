@@ -19,7 +19,6 @@
 
   <ItemGroup>
     <Folder Include="Features\MapItem\DTOs\" />
-    <Folder Include="Features\MapItem\Validators\" />
     <Folder Include="Features\MapItem\Services\" />
     <Folder Include="Features\SalesInvoice\Services\" />
     <Folder Include="Services\NewFolder\" />

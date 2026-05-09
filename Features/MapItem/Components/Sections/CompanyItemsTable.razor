@@ -1,5 +1,62 @@
-﻿<h3>CompanyItemsTable</h3>
-
-@code {
-
-}
+﻿<div class="card-section">
+    <div class="filters">
+        <h3 class="company-items-title">
+            COMPANY ITEMS
+            @if (SelectedCompanyItemIdForFilter.HasValue)
+            {
+                var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
+                    <button @onclick="ClearFilterAsync" class="btn-primary company-items-clear-filter">
+                    Clear Filter
+                </button>
+            }
+        </h3>
+        <div class="filter-group">
+            <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged"
+                    disabled="@(!IsSubDistributorSelected)">
+                <option value="All">All categories</option>
+                @foreach (var category in CompanyItemCategories)
+                {
+                    <option value="@category">@category</option>
+                }
+            </select>
+        </div>
+        <div class="filter-group">
+            <select @bind="SelectedCompanyItemsFilterString" @bind:after="HandleFilterChanged"
+                    disabled="@(!IsSubDistributorSelected)">
+                <option value="All">All company items</option>
+                <option value="Unmapped">Items for Mapping </option>
+                <option value="Mapped">Already Mapped</option>
+            </select>
+        </div>
+    </div>
+    <table class="mapping-table">
+        <thead>
+            <tr>
+                <th>COMPANY ITEM CODE</th>
+                <th>CATEGORY</th>
+                <th>ITEM NAME</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (CompanyItems.Any())
+            {
+                @foreach (var item in CompanyItems)
+                {
+                    var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
+                    <tr @onclick="() => HandleRowClicked(item)"
+                        class="company-items-row @(isSelected ? "selected-row" : string.Empty)">
+                        <td>@item.CompanyItemCode</td>
+                        <td>@item.Category</td>
+                        <td>@item.ItemName</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="3">No company items found.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

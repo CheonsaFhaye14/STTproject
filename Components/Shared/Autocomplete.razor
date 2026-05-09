@@ -6,7 +6,7 @@
 
 
 <div class="autocomplete">
-    <input class="form-input" @ref="inputRef" value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown"
+    <input class="form-input" @ref="inputRef" @bind-value="Value" @bind-value:event="oninput" @onkeydown="OnKeyDown"
            @onfocus="OpenOnFocus" @onblur="HandleBlur" placeholder="@Placeholder" disabled="@IsDisabled" />
     @if (isOpen && FilteredItems.Any())
     {
@@ -14,11 +14,12 @@
             @foreach (var (item, idx) in FilteredItems.Select((it, i) => (it, i)))
             {
                 var cls = idx == highlightedIndex ? "autocomplete-item highlighted" : "autocomplete-item";
-                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">@GetDisplayText(item)</div>
-            }
-        </div>
-    }
-</div>
+                <div class="@cls" @onclick="() => SelectItem(item)" @onmouseover="() => highlightedIndex = idx">
+                    @GetDisplayText(item)</div>
+                }
+            </div>
+        }
+    </div>
 
 @code {
     [Inject] IJSRuntime JSRuntime { get; set; } = default!;
@@ -46,17 +47,18 @@
             ? Items
             : Items.Where(i => i.ItemName.Contains(Value, StringComparison.OrdinalIgnoreCase));
 
-    private async Task OnInput(ChangeEventArgs e)
+    private string? _previousValue;
+
+    protected override async Task OnParametersSetAsync()
     {
-        Value = e?.Value?.ToString() ?? string.Empty;
-        highlightedIndex = -1;
-        hasSelectedItem = false;
-        await ValueChanged.InvokeAsync(Value);
-        isOpen = true;
-        if (FilteredItems.Any())
+        if (_previousValue != Value)
         {
-            highlightedIndex = 0;
+            _previousValue = Value;
+            highlightedIndex = -1;
+            hasSelectedItem = false;
+            await InvokeAsync(StateHasChanged);
         }
+        await base.OnParametersSetAsync();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -155,7 +157,10 @@
     private void HandleBlur(FocusEventArgs args)
     {
         // Delay closing so click events on popup can register
-        Task.Run(async () => { await Task.Delay(150); isOpen = false; highlightedIndex = -1; await InvokeAsync(StateHasChanged); });
+        Task.Run(async () =>
+        {
+            await Task.Delay(150); isOpen = false; highlightedIndex = -1; await InvokeAsync(StateHasChanged);
+        });
     }
 
     public async Task OpenPopupAsync()

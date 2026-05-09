@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using STTproject.Data;
 
@@ -11,9 +12,11 @@ using STTproject.Data;
 namespace STTproject.Migrations
 {
     [DbContext(typeof(SttprojectContext))]
-    partial class SttprojectContextModelSnapshot : ModelSnapshot
+    [Migration("20260509141059_RedefineCascadeDelete")]
+    partial class RedefineCascadeDelete
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

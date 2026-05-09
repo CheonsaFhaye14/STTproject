@@ -4,7 +4,7 @@
 @typeparam TItem
 
 <div class="autocomplete">
-    <input class="form-input" @ref="inputRef" value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown"
+    <input class="form-input" @ref="inputRef" @bind-value="Value" @bind-value:event="oninput" @onkeydown="OnKeyDown"
            @onfocus="OpenOnFocus" @onblur="HandleBlur" placeholder="@Placeholder" disabled="@IsDisabled" />
     @if (isOpen && FilteredItems.Any())
     {
@@ -45,18 +45,19 @@
                 ? Items
                 : Items.Where(i => ItemLabel(i).Contains(Value ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
-    private async Task OnInput(ChangeEventArgs e)
+    private string? _previousValue;
+
+    protected override async Task OnParametersSetAsync()
     {
-        Value = e?.Value?.ToString() ?? string.Empty;
-        showAllForOpen = false;
-        highlightedIndex = -1;
-        hasSelectedItem = false;
-        await ValueChanged.InvokeAsync(Value);
-        isOpen = true;
-        if (FilteredItems.Any())
+        if (_previousValue != Value)
         {
-            highlightedIndex = 0;
+            _previousValue = Value;
+            showAllForOpen = false;
+            highlightedIndex = -1;
+            hasSelectedItem = false;
+            await InvokeAsync(StateHasChanged);
         }
+        await base.OnParametersSetAsync();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)

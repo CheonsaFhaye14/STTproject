@@ -1,4 +1,4 @@
-namespace STTproject.Components.Pages.Validation;
+namespace STTproject.Features.MapItem.Validators;
 
 public static class MapItemValidation
 {

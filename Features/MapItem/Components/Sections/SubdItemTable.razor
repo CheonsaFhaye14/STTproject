@@ -1,5 +1,61 @@
-﻿<h3>SubdItemTable</h3>
+﻿<div class="card-section">
+	<h3 class="subd-items-title">
+		SUB DISTRIBUTOR ITEMS
+		@if (SelectedCompanyItemIdForFilter.HasValue)
+		{
+			var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
+			if (selectedItem != null)
+			{
+				<span class="subd-items-selected-summary">
+					(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
+				</span>
+			}
+		}
+	</h3>
 
-@code {
-
-}
+	<table class="mapping-table">
+		<thead>
+			<tr>
+				@if (!IsSubDistributorSelected)
+				{
+					<th>SUB DISTRIBUTOR NAME</th>
+				}
+				<th>SUB ITEM CODE</th>
+				<th>ITEM NAME</th>
+				<th>UNIT OF MEASURES</th>
+				<th>ACTIONS</th>
+			</tr>
+		</thead>
+		<tbody>
+			@if (SubdItems.Any())
+			{
+				@foreach (var item in SubdItems)
+				{
+					<tr>
+						@if (!IsSubDistributorSelected)
+						{
+							<td>@item.SubdName</td>
+						}
+						<td>@item.SubItemCode</td>
+						<td>@item.Description</td>
+						<td>@item.UomName</td>
+						<td>
+							<button class="btn-primary" type="button" @onclick="() => HandleEditClicked(item)"
+									disabled="@(!IsSubDistributorSelected)">EDIT</button>
+							<button class="btn-primary" type="button" @onclick="() => HandleDeleteClicked(item)"
+									disabled="@(!IsSubDistributorSelected)">DELETE</button>
+						</td>
+					</tr>
+				}
+			}
+			else
+			{
+				<tr>
+					<td colspan="@GetEmptyStateColumnSpan()">
+						No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+</div>

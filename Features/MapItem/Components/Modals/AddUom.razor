@@ -1,5 +1,162 @@
-﻿<h3>AddUom</h3>
+﻿@inject IJSRuntime JSRuntime
 
-@code {
+@if (ShowAddUomModal)
+{
+    <div class="modal-overlay add-uom-modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h4>Add Unit of Measure</h4>
+                @if (!string.IsNullOrWhiteSpace(ItemName) || !string.IsNullOrWhiteSpace(ItemCode))
+                {
+                    <div class="modal-item" style="margin-top:6px;font-size:0.95em;color:#444;">
+                        @if (!string.IsNullOrWhiteSpace(ItemCode))
+                        {
+                            <strong>@ItemCode</strong>
+                            @if (!string.IsNullOrWhiteSpace(ItemName))
+                            {
+                                <text> - </text>
+                            }
+                        }
+                        @if (!string.IsNullOrWhiteSpace(ItemName))
+                        {
+                            <span>@ItemName</span>
+                        }
+                    </div>
+                }
+            </div>
 
+            <div class="modal-body">
+                <!-- (Piece will be shown in the All Units table below) -->
+
+                <!-- Add new UOM section -->
+            
+                <h5>Add Additional Units</h5>
+                    
+                <div class="form-group">
+                    <label>Unit of Measure</label>
+                    <select @ref="uomSelectRef" @bind="SelectedUomOption" @bind:after="PersistDraftAsync"
+                            @onkeydown="HandleUomSelectKeyDown"
+                            @onkeydown:preventDefault="@(selectedUomOption != string.Empty)">
+                        <option value="">-- Select Unit of Measure --</option>
+                        @foreach (var option in defaultOptions)
+                        {
+                            @if (!workingUomEntries.ContainsKey(option))
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        }
+                        <option value="__custom">Other (type custom)</option>
+                    </select>
+                    @if (!string.IsNullOrWhiteSpace(GetFieldError("uom")))
+                    {
+                        <span class="error-text">@GetFieldError("uom")</span>
+                    }
+                </div>
+
+                @if (selectedUomOption == "__custom")
+                {
+                    <div class="form-group">
+                        <label>Custom Unit of Measure</label>
+                        <input @bind="customUom" @bind:event="oninput" @bind:after="PersistDraftAsync"
+                               placeholder="Enter unit name" />
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label>Conversion (How many pieces per @(GetSelectedUomName() ?? "unit")?):</label>
+                    <input @ref="conversionInputRef" type="number" min="1" step="1" @bind="ConversionInput"
+                           @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
+                           @onkeydown="HandleConversionKeyDown" />
+                    @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
+                    {
+                        <span class="error-text">@GetFieldError("conversion")</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Price (Optional - will be calculated if left empty)</label>
+                    <input @ref="priceInputRef" type="number" min="0" step="0.01" @bind="PriceInput" @bind:event="oninput"
+                           @bind:after="PersistDraftAsync" placeholder="0.00" @onkeydown="HandlePriceKeyDown" />
+                    @if (!string.IsNullOrWhiteSpace(GetFieldError("price")))
+                    {
+                        <span class="error-text">@GetFieldError("price")</span>
+                    }
+                </div>
+
+                <div class="modal-actions">
+                    <button @ref="addUomButtonRef" type="button" class="btn-primary"
+                            @onclick="() => AddUomEntryAsync(false)" @onkeydown="HandleAddUomButtonKeyDown">Add UOM</button>
+                </div>
+
+                
+                <!-- Display all UOMs -->
+                @if (workingUomEntries.Count > 0)
+                {
+                    <div class="modal-queue" style="margin-top: 20px;">
+                        <h5>All Units</h5>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Unit of Measure</th>
+                                    <th>Conversion (Pieces)</th>
+                                    <th>Price</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in workingUomEntries.OrderBy(x => x.Value.Conversion))
+                                {
+                                    <tr>
+                                        <td>@row.Key@(row.Key == "Piece" ? " (Base Unit)" : string.Empty)</td>
+                                        <td>
+                                            @if (row.Key == "Piece")
+                                            {
+                                                <input type="number" min="1" step="1" @bind="row.Value.Conversion"
+                                                       @bind:event="onchange" readonly />
+                                            }
+                                            else
+                                            {
+                                                <input type="number" min="1" step="1" @bind="row.Value.Conversion"
+                                                       @bind:event="onchange" />
+                                            }
+                                        </td>
+                                        <td>
+                                            <input type="number" min="0" step="0.01" @bind="row.Value.Price" @bind:event="onchange"
+                                                   @bind:after="@(async () => await HandlePriceInputChangedAsync(row.Key))"
+                                                   placeholder="0.00" />
+                                        </td>
+                                        <td>
+                                            @if (!string.Equals(row.Key, "Piece", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <button type="button" class="btn remove-btn"
+                                                        @onclick="() => RemoveUomEntry(row.Key)">Remove</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                @if (!string.IsNullOrWhiteSpace(GetFieldError("prices")))
+                {
+                    <span class="error-text">@GetFieldError("prices")</span>
+                }
+                <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel (Esc)</button>
+                <button type="button" class="btn-secondary" @onclick="ShowClearDraftConfirmModal">Clear Draft</button>
+                <button type="button" class="btn-primary" @onclick="AddAsync">Save</button>
+            </div>
+        </div>
+
+        @if (showClearDraftConfirmModal)
+        {
+            <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
+                          Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
+                          OnNo="CancelClearDraftConfirm" />
+        }
+    </div>
 }
+

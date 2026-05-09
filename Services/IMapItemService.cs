@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 
 using STTproject.Models;
+using Microsoft.Extensions.Logging;
 using STTproject.Data;
+using STTproject.Features.MapItem.DTOs;
 namespace STTproject.Services;
 
 public interface IMapItemService
@@ -31,10 +33,12 @@ public enum CompanyItemFilterMode
 public class MapItemService : IMapItemService
 {
     private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly ILogger<MapItemService> _logger;
 
-    public MapItemService(IDbContextFactory<SttprojectContext> contextFactory)
+    public MapItemService(IDbContextFactory<SttprojectContext> contextFactory, ILogger<MapItemService> logger)
     {
         _contextFactory = contextFactory;
+        _logger = logger;
     }
 
     public async Task<List<string>> GetMapItemPrincipalsAsync(
@@ -401,18 +405,38 @@ public class MapItemService : IMapItemService
                 return DeleteSubdItemResult.InUse("This sub distributor item cannot be deleted because it is already used by one or more invoices.");
             }
 
-            if (existing.ItemsUom is not null)
+            // Remove any UOM rows that belong to this SubdItem first
+            var existingUoms = await context.ItemsUoms
+                .Where(u => u.SubdItemId == subdItemId)
+                .ToListAsync(cancellationToken);
+
+            if (existingUoms.Any())
             {
-                context.ItemsUoms.Remove(existing.ItemsUom);
+                context.ItemsUoms.RemoveRange(existingUoms);
+                // persist deletion of dependent rows first to avoid relationship/severed errors
+                await context.SaveChangesAsync(cancellationToken);
             }
 
+            // Clear the navigation on the tracked SubdItem to avoid "association severed" errors
+            existing.ItemsUom = null;
+            context.Entry(existing).Reference(e => e.ItemsUom).CurrentValue = null;
+
+            // Now remove the subd item
             context.SubdItems.Remove(existing);
             await context.SaveChangesAsync(cancellationToken);
             return DeleteSubdItemResult.Success();
         }
-        catch
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
         {
-            return DeleteSubdItemResult.Failed("Unable to delete the sub distributor item.");
+            var baseMsg = dbEx.GetBaseException()?.Message ?? dbEx.Message;
+            _logger?.LogError(dbEx, "DB update error deleting SubdItem {SubdItemId}: {Message}", subdItemId, baseMsg);
+            return DeleteSubdItemResult.Failed($"Unable to delete the sub distributor item: {baseMsg}");
+        }
+        catch (Exception ex)
+        {
+            var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+            _logger?.LogError(ex, "Error deleting SubdItem {SubdItemId}: {Message}", subdItemId, baseMsg);
+            return DeleteSubdItemResult.Failed($"Unable to delete the sub distributor item: {baseMsg}");
         }
     }
 
@@ -586,20 +610,6 @@ public sealed class MapSubDistributorItemRow
     public string SubdName { get; set; } = string.Empty;
     public string UomName { get; set; } = string.Empty;
 }
-
-public sealed class TemplateRow
-{
-    public string CompanyItemCode { get; set; } = string.Empty;
-    public string CompanyItemName { get; set; } = string.Empty;
-    public string Principal { get; set; } = string.Empty;
-    public string SubDistributorCode { get; set; } = string.Empty;
-    public string SubdItemName { get; set; } = string.Empty;
-    public string SubdItemCode { get; set; } = string.Empty;
-    public string UOM { get; set; } = string.Empty;
-    public decimal? Conversion { get; set; }
-    public decimal? Price { get; set; }
-}
-
 public sealed class DeleteSubdItemResult
 {
     public bool IsDeleted { get; init; }
