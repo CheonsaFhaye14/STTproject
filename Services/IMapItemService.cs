@@ -577,13 +577,7 @@ public class MapItemService : IMapItemService
     }
 }
 
-public sealed class CompanyItemDropdownItem
-{
-    public int CompanyItemId { get; set; }
-    public string ItemCode { get; set; } = string.Empty;
-    public string ItemName { get; set; } = string.Empty;
-    public string Principal { get; set; } = string.Empty;
-}
+
 
 public sealed class MapCompanyItemRow
 {
@@ -597,19 +591,6 @@ public sealed class MapCompanyItemRow
     public string UomName { get; set; } = string.Empty;
 }
 
-public sealed class MapSubDistributorItemRow
-{
-    public int SubdItemId { get; set; }
-    public int SubDistributorId { get; set; }
-    public string SubItemCode { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public decimal Price { get; set; }
-    public string Principal { get; set; } = string.Empty;
-    public int CompanyItemId { get; set; }
-    public string CompanyItemName { get; set; } = string.Empty;
-    public string SubdName { get; set; } = string.Empty;
-    public string UomName { get; set; } = string.Empty;
-}
 public sealed class DeleteSubdItemResult
 {
     public bool IsDeleted { get; init; }
@@ -620,7 +601,6 @@ public sealed class DeleteSubdItemResult
     public static DeleteSubdItemResult InUse(string message) => new() { IsDeleted = false, ErrorMessage = message };
     public static DeleteSubdItemResult Failed(string message) => new() { IsDeleted = false, ErrorMessage = message };
 }
-
 public sealed class UpdateSubdItemResult
 {
     public bool IsUpdated { get; init; }

@@ -5,7 +5,7 @@
             @if (SelectedCompanyItemIdForFilter.HasValue)
             {
                 var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
-                    <button @onclick="ClearFilterAsync" class="btn-primary company-items-clear-filter">
+                <button @onclick="ClearFilterAsync" class="btn-primary company-items-clear-filter">
                     Clear Filter
                 </button>
             }

@@ -21,6 +21,7 @@ builder.Services.AddScoped<IMapItemService, MapItemService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<AddUomService>();
+builder.Services.AddScoped<MapItemDraftService>();
 builder.Services.AddScoped<DownloadTemplateService>();
 
 var app = builder.Build();

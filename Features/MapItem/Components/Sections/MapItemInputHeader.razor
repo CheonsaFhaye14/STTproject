@@ -1,4 +1,5 @@
-﻿<div class="form-row">
+﻿@using STTproject.Features.MapItem.DTOs
+<div class="form-row">
     <div class="form-group">
         <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
         <input @ref="itemCodeInput" value="@itemCodeInternal" @oninput="HandleItemCodeInput"
