@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -17,11 +12,18 @@ namespace STTproject.Features.SalesInvoice.Components.Modals;
 public partial class AddInvoiceItems
 {
     private ElementReference SkuCodeInput;
+
     private GenericAutocomplete<SubdItem>? itemNameAutocomplete;
+
     private ElementReference UomSelect;
+
     private ElementReference QuantityInput;
+
     private IJSObjectReference? jsModule;
+    [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
+
     private bool ShowValidationErrors;
+
     private bool skipNextSkuBlurValidation;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
 
@@ -39,36 +41,11 @@ public partial class AddInvoiceItems
     [Parameter] public bool HeaderIsSaved { get; set; } = false;
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
-    private bool _wasModalShown;
-
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-        }
-
-        if (ShowModal && !_wasModalShown)
-        {
-            _wasModalShown = true;
-            try
-            {
-                await SkuCodeInput.FocusAsync();
-            }
-            catch { }
-        }
-        else if (!ShowModal && _wasModalShown)
-        {
-            _wasModalShown = false;
-        }
-    }
 
     private List<InputItemModel> modalItems = new();
     public InputItemModel NewItem { get; set; } = CreateNewItem();
     private SubdItem? CurrentSubdItem { get; set; }
     private ItemsUom? CurrentUom { get; set; }
-    private string SelectedUOM { get; set; } = string.Empty;
 
     private string NewSku
     {
@@ -124,36 +101,6 @@ SelectedSubdistributorId);
             CurrentSubdItem = null;
             NewItem.SubdItemId = 0;
             NewItem.ItemName = string.Empty;
-            NewItem.ItemsUomId = 0;
-            CurrentUom = null;
-        }
-
-        RevalidateIfNeeded();
-        _ = OnDraftChanged.InvokeAsync();
-    }
-
-    private void OnItemNameChanged(ChangeEventArgs e)
-    {
-        var itemName = e.Value?.ToString();
-        NewItem.ItemName = itemName ?? string.Empty;
-
-        var selected = AvailableItems
-            .FirstOrDefault(i => i.ItemName.Equals(itemName, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId ==
-SelectedSubdistributorId);
-
-        if (selected != null)
-        {
-            NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
-            CurrentSubdItem = selected;
-            NewItem.SubdItemId = selected.SubdItemId;
-            NewItem.ItemsUomId = 0;
-            CurrentUom = null;
-        }
-        else
-        {
-            NewItem.ItemCode = string.Empty;
-            CurrentSubdItem = null;
-            NewItem.SubdItemId = 0;
             NewItem.ItemsUomId = 0;
             CurrentUom = null;
         }
@@ -384,25 +331,6 @@ SelectedSubdistributorId);
         }
     }
 
-    private async Task HandleItemNameKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            ShowValidationErrors = true;
-            ValidateDraft();
-
-            if (string.IsNullOrWhiteSpace(NewItem.ItemName))
-            {
-                if (itemNameAutocomplete != null)
-                    await itemNameAutocomplete.OpenPopupAsync();
-                return;
-            }
-
-            await Task.Delay(10);
-            await UomSelect.FocusAsync();
-        }
-    }
-
     private async Task HandleItemNameConfirmed()
     {
         ShowValidationErrors = true;
@@ -437,26 +365,8 @@ SelectedSubdistributorId);
 
     private async Task OpenSelectDropdownAsync(ElementReference selectRef)
     {
-        if (jsModule != null)
-        {
-            await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (jsModule != null)
-        {
-            try
-            {
-                await jsModule.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-                // Circuit disconnected, JS cleanup not possible
-            }
-            jsModule = null;
-        }
+        jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
     }
 
     private async Task HandleQuantityKeyDown(KeyboardEventArgs e)

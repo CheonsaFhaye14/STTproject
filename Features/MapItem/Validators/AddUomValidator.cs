@@ -1,7 +1,5 @@
 using STTproject.Models;
 
-using STTproject.Models;
-
 namespace STTproject.Features.MapItem.Validators;
 
 public static class AddUomValidator

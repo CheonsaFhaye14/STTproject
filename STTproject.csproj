@@ -18,8 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Features\Home\Modals\" />
-    <Folder Include="Features\Home\Sections\" />
     <Folder Include="Features\Login\Components\Sections\" />
     <Folder Include="Features\MapItem\DTOs\" />
     <Folder Include="Features\MapItem\Services\" />
