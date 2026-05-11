@@ -1,3 +1,4 @@
+@page "/salesinvoice"
 @page "/salesinvoice/{SubDistributorId:int}"
 @page "/salesinvoice/edit/{InvoiceId:int}"
 
@@ -56,28 +57,28 @@
 }
 
 <AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
-              OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-              AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-              OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
+                 OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                 AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
+                 OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
 
 <EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-           OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
-           OnBeforeSave="OnEditItemsBeforeSave" />
+                  OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
+                  OnBeforeSave="OnEditItemsBeforeSave" />
 
 <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                    AvailableUoms="availableUoms" />
 
 
 
-    <div class="commit-actions">
-        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-        disabled="@(invoice.SubdistributorId <= 0)">
-    Clear Draft
-</button>
-        @if (isSaved)
-        {
-            <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
-            <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
-        }
-    </div>
+<div class="commit-actions">
+    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+            disabled="@(invoice.SubdistributorId <= 0)">
+        Clear Draft
+    </button>
+    @if (isSaved)
+    {
+        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
+        <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
+    }
+</div>
 

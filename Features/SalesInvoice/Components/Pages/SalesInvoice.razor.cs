@@ -203,7 +203,7 @@ public partial class SalesInvoice
 
     private string GetDraftStorageKey()
     {
-        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        var userId = userContext.UserId ?? 0;
         var subDistributorId = invoice.SubdistributorId != 0 ? invoice.SubdistributorId : SubDistributorId;
         var invoiceScope = currentInvoiceId != 0 ? $"invoice:{currentInvoiceId}" : "new";
         return $"salesinvoice-draft:{userId}:subd:{subDistributorId}:{invoiceScope}";
@@ -416,8 +416,7 @@ public partial class SalesInvoice
 
     private void GoBackToHome()
     {
-        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
-        Navigation.NavigateTo(userId > 0 ? $"/home?uid={userId}" : "/home");
+        Navigation.NavigateTo("/home");
     }
 
     private void ShowCommitInvoiceConfirm()
@@ -601,10 +600,6 @@ public partial class SalesInvoice
     [Parameter]
     public int? InvoiceId { get; set; }
 
-    [Parameter]
-    [SupplyParameterFromQuery(Name = "uid")]
-    public int? UserIdFromQuery { get; set; }
-
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();
@@ -636,14 +631,6 @@ public partial class SalesInvoice
 
     private async Task _OnParametersSetAsyncInternal()
     {
-        if (!userContext.UserId.HasValue)
-        {
-            if (UserIdFromQuery.HasValue)
-            {
-                userContext.UserId = UserIdFromQuery.Value;
-            }
-        }
-
         if (!userContext.UserId.HasValue)
         {
             Navigation.NavigateTo("/");

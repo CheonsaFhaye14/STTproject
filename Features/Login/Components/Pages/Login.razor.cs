@@ -1,14 +1,28 @@
-﻿namespace STTproject.Features.Login.Components.Pages
+﻿using Microsoft.AspNetCore.Components;
+
+namespace STTproject.Features.Login.Components.Pages
 {
     public partial class Login
     {
-        private string? username;
-        private string? password;
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "error")]
+        public string? ErrorCode { get; set; }
 
-        private void HandleLogin()
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "username")]
+        public string? Username { get; set; }
+
+        private string? loginErrorMessage;
+
+        protected override void OnParametersSet()
         {
-            userContext.UserId = 11;
-            Navigation.NavigateTo($"/home?uid={userContext.UserId.Value}");
+            loginErrorMessage = ErrorCode switch
+            {
+                "missing" => "Enter a username and password.",
+                "invalid" => "Invalid username or password.",
+                "db" => "Cannot connect to the database right now. Please try again.",
+                _ => null
+            };
         }
     }
 }

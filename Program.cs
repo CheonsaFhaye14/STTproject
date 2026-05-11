@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using STTproject.Components;
 using STTproject.Data;
 using STTproject.Services;
 using STTproject.Features.MapItem.Services;
+using STTproject.Features.Login.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +16,8 @@ builder.WebHost.UseUrls("https://sttproject.dev.localhost:7105;http://sttproject
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddDbContextFactory<SttprojectContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -20,6 +25,7 @@ builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IMapItemService, MapItemService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<AddUomService>();
 builder.Services.AddScoped<MapItemDraftService>();
 builder.Services.AddScoped<DownloadTemplateService>();
@@ -35,8 +41,31 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
-
 app.UseAntiforgery();
+
+app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService) =>
+{
+    var form = await httpContext.Request.ReadFormAsync();
+    var username = form["username"].ToString().Trim();
+    var password = form["password"].ToString();
+
+    var (success, user, errorCode) = await loginService.AuthenticateAsync(username, password);
+
+    if (!success)
+    {
+        return Results.Redirect($"/?error={errorCode}&username={Uri.EscapeDataString(username)}");
+    }
+
+    httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = httpContext.Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        Expires = DateTimeOffset.UtcNow.AddDays(7)
+    });
+
+    return Results.Redirect("/home");
+});
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

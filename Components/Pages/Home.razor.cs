@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Components.Web;
+﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using STTproject.Data;
 using STTproject.Services;
 
@@ -6,7 +7,7 @@ namespace STTproject.Components.Pages
 {
     public partial class Home
     {
-        private int userid = 11; // Placeholder for user ID, to be replaced with actual user context
+        private int userid;
         private string UserFullName = string.Empty;
 
         private List<SubDistributor> subdList = new();
@@ -92,9 +93,16 @@ namespace STTproject.Components.Pages
             }
         }
 
-        protected override async Task OnInitializedAsync()
+        protected override async Task OnParametersSetAsync()
         {
-            userContext.UserId = userid;
+            if (!userContext.UserId.HasValue)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            userid = userContext.UserId.Value;
+            UserFullName = string.Empty;
 
             var user = await homeService.GetUserAsync(userid);
             if (user != null)
@@ -109,12 +117,12 @@ namespace STTproject.Components.Pages
 
         void InputSalesInvoice(int subDistributorId)
         {
-            Navigation.NavigateTo($"/salesinvoice/{subDistributorId}?uid={userid}");
+            Navigation.NavigateTo($"/salesinvoice/{subDistributorId}");
         }
 
         void GoToMapItems()
         {
-            Navigation.NavigateTo($"/mapitem?uid={userid}");
+            Navigation.NavigateTo("/mapitem");
         }
 
         void SetBatchMode()
@@ -198,7 +206,7 @@ namespace STTproject.Components.Pages
         {
             if (selectedInvoiceDetails != null)
             {
-                Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}?uid={userid}");
+                Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}");
             }
         }
 
@@ -287,6 +295,6 @@ namespace STTproject.Components.Pages
             batchRows = await homeService.GetSalesInvoiceBatchRowsAsync(userid);
             flatRows = await homeService.GetSalesInvoiceFlatRowsAsync(userid);
         }
-  
-}
+
+    }
 }

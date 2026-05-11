@@ -1,26 +1,55 @@
 ﻿@layout STTproject.Shared.Layout.EmptyLayout
 @page "/"
-@using Microsoft.AspNetCore.Components.Forms
-@using STTproject.Services
 
-@inject NavigationManager Navigation
-@inject IUserContextService userContext
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
 <div class="login-container">
     <div class="login-card">
         <h2 class="login-title">LOGIN</h2>
 
-        <div class="login-field">
-            <label>USERNAME</label>
-            <InputText @bind-Value="username" placeholder="Enter username" />
-        </div>
+        <form method="post" action="/login">
 
-        <div class="login-field">
-            <label>PASSWORD</label>
-            <InputText @bind-Value="password" type="password" placeholder="Enter password" />
-        </div>
+            <div class="login-field">
+                <label>USERNAME</label>
+                <input name="username" placeholder="Enter username" value="@Username" />
+            </div>
 
-        <button class="login-btn" @onclick="HandleLogin">LOGIN</button>
+            <div class="login-field">
+                <label>PASSWORD</label>
+                <div class="password-wrapper">
+                    <input id="passwordInput" name="password" type="password" placeholder="Enter password"
+                           class="password-input" />
+                    <button type="button" class="password-toggle-icon" onclick="togglePasswordVisibility()"
+                            title="Show/hide password">
+                        <i id="toggleIcon" class="fas fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(loginErrorMessage))
+            {
+                <p class="login-error">@loginErrorMessage</p>
+            }
+
+            <button class="login-btn" type="submit">LOGIN</button>
+        </form>
     </div>
 </div>
+
+<script>
+    function togglePasswordVisibility() {
+        const input = document.getElementById('passwordInput');
+        const icon = document.getElementById('toggleIcon');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+</script>
 

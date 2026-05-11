@@ -13,11 +13,6 @@ namespace STTproject.Features.MapItem.Components.Pages
 {
     public partial class MapItem
     {
-            [Parameter]
-            [SupplyParameterFromQuery(Name = "uid")]
-            public int? UserIdFromQuery { get; set; }
-
-
         private bool showAddUomModal = false;
         private string? modalCompanyItemCode;
         private string? modalCompanyItemName;
@@ -43,6 +38,8 @@ namespace STTproject.Features.MapItem.Components.Pages
         private bool showErrorModal = false;
         private bool showDownloadTemplateModal = false;
         private bool showClearConfirmModal = false;
+        private bool shouldHydrateClientStateAfterRender = false;
+        private bool hasHydratedClientState = false;
         [Parameter] public EventCallback OnDraftChanged { get; set; }
 
         private async Task HandleDownloadTemplateSubmit((int SubdistributorId, string? Principal) filters)
@@ -109,19 +106,19 @@ namespace STTproject.Features.MapItem.Components.Pages
 
         private string GetDraftStorageKey()
         {
-            var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+            var userId = userContext.UserId ?? 0;
             return $"mapitem-draft:{userId}";
         }
 
         private string GetAddUomDraftStorageKey()
         {
-            var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+            var userId = userContext.UserId ?? 0;
             var companyItemId = selectedCompanyItemId ?? 0;
             return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}";
         }
         private string GetLastSelectedSubdStorageKey()
         {
-            var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+            var userId = userContext.UserId ?? 0;
             return $"mapitem-last-selected-subd:{userId}";
         }
 
@@ -240,8 +237,7 @@ namespace STTproject.Features.MapItem.Components.Pages
 
         private void GoBackToHome()
         {
-            var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
-            Navigation.NavigateTo(userId > 0 ? $"/home?uid={userId}" : "/home");
+            Navigation.NavigateTo("/home");
         }
 
         async ValueTask IAsyncDisposable.DisposeAsync()
@@ -333,11 +329,6 @@ namespace STTproject.Features.MapItem.Components.Pages
 
         private async Task _OnParametersSetAsyncInternal()
         {
-            if (!userContext.UserId.HasValue && UserIdFromQuery.HasValue)
-            {
-                userContext.UserId = UserIdFromQuery.Value;
-            }
-
             if (!userContext.UserId.HasValue)
             {
                 subdList = new();
@@ -356,10 +347,14 @@ namespace STTproject.Features.MapItem.Components.Pages
             }
 
             subdList = await homeService.GetSubDistributorsAsync(userContext.UserId.Value);
+            shouldHydrateClientStateAfterRender = true;
 
             if (selectedSubdId == 0)
             {
-                await RestoreLastSelectedSubdAsync();
+                if (hasHydratedClientState)
+                {
+                    await RestoreLastSelectedSubdAsync();
+                }
             }
 
             if (!subdList.Any())
@@ -389,7 +384,11 @@ namespace STTproject.Features.MapItem.Components.Pages
 
             UpdateSelectedSubdLocation();
             await LoadMapTablesAsync();
-            await RestoreDraftStateOnlyAsync();
+
+            if (hasHydratedClientState && selectedSubdId != 0)
+            {
+                await RestoreDraftStateOnlyAsync();
+            }
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -416,6 +415,34 @@ namespace STTproject.Features.MapItem.Components.Pages
                     return;
                 }
                 await subdSelectRef.FocusAsync();
+
+                if (shouldHydrateClientStateAfterRender && !hasHydratedClientState && userContext.UserId.HasValue)
+                {
+                    await HydrateClientStateAfterRenderAsync();
+                    StateHasChanged();
+                }
+            }
+        }
+
+        private async Task HydrateClientStateAfterRenderAsync()
+        {
+            if (hasHydratedClientState)
+            {
+                return;
+            }
+
+            hasHydratedClientState = true;
+
+            if (selectedSubdId == 0)
+            {
+                await RestoreLastSelectedSubdAsync();
+            }
+
+            if (selectedSubdId != 0)
+            {
+                UpdateSelectedSubdLocation();
+                await LoadMapTablesAsync();
+                await RestoreDraftStateOnlyAsync();
             }
         }
 
@@ -1348,6 +1375,6 @@ namespace STTproject.Features.MapItem.Components.Pages
             showErrorModal = false;
             itemActionErrorMessage = null;
         }
-    
-}
+
+    }
 }
