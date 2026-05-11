@@ -1,6 +1,8 @@
-﻿@page "/login"
+﻿@layout STTproject.Shared.Layout.EmptyLayout
+@page "/"
 @using Microsoft.AspNetCore.Components.Forms
 @using STTproject.Services
+
 @inject NavigationManager Navigation
 @inject IUserContextService userContext
 
@@ -22,21 +24,3 @@
     </div>
 </div>
 
-@code {
-    private string? username;
-    private string? password;
-
-    private void HandleLogin()
-    {
-        if (username == "admin" && password == "1234")
-        {
-            Navigation.NavigateTo(userContext.UserId.HasValue
-                ? $"/?uid={userContext.UserId.Value}"
-                : "/");
-        }
-        else
-        {
-            Console.WriteLine("Invalid login");
-        }
-    }
-}

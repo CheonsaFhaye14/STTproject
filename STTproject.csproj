@@ -23,7 +23,6 @@
     <Folder Include="Features\MapItem\Services\" />
     <Folder Include="Features\SalesInvoice\Services\" />
     <Folder Include="Services\NewFolder\" />
-    <Folder Include="Shared\Layout\" />
     <Folder Include="wwwroot\js\components\" />
     <Folder Include="wwwroot\js\utils\" />
   </ItemGroup>

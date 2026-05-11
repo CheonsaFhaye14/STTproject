@@ -1,5 +1,7 @@
-﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
 @using STTproject.Services
+
+@inherits LayoutComponentBase
 
 @inject IUserContextService userContext
 
@@ -8,7 +10,7 @@
     <main>
         <div class="top-row">
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="" Match="NavLinkMatch.All" tabindex="-1">
+                <NavLink class="nav-link" href="home" Match="NavLinkMatch.All" tabindex="-1">
                     <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
                 </NavLink>
             </div>
@@ -44,12 +46,6 @@
         </article>
     </main>
 </div>
-
-@code {
-    private string MapItemHref => userContext.UserId.HasValue
-        ? $"mapitem?uid={userContext.UserId.Value}"
-        : "mapitem";
-}
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

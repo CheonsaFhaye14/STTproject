@@ -416,7 +416,8 @@ public partial class SalesInvoice
 
     private void GoBackToHome()
     {
-        Navigation.NavigateTo("/");
+        var userId = userContext.UserId ?? UserIdFromQuery ?? 0;
+        Navigation.NavigateTo(userId > 0 ? $"/home?uid={userId}" : "/home");
     }
 
     private void ShowCommitInvoiceConfirm()
