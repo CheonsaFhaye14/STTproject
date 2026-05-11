@@ -132,7 +132,6 @@ public partial class SalesInvoice
         return Task.CompletedTask;
     }
 
-    // Add Items Confirmation
     async Task OnAddItemsBeforeSave(List<InputItemModel> itemsToAdd)
     {
         if (itemsToAdd?.Any() == true)
@@ -158,7 +157,6 @@ public partial class SalesInvoice
         addItemsConfirmCount = 0;
     }
 
-    // Edit Items Confirmation
     async Task OnEditItemsBeforeSave(List<InputItemModel> itemsToSave)
     {
         if (editItemsModalRef != null)

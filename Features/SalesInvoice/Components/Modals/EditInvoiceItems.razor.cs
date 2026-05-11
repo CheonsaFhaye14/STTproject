@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -24,7 +20,6 @@ public partial class EditInvoiceItems
     private ElementReference itemNameSelectRef;
     private ElementReference uomSelectRef;
     private ElementReference quantityInputRef;
-    private ElementReference removeButtonRef;
     private ElementReference cancelButtonRef;
     private ElementReference saveButtonRef;
     private IJSObjectReference? jsModule;
@@ -444,9 +439,6 @@ public partial class EditInvoiceItems
         return merged;
     }
 
-    /// <summary>
-    /// Counts the number of items that were deleted (in original Items but not in current editableItems).
-    /// </summary>
     public int GetDeletedItemCount()
     {
         return Items.Where(item =>
@@ -457,9 +449,6 @@ public partial class EditInvoiceItems
         ).Count();
     }
 
-    /// <summary>
-    /// Counts the number of items that were modified (quantity or UOM changed).
-    /// </summary>
     public int GetModifiedItemCount()
     {
         return editableItems.Where(item =>
@@ -481,22 +470,6 @@ public partial class EditInvoiceItems
     private string GetFieldError(string fieldKey)
     {
         return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (jsModule != null)
-        {
-            try
-            {
-                await jsModule.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-                // Circuit disconnected, JS cleanup not possible
-            }
-            jsModule = null;
-        }
     }
 
 }

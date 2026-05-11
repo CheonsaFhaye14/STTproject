@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using STTproject.Models;
 using STTproject.Data;
@@ -27,12 +23,6 @@ public partial class InvoiceItemsTable
         }
 
         return AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId)?.UomName ?? string.Empty;
-    }
-
-    private async Task RemoveItem(InputItemModel item)
-    {
-        Items.Remove(item);
-        await ItemsChanged.InvokeAsync(Items);
     }
 
 }

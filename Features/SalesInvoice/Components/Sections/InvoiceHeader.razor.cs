@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -10,7 +5,7 @@ using STTproject.Components.Shared;
 using STTproject.Features.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;
-using STTproject.Services;
+
 
 namespace STTproject.Features.SalesInvoice.Components.Sections;
 
