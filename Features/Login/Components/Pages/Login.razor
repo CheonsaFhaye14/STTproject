@@ -10,12 +10,13 @@
         <form method="post" action="/login">
 
             <div class="login-field">
-                <label>USERNAME</label>
+                <label>Username</label>
                 <input name="username" placeholder="Enter username" value="@Username" />
             </div>
 
             <div class="login-field">
-                <label>PASSWORD</label>
+                <label>Password
+                </label>
                 <div class="password-wrapper">
                     <input id="passwordInput" name="password" type="password" placeholder="Enter password"
                            class="password-input" />
@@ -30,8 +31,9 @@
             {
                 <p class="login-error">@loginErrorMessage</p>
             }
-
+            <label>Remember Me</label>
             <button class="login-btn" type="submit">LOGIN</button>
+            <label>Forget Password?  | Admin / User</label>
         </form>
     </div>
 </div>

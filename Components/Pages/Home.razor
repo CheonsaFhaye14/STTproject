@@ -34,7 +34,7 @@
                     <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province ?? string.Empty)</p>
                 </div>
 
-                <button class="example" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
+                <button class="example" @onclick="@(async e => await InputSalesInvoice(subd.SubDistributorId))">
                     INPUT INVOICE
                 </button>
             </div>

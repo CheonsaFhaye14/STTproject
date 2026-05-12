@@ -204,9 +204,8 @@ public partial class SalesInvoice
     private string GetDraftStorageKey()
     {
         var userId = userContext.UserId ?? 0;
-        var subDistributorId = invoice.SubdistributorId != 0 ? invoice.SubdistributorId : SubDistributorId;
         var invoiceScope = currentInvoiceId != 0 ? $"invoice:{currentInvoiceId}" : "new";
-        return $"salesinvoice-draft:{userId}:subd:{subDistributorId}:{invoiceScope}";
+        return $"salesinvoice-draft:{userId}:subd:{invoice.SubdistributorId}:{invoiceScope}";
     }
 
     private async Task PersistDraftAsync()
@@ -416,7 +415,7 @@ public partial class SalesInvoice
 
     private void GoBackToHome()
     {
-        Navigation.NavigateTo("/home");
+        Navigation.NavigateTo("/home", forceLoad: true);
     }
 
     private void ShowCommitInvoiceConfirm()
@@ -594,12 +593,6 @@ public partial class SalesInvoice
     string? errorMessage;
     bool showErrorModal = false;
 
-    [Parameter]
-    public int SubDistributorId { get; set; }
-
-    [Parameter]
-    public int? InvoiceId { get; set; }
-
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();
@@ -608,6 +601,12 @@ public partial class SalesInvoice
     List<Customer> customers = new();
     List<CustomerBranch> customerBranches = new();
     private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
+
+    [Parameter]
+    public int SubDistributorId { get; set; }
+
+    [Parameter]
+    public int? InvoiceId { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -631,78 +630,109 @@ public partial class SalesInvoice
 
     private async Task _OnParametersSetAsyncInternal()
     {
-        if (!userContext.UserId.HasValue)
+        try
         {
-            Navigation.NavigateTo("/");
-            return;
+            if (!userContext.UserId.HasValue)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            // Reset all modal states when parameters change to ensure clean UI
+            showAddItemsModal = false;
+            showEditItemsModal = false;
+            showCommitConfirmModal = false;
+            showAddItemsConfirmModal = false;
+            showEditItemsConfirmModal = false;
+            showClearConfirmModal = false;
+            showErrorModal = false;
+            errorMessage = null;
+            isSaved = false;
+
+            var currentUserId = userContext.UserId.Value;
+            subdList = await homeService.GetSubDistributorsAsync(currentUserId);
+
+            if (!subdList.Any())
+            {
+                customers = new();
+                customerBranches = new();
+                subdItems = new();
+                availableUoms = new();
+                invoice.SubdistributorId = 0;
+                return;
+            }
+
+            var selectedSubdId = SubDistributorId;
+
+            if (InvoiceId.HasValue && InvoiceId.Value > 0)
+            {
+                var invoiceData = await salesInvoiceService.GetInvoiceByIdAsync(InvoiceId.Value);
+                if (invoiceData.HasValue && invoiceData.Value.Invoice != null)
+                {
+                    var loadedInvoice = invoiceData.Value.Invoice;
+                    invoice = loadedInvoice;
+                    items = invoiceData.Value.Items;
+                    AssignLineItemIds(items);
+                    currentInvoiceId = InvoiceId.Value;
+                    isSaved = true;
+                    selectedSubdId = invoice.SubdistributorId;
+                }
+            }
+
+            if (!subdList.Any(s => s.SubDistributorId == selectedSubdId))
+            {
+                selectedSubdId = subdList.FirstOrDefault()?.SubDistributorId ?? 0;
+            }
+
+            var pageData = await salesInvoiceService.GetPageDataAsync(selectedSubdId);
+            customers = pageData.Customers;
+            customerBranches = pageData.CustomerBranches;
+            subdItems = pageData.SubdItems;
+            availableUoms = pageData.ItemUoms;
+
+            if (!InvoiceId.HasValue || InvoiceId.Value == 0)
+            {
+                invoice.SubdistributorId = selectedSubdId;
+                return;
+            }
+
+            var selectedCustomer = customers.FirstOrDefault(c => c.CustomerId == invoice.CustomerId);
+            if (selectedCustomer != null)
+            {
+                invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
+                invoice.CustomerName = selectedCustomer.CustomerName;
+                invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
+            }
+
+            var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
+            if (selectedBranch != null)
+            {
+                invoice.CustomerAddress = string.Join(", ", new[]
+                {
+                    selectedBranch.AddressLine,
+                    selectedBranch.City,
+                    selectedBranch.Province,
+                    selectedBranch.ZipCode.ToString()
+                }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            }
+
+            StateHasChanged();
         }
-
-        var currentUserId = userContext.UserId.Value;
-        subdList = await homeService.GetSubDistributorsAsync(currentUserId);
-
-        if (!subdList.Any())
+        catch (Exception ex)
         {
-            customers = new();
-            customerBranches = new();
-            subdItems = new();
-            availableUoms = new();
-            invoice.SubdistributorId = 0;
-            return;
+            Console.WriteLine($"SalesInvoice._OnParametersSetAsyncInternal EXCEPTION: {ex.GetType().Name} - {ex.Message}");
+            throw;
         }
+    }
 
-        var selectedSubdId = SubDistributorId;
-
+    private string GetComponentKey()
+    {
         if (InvoiceId.HasValue && InvoiceId.Value > 0)
         {
-            var invoiceData = await salesInvoiceService.GetInvoiceByIdAsync(InvoiceId.Value);
-            if (invoiceData.HasValue && invoiceData.Value.Invoice != null)
-            {
-                var loadedInvoice = invoiceData.Value.Invoice;
-                invoice = loadedInvoice;
-                items = invoiceData.Value.Items;
-                AssignLineItemIds(items);
-                currentInvoiceId = InvoiceId.Value;
-                isSaved = true;
-                selectedSubdId = invoice.SubdistributorId;
-            }
+            return $"invoice-{InvoiceId.Value}";
         }
 
-        if (!subdList.Any(s => s.SubDistributorId == selectedSubdId))
-        {
-            selectedSubdId = subdList.FirstOrDefault()?.SubDistributorId ?? 0;
-        }
-
-        var pageData = await salesInvoiceService.GetPageDataAsync(selectedSubdId);
-        customers = pageData.Customers;
-        customerBranches = pageData.CustomerBranches;
-        subdItems = pageData.SubdItems;
-        availableUoms = pageData.ItemUoms;
-
-        if (!InvoiceId.HasValue || InvoiceId.Value == 0)
-        {
-            invoice.SubdistributorId = selectedSubdId;
-            return;
-        }
-
-        var selectedCustomer = customers.FirstOrDefault(c => c.CustomerId == invoice.CustomerId);
-        if (selectedCustomer != null)
-        {
-            invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
-            invoice.CustomerName = selectedCustomer.CustomerName;
-            invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
-        }
-
-        var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
-        if (selectedBranch != null)
-        {
-            invoice.CustomerAddress = string.Join(", ", new[]
-            {
-                selectedBranch.AddressLine,
-                selectedBranch.City,
-                selectedBranch.Province,
-                selectedBranch.ZipCode.ToString()
-            }.Where(value => !string.IsNullOrWhiteSpace(value)));
-        }
+        return $"subd-{SubDistributorId}";
     }
 
     async Task UpdateSubdDisplay(SubDistributor s)

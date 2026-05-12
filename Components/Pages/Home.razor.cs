@@ -115,14 +115,15 @@ namespace STTproject.Components.Pages
             flatRows = await homeService.GetSalesInvoiceFlatRowsAsync(userid);
         }
 
-        void InputSalesInvoice(int subDistributorId)
+        async Task InputSalesInvoice(int subDistributorId)
         {
-            Navigation.NavigateTo($"/salesinvoice/{subDistributorId}");
+            // Force full page reload to ensure component lifecycle runs properly
+            Navigation.NavigateTo($"/salesinvoice/{subDistributorId}", forceLoad: true);
         }
 
-        void GoToMapItems()
+        async Task GoToMapItems()
         {
-            Navigation.NavigateTo("/mapitem");
+            Navigation.NavigateTo("/mapitem", forceLoad: true);
         }
 
         void SetBatchMode()
@@ -202,11 +203,11 @@ namespace STTproject.Components.Pages
             deleteInvoiceErrorMessage = null;
         }
 
-        void EditInvoiceDetails()
+        async Task EditInvoiceDetails()
         {
             if (selectedInvoiceDetails != null)
             {
-                Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}");
+                Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}", forceLoad: true);
             }
         }
 

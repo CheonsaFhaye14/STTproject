@@ -237,7 +237,7 @@ namespace STTproject.Features.MapItem.Components.Pages
 
         private void GoBackToHome()
         {
-            Navigation.NavigateTo("/home");
+            Navigation.NavigateTo("/home", forceLoad: true);
         }
 
         async ValueTask IAsyncDisposable.DisposeAsync()
