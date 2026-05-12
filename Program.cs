@@ -61,10 +61,24 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
         HttpOnly = true,
         Secure = httpContext.Request.IsHttps,
         SameSite = SameSiteMode.Lax,
+        Path = "/",
         Expires = DateTimeOffset.UtcNow.AddDays(7)
     });
 
     return Results.Redirect("/home");
+});
+
+app.MapGet("/logout", (HttpContext httpContext) =>
+{
+    httpContext.Response.Cookies.Delete(UserContextService.UserIdCookieName, new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = httpContext.Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        Path = "/"
+    });
+
+    return Results.Redirect("/");
 });
 
 app.MapStaticAssets();
