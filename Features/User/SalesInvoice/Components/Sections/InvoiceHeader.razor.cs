@@ -313,6 +313,14 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return OnDraftChanged.InvokeAsync();
     }
 
+    // Handler for typing only (do not sync/clear IDs while user types)
+    private Task HandleCustomerNameTyping(string? value)
+    {
+        Invoice.CustomerName = value ?? string.Empty;
+        // Keep existing IDs until selection is confirmed
+        return OnDraftChanged.InvokeAsync();
+    }
+
     private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")

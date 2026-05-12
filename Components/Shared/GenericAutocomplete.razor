@@ -4,8 +4,8 @@
 @typeparam TItem
 
 <div class="autocomplete">
-    <input class="form-input" @ref="inputRef" @bind-value="Value" @bind-value:event="oninput" @onkeydown="OnKeyDown"
-           @onfocus="OpenOnFocus" @onblur="HandleBlur" placeholder="@Placeholder" disabled="@IsDisabled" />
+            <input class="form-input" @ref="inputRef" @bind="Value" @bind:event="oninput" @bind:after="HandleInputChanged"
+                @onkeydown="OnKeyDown" @onfocus="OpenOnFocus" @onblur="HandleBlur" placeholder="@Placeholder" disabled="@IsDisabled" />
     @if (isOpen && FilteredItems.Any())
     {
         <div class="autocomplete-popup" @onmousedown:preventDefault>
@@ -47,6 +47,15 @@
 
     private string? _previousValue;
 
+    private Task HandleInputChanged()
+    {
+        showAllForOpen = false;
+        isOpen = true;
+        highlightedIndex = FilteredItems.Any() ? 0 : -1;
+        hasSelectedItem = false;
+        return InvokeAsync(StateHasChanged);
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (_previousValue != Value)
@@ -55,6 +64,10 @@
             showAllForOpen = false;
             highlightedIndex = -1;
             hasSelectedItem = false;
+            if (!string.IsNullOrWhiteSpace(Value))
+            {
+                isOpen = true;
+            }
             await InvokeAsync(StateHasChanged);
         }
         await base.OnParametersSetAsync();

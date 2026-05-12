@@ -69,7 +69,7 @@
         <div class="form-group">
             <label>@SalesInvoiceValidation.Header.CustomerName.Label<span class="required-asterisk"> *</span></label>
             <GenericAutocomplete TItem="Customer" @ref="customerNameAutocomplete" Items="FilteredCustomers.ToList()"
-                                 Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameValueChanged"
+                                 Value="@Invoice.CustomerName" ValueChanged="HandleCustomerNameTyping"
                                  ItemLabel="@(c => c.CustomerName)" OnSelected="HandleCustomerAutocompleteSelected"
                                  OnConfirmed="HandleCustomerNameConfirmed" Placeholder="-- Select Customer --"
                                  IsDisabled="@IsSaved" ShowAllOnOpen="true" />
