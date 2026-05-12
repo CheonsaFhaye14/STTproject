@@ -444,6 +444,11 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 await LoadMapTablesAsync();
                 await RestoreDraftStateOnlyAsync();
             }
+            else
+            {
+                await LoadMapTablesAsync();
+                await RestoreDraftStateOnlyAsync();
+            }
         }
 
         private async Task HandleSubdKeyDown(KeyboardEventArgs e)
@@ -605,10 +610,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 selectedPrincipal,
                 IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
 
-            subDistributorItems = await mapItemService.GetMapSubDistributorItemsAsync(
-                userContext.UserId.Value,
-                selectedSubdId,
-                selectedPrincipal);
+            subDistributorItems = selectedSubdId != 0
+                ? await mapItemService.GetMapSubDistributorItemsAsync(
+                    userContext.UserId.Value,
+                    selectedSubdId,
+                    selectedPrincipal)
+                : new List<MapSubDistributorItemRow>();
 
             companyItemsAll = companyRows
                 .GroupBy(x => new { x.CompanyItemId, x.CompanyItemCode, x.Description, x.Category })
@@ -1113,7 +1120,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
             StateHasChanged();
 
-            if (userContext.UserId is null || selectedSubdId == 0)
+            if (userContext.UserId is null)
             {
                 return;
             }
@@ -1189,11 +1196,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            if (selectedSubdId == 0)
-            {
-                return;
-            }
-
             var draftStore = await draftService.LoadDraftStoreAsync(GetDraftStorageKey());
             draftStore.Drafts[selectedSubdId.ToString()] = new MapItemDraftState
             {
@@ -1221,11 +1223,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            if (selectedSubdId == 0)
-            {
-                return;
-            }
-
             var draftStore = await draftService.LoadDraftStoreAsync(GetDraftStorageKey());
             if (!draftStore.Drafts.TryGetValue(selectedSubdId.ToString(), out _))
             {
@@ -1240,11 +1237,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private async Task RestoreDraftStateOnlyAsync()
         {
             if (userContext.UserId is null)
-            {
-                return;
-            }
-
-            if (selectedSubdId == 0)
             {
                 return;
             }
@@ -1299,10 +1291,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             {
                 return;
             }
-            if (selectedSubdId == 0)
-            {
-                return;
-            }
 
             var draftStore = await draftService.LoadDraftStoreAsync(GetDraftStorageKey());
             if (draftStore.Drafts.Remove(selectedSubdId.ToString()) && draftStore.Drafts.Count > 0)
@@ -1316,7 +1304,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
         private async Task PersistLastSelectedSubdAsync()
         {
-            if (userContext.UserId is null || selectedSubdId == 0)
+            if (userContext.UserId is null)
             {
                 return;
             }
@@ -1342,12 +1330,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            if (selectionState.SelectedSubdId == 0)
-            {
-                return;
-            }
-
-            if (!subdList.Any(subd => subd.SubDistributorId == selectionState.SelectedSubdId))
+            if (selectionState.SelectedSubdId != 0 && !subdList.Any(subd => subd.SubDistributorId == selectionState.SelectedSubdId))
             {
                 return;
             }

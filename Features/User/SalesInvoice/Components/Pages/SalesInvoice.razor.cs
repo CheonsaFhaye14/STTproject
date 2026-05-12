@@ -40,10 +40,10 @@ public partial class SalesInvoice
         await PersistDraftAsync();
     }
 
-    void EnableEdit()
+    async Task EnableEdit()
     {
         isSaved = false;
-        _ = PersistDraftAsync();
+        await PersistDraftAsync();
     }
 
     private static void AssignLineItemIds(List<InputItemModel> itemsToNumber)
@@ -54,20 +54,20 @@ public partial class SalesInvoice
         }
     }
 
-    void OpenAddItemsModal()
+    async Task OpenAddItemsModal()
     {
         showEditItemsModal = false;
         showAddItemsModal = true;
-        _ = PersistDraftAsync();
+        await PersistDraftAsync();
     }
 
-    void CloseAddItemsModal()
+    async Task CloseAddItemsModal()
     {
         showAddItemsModal = false;
-        _ = PersistDraftAsync();
+        await PersistDraftAsync();
     }
 
-    void OpenEditItemsModal()
+    async Task OpenEditItemsModal()
     {
         if (!items.Any())
         {
@@ -82,16 +82,16 @@ public partial class SalesInvoice
 
         showAddItemsModal = false;
         showEditItemsModal = true;
-        _ = PersistDraftAsync();
+        await PersistDraftAsync();
     }
 
-    void CloseEditItemsModal()
+    async Task CloseEditItemsModal()
     {
         showEditItemsModal = false;
-        _ = PersistDraftAsync();
+        await PersistDraftAsync();
     }
 
-    Task OnModalItemsSaved(List<InputItemModel> savedItems)
+    async Task OnModalItemsSaved(List<InputItemModel> savedItems)
     {
         if (savedItems?.Any() == true)
         {
@@ -120,16 +120,14 @@ public partial class SalesInvoice
         }
 
         showAddItemsModal = false;
-        _ = PersistDraftAsync();
-        return Task.CompletedTask;
+        await PersistDraftAsync();
     }
 
-    Task OnEditedItemsSaved(List<InputItemModel> editedItems)
+    async Task OnEditedItemsSaved(List<InputItemModel> editedItems)
     {
         items = editedItems;
         showEditItemsModal = false;
-        _ = PersistDraftAsync();
-        return Task.CompletedTask;
+        await PersistDraftAsync();
     }
 
     async Task OnAddItemsBeforeSave(List<InputItemModel> itemsToAdd)
@@ -241,7 +239,17 @@ public partial class SalesInvoice
             return;
         }
 
-        var draft = JsonSerializer.Deserialize<SalesInvoiceDraftState>(draftJson);
+        SalesInvoiceDraftState? draft;
+        try
+        {
+            draft = JsonSerializer.Deserialize<SalesInvoiceDraftState>(draftJson);
+        }
+        catch (JsonException)
+        {
+            await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", GetDraftStorageKey());
+            return;
+        }
+
         if (draft?.Invoice is null)
         {
             return;
@@ -485,10 +493,10 @@ public partial class SalesInvoice
             return;
         }
 
-        ResetAfterSuccessfulCommit();
+        await ResetAfterSuccessfulCommit();
     }
 
-    private void ResetAfterSuccessfulCommit()
+    private async Task ResetAfterSuccessfulCommit()
     {
         var selectedSubdistributorId = invoice.SubdistributorId;
 
@@ -504,7 +512,7 @@ public partial class SalesInvoice
         showEditItemsModal = false;
         showCommitConfirmModal = false;
         errorMessage = null;
-        _ = ClearDraftAsync();
+        await ClearDraftAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -714,6 +722,11 @@ public partial class SalesInvoice
                     selectedBranch.Province,
                     selectedBranch.ZipCode.ToString()
                 }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            }
+
+            if (jsModule != null)
+            {
+                await RestoreDraftAsync();
             }
 
             StateHasChanged();

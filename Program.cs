@@ -49,12 +49,23 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
     var username = form["username"].ToString().Trim();
     var password = form["password"].ToString();
     var requestedRole = form["role"].ToString().Trim();
+    var rememberMe = string.Equals(form["rememberMe"].ToString(), "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(form["rememberMe"].ToString(), "1", StringComparison.OrdinalIgnoreCase);
 
     var (success, user, errorCode) = await loginService.AuthenticateAsync(username, password);
 
     if (!success)
     {
-        return Results.Redirect($"/?error={errorCode}&username={Uri.EscapeDataString(username)}");
+        var query = $"?error={errorCode}&username={Uri.EscapeDataString(username)}";
+        if (rememberMe)
+        {
+            query += "&rememberMe=1";
+        }
+        if (!string.IsNullOrWhiteSpace(requestedRole))
+        {
+            query += $"&role={Uri.EscapeDataString(requestedRole)}";
+        }
+        return Results.Redirect($"/{query}");
     }
 
     var normalizedRole = string.Equals(requestedRole, "Admin", StringComparison.OrdinalIgnoreCase)
@@ -63,17 +74,32 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
 
     if (!string.Equals(user!.Role, normalizedRole, StringComparison.OrdinalIgnoreCase))
     {
-        return Results.Redirect($"/?error=role&username={Uri.EscapeDataString(username)}");
+        var query = $"?error=role&username={Uri.EscapeDataString(username)}";
+        if (rememberMe)
+        {
+            query += "&rememberMe=1";
+        }
+        if (!string.IsNullOrWhiteSpace(requestedRole))
+        {
+            query += $"&role={Uri.EscapeDataString(requestedRole)}";
+        }
+        return Results.Redirect($"/{query}");
     }
 
-    httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), new CookieOptions
+    var cookieOptions = new CookieOptions
     {
         HttpOnly = true,
         Secure = httpContext.Request.IsHttps,
         SameSite = SameSiteMode.Lax,
-        Path = "/",
-        Expires = DateTimeOffset.UtcNow.AddDays(7)
-    });
+        Path = "/"
+    };
+
+    if (rememberMe)
+    {
+        cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(7);
+    }
+
+    httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), cookieOptions);
 
     return Results.Redirect(normalizedRole == "Admin" ? "/admin" : "/home");
 });

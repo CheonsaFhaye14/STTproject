@@ -12,7 +12,22 @@ namespace STTproject.Features.Login.Components.Pages
         [SupplyParameterFromQuery(Name = "username")]
         public string? Username { get; set; }
 
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "rememberMe")]
+        public string? RememberMeRaw { get; set; }
+
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "role")]
+        public string? SelectedRole { get; set; }
+
         private string? loginErrorMessage;
+
+        private bool RememberMe => string.Equals(RememberMeRaw, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(RememberMeRaw, "1", StringComparison.OrdinalIgnoreCase);
+
+        private bool IsAdminSelected => string.Equals(SelectedRole, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        private bool IsEncoderSelected => !IsAdminSelected;
 
         protected override void OnParametersSet()
         {

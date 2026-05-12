@@ -31,17 +31,23 @@
             <div class="login-field">
                 <div class="login-role-options">
                     <label>
-                        <input type="radio" name="role" value="Admin" />
+                        <input type="radio" name="role" value="Admin" checked="@IsAdminSelected" />
                         Admin
                     </label>
                     <label>
-                        <input type="radio" name="role" value="Encoder" checked />
+                        <input type="radio" name="role" value="Encoder" checked="@IsEncoderSelected" />
                         Encoder
                     </label>
                 </div>
             </div>
 
-            <label>Remember Me</label>
+            <div class="login-field remember-me-field">
+                <label>
+                    <input type="checkbox" name="rememberMe" value="true" checked="@RememberMe" />
+                    Remember Me
+                </label>
+            </div>
+
             <button class="login-btn" type="submit">LOGIN</button>
             <label>Forget Password?</label>
         </form>

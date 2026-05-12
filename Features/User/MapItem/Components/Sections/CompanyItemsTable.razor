@@ -11,8 +11,7 @@
             }
         </h3>
         <div class="filter-group">
-            <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged"
-                    disabled="@(!IsSubDistributorSelected)">
+            <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged">
                 <option value="All">All categories</option>
                 @foreach (var category in CompanyItemCategories)
                 {
