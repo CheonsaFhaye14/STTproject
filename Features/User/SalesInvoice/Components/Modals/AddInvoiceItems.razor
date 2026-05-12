@@ -1,0 +1,133 @@
+@using Microsoft.AspNetCore.Components.Web
+@using STTproject.Components.Helper
+@using STTproject.Models
+@using STTproject.Data
+@using Microsoft.JSInterop
+@using STTproject.Components.Shared
+@namespace STTproject.Features.User.SalesInvoice.Components.Modals
+
+@inject IJSRuntime JS
+
+@if (ShowModal)
+{
+    <div class="modal-overlay" id="add-items-modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="invoice-header">
+                    <h4>Add Invoice Items</h4>
+                </div>
+              
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>@SalesInvoiceValidation.AddItem.Sku.Label<span class="required-asterisk"> *</span></label>
+                    <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown"
+                           @onblur="HandleSkuBlur" />
+                    @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Sku.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>@SalesInvoiceValidation.AddItem.ItemName.Label<span class="required-asterisk"> *</span></label>
+                    <GenericAutocomplete TItem="SubdItem" @ref="itemNameAutocomplete"
+                                         Items="AvailableItems.Where(i => i.SubDistributorId == SelectedSubdistributorId).DistinctBy(i => i.ItemName).ToList()"
+                                         Value="@NewItem.ItemName" ValueChanged="@(v => NewItem.ItemName = v ?? string.Empty)"
+                                         ItemLabel="@(i => i.ItemName)" OnSelected="HandleItemAutocompleteSelected"
+                                         OnConfirmed="HandleItemNameConfirmed" Placeholder="-- Select --" />
+                    @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.ItemName.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>@SalesInvoiceValidation.AddItem.Uom.Label<span class="required-asterisk"> *</span></label>
+                    <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
+                            disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleDraftFieldBlur">
+                        <option value="0">-- Select --</option>
+                        @if (CurrentSubdItem != null)
+                        {
+                            @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId))
+                            {
+                                <option value="@uom.ItemsUomId">@uom.UomName</option>
+                            }
+                        }
+                    </select>
+                    @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>@SalesInvoiceValidation.AddItem.Quantity.Label<span class="required-asterisk"> *</span></label>
+                    <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
+                           disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
+                    )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
+                           @onblur="HandleDraftFieldBlur" />
+                    @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Price</label>
+                    <input value="@GetNormalPriceDisplay()" disabled />
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-primary" @onclick="AddItemToQueue"
+                            disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || !HeaderIsSaved)">Add</button>
+                    <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel (Esc)</button>
+                    <button type="button" class="btn-primary" @onclick="SaveModal" disabled="@(!modalItems.Any())">Save
+                        items (Ctrl+S)</button>
+                    </div>
+
+                    <div class="modal-help">Press Enter after typing quantity to add the item quickly.</div>
+
+                    @if (modalItems.Any())
+                    {
+                        <div class="modal-queue">
+                            <h5>Queued items</h5>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Name</th>
+                                        <th>UOM</th>
+                                        <th>Qty</th>
+                                        <th>Line Amount</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var queuedItem in modalItems)
+                                    {
+                                        <tr>
+                                            <td>@queuedItem.ItemCode</td>
+                                            <td>@queuedItem.ItemName</td>
+                                            <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
+                                            </td>
+                                            <td>@queuedItem.Quantity</td>
+                                            <td>@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
+                                            <td><button type="button" class="btn remove-btn"
+                                                            @onclick="() => RemoveQueuedItem(queuedItem)">Remove</button></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+

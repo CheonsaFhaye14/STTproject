@@ -18,10 +18,36 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Features\Admin\CompanyItem\DTOs\" />
+    <Folder Include="Features\Admin\CompanyItem\Services\" />
+    <Folder Include="Features\Admin\CompanyItem\Validators\" />
+    <Folder Include="Features\Admin\Customers\Components\Modals\" />
+    <Folder Include="Features\Admin\Customers\Components\Pages\" />
+    <Folder Include="Features\Admin\Customers\Components\Sections\" />
+    <Folder Include="Features\Admin\Customers\DTOs\" />
+    <Folder Include="Features\Admin\Customers\Services\" />
+    <Folder Include="Features\Admin\Customers\Validators\" />
+    <Folder Include="Features\Admin\Dashboard\Components\Modals\" />
+    <Folder Include="Features\Admin\Dashboard\DTOs\" />
+    <Folder Include="Features\Admin\Dashboard\Validators\" />
+    <Folder Include="Features\Admin\Dashboard\Services\" />
+    <Folder Include="Features\Admin\Reports\Components\Modals\" />
+    <Folder Include="Features\Admin\Reports\Components\Pages\" />
+    <Folder Include="Features\Admin\Reports\Components\Sections\" />
+    <Folder Include="Features\Admin\Reports\DTOs\" />
+    <Folder Include="Features\Admin\Reports\Services\" />
+    <Folder Include="Features\Admin\Reports\Validators\" />
+    <Folder Include="Features\Admin\SalesInvoice\DTOs\" />
+    <Folder Include="Features\Admin\SalesInvoice\Services\" />
+    <Folder Include="Features\Admin\SalesInvoice\Validators\" />
+    <Folder Include="Features\Admin\SubdItem\DTOs\" />
+    <Folder Include="Features\Admin\SubdItem\Services\" />
+    <Folder Include="Features\Admin\SubdItem\Validators\" />
+    <Folder Include="Features\Admin\Users\DTOs\" />
+    <Folder Include="Features\Admin\Users\Services\" />
+    <Folder Include="Features\Admin\Users\Validators\" />
     <Folder Include="Features\Login\Components\Sections\" />
-    <Folder Include="Features\MapItem\DTOs\" />
-    <Folder Include="Features\MapItem\Services\" />
-    <Folder Include="Features\SalesInvoice\Services\" />
+    <Folder Include="Features\User\SalesInvoice\Services\" />
     <Folder Include="Services\NewFolder\" />
     <Folder Include="wwwroot\js\components\" />
     <Folder Include="wwwroot\js\utils\" />

@@ -1,0 +1,476 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using STTproject.Features.User.SalesInvoice.Validators;
+using STTproject.Models;
+using STTproject.Data;
+namespace STTproject.Features.User.SalesInvoice.Components.Modals;
+
+public partial class EditInvoiceItems
+{
+    [Parameter] public bool ShowModal { get; set; }
+    [Parameter] public EventCallback<bool> ShowModalChanged { get; set; }
+    [Parameter] public EventCallback OnCancelModal { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>> OnSaveEditedItems { get; set; }
+    [Parameter] public EventCallback<List<InputItemModel>> OnBeforeSave { get; set; }
+    [Parameter] public List<InputItemModel> Items { get; set; } = new();
+    [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
+    [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
+
+    private ElementReference itemNameSelectRef;
+    private ElementReference uomSelectRef;
+    private ElementReference quantityInputRef;
+    private ElementReference cancelButtonRef;
+    private ElementReference saveButtonRef;
+    private IJSObjectReference? jsModule;
+    private Dictionary<string, string> ValidationErrors { get; set; } = new();
+    private bool uomEnterPrimed;
+
+    private bool wasShown;
+    private bool focusItemNameOnRender;
+    private List<InputItemModel> editableItems = new();
+    private int selectedItemIndex;
+
+    // Public property to expose editableItems for confirmation
+    public List<InputItemModel> EditableItems => editableItems;
+
+    private InputItemModel? SelectedItem =>
+        selectedItemIndex >= 0 && selectedItemIndex < editableItems.Count
+            ? editableItems[selectedItemIndex]
+            : null;
+
+    protected override void OnParametersSet()
+    {
+        if (ShowModal && !wasShown)
+        {
+            editableItems = Items.Select(CloneItem).ToList();
+            foreach (var item in editableItems.Where(i => i.Quantity <= 0))
+            {
+                item.Quantity = 1;
+            }
+            selectedItemIndex = -1;
+            ValidationErrors.Clear();
+            wasShown = true;
+            focusItemNameOnRender = true;
+            uomEnterPrimed = false;
+        }
+        else if (!ShowModal)
+        {
+            wasShown = false;
+            focusItemNameOnRender = false;
+            uomEnterPrimed = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        }
+
+        if (ShowModal && focusItemNameOnRender && editableItems.Any())
+        {
+            focusItemNameOnRender = false;
+            await itemNameSelectRef.FocusAsync();
+        }
+    }
+
+    private IEnumerable<ItemsUom> GetSellableUoms(InputItemModel item)
+    {
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
+        if (selectedUom is null)
+        {
+            return Enumerable.Empty<ItemsUom>();
+        }
+
+        return AvailableUoms
+            .Where(u => u.SubdItemId == selectedUom.SubdItemId)
+            .OrderBy(u => u.UomName);
+    }
+
+    private string GetItemNameOptionLabel(InputItemModel item)
+    {
+        var uomName = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId)?.UomName ?? item.UomName;
+        return $"[{item.LineItemId}] {item.ItemName} ({uomName})";
+    }
+
+    private void OnSelectedItemChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var index) && index >= 0 && index < editableItems.Count)
+        {
+            selectedItemIndex = index;
+            uomEnterPrimed = false;
+            ValidateDraft();
+        }
+    }
+
+    private void OnUomChanged(ChangeEventArgs e)
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        if (!int.TryParse(e.Value?.ToString(), out var uomId))
+        {
+            return;
+        }
+
+        item.ItemsUomId = uomId;
+        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
+
+        if (selectedUom != null)
+        {
+            item.Amount = selectedUom.Price * item.Quantity;
+            item.UomName = selectedUom.UomName;
+        }
+
+        uomEnterPrimed = false;
+        ValidateDraft();
+    }
+
+    private void OnQuantityInput(ChangeEventArgs e)
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var previousQuantity = item.Quantity > 0 ? item.Quantity : 1;
+        var unitPrice = item.Amount / previousQuantity;
+
+        if (!int.TryParse(e.Value?.ToString(), out var quantity))
+        {
+            item.Quantity = 0;
+            ValidateDraft();
+            return;
+        }
+
+        item.Quantity = quantity;
+
+        if (quantity > 0)
+        {
+            var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
+            item.Amount = (selectedUom?.Price ?? unitPrice) * item.Quantity;
+        }
+
+        ValidateDraft();
+    }
+
+    private void RemoveSelectedItem()
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        editableItems.Remove(item);
+        ValidationErrors.Clear();
+
+        if (!editableItems.Any())
+        {
+            selectedItemIndex = -1;
+            StateHasChanged();
+            return;
+        }
+
+        if (selectedItemIndex >= editableItems.Count)
+        {
+            selectedItemIndex = editableItems.Count - 1;
+        }
+    }
+
+    private async Task HandleItemNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (selectedItemIndex < 0)
+            {
+                ValidationErrors[SalesInvoiceValidation.EditItem.ItemName.Key] = SalesInvoiceValidation.EditItem.ItemName.ErrorMessage;
+                await OpenSelectDropdownAsync(itemNameSelectRef);
+                return;
+            }
+
+            ValidateDraft();
+
+            await Task.Delay(10);
+            if (SelectedItem != null)
+            {
+                try { await uomSelectRef.FocusAsync(); } catch { /* ignore focus errors */ }
+            }
+            else
+            {
+                try { await cancelButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
+            }
+        }
+    }
+
+    private async Task HandleUomKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var item = SelectedItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            if (!uomEnterPrimed)
+            {
+                uomEnterPrimed = true;
+                await OpenSelectDropdownAsync(uomSelectRef);
+                return;
+            }
+
+            uomEnterPrimed = false;
+
+            if (item.ItemsUomId == 0)
+            {
+                ValidationErrors[SalesInvoiceValidation.EditItem.Uom.Key] = SalesInvoiceValidation.EditItem.Uom.ErrorMessage;
+                await OpenSelectDropdownAsync(uomSelectRef);
+                return;
+            }
+
+            ValidateDraft();
+
+            await Task.Delay(10);
+            await quantityInputRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleQuantityKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var item = SelectedItem;
+            if (item is null)
+            {
+                return;
+            }
+
+            if (item.Quantity <= 0)
+            {
+                ValidationErrors[SalesInvoiceValidation.EditItem.Quantity.Key] = SalesInvoiceValidation.EditItem.Quantity.ErrorMessage;
+                return;
+            }
+
+            ValidateDraft();
+
+            await Task.Delay(10);
+            await saveButtonRef.FocusAsync();
+        }
+    }
+
+    private Task HandleItemNameBlur(FocusEventArgs _)
+    {
+        if (selectedItemIndex < 0)
+        {
+            ValidationErrors[SalesInvoiceValidation.EditItem.ItemName.Key] = SalesInvoiceValidation.EditItem.ItemName.ErrorMessage;
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleUomBlur(FocusEventArgs _)
+    {
+        uomEnterPrimed = false;
+
+        if (SelectedItem is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleQuantityBlur(FocusEventArgs _)
+    {
+        if (SelectedItem is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ValidateDraft();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleRemoveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            try { await cancelButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
+        }
+    }
+
+    private async Task HandleCancelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Delay(10);
+            try { await saveButtonRef.FocusAsync(); } catch { /* ignore focus errors */ }
+        }
+    }
+
+    private async Task HandleSaveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveModal();
+            return;
+        }
+    }
+
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
+    {
+        if (jsModule != null)
+        {
+            await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
+        }
+    }
+
+    private async Task SaveModal()
+    {
+        // Only validate if there are items to save
+        if (editableItems.Any())
+        {
+            ValidateDraft();
+
+            if (ValidationErrors.Any())
+            {
+                return;
+            }
+        }
+
+        var mergedItems = MergeMatchingItems(editableItems);
+
+        // Trigger confirmation before saving
+        if (OnBeforeSave.HasDelegate)
+        {
+            await OnBeforeSave.InvokeAsync(mergedItems);
+        }
+        else
+        {
+            await SaveItemsInternal(mergedItems);
+        }
+    }
+
+    public async Task SaveFromShortcutAsync()
+    {
+        await SaveModal();
+    }
+
+    public async Task SaveItemsInternal(List<InputItemModel> mergedItems)
+    {
+        if (OnSaveEditedItems.HasDelegate)
+        {
+            await OnSaveEditedItems.InvokeAsync(mergedItems);
+        }
+
+        await CloseModal();
+    }
+
+    private async Task CancelModal()
+    {
+        if (OnCancelModal.HasDelegate)
+        {
+            await OnCancelModal.InvokeAsync();
+        }
+
+        await CloseModal();
+    }
+
+    private async Task CloseModal()
+    {
+        if (ShowModalChanged.HasDelegate)
+        {
+            await ShowModalChanged.InvokeAsync(false);
+        }
+    }
+
+    private static InputItemModel CloneItem(InputItemModel source)
+    {
+        return new InputItemModel
+        {
+            ItemCode = source.ItemCode,
+            SubdItemId = source.SubdItemId,
+            ItemName = source.ItemName,
+            ItemsUomId = source.ItemsUomId,
+            Quantity = source.Quantity,
+            Amount = source.Amount,
+            LineItemId = source.LineItemId
+        };
+    }
+
+    public static List<InputItemModel> MergeMatchingItems(IEnumerable<InputItemModel> source)
+    {
+        var merged = source
+            .Where(item => item.Quantity > 0)
+            .GroupBy(item => new
+            {
+                item.SubdItemId,
+                item.ItemsUomId,
+                ItemCode = item.ItemCode.ToUpperInvariant(),
+                ItemName = item.ItemName.ToUpperInvariant()
+            })
+            .Select(group =>
+            {
+                var first = group.First();
+                return new InputItemModel
+                {
+                    ItemCode = first.ItemCode,
+                    SubdItemId = first.SubdItemId,
+                    ItemName = first.ItemName,
+                    ItemsUomId = first.ItemsUomId,
+                    Quantity = group.Sum(x => x.Quantity),
+                    Amount = group.Sum(x => x.Amount),
+                    LineItemId = first.LineItemId
+                };
+            })
+            .ToList();
+
+        return merged;
+    }
+
+    public int GetDeletedItemCount()
+    {
+        return Items.Where(item =>
+            !editableItems.Any(e =>
+                e.SubdItemId == item.SubdItemId &&
+                e.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
+            )
+        ).Count();
+    }
+
+    public int GetModifiedItemCount()
+    {
+        return editableItems.Where(item =>
+        {
+            var originalItem = Items.FirstOrDefault(i =>
+                i.SubdItemId == item.SubdItemId &&
+                i.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
+            );
+            return originalItem != null &&
+                   (item.Quantity != originalItem.Quantity || item.ItemsUomId != originalItem.ItemsUomId);
+        }).Count();
+    }
+
+    private void ValidateDraft()
+    {
+        ValidationErrors = SalesInvoiceValidation.ValidateEditItemDraft(SelectedItem, SelectedItem != null);
+    }
+
+    private string GetFieldError(string fieldKey)
+    {
+        return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
+    }
+
+}
+

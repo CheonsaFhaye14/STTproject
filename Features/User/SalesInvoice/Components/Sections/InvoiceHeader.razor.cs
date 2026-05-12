@@ -1,0 +1,688 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using STTproject.Components.Shared;
+using STTproject.Features.User.SalesInvoice.Validators;
+using STTproject.Models;
+using STTproject.Data;
+
+
+namespace STTproject.Features.User.SalesInvoice.Components.Sections;
+
+public partial class InvoiceHeader
+{
+    private ElementReference invoiceNumberInput;
+    private ElementReference invoiceDateInput;
+    private ElementReference orderDateInput;
+    private ElementReference orderTypeSelect;
+    private ElementReference customerCodeInput;
+    private GenericAutocomplete<Customer>? customerNameAutocomplete;
+    private GenericAutocomplete<CustomerBranch>? customerBranchAutocomplete;
+    private ElementReference saveButton;
+    private IJSObjectReference? jsModule;
+    [Parameter] public EventCallback OnDraftChanged { get; set; }
+    private bool customerBranchEnterPrimed;
+    private Dictionary<string, string> ValidationErrors { get; set; } = new();
+    private CancellationTokenSource? invoiceNumberCheckCts;
+    private readonly SemaphoreSlim invoiceNumberCheckLock = new(1, 1);
+
+    private async Task HandleInvoiceNumberKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+            {
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key,
+SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
+                return;
+            }
+
+            // Cancel any pending delayed check from HandleInvoiceNumberChanged
+            invoiceNumberCheckCts?.Cancel();
+            invoiceNumberCheckCts = new CancellationTokenSource();
+            var cts = invoiceNumberCheckCts;
+
+            // Acquire lock to ensure sequential execution
+            await invoiceNumberCheckLock.WaitAsync();
+            try
+            {
+                if (await InvoiceNumberExistsAsync(cts.Token))
+                {
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    return;
+                }
+
+                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+                await Task.Delay(10);
+                await invoiceDateInput.FocusAsync();
+            }
+            catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
+            finally
+            {
+                invoiceNumberCheckLock.Release();
+            }
+        }
+    }
+
+    private async Task HandleInvoiceNumberChanged()
+    {
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts = new CancellationTokenSource();
+        var cts = invoiceNumberCheckCts;
+
+        try
+        {
+            await Task.Delay(500, cts.Token);
+
+            if (cts.Token.IsCancellationRequested) return;
+            if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber)) return;
+
+            // Acquire lock to ensure sequential execution
+            await invoiceNumberCheckLock.WaitAsync();
+            try
+            {
+                if (await InvoiceNumberExistsAsync(cts.Token))
+                {
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    return;
+                }
+                ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+                await OnDraftChanged.InvokeAsync();
+            }
+            finally
+            {
+                invoiceNumberCheckLock.Release();
+            }
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
+    }
+
+    private async Task HandleInvoiceNumberBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.InvoiceNumber))
+        {
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key,
+SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
+            return;
+        }
+
+        // Cancel any pending delayed check from HandleInvoiceNumberChanged
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts = new CancellationTokenSource();
+        var cts = invoiceNumberCheckCts;
+
+        // Acquire lock to ensure sequential execution
+        await invoiceNumberCheckLock.WaitAsync();
+        try
+        {
+            if (await InvoiceNumberExistsAsync(cts.Token))
+            {
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                return;
+            }
+
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested) { }
+        finally
+        {
+            invoiceNumberCheckLock.Release();
+        }
+    }
+
+    private async Task HandleInvoiceDateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (Invoice.InvoiceDate == default)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key, SalesInvoiceValidation.Header.InvoiceDate.ErrorMessage);
+                return;
+            }
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key);
+            await Task.Delay(10);
+            await orderDateInput.FocusAsync();
+        }
+        else if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await orderDateInput.FocusAsync();
+        }
+    }
+
+    private Task HandleInvoiceDateBlur(FocusEventArgs _)
+    {
+        if (Invoice.InvoiceDate == default)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key, SalesInvoiceValidation.Header.InvoiceDate.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleInvoiceDateChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleOrderDateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (Invoice.OrderDate == default)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
+                return;
+            }
+            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
+            await Task.Delay(10);
+            await orderTypeSelect.FocusAsync();
+        }
+        else if (e.Key == "Tab" && !e.ShiftKey)
+        {
+            await Task.Delay(10);
+            await orderTypeSelect.FocusAsync();
+        }
+    }
+
+    private Task HandleOrderDateBlur(FocusEventArgs _)
+    {
+        if (Invoice.OrderDate == default)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleOrderDateChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleOrderTypeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.OrderType))
+            {
+                SetFieldError(SalesInvoiceValidation.Header.OrderType.Key, SalesInvoiceValidation.Header.OrderType.ErrorMessage);
+                return;
+            }
+            ClearFieldError(SalesInvoiceValidation.Header.OrderType.Key);
+            await Task.Delay(10);
+            await customerCodeInput.FocusAsync();
+        }
+    }
+
+    private Task HandleOrderTypeBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.OrderType))
+        {
+            SetFieldError(SalesInvoiceValidation.Header.OrderType.Key, SalesInvoiceValidation.Header.OrderType.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.OrderType.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleOrderTypeChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+            {
+                ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+                ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+
+                if (FilteredCustomers.Any())
+                {
+                    await Task.Delay(10);
+                    if (customerNameAutocomplete != null)
+                        await customerNameAutocomplete.GetInputRef().FocusAsync();
+                }
+
+                return;
+            }
+
+            if (Invoice.CustomerId <= 0)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key, "Customer code is invalid.");
+                SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+                return;
+            }
+
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+            await Task.Delay(10);
+
+            if (FilteredCustomerBranches.Any())
+            {
+                if (customerBranchAutocomplete != null)
+                    await customerBranchAutocomplete.GetInputRef().FocusAsync();
+            }
+            else
+            {
+                await saveButton.FocusAsync();
+            }
+        }
+    }
+
+    private Task HandleCustomerCodeBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+            return Task.CompletedTask;
+        }
+
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerCode.Key, "Customer code is invalid.");
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return Task.CompletedTask;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerNameValueChanged(string? value)
+    {
+        Invoice.CustomerName = value ?? string.Empty;
+        Invoice.CustomerId = 0;
+        Invoice.CustomerCode = string.Empty;
+        SyncCustomerState();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (!customerBranchEnterPrimed)
+            {
+                customerBranchEnterPrimed = true;
+                if (customerBranchAutocomplete != null)
+                    await customerBranchAutocomplete.OpenPopupAsync();
+                return;
+            }
+
+            customerBranchEnterPrimed = false;
+
+            if (Invoice.CustomerBranchId <= 0)
+            {
+                SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+                return;
+            }
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+            await Task.Delay(10);
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private async Task HandleCustomerNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter")
+        {
+            return;
+        }
+
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        customerBranchEnterPrimed = false;
+        await Task.Delay(10);
+
+        if (FilteredCustomerBranches.Any())
+        {
+            if (customerBranchAutocomplete != null)
+                await customerBranchAutocomplete.GetInputRef().FocusAsync();
+        }
+        else
+        {
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private Task HandleCustomerNameBlur(FocusEventArgs _)
+    {
+        if (Invoice.CustomerId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerName.Key, SalesInvoiceValidation.Header.CustomerName.ErrorMessage);
+            return Task.CompletedTask;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerBranchBlur(FocusEventArgs _)
+    {
+        if (!FilteredCustomerBranches.Any())
+        {
+            return Task.CompletedTask;
+        }
+
+        if (Invoice.CustomerBranchId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCustomerBranchValueChanged(string? value)
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private void SetFieldError(string fieldKey, string message)
+    {
+        ValidationErrors[fieldKey] = message;
+    }
+
+    private void ClearFieldError(string fieldKey)
+    {
+        ValidationErrors.Remove(fieldKey);
+    }
+
+    private string GetFieldError(string fieldKey)
+    {
+        return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
+    }
+
+    [Parameter] public InputInvoiceModel Invoice { get; set; } = new();
+    [Parameter] public bool IsSaved { get; set; }
+    [Parameter] public int CurrentInvoiceId { get; set; }
+    [Parameter] public EventCallback OnSaveClick { get; set; }
+    [Parameter] public EventCallback OnEditClick { get; set; }
+    private DateOnly? InvoiceDateValue
+    {
+        get => Invoice.InvoiceDate != default(DateOnly) ? Invoice.InvoiceDate : null;
+        set => Invoice.InvoiceDate = value ?? default;
+    }
+
+    private DateOnly? OrderDateValue
+    {
+        get => Invoice.OrderDate != default(DateOnly) ? Invoice.OrderDate : null;
+        set => Invoice.OrderDate = value ?? default;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await invoiceNumberInput.FocusAsync();
+        }
+    }
+
+    private async Task OpenSelectDropdownAsync(ElementReference selectRef)
+    {
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+        await jsModule.InvokeVoidAsync("openSelectDropdown", selectRef);
+    }
+
+    private async Task ValidateAndSave()
+    {
+        // Acquire lock to ensure sequential execution with other invoice number checks
+        await invoiceNumberCheckLock.WaitAsync();
+        try
+        {
+            ValidationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
+                Invoice,
+                FilteredCustomerBranches.Any(),
+                () => InvoiceNumberExistsAsync());
+
+            if (ValidationErrors.Any())
+            {
+                return;
+            }
+
+            // If all checks pass, trigger parent save
+            await OnSaveClick.InvokeAsync();
+        }
+        finally
+        {
+            invoiceNumberCheckLock.Release();
+        }
+
+        // Mark as saved so Edit button appears
+        IsSaved = true;
+    }
+
+    private Task<bool> InvoiceNumberExistsAsync(CancellationToken cancellationToken = default)
+    {
+        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId, cancellationToken);
+    }
+
+    [Parameter] public List<Customer> Customers { get; set; } = new();
+    [Parameter] public List<CustomerBranch> CustomerBranches { get; set; } = new();
+    [Parameter] public int SelectedSubdistributorId { get; set; }
+
+    private List<CustomerBranch> FilteredCustomerBranches { get; set; } = new();
+
+    private IEnumerable<Customer> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId
+&& c.IsActive);
+
+    protected override void OnParametersSet()
+    {
+        SyncCustomerState();
+    }
+
+    private Task HandleInputCodeChanged()
+    {
+        // When typing/pasting a code, clear out the ID internally so SyncCustomerState
+        // looks strictly by string instead of falling back to the old ID that hasn't changed yet.
+        Invoice.CustomerId = 0;
+        SyncCustomerState();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleCustomerNameChanged()
+    {
+        // When picking dropdown name, clear code out temporarily
+        // to force the sync to prioritize searching by the Dropdown ID.
+        Invoice.CustomerCode = string.Empty;
+        SyncCustomerState();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerNameConfirmed()
+    {
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
+        customerBranchEnterPrimed = false;
+        await Task.Delay(10);
+
+        if (FilteredCustomerBranches.Any())
+        {
+            if (customerBranchAutocomplete != null)
+            {
+                await customerBranchAutocomplete.GetInputRef().FocusAsync();
+            }
+        }
+        else
+        {
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private Task HandleCustomerAutocompleteSelected(Customer? customer)
+    {
+        if (customer is null)
+        {
+            Invoice.CustomerId = 0;
+            SyncCustomerState();
+            return OnDraftChanged.InvokeAsync();
+        }
+
+        Invoice.CustomerId = customer.CustomerId;
+        Invoice.CustomerCode = customer.CustomerCode;
+        Invoice.CustomerName = customer.CustomerName;
+        Invoice.CustomerType = customer.CustomerType;
+        SyncCustomerState();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleBranchChanged()
+    {
+        customerBranchEnterPrimed = false;
+        ApplySelectedBranch(Invoice.CustomerBranchId);
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task HandleCustomerBranchAutocompleteSelected(CustomerBranch? branch)
+    {
+        customerBranchEnterPrimed = false;
+
+        if (branch is null)
+        {
+            Invoice.CustomerBranchId = 0;
+            Invoice.CustomerAddress = string.Empty;
+            return OnDraftChanged.InvokeAsync();
+        }
+
+        Invoice.CustomerBranchId = branch.CustomerBranchId;
+        ApplySelectedBranch(branch.CustomerBranchId);
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleCustomerBranchConfirmed()
+    {
+        customerBranchEnterPrimed = false;
+
+        if (Invoice.CustomerBranchId <= 0)
+        {
+            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
+                SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
+            return;
+        }
+
+        ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+        await Task.Delay(10);
+        await saveButton.FocusAsync();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        invoiceNumberCheckCts?.Cancel();
+        invoiceNumberCheckCts?.Dispose();
+        if (jsModule is not null)
+        {
+            await jsModule.DisposeAsync();
+        }
+    }
+
+    private void SyncCustomerState()
+    {
+        var selectedCustomer = FilteredCustomers.FirstOrDefault(customer =>
+            !string.IsNullOrWhiteSpace(Invoice.CustomerCode) && customer.CustomerCode.Equals(Invoice.CustomerCode,
+StringComparison.OrdinalIgnoreCase));
+
+        // Instead of falling back blindly, let's make sure the user hasn't explicitly
+        // deleted the code but the ID lingered from a prior selection.
+        if (selectedCustomer is null && Invoice.CustomerId > 0 && !string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        {
+            selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+        }
+        else if (selectedCustomer is null && Invoice.CustomerId > 0 && string.IsNullOrWhiteSpace(Invoice.CustomerCode))
+        {
+            // If code is empty but ID was set (via dropdown), prioritize dropdown selection.
+            selectedCustomer = FilteredCustomers.FirstOrDefault(customer => customer.CustomerId == Invoice.CustomerId);
+        }
+
+        if (selectedCustomer is null)
+        {
+            Invoice.CustomerId = 0;
+            Invoice.CustomerName = string.Empty;
+            Invoice.CustomerType = string.Empty;
+            Invoice.CustomerAddress = string.Empty;
+            Invoice.CustomerBranchId = 0;
+            FilteredCustomerBranches = new List<CustomerBranch>();
+            return;
+        }
+
+        Invoice.CustomerCode = selectedCustomer.CustomerCode;
+        Invoice.CustomerId = selectedCustomer.CustomerId;
+        Invoice.CustomerName = selectedCustomer.CustomerName;
+        Invoice.CustomerType = selectedCustomer.CustomerType;
+
+        FilteredCustomerBranches = CustomerBranches
+            .Where(branch => branch.CustomerId == selectedCustomer.CustomerId && branch.IsActive)
+            .OrderBy(branch => branch.BranchName)
+            .ToList();
+
+        if (FilteredCustomerBranches.Any())
+        {
+            if (Invoice.CustomerBranchId <= 0 || !FilteredCustomerBranches.Any(branch => branch.CustomerBranchId ==
+Invoice.CustomerBranchId))
+            {
+                var defaultBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.IsDefault);
+                Invoice.CustomerBranchId = (defaultBranch ?? FilteredCustomerBranches[0]).CustomerBranchId;
+            }
+        }
+        else
+        {
+            Invoice.CustomerBranchId = 0;
+            Invoice.CustomerAddress = string.Empty;
+        }
+    }
+
+    private void ApplySelectedBranch(int branchId)
+    {
+        var selectedBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.CustomerBranchId == branchId);
+
+        if (selectedBranch is null)
+        {
+            Invoice.CustomerAddress = string.Empty;
+            return;
+        }
+
+        Invoice.CustomerAddress = FormatBranchAddress(selectedBranch);
+    }
+
+    private static string FormatBranchAddress(CustomerBranch branch)
+    {
+        var parts = new List<string> { branch.AddressLine, branch.City, branch.Province };
+
+        if (branch.ZipCode > 0)
+        {
+            parts.Add(branch.ZipCode.ToString());
+        }
+
+        return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+
+}
+

@@ -20,10 +20,6 @@
                 <div class="password-wrapper">
                     <input id="passwordInput" name="password" type="password" placeholder="Enter password"
                            class="password-input" />
-                    <button type="button" class="password-toggle-icon" onclick="togglePasswordVisibility()"
-                            title="Show/hide password">
-                        <i id="toggleIcon" class="fas fa-eye"></i>
-                    </button>
                 </div>
             </div>
 
@@ -31,27 +27,26 @@
             {
                 <p class="login-error">@loginErrorMessage</p>
             }
+
+            <div class="login-field">
+                <label>Login as</label>
+                <div class="login-role-options">
+                    <label>
+                        <input type="radio" name="role" value="Admin" />
+                        Admin
+                    </label>
+                    <label>
+                        <input type="radio" name="role" value="Encoder" checked />
+                        Encoder
+                    </label>
+                </div>
+            </div>
+
             <label>Remember Me</label>
             <button class="login-btn" type="submit">LOGIN</button>
-            <label>Forget Password?  | Admin / User</label>
+            <label>Forget Password?</label>
         </form>
     </div>
 </div>
 
-<script>
-    function togglePasswordVisibility() {
-        const input = document.getElementById('passwordInput');
-        const icon = document.getElementById('toggleIcon');
-        
-        if (input.type === 'password') {
-            input.type = 'text';
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        } else {
-            input.type = 'password';
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
-    }
-</script>
 

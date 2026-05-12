@@ -1,0 +1,76 @@
+﻿@using STTproject.Features.User.MapItem.DTOs
+<div class="form-row">
+    <div class="form-group">
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.SkuCode)</h5>
+        <input @ref="itemCodeInput" value="@itemCodeInternal" @oninput="HandleItemCodeInput"
+               disabled="@(!IsSubDistributorSelected)" @onkeydown="OnItemCodeKeyDown" @onblur="OnFormFieldBlur" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.SkuCode.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.SkuCode.Key)</span>
+        }
+    </div>
+
+    <div class="form-group">
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.ItemName)</h5>
+        <input @ref="itemNameInput" value="@itemNameInternal" @oninput="HandleItemNameInput"
+               disabled="@(!IsSubDistributorSelected)" @onkeydown="OnItemNameKeyDown" @onblur="OnFormFieldBlur" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.ItemName.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.ItemName.Key)</span>
+        }
+    </div>
+
+    <div class="form-group">
+        <h5>PRINCIPAL</h5>
+        <select class="form-input" @ref="principalSelect" value="@SelectedDropdownPrincipal"
+                @onchange="HandlePrincipalChanged" @onkeydown="OnPrincipalKeyDown" disabled="@(!IsSubDistributorSelected)">
+            <option value="">-- Select Principal --</option>
+            @foreach (var principalItem in DisplayPrincipalsDropdown)
+            {
+                <option value="@principalItem">@principalItem</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.CompanyItem)</h5>
+        <GenericAutocomplete TItem="CompanyItemDropdownItem" @ref="companyItemAutocomplete"
+                             Items="CompanyItemsForDropdown.ToList()" Value="@SelectedCompanyItemDisplayName"
+                             ValueChanged="HandleCompanyItemValueChanged" OnSelected="OnAutocompleteSelected"
+                             OnConfirmed="OnCompanyItemConfirmed" Placeholder="-- Select Company Item --"
+                             IsDisabled="@(!IsSubDistributorSelected)" ItemLabel="@(item => GetCompanyItemLabel(item))"
+                             ShowAllOnOpen="true" />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>
+        }
+    </div>
+
+    <div class="form-group">
+        <h5>@MapItemValidation.Label(MapItemValidation.Form.UnitOfMeasure)</h5>
+        <input value="@GetUnitOfMeasureSummary()" disabled />
+        @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)</span>
+        }
+    </div>
+
+    <div class="form-actions">
+        <button class="btn-primary" type="button" @ref="addUomButton" @onclick="OnOpenAddUomModal"
+                disabled="@(!CanOpenAddUom)">Add UOM</button>
+        <button class="btn-primary" type="button" @ref="saveButton" @onclick="OnSaveItem"
+                disabled="@(!CanSaveItem)">@((IsEditingItem) ? "UPDATE" : "ADD")</button>
+        @if (!IsEditingItem)
+        {
+            <button class="btn-secondary" type="button" @onclick="OnClearDraftRequested"
+                    disabled="@(!IsSubDistributorSelected)">
+                Clear Draft
+            </button>
+        }
+
+        @if (IsEditingItem)
+        {
+            <button class="btn-secondary" type="button" @onclick="OnCancelEdit">CANCEL</button>
+        }
+    </div>
+</div>

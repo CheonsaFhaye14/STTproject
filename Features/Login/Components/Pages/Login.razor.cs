@@ -20,6 +20,7 @@ namespace STTproject.Features.Login.Components.Pages
             {
                 "missing" => "Enter a username and password.",
                 "invalid" => "Invalid username or password.",
+                "role" => "Selected role does not match your account.",
                 "db" => "Cannot connect to the database right now. Please try again.",
                 _ => null
             };

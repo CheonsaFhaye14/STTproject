@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using STTproject.Models;
 using Microsoft.Extensions.Logging;
 using STTproject.Data;
-using STTproject.Features.MapItem.DTOs;
+using STTproject.Features.User.MapItem.DTOs;
 namespace STTproject.Services;
 
 public interface IMapItemService

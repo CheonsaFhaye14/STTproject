@@ -4,7 +4,7 @@ using Microsoft.Data.SqlClient;
 using STTproject.Components;
 using STTproject.Data;
 using STTproject.Services;
-using STTproject.Features.MapItem.Services;
+using STTproject.Features.User.MapItem.Services;
 using STTproject.Features.Login.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,12 +48,22 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
     var form = await httpContext.Request.ReadFormAsync();
     var username = form["username"].ToString().Trim();
     var password = form["password"].ToString();
+    var requestedRole = form["role"].ToString().Trim();
 
     var (success, user, errorCode) = await loginService.AuthenticateAsync(username, password);
 
     if (!success)
     {
         return Results.Redirect($"/?error={errorCode}&username={Uri.EscapeDataString(username)}");
+    }
+
+    var normalizedRole = string.Equals(requestedRole, "Admin", StringComparison.OrdinalIgnoreCase)
+        ? "Admin"
+        : "Encoder";
+
+    if (!string.Equals(user!.Role, normalizedRole, StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Redirect($"/?error=role&username={Uri.EscapeDataString(username)}");
     }
 
     httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), new CookieOptions
@@ -65,7 +75,7 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
         Expires = DateTimeOffset.UtcNow.AddDays(7)
     });
 
-    return Results.Redirect("/home");
+    return Results.Redirect(normalizedRole == "Admin" ? "/admin" : "/home");
 });
 
 app.MapGet("/logout", (HttpContext httpContext) =>
