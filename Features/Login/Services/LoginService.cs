@@ -1,12 +1,16 @@
+using System;
+using System;
+using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using STTproject.Data;
 
 namespace STTproject.Features.Login.Services
 {
     public interface ILoginService
     {
-        Task<(bool Success, Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password);
+        Task<(bool Success, STTproject.Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password);
     }
 
     public class LoginService : ILoginService
@@ -20,7 +24,7 @@ namespace STTproject.Features.Login.Services
             _logger = logger;
         }
 
-        public async Task<(bool Success, Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password)
+        public async Task<(bool Success, STTproject.Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password)
         {
             // Validate inputs
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))

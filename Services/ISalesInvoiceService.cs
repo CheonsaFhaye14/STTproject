@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using STTproject.Models;
 using STTproject.Data;
 namespace STTproject.Services;
@@ -19,10 +20,12 @@ public interface ISalesInvoiceService
 public sealed class SalesInvoiceService : ISalesInvoiceService
 {
     private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly ILogger<SalesInvoiceService> _logger;
 
-    public SalesInvoiceService(IDbContextFactory<SttprojectContext> contextFactory)
+    public SalesInvoiceService(IDbContextFactory<SttprojectContext> contextFactory, ILogger<SalesInvoiceService> logger)
     {
         _contextFactory = contextFactory;
+        _logger = logger;
     }
 
     public async Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default)
@@ -93,6 +96,71 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
+        if (invoice is null)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Invoice data is missing."
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Invoice number is required."
+            };
+        }
+
+        if (invoice.InvoiceDate == default)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Invoice date is required."
+            };
+        }
+
+        if (invoice.OrderDate == default)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Order date is required."
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(invoice.OrderType))
+        {
+            invoice.OrderType = "Invoice";
+        }
+
+        if (invoice.SubdistributorId <= 0)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Subdistributor is required."
+            };
+        }
+
+        if (currentUserId <= 0)
+        {
+            return new SaveInvoiceResult
+            {
+                IsSaved = false,
+                InvoiceId = currentInvoiceId,
+                ErrorMessage = "Unable to identify the current user. Please sign in again."
+            };
+        }
+
         if (items is null || !items.Any())
         {
             return new SaveInvoiceResult
@@ -103,99 +171,183 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var duplicateExists = await context.SalesInvoices
-            .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
-
-        if (duplicateExists)
-        {
-            return new SaveInvoiceResult
-            {
-                IsDuplicate = true,
-                InvoiceId = currentInvoiceId
-            };
-        }
-
-        var customerExists = await context.Customers
-            .AnyAsync(c => c.CustomerId == invoice.CustomerId && c.IsActive, cancellationToken);
-
-        if (!customerExists)
+        var invalidItem = items.FirstOrDefault(i => i.SubdItemId <= 0 || i.ItemsUomId <= 0 || i.Quantity <= 0 || i.Amount < 0);
+        if (invalidItem is not null)
         {
             return new SaveInvoiceResult
             {
                 IsSaved = false,
                 InvoiceId = currentInvoiceId,
-                ErrorMessage = "Selected customer is invalid."
+                ErrorMessage = "One or more invoice items are invalid. Please review and try again."
             };
         }
 
-        var customerHasBranches = await context.CustomerBranches
-            .AnyAsync(cb => cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
-
-        if (!customerHasBranches)
+        try
         {
-            return new SaveInvoiceResult
+            var duplicateExists = await context.SalesInvoices
+                .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+
+            if (duplicateExists)
             {
-                IsSaved = false,
-                InvoiceId = currentInvoiceId,
-                ErrorMessage = "Selected customer has no branch configured."
-            };
-        }
+                return new SaveInvoiceResult
+                {
+                    IsDuplicate = true,
+                    InvoiceId = currentInvoiceId
+                };
+            }
 
-        if (invoice.CustomerBranchId <= 0)
-        {
-            return new SaveInvoiceResult
+            var customerExists = await context.Customers
+                .AnyAsync(c => c.CustomerId == invoice.CustomerId && c.IsActive, cancellationToken);
+
+            if (!customerExists)
             {
-                IsSaved = false,
-                InvoiceId = currentInvoiceId,
-                ErrorMessage = "Customer branch is required."
-            };
-        }
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Selected customer is invalid."
+                };
+            }
 
-        var customerBranchExists = await context.CustomerBranches
-            .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
+            var customerHasBranches = await context.CustomerBranches
+                .AnyAsync(cb => cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
 
-        if (!customerBranchExists)
-        {
-            return new SaveInvoiceResult
+            if (!customerHasBranches)
             {
-                IsSaved = false,
-                InvoiceId = currentInvoiceId,
-                ErrorMessage = "Selected customer branch is invalid."
-            };
-        }
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Selected customer has no branch configured."
+                };
+            }
 
-        if (currentInvoiceId == 0)
-        {
-            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            if (invoice.CustomerBranchId <= 0)
+            {
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Customer branch is required."
+                };
+            }
+
+            var customerBranchExists = await context.CustomerBranches
+                .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
+
+            if (!customerBranchExists)
+            {
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Selected customer branch is invalid."
+                };
+            }
+
+            if (currentInvoiceId == 0)
+            {
+                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+                try
+                {
+                    var salesInvoice = new SalesInvoice
+                    {
+                        SalesInvoiceCode = invoice.InvoiceNumber,
+                        SalesInvoiceDate = invoice.InvoiceDate,
+                        OrderType = invoice.OrderType,
+                        OrderDate = invoice.OrderDate,
+                        CustomerId = invoice.CustomerId,
+                        CustomerBranchId = invoice.CustomerBranchId,
+                        SubDistributorId = invoice.SubdistributorId,
+                        CreatedBy = currentUserId,
+                        UpdatedBy = currentUserId,
+                        CreatedDate = DateTime.Now,
+                        UpdatedDate = DateTime.Now,
+                    };
+
+                    context.SalesInvoices.Add(salesInvoice);
+                    await context.SaveChangesAsync(cancellationToken);
+
+                    context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
+                    {
+                        SalesInvoiceId = salesInvoice.SalesInvoiceId,
+                        SubdItemId = i.SubdItemId,
+                        ItemsUomId = i.ItemsUomId,
+                        Quantity = i.Quantity,
+                        Amount = i.Amount,
+                        CreatedBy = currentUserId,
+                        UpdatedBy = currentUserId,
+                        CreatedDate = DateTime.Now,
+                        UpdatedDate = DateTime.Now
+                    }));
+
+                    await context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+
+                    return new SaveInvoiceResult
+                    {
+                        IsSaved = true,
+                        InvoiceId = salesInvoice.SalesInvoiceId
+                    };
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    var baseMsg = dbEx.GetBaseException()?.Message ?? dbEx.Message;
+                    _logger.LogError(dbEx, "Database error saving new sales invoice {InvoiceNumber} for user {UserId}: {Message}", invoice.InvoiceNumber, currentUserId, baseMsg);
+                    return new SaveInvoiceResult
+                    {
+                        IsSaved = false,
+                        InvoiceId = currentInvoiceId,
+                        ErrorMessage = "Unable to save invoice due to a database error. " + baseMsg
+                    };
+                }
+            }
+
+            var existing = await context.SalesInvoices
+                .FirstOrDefaultAsync(x => x.SalesInvoiceId == currentInvoiceId, cancellationToken);
+
+            if (existing is null)
+            {
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Invoice record was not found."
+                };
+            }
+
+            await using var updateTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                var salesInvoice = new SalesInvoice
-                {
-                    SalesInvoiceCode = invoice.InvoiceNumber,
-                    SalesInvoiceDate = invoice.InvoiceDate,
-                    OrderType = invoice.OrderType,
-                    OrderDate = invoice.OrderDate,
-                    CustomerId = invoice.CustomerId,
-                    CustomerBranchId = invoice.CustomerBranchId,
-                    SubDistributorId = invoice.SubdistributorId,
-                    CreatedBy = currentUserId,
-                    UpdatedBy = currentUserId,
-                    CreatedDate = DateTime.Now,
-                    UpdatedDate = DateTime.Now,
-                };
+                existing.SalesInvoiceCode = invoice.InvoiceNumber;
+                existing.SalesInvoiceDate = invoice.InvoiceDate;
+                existing.OrderDate = invoice.OrderDate;
+                existing.OrderType = invoice.OrderType;
+                existing.CustomerId = invoice.CustomerId;
+                existing.CustomerBranchId = invoice.CustomerBranchId;
+                existing.SubDistributorId = invoice.SubdistributorId;
+                existing.UpdatedBy = currentUserId;
+                existing.UpdatedDate = DateTime.Now;
 
-                context.SalesInvoices.Add(salesInvoice);
-                await context.SaveChangesAsync(cancellationToken);
+                var existingItems = await context.SalesInvoiceItems
+                    .Where(x => x.SalesInvoiceId == currentInvoiceId)
+                    .ToListAsync(cancellationToken);
+
+                if (existingItems.Any())
+                {
+                    context.SalesInvoiceItems.RemoveRange(existingItems);
+                }
 
                 context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
                 {
-                    SalesInvoiceId = salesInvoice.SalesInvoiceId,
+                    SalesInvoiceId = currentInvoiceId,
                     SubdItemId = i.SubdItemId,
                     ItemsUomId = i.ItemsUomId,
                     Quantity = i.Quantity,
-                    Amount = i.Amount
-                    ,
+                    Amount = i.Amount,
                     CreatedBy = currentUserId,
                     UpdatedBy = currentUserId,
                     CreatedDate = DateTime.Now,
@@ -203,84 +355,37 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 }));
 
                 await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await updateTransaction.CommitAsync(cancellationToken);
 
                 return new SaveInvoiceResult
                 {
                     IsSaved = true,
-                    InvoiceId = salesInvoice.SalesInvoiceId
+                    InvoiceId = currentInvoiceId
                 };
             }
-            catch
+            catch (DbUpdateException dbEx)
             {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
+                await updateTransaction.RollbackAsync(cancellationToken);
+                var baseMsg = dbEx.GetBaseException()?.Message ?? dbEx.Message;
+                _logger.LogError(dbEx, "Database error updating sales invoice {InvoiceId} for user {UserId}: {Message}", currentInvoiceId, currentUserId, baseMsg);
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = "Unable to update invoice due to a database error. " + baseMsg
+                };
             }
         }
-
-        var existing = await context.SalesInvoices
-            .FirstOrDefaultAsync(x => x.SalesInvoiceId == currentInvoiceId, cancellationToken);
-
-        if (existing is null)
+        catch (Exception ex)
         {
+            var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+            _logger.LogError(ex, "Unexpected error saving sales invoice {InvoiceNumber} for user {UserId}: {Message}", invoice.InvoiceNumber, currentUserId, baseMsg);
             return new SaveInvoiceResult
             {
                 IsSaved = false,
                 InvoiceId = currentInvoiceId,
-                ErrorMessage = "Invoice record was not found."
+                ErrorMessage = "Unable to save invoice: " + baseMsg
             };
-        }
-
-        await using var updateTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
-
-        try
-        {
-            existing.SalesInvoiceCode = invoice.InvoiceNumber;
-            existing.SalesInvoiceDate = invoice.InvoiceDate;
-            existing.OrderDate = invoice.OrderDate;
-            existing.OrderType = invoice.OrderType;
-            existing.CustomerId = invoice.CustomerId;
-            existing.CustomerBranchId = invoice.CustomerBranchId;
-            existing.SubDistributorId = invoice.SubdistributorId;
-            existing.UpdatedBy = currentUserId;
-            existing.UpdatedDate = DateTime.Now;
-
-            var existingItems = await context.SalesInvoiceItems
-                .Where(x => x.SalesInvoiceId == currentInvoiceId)
-                .ToListAsync(cancellationToken);
-
-            if (existingItems.Any())
-            {
-                context.SalesInvoiceItems.RemoveRange(existingItems);
-            }
-
-            context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
-            {
-                SalesInvoiceId = currentInvoiceId,
-                SubdItemId = i.SubdItemId,
-                ItemsUomId = i.ItemsUomId,
-                Quantity = i.Quantity,
-                Amount = i.Amount
-                ,
-                CreatedBy = currentUserId,
-                UpdatedBy = currentUserId,
-                CreatedDate = DateTime.Now,
-                UpdatedDate = DateTime.Now
-            }));
-
-            await context.SaveChangesAsync(cancellationToken);
-            await updateTransaction.CommitAsync(cancellationToken);
-
-            return new SaveInvoiceResult
-            {
-                IsSaved = true,
-                InvoiceId = currentInvoiceId
-            };
-        }
-        catch
-        {
-            await updateTransaction.RollbackAsync(cancellationToken);
-            throw;
         }
     }
 

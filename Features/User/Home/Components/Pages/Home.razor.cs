@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Components.Web;
 using STTproject.Data;
 using STTproject.Services;
 
-namespace STTproject.Components.Pages
+namespace STTproject.Features.User.Home.Components.Pages
 {
     public partial class Home
     {

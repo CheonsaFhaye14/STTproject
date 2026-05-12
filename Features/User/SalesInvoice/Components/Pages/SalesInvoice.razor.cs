@@ -472,9 +472,10 @@ public partial class SalesInvoice
         {
             result = await salesInvoiceService.SaveInvoiceAsync(invoice, items, currentInvoiceId, userContext.UserId ?? 0);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            errorMessage = "Unable to commit invoice due to a database error.";
+            var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+            errorMessage = $"Unable to commit invoice due to a database error: {baseMsg}";
             showErrorModal = true;
             return;
         }

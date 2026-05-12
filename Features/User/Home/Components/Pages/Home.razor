@@ -1,5 +1,324 @@
-﻿<h3>Home</h3>
+@page "/home"
+@using Microsoft.AspNetCore.Components
+@using STTproject.Components.Helper
+@using System.Linq
+@using STTproject.Models
+@using STTproject.Data
+@using STTproject.Services
+@using STTproject.Components.Shared
 
-@code {
+@rendermode InteractiveServer
 
-}
+@inject IHomeService homeService
+@inject IUserContextService userContext
+@inject NavigationManager Navigation
+
+
+<div class="title">
+    <h2>Hello, @UserFullName</h2>
+</div>
+
+<!-- CARDS -->
+<div class="cards">
+    @foreach (var subd in subdList)
+    {
+        <div class="card">
+
+            <div class="card-content">
+                <div class="card-text">
+                    
+                    <h4>@subd.SubdCode</h4>
+                    <div class="subdname">
+                        <h3>@FormatHelper.ToAllCaps(subd.SubdName)</h3>
+                    </div>
+                   
+                    <p>@FormatHelper.FormatLocation(subd.CityMunicipality, subd.Province ?? string.Empty)</p>
+                </div>
+
+                <button type="button" class="example" @onclick="() => InputSalesInvoice(subd.SubDistributorId)">
+                    INPUT INVOICE
+                </button>
+            </div>
+
+             
+        </div>
+    }
+</div>
+
+<!-- RECENT ACTIVITY Table to be moved-->
+<div class="activity" @onkeydown="HandlePageKeyDown">
+    <h3>Recent Activity...</h3>
+
+    <!-- FILTERS -->
+    <div class="filters">
+        <!-- VIEW MODE TOGGLE - Combined button -->
+        <div class="filter-group view-toggle">
+            <button class="@(currentViewMode == "batch" ? "btn-toggle active" : "btn-toggle")"
+                    @onclick="ToggleViewMode">
+                @(currentViewMode == "batch" ? "Batch View" : "Invoice List")
+            </button>
+        </div>
+
+        <div class="filter-group">
+            <label>SUB DISTRIBUTOR</label>
+            <select @bind="selectedSubdNameFilter">
+                <option value="">ALL</option>
+                @foreach (var subd in subdList)
+                {
+                    <option value="@subd.SubdName">@subd.SubdName</option>
+                }
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>INVOICE DATE</label>
+            <input type="date" @bind="selectedDateFilter" />
+        </div>
+
+    </div>
+
+    <!-- BATCH VIEW (Grouped View) -->
+    @if (currentViewMode == "batch")
+    {
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>BATCH NAME</th>
+                    <th>SubDistributor Name</th>
+                    <th>Invoice Date Range</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredBatchRows.Any())
+                {
+                    @foreach (var row in FilteredBatchRows)
+                    {
+                        <tr>
+                            <td>@row.BatchId</td>
+                            <td>@row.SubdName</td>
+                            <td>
+                                @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
+                                {
+                                    @row.LatestInvoiceDate.ToString("yyyy-MM-dd")
+                                }
+                                else
+                                {
+                                    @($"{row.OldestInvoiceDate:yyyy-MM-dd} - {row.LatestInvoiceDate:yyyy-MM-dd}")
+                                }
+                            </td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenBatchDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="4">No sales invoice activity found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <!-- FLAT VIEW (Invoice List) -->
+    @if (currentViewMode == "flat")
+    {
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>Sales Invoice Code</th>
+                    <th>Sales Invoice Date</th>
+                    <th>SubDistributor Name</th>
+                    <th>Customer Name</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredFlatRows.Any())
+                {
+                    @foreach (var row in FilteredFlatRows)
+                    {
+                        <tr>
+                            <td>@row.InvoiceCode</td>
+                            <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.SubdName</td>
+                            <td>@row.CustomerName</td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="5">No sales invoice found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+</div>
+
+@if (showBatchDetailsModal)
+{
+    <div class="modal-overlay" tabindex="0" @onclick="CloseBatchDetails" @onkeydown="HandlePageKeyDown">
+        <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4>Batch Details: @selectedBatchId</h4>
+            </div>
+            <div class="modal-body">
+                <table class="activity-table">
+                    <thead>
+                        <tr>
+                            <th>Sales Invoice Code</th>
+                            <th>Sales Invoice Date</th>
+                            <th>SubDistributor Name</th>
+                            <th>Customer Name</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (selectedBatchInvoices.Any())
+                        {
+                            @foreach (var invoiceRow in selectedBatchInvoices)
+                            {
+                                <tr>
+                                    <td>@invoiceRow.InvoiceCode</td>
+                                    <td>@invoiceRow.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@invoiceRow.SubdName</td>
+                                    <td>@invoiceRow.CustomerName</td>
+                                    <td>
+                                        <button class="btn-primary"
+                                                @onclick="() => OpenInvoiceDetailsByIdAsync(invoiceRow.SalesInvoiceId)">View
+                                            Details</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        else
+                            {
+                                <tr>
+                                    <td colspan="5">No invoices found for this batch.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" @onclick="CloseBatchDetails">Close (Esc)</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- INVOICE DETAILS MODAL (for Flat View) -->
+    @if (showInvoiceDetailsModal)
+    {
+        <div class="modal-overlay" tabindex="0" @onclick="CloseInvoiceDetails" @onkeydown="HandlePageKeyDown">
+            <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h4>Invoice Details: @selectedInvoiceCode</h4>
+                </div>
+                <div class="modal-body">
+                    @if (selectedInvoiceDetails != null)
+                    {
+                        <!-- Invoice Header (Read-only form) -->
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Invoice Date</label>
+                                <input type="date" value="@selectedInvoiceDetails.InvoiceDate.ToString("yyyy-MM-dd")" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Order Date</label>
+                                <input type="date" value="@selectedInvoiceDetails.OrderDate.ToString("yyyy-MM-dd")" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Order Type</label>
+                                <input value="@selectedInvoiceDetails.OrderType" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Customer Name</label>
+                                <input value="@selectedInvoiceDetails.CustomerName" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Customer Branch</label>
+                                <input value="@selectedInvoiceDetails.CustomerBranch" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Address</label>
+                                <input value="@selectedInvoiceDetails.Address" disabled />
+                            </div>
+                            <div class="form-group">
+                                <label>Created Date</label>
+                                <input value="@selectedInvoiceDetails.CreatedDate.ToString("yyyy-MM-dd HH:mm")" disabled />
+                            </div>
+                        </div>
+                    
+                        <h5>Item Details</h5>
+                        <table class="activity-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Code</th>
+                                    <th>Item Name</th>
+                                    <th>UOM</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (selectedInvoiceDetails.ItemDetails.Any())
+                                {
+                                    @foreach (var item in selectedInvoiceDetails.ItemDetails)
+                                    {
+                                        <tr>
+                                            <td>@item.ItemCode</td>
+                                            <td>@item.ItemName</td>
+                                            <td>@item.UomName</td>
+                                            <td>@item.Quantity</td>
+                                            <td>@FormatHelper.FormatPrice(item.Price)</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5">No item details found.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p>No invoice details available.</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(deleteInvoiceErrorMessage))
+                    {
+                        <p style="color: red;">@deleteInvoiceErrorMessage</p>
+                    }
+                    <div class="modal-actions">
+                        <button class="btn-primary" @onclick="EditInvoiceDetails">Edit</button>
+                        <button class="btn-secondary" @onclick="ShowDeleteInvoiceConfirm">Delete</button>
+                        <button class="btn-secondary" @onclick="CloseInvoiceDetails">Close (Esc)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (showDeleteInvoiceConfirmModal)
+    {
+        <ConfirmModal Show="showDeleteInvoiceConfirmModal" Title="Delete Invoice"
+                      Message="@($"Are you sure you want to delete invoice {selectedInvoiceCode}?")" OnYes="ConfirmDeleteInvoiceAsync"
+                      OnNo="CancelDeleteInvoice" />
+    }
+
+    <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@deleteInvoiceErrorMessage" ShowError="true"
+                  OnErrorConfirm="CloseErrorModal" />
+
+
