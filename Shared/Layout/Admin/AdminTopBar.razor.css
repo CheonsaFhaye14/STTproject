@@ -1,0 +1,9 @@
+.admin-topbar {
+  height: 56px;
+}
+
+.admin-topbar .site-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}

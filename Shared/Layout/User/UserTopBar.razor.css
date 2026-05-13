@@ -1,0 +1,9 @@
+.user-topbar {
+  height: 56px;
+}
+
+.user-topbar .site-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}

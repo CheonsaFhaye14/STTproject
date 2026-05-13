@@ -1,0 +1,52 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using STTproject.Services
+
+@inherits LayoutComponentBase
+
+@inject IUserContextService userContext
+
+@inject NavigationManager Navigation
+
+<div>
+    <UserTopBar />
+
+    <div class="d-flex">
+    <nav class="sidebar bg-light border-end d-flex flex-column p-3" style="width:240px;min-width:200px;">
+        <div class="mb-3"> 
+            <h5 class="m-0">Encoder</h5>
+        </div>
+
+        <ul class="nav nav-pills flex-column mb-3">
+            <li class="nav-item">
+                <NavLink class="nav-link" href="home" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door-fill me-2" aria-hidden="true"></span> Home
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="mapitem">
+                    <span class="bi bi-plus-square-fill me-2" aria-hidden="true"></span> Map Items
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="profile">
+                    <span class="bi bi-person me-2" aria-hidden="true"></span> Profile
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="settings">
+                    <span class="bi bi-gear me-2" aria-hidden="true"></span> Settings
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="help">
+                    <span class="bi bi-question-circle me-2" aria-hidden="true"></span> Help
+                </NavLink>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="flex-grow-1 p-3">
+        @Body
+    </main>
+    </div>
+</div>
