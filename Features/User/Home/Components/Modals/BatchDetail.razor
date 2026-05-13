@@ -1,7 +1,4 @@
 ﻿@using System.Linq
-@using STTproject.Data
-@using Microsoft.AspNetCore.Components
-
 @if (Show)
 {
     <div class="modal-overlay" tabindex="0" @onclick="async () => await OnClose.InvokeAsync()" @onkeydown="HandleKeyDown">
