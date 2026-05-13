@@ -1,30 +1,11 @@
-@using STTproject.Models
-@using STTproject.Data;
-@using STTproject.Services
-<div class="line">
-    <h3 class="title">SALES INVOICE</h3>
+﻿using Microsoft.AspNetCore.Components;
+using STTproject.Data;
+using System.Linq;
 
-    <div class="filter-group">
-        <label>Subd Code</label>
+namespace STTproject.Features.User.SalesInvoice.Components.Sections;
 
-        <select @bind="SelectedSubdId" @bind:after="HandleChange" disabled="@IsSaved">
-            @foreach (var s in Subdistributors)
-            {
-                <option value="@s.SubDistributorId">
-                    @s.SubdCode
-                </option>
-            }
-        </select>
-    </div>
-
-    <div class="filter-group">
-        <label>Subd Name</label>
-        <input value="@SelectedSubdName" disabled />
-    </div>
-    
-</div>
-
-@code {
+public partial class TitleHeader : ComponentBase
+{
     [Parameter] public List<SubDistributor> Subdistributors { get; set; } = new();
 
     [Parameter] public int SelectedSubdId { get; set; }

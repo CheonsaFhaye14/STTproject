@@ -1,5 +1,152 @@
-﻿<h3>RecentActivityTable</h3>
+﻿@using Microsoft.AspNetCore.Components
+@using STTproject.Components.Helper
+@using STTproject.Services
+@using System.Linq
+@using STTproject.Features.User.Home.Components.Modals
+@using STTproject.Components.Shared
 
-@code {
+@inject IHomeService homeService
+@inject IUserContextService userContext
+@inject NavigationManager Navigation
 
+<div class="activity">
+    <h3>Recent Activity...</h3>
+
+    <!-- FILTERS -->
+    <div class="filters">
+        <!-- VIEW MODE TOGGLE - Combined button -->
+        <div class="filter-group view-toggle">
+            <button class="@(currentViewMode == "batch" ? "btn-toggle active" : "btn-toggle")"
+                    @onclick="ToggleViewMode">
+                @(currentViewMode == "batch" ? "Batch View" : "Invoice List")
+            </button>
+        </div>
+
+        <div class="filter-group">
+            <label>SUB DISTRIBUTOR</label>
+            <select @bind="selectedSubdNameFilter">
+                <option value="">ALL</option>
+                @foreach (var subd in SubdList)
+                {
+                    <option value="@subd.SubdName">@subd.SubdName</option>
+                }
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>CREATED DATE</label>
+            <input type="date" @bind="selectedDateFilter" />
+        </div>
+
+    </div>
+
+    <!-- BATCH VIEW (Grouped View) -->
+    @if (currentViewMode == "batch")
+    {
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>BATCH NAME</th>
+                    <th>SubDistributor Name</th>
+                    <th>Invoice Date Range</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredBatchRows.Any())
+                {
+                    @foreach (var row in FilteredBatchRows)
+                    {
+                        <tr>
+                            <td>@row.BatchId</td>
+                            <td>@row.SubdName</td>
+                            <td>
+                                @if (row.LatestInvoiceDate == row.OldestInvoiceDate)
+                                {
+                                    @row.LatestInvoiceDate.ToString("yyyy-MM-dd")
+                                }
+                                else
+                                {
+                                    @($"{row.OldestInvoiceDate:yyyy-MM-dd} - {row.LatestInvoiceDate:yyyy-MM-dd}")
+                                }
+                            </td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenBatchDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="4">No sales invoice activity found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <!-- FLAT VIEW (Invoice List) -->
+    @if (currentViewMode == "flat")
+    {
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>Sales Invoice Code</th>
+                    <th>Sales Invoice Date</th>
+                    <th>SubDistributor Name</th>
+                    <th>Customer Name</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredFlatRows.Any())
+                {
+                    @foreach (var row in FilteredFlatRows)
+                    {
+                        <tr>
+                            <td>@row.InvoiceCode</td>
+                            <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.SubdName</td>
+                            <td>@row.CustomerName</td>
+                            <td>
+                                <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="5">No sales invoice found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<!-- MODALS -->
+<BatchDetail Show="showBatchDetailsModal" 
+             BatchId="selectedBatchId" 
+             BatchInvoices="selectedBatchInvoices"
+             OnClose="CloseBatchDetails"
+             OnViewInvoiceDetails="async (id) => await OpenInvoiceDetailsByIdAsync(id)" />
+
+<InvoiceDetail Show="showInvoiceDetailsModal"
+               InvoiceCode="selectedInvoiceCode"
+               InvoiceDetails="selectedInvoiceDetails"
+               ErrorMessage="deleteInvoiceErrorMessage"
+               OnClose="CloseInvoiceDetails"
+               OnEdit="EditInvoiceDetails"
+               OnDelete="ShowDeleteInvoiceConfirm" />
+
+@if (showDeleteInvoiceConfirmModal)
+{
+    <ConfirmModal Show="showDeleteInvoiceConfirmModal" Title="Delete Invoice"
+                  Message="@($"Are you sure you want to delete invoice {selectedInvoiceCode}?")" OnYes="ConfirmDeleteInvoiceAsync"
+                  OnNo="CancelDeleteInvoice" />
 }
+
+<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@deleteInvoiceErrorMessage" ShowError="true"
+              OnErrorConfirm="CloseErrorModal" />

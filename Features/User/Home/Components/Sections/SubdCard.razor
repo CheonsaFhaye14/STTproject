@@ -1,5 +1,16 @@
-﻿<h3>SubdCard</h3>
+﻿<div class="card">
+	<div class="card-content">
+		<div class="card-text">
+			<h4>@Subdistributor.SubdCode</h4>
+			<div class="subdname">
+				<h3>@STTproject.Components.Helper.FormatHelper.ToAllCaps(Subdistributor.SubdName)</h3>
+			</div>
 
-@code {
+			<p>@STTproject.Components.Helper.FormatHelper.FormatLocation(Subdistributor.CityMunicipality, Subdistributor.Province ?? string.Empty)</p>
+		</div>
 
-}
+		<button type="button" class="example" @onclick="HandleInputInvoice">
+			INPUT INVOICE
+		</button>
+	</div>
+</div>

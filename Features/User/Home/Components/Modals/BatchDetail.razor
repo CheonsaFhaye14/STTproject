@@ -1,5 +1,55 @@
-﻿<h3>BatchDetail</h3>
+﻿@using System.Linq
+@using STTproject.Data
+@using Microsoft.AspNetCore.Components
 
-@code {
-
+@if (Show)
+{
+    <div class="modal-overlay" tabindex="0" @onclick="async () => await OnClose.InvokeAsync()" @onkeydown="HandleKeyDown">
+        <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4>Batch Details: @BatchId</h4>
+            </div>
+            <div class="modal-body">
+                <table class="activity-table">
+                    <thead>
+                        <tr>
+                            <th>Sales Invoice Code</th>
+                            <th>Sales Invoice Date</th>
+                            <th>SubDistributor Name</th>
+                            <th>Customer Name</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (BatchInvoices.Any())
+                        {
+                            @foreach (var invoiceRow in BatchInvoices)
+                            {
+                                <tr>
+                                    <td>@invoiceRow.InvoiceCode</td>
+                                    <td>@invoiceRow.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@invoiceRow.SubdName</td>
+                                    <td>@invoiceRow.CustomerName</td>
+                                    <td>
+                                            <button class="btn-primary"
+                                                @onclick="async () => await OnViewInvoiceDetails.InvokeAsync(invoiceRow.SalesInvoiceId)">View
+                                                Details</button>
+                                            </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5">No invoices found for this batch.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="async () => await OnClose.InvokeAsync()">Close (Esc)</button>
+            </div>
+        </div>
+    </div>
 }

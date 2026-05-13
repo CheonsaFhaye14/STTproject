@@ -1,5 +1,98 @@
-﻿<h3>InvoiceDetail</h3>
+﻿@using STTproject.Components.Helper
+@using System.Linq
+@using STTproject.Data
+@using Microsoft.AspNetCore.Components
 
-@code {
+@if (Show)
+{
+    <div class="modal-overlay" tabindex="0" @onclick="async () => await OnClose.InvokeAsync()" @onkeydown="HandleKeyDown">
+        <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4>Invoice Details: @InvoiceCode</h4>
+            </div>
+            <div class="modal-body">
+                @if (InvoiceDetails is not null)
+                {
+                    <!-- Invoice Header (Read-only form) -->
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Invoice Date</label>
+                            <input type="date" value="@InvoiceDetails.InvoiceDate.ToString("yyyy-MM-dd")" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Order Date</label>
+                            <input type="date" value="@InvoiceDetails.OrderDate.ToString("yyyy-MM-dd")" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Order Type</label>
+                            <input value="@InvoiceDetails.OrderType" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Customer Name</label>
+                            <input value="@InvoiceDetails.CustomerName" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Customer Branch</label>
+                            <input value="@InvoiceDetails.CustomerBranch" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Address</label>
+                            <input value="@InvoiceDetails.Address" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Created Date</label>
+                            <input value="@InvoiceDetails.CreatedDate.ToString("yyyy-MM-dd HH:mm")" disabled />
+                        </div>
+                    </div>
 
+                    <h5>Item Details</h5>
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>Item Code</th>
+                                <th>Item Name</th>
+                                <th>UOM</th>
+                                <th>Quantity</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (InvoiceDetails.ItemDetails.Any())
+                            {
+                                @foreach (var item in InvoiceDetails.ItemDetails)
+                                {
+                                    <tr>
+                                        <td>@item.ItemCode</td>
+                                        <td>@item.ItemName</td>
+                                        <td>@item.UomName</td>
+                                        <td>@item.Quantity</td>
+                                        <td>@FormatHelper.FormatPrice(item.Price)</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5">No item details found.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p>No invoice details available.</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <p style="color: red;">@ErrorMessage</p>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary" @onclick="async () => await OnEdit.InvokeAsync()">Edit</button>
+                <button class="btn-secondary" @onclick="async () => await OnDelete.InvokeAsync()">Delete</button>
+                <button class="btn-secondary" @onclick="async () => await OnClose.InvokeAsync()">Close (Esc)</button>
+            </div>
+        </div>
+    </div>
 }

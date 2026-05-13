@@ -1,0 +1,23 @@
+
+<div class="line">
+    <h3 class="title">SALES INVOICE</h3>
+
+    <div class="filter-group">
+        <label>Subd Code</label>
+
+        <select @bind="SelectedSubdId" @bind:after="HandleChange" disabled="@IsSaved">
+            @foreach (var s in Subdistributors)
+            {
+                <option value="@s.SubDistributorId">
+                    @s.SubdCode
+                </option>
+            }
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label>Subd Name</label>
+        <input value="@SelectedSubdName" disabled />
+    </div>
+    
+</div>
