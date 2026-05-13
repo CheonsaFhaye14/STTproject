@@ -1,13 +1,13 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
-using STTproject.Components.Helper;
 using STTproject.Data;
 using STTproject.Features.User.MapItem.Components.Sections;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Features.User.MapItem.Validators;
 using STTproject.Models;
 using STTproject.Services;
+using STTproject.Shared.Helper;
 
 namespace STTproject.Features.User.MapItem.Components.Pages
 {

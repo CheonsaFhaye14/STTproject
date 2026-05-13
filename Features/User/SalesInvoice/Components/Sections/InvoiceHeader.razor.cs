@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
-using STTproject.Components.Shared;
+using STTproject.Shared.Components;
 using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;

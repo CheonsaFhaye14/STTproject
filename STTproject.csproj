@@ -32,7 +32,6 @@
     <Folder Include="Features\Admin\Customers\DTOs\" />
     <Folder Include="Features\Admin\Customers\Services\" />
     <Folder Include="Features\Admin\Customers\Validators\" />
-    <Folder Include="Features\Admin\Dashboard\Components\Modals\" />
     <Folder Include="Features\Admin\Dashboard\DTOs\" />
     <Folder Include="Features\Admin\Dashboard\Validators\" />
     <Folder Include="Features\Admin\Dashboard\Services\" />
@@ -59,7 +58,6 @@
     <Folder Include="Features\User\Profile\DTOs\" />
     <Folder Include="Features\User\Profile\Services\" />
     <Folder Include="Features\User\Profile\Validators\" />
-    <Folder Include="Features\User\SalesInvoice\Services\" />
     <Folder Include="Features\User\Settings\DTOs\" />
     <Folder Include="Features\User\Settings\Services\" />
     <Folder Include="Features\User\Settings\Validators\" />

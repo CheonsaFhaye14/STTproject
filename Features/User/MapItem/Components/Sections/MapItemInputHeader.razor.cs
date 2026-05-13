@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
-using STTproject.Components.Shared;
+using STTproject.Shared.Components;
 using STTproject.Features.User.MapItem.DTOs;
-using STTproject.Services;
 
 namespace STTproject.Features.User.MapItem.Components.Sections;
 

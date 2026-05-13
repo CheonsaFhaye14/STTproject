@@ -3,10 +3,10 @@
 		<div class="card-text">
 			<h4>@Subdistributor.SubdCode</h4>
 			<div class="subdname">
-				<h3>@STTproject.Components.Helper.FormatHelper.ToAllCaps(Subdistributor.SubdName)</h3>
+				<h3>@STTproject.Shared.Helper.FormatHelper.ToAllCaps(Subdistributor.SubdName)</h3>
 			</div>
 
-			<p>@STTproject.Components.Helper.FormatHelper.FormatLocation(Subdistributor.CityMunicipality, Subdistributor.Province ?? string.Empty)</p>
+			<p>@STTproject.Shared.Helper.FormatHelper.FormatLocation(Subdistributor.CityMunicipality, Subdistributor.Province ?? string.Empty)</p>
 		</div>
 
 		<button type="button" class="example" @onclick="HandleInputInvoice">
