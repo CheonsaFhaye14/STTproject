@@ -1,9 +1,12 @@
 .user-topbar {
-  height: 56px;
+    height: 50px;
+    background: rgba(224, 184, 255, 0.45);
+    backdrop-filter: blur(10px);
 }
 
-.user-topbar .site-logo {
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-}
+    .user-topbar .site-logo {
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+       
+    }

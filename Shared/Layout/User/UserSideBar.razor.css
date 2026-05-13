@@ -1,32 +1,54 @@
+/* SIDEBAR */
 .sidebar {
-  height: 100vh;
-  position: sticky;
-  top: 0;
+    width: 240px;
+    min-width: 240px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    transition: all 0.3s ease;
 }
 
-.sidebar .nav-link {
-  color: #343a40;
-}
+    /* SIDEBAR TITLE */
+    .sidebar h5 {
+        letter-spacing: 0.3px;
+    }
 
-.sidebar .nav-link.active {
-  background-color: rgba(0, 0, 0, 0.05);
-  font-weight: 600;
-}
+    /* NAV LINKS */
+    .sidebar .nav-link {
+        color: #343a40;
+        border-radius: 10px;
+        margin-bottom: 5px;
+        transition: 0.2s;
+    }
 
-.sidebar h5 {
-  letter-spacing: 0.3px;
-}
+        .sidebar .nav-link:hover {
+            background-color: rgba(224, 184, 255, 0.45);
+        }
+
+        .sidebar .nav-link.active {
+            background-color: rgba(224, 184, 255, 0.45);
+            font-weight: 600;
+        }
+
+/* PAGE */
 .page {
     position: relative;
     display: flex;
     flex-direction: column;
 }
 
+/* LAYOUT */
+.layout-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* MAIN */
 main {
     flex: 1;
 }
 
-
+/* TOP ROW */
 .top-row {
     background-color: #F5AFAF;
     border-bottom: 5px solid #F9DFDF;
@@ -36,74 +58,123 @@ main {
     align-items: center;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
+    /* TOP ROW LINKS */
+    .top-row ::deep a,
+    .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
         padding-left: 7px;
         padding-right: 7px;
-        padding-bottom: 2px;
         padding-top: 2px;
+        padding-bottom: 2px;
         border-radius: 10px;
         background-color: #AC7A7A;
         color: white;
         box-shadow: 1px 1px 1px #888888;
     }
 
-        .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+        .top-row ::deep a:hover,
+        .top-row ::deep .btn-link:hover {
             background-color: white;
             color: black;
-            padding-left: 7px;
-            padding-right: 7px;
-            padding-bottom: 2px;
-            padding-top: 2px;
-            border-radius: 10px;
         }
 
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
+/* MENU BUTTON */
+.menu-btn {
+    border: none;
+    background: none;
+    font-size: 28px;
+    cursor: pointer;
+    margin-bottom: 10px;
+    display: none;
+}
+
+/* CLOSE BUTTON */
+.close-btn {
+    border: none;
+    background: none;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+/* OVERLAY */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    opacity: 0;
+    visibility: hidden;
+    transition: 0.3s ease;
+    z-index: 1040;
+}
+
+    .overlay.show {
+        opacity: 1;
+        visibility: visible;
     }
 
-@media (max-width: 640.98px) {
+/* MOBILE */
+@media (max-width: 767px) {
+
+    .layout-wrapper {
+        display: block;
+    }
+
+    .sidebar {
+        position: fixed !important;
+        top: 0;
+        left: -250px;
+        width: 240px;
+        min-width: 240px;
+        height: 100vh;
+        background: white;
+        z-index: 1050;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+    }
+
+        .sidebar.show {
+            left: 0;
+        }
+
+    .menu-btn {
+        display: block;
+    }
+
+    main {
+        width: 100%;
+    }
+
     .top-row {
         justify-content: space-between;
     }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        margin-left: 0;
-    }
+        .top-row ::deep a,
+        .top-row ::deep .btn-link {
+            margin-left: 0;
+        }
 }
 
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
+/* DESKTOP */
+@media (min-width: 768px) {
+
+    .overlay {
+        display: none;
     }
 
     .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
+        left: 0 !important;
     }
 
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    .close-btn {
+        display: none;
     }
 
-    .top-row.auth ::deep a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
-    }
-
-    .top-row, article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+    .menu-btn {
+        display: none;
     }
 }
 
+/* ERROR UI */
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;

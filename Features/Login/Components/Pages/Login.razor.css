@@ -1,135 +1,216 @@
-﻿/* Background */
+﻿/* Whole Page */
 .login-page {
     height: 100vh;
-    background: linear-gradient(135deg, #f8dede, #f3cfcf);
+    background: url('/images/loginpageBG.png') no-repeat center center/cover;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    position: relative;
+ 
 }
 
-/* Top bar */
-.top-bar {
-    background-color: #e7a9a9;
-    text-align: center;
-    padding: 10px;
-    font-weight: bold;
-    letter-spacing: 1px;
-}
-
-/* Center container */
-.login-container {
-    margin: auto;
-    width: 350px;
-    padding: 30px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    text-align: center;
-}
-
-    /* Title */
-    .login-container h2 {
-        margin-bottom: 20px;
+    /* Background Overlay */
+    .login-page::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(2px);
     }
+
+/* Top Bar */
+.top-bar {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 5px;
+    background: rgba(224, 184, 255, 0.45);
+    backdrop-filter: blur(10px);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: black;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* Center Wrapper */
+.login-wrapper {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+/* Login Container */
+.login-container {
+    width: 450px;
+    padding: 45px 40px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15), inset 0 0 10px rgba(255,255,255,0.2);
+    text-align: center;
+}
+
+/* Login Title */
+.login-title {
+    font-size: 30px;
+    font-weight: 650;
+    margin-bottom: 20px;
+    color: black;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+/* Input Group */
+.input-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+    .input-group label {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 15px;
+        color: #222;
+        font-weight: 500;
+    }
+
+    /* Inputs */
+.input-wrapper,
+.password-wrapper {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
 
 /* Inputs */
-.input-group {
-    text-align: left;
-    margin-bottom: 15px;
-}
-
-    .input-group input {
-        width: 100%;
-        padding: 10px;
-        border-radius: 6px;
-        border: none;
-        background: #d3d3d3;
-    }
-
-/* Remember */
-.remember {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 15px;
-}
-
-/* Button */
-.login-btn {
-    width: 100%;
-    padding: 10px;
-    background: #2c2c2c;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-    .login-btn:hover {
-        background: #444;
-    }
-
-    .login-btn:disabled {
-        background: #777;
-        cursor: not-allowed;
-    }
-
-.login-error {
-    color: #b00020;
-    margin-top: 10px;
-    margin-bottom: 10px;
-    font-size: 0.95rem;
-}
-
-/* Password Field with Icon */
-.password-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
+.input-group input,
 .password-input {
     width: 100%;
-    padding: 10px 40px 10px 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 14px;
-    background: #f5f5f5;
-}
-
-.password-input:focus {
-    outline: none;
-    border-color: #666;
-    background: white;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(230,230,230,0.95);
+    font-size: 13px;
+   
 }
 
 .password-toggle-icon {
     position: absolute;
-    right: 12px;
-    background: none;
+    right: 15px;
     border: none;
+    background: transparent;
     cursor: pointer;
     color: #666;
-    font-size: 16px;
-    padding: 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.password-toggle-icon:hover {
-    color: #333;
-}
-
-/* Links */
-.links {
-    margin-top: 15px;
-    font-size: 12px;
-    color: #333;
+    font-size: 10px;
 }
 
 /* Error */
-.error {
-    color: red;
-    margin-top: 10px;
+.login-error {
+    color: #b00020;
+    margin-bottom: 15px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Role Options */
+.role-options {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin: 15px 0;
+    font-size: 16px;
+    color: #222;
+}
+
+    .role-options label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+/* Remember */
+.remember {
+    margin: 20px 0;
+    text-align: center;
+}
+
+    .remember label {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        color: #222;
+    }
+
+/* Login Button */
+.login-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 12px;
+    background: #2e2e2e;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+    .login-btn:hover {
+        background: #1f1f1f;
+        transform: translateY(-2px);
+    }
+
+/* Links */
+.links {
+    margin-top: 25px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+    .links a {
+        text-decoration: none;
+        color: black;
+        transition: 0.3s ease;
+    }
+
+        .links a:hover {
+            color: #8b5cf6;
+        }
+
+/* Responsive */
+@media (max-width: 500px) {
+
+    .login-container {
+        width: 90%;
+        padding: 30px 20px;
+    }
+
+    .login-title {
+        font-size: 50px;
+    }
+
+    .top-bar {
+        font-size: 18px;
+    }
+
+    .role-options {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .links {
+        flex-direction: column;
+        gap: 5px;
+    }
 }

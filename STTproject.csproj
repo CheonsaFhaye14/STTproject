@@ -63,6 +63,7 @@
     <Folder Include="Features\User\Settings\DTOs\" />
     <Folder Include="Features\User\Settings\Services\" />
     <Folder Include="Features\User\Settings\Validators\" />
+    <Folder Include="wwwroot\assets\" />
     <Folder Include="wwwroot\js\components\" />
     <Folder Include="wwwroot\js\utils\" />
   </ItemGroup>
