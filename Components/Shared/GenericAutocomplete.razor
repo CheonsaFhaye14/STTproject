@@ -64,10 +64,6 @@
             showAllForOpen = false;
             highlightedIndex = -1;
             hasSelectedItem = false;
-            if (!string.IsNullOrWhiteSpace(Value))
-            {
-                isOpen = true;
-            }
             await InvokeAsync(StateHasChanged);
         }
         await base.OnParametersSetAsync();
