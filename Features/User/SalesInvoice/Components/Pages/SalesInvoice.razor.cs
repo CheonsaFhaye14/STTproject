@@ -21,6 +21,8 @@ public partial class SalesInvoice
     private EditInvoiceItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<SalesInvoice>? objRef;
+    private bool isInitialDataReady;
+    private bool hasAttemptedDraftRestore;
 
     async Task OnItemsChanged(List<InputItemModel> updatedItems)
     {
@@ -266,6 +268,17 @@ public partial class SalesInvoice
         {
             await addItemsModalRef.RestoreDraftStateAsync(draft.AddItemsDraft);
         }
+    }
+
+    private async Task TryRestoreDraftOnceAsync()
+    {
+        if (jsModule is null || !isInitialDataReady || hasAttemptedDraftRestore)
+        {
+            return;
+        }
+
+        hasAttemptedDraftRestore = true;
+        await RestoreDraftAsync();
     }
 
     private void ShowClearConfirmModal()
@@ -525,7 +538,7 @@ public partial class SalesInvoice
             {
                 jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
                 await jsModule.InvokeVoidAsync("registerF3", objRef);
-                await RestoreDraftAsync();
+                await TryRestoreDraftOnceAsync();
             }
             catch (TaskCanceledException)
             {
@@ -657,6 +670,8 @@ public partial class SalesInvoice
             showErrorModal = false;
             errorMessage = null;
             isSaved = false;
+            isInitialDataReady = false;
+            hasAttemptedDraftRestore = false;
 
             var currentUserId = userContext.UserId.Value;
             subdList = await homeService.GetSubDistributorsAsync(currentUserId);
@@ -702,33 +717,33 @@ public partial class SalesInvoice
             if (!InvoiceId.HasValue || InvoiceId.Value == 0)
             {
                 invoice.SubdistributorId = selectedSubdId;
-                return;
             }
 
-            var selectedCustomer = customers.FirstOrDefault(c => c.CustomerId == invoice.CustomerId);
-            if (selectedCustomer != null)
+            if (InvoiceId.HasValue && InvoiceId.Value > 0)
             {
-                invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
-                invoice.CustomerName = selectedCustomer.CustomerName;
-                invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
-            }
-
-            var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
-            if (selectedBranch != null)
-            {
-                invoice.CustomerAddress = string.Join(", ", new[]
+                var selectedCustomer = customers.FirstOrDefault(c => c.CustomerId == invoice.CustomerId);
+                if (selectedCustomer != null)
                 {
-                    selectedBranch.AddressLine,
-                    selectedBranch.City,
-                    selectedBranch.Province,
-                    selectedBranch.ZipCode.ToString()
-                }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                    invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
+                    invoice.CustomerName = selectedCustomer.CustomerName;
+                    invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
+                }
+
+                var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
+                if (selectedBranch != null)
+                {
+                    invoice.CustomerAddress = string.Join(", ", new[]
+                    {
+                        selectedBranch.AddressLine,
+                        selectedBranch.City,
+                        selectedBranch.Province,
+                        selectedBranch.ZipCode.ToString()
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                }
             }
 
-            if (jsModule != null)
-            {
-                await RestoreDraftAsync();
-            }
+            isInitialDataReady = true;
+            await TryRestoreDraftOnceAsync();
 
             StateHasChanged();
         }

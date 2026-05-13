@@ -66,10 +66,10 @@
             hasSelectedItem = false;
             await InvokeAsync(StateHasChanged);
         }
-        await base.OnParametersSetAsync();
+        await base.OnParametersSetAsync(); 
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
+    private async Task OnKeyDown(KeyboardEventArgs e) 
     {
         if (e.Key == "ArrowDown")
         {
