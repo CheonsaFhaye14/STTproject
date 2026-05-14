@@ -653,6 +653,7 @@ public partial class SalesInvoice
             onParametersSetLock.Release();
         }
     }
+    
 
     private async Task _OnParametersSetAsyncInternal()
     {
@@ -777,6 +778,29 @@ public partial class SalesInvoice
         availableUoms = pageData.ItemUoms;
         await PersistDraftAsync();
     }
+
+        private async Task DownloadTemplate()
+    {
+        try
+        {
+            var templateData = await mapItemService.GetTemplateDataAsync(invoice.SubdistributorId, null);
+            await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
+
+            downloadSuccessMessage = "Template downloaded successfully.";
+            showDownloadSuccess = true;
+            StateHasChanged();
+            await Task.Delay(3000);
+            showDownloadSuccess = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+            errorMessage = $"Failed to generate template: {baseMsg}";
+            showErrorModal = true;
+        }
+    }
+
 
 }
 

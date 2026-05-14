@@ -32,7 +32,6 @@ namespace STTproject.Features.User.Home.Components.Sections
         private bool showInvoiceDetailsModal;
         private string selectedInvoiceCode = string.Empty;
         private HomeSalesInvoiceDetailRow? selectedInvoiceDetails;
-        private bool showErrorModal = false;
 
         private IEnumerable<HomeSalesInvoiceBatchRow> FilteredBatchRows
         {
