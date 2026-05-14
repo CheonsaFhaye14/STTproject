@@ -4,7 +4,6 @@ namespace STTproject.Models
     {
         public string InvoiceNumber { get; set; } = string.Empty;
         public DateOnly InvoiceDate { get; set; }
-        public DateOnly OrderDate { get; set; }
         public string OrderType { get; set; } = string.Empty;
         public int CustomerId { get; set; }
         public string CustomerType { get; set; } = string.Empty;

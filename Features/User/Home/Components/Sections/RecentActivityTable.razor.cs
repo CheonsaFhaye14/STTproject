@@ -32,8 +32,6 @@ namespace STTproject.Features.User.Home.Components.Sections
         private bool showInvoiceDetailsModal;
         private string selectedInvoiceCode = string.Empty;
         private HomeSalesInvoiceDetailRow? selectedInvoiceDetails;
-        private bool showDeleteInvoiceConfirmModal;
-        private string? deleteInvoiceErrorMessage;
         private bool showErrorModal = false;
 
         private IEnumerable<HomeSalesInvoiceBatchRow> FilteredBatchRows
@@ -148,8 +146,6 @@ namespace STTproject.Features.User.Home.Components.Sections
         async Task OpenInvoiceDetailsByIdAsync(int salesInvoiceId, string? invoiceCode = null)
         {
             selectedInvoiceCode = invoiceCode ?? string.Empty;
-            deleteInvoiceErrorMessage = null;
-            showDeleteInvoiceConfirmModal = false;
 
             selectedInvoiceDetails = await homeService.GetInvoiceDetailByIdAsync(
                 UserId,
@@ -166,10 +162,8 @@ namespace STTproject.Features.User.Home.Components.Sections
         void CloseInvoiceDetails()
         {
             showInvoiceDetailsModal = false;
-            showDeleteInvoiceConfirmModal = false;
             selectedInvoiceCode = string.Empty;
             selectedInvoiceDetails = null;
-            deleteInvoiceErrorMessage = null;
         }
 
         async Task EditInvoiceDetails()
@@ -179,68 +173,6 @@ namespace STTproject.Features.User.Home.Components.Sections
                 Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}", forceLoad: true);
             }
         }
-
-        void ShowDeleteInvoiceConfirm()
-        {
-            if (selectedInvoiceDetails == null)
-            {
-                return;
-            }
-
-            deleteInvoiceErrorMessage = null;
-            showDeleteInvoiceConfirmModal = true;
-        }
-
-        void CancelDeleteInvoice()
-        {
-            showDeleteInvoiceConfirmModal = false;
-        }
-
-        async Task ConfirmDeleteInvoiceAsync()
-        {
-            if (selectedInvoiceDetails == null)
-            {
-                return;
-            }
-
-            try
-            {
-                var deleted = await homeService.DeleteInvoiceByIdAsync(UserId, selectedInvoiceDetails.SalesInvoiceId);
-                if (!deleted)
-                {
-                    deleteInvoiceErrorMessage = "Unable to delete invoice.";
-                    showErrorModal = true;
-                    return;
-                }
-
-                await ReloadRecentActivityAsync();
-
-                if (showBatchDetailsModal && selectedBatchSubDistributorId > 0)
-                {
-                    selectedBatchInvoices = await homeService.GetBatchInvoiceSummariesAsync(
-                        UserId,
-                        selectedBatchSubDistributorId,
-                        selectedBatchCreatedDate,
-                        selectedBatchFirstInvoiceId,
-                        selectedBatchLastInvoiceId);
-                }
-
-                showDeleteInvoiceConfirmModal = false;
-                CloseInvoiceDetails();
-            }
-            catch
-            {
-                deleteInvoiceErrorMessage = "Unable to delete invoice due to a database error.";
-                showErrorModal = true;
-            }
-        }
-
-        private void CloseErrorModal()
-        {
-            showErrorModal = false;
-            deleteInvoiceErrorMessage = null;
-        }
-
         async Task ReloadRecentActivityAsync()
         {
             batchRows = await homeService.GetSalesInvoiceBatchRowsAsync(UserId);

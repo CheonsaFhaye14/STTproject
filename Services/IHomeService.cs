@@ -328,7 +328,6 @@ public class HomeService : IHomeService
                 InvoiceDate = si.SalesInvoiceDate,
                 CreatedDate = si.CreatedDate,
                 OrderType = si.OrderType,
-                OrderDate = si.OrderDate,
                 CustomerName = si.Customer.CustomerName,
                 CustomerBranch = si.CustomerBranch.BranchName,
                 Address = si.CustomerBranch.AddressLine + ", " + si.CustomerBranch.City + ", " + si.CustomerBranch.Province,
@@ -449,7 +448,6 @@ public sealed class HomeSalesInvoiceDetailRow
     public DateOnly InvoiceDate { get; set; }
     public DateTime CreatedDate { get; set; }
     public string OrderType { get; set; } = string.Empty;
-    public DateOnly OrderDate { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerBranch { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;

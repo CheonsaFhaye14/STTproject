@@ -29,6 +29,7 @@ builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<AddUomService>();
 builder.Services.AddScoped<MapItemDraftService>();
 builder.Services.AddScoped<DownloadTemplateService>();
+builder.Services.AddScoped<STTproject.Features.User.SalesInvoice.Services.DownloadTemplateService>();
 
 var app = builder.Build();
 

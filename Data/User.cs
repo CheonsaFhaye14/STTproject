@@ -21,6 +21,8 @@ public partial class User
 
     public DateTime? UpdatedDate { get; set; }
 
+    public string? Email { get; set; }
+
     public virtual ICollection<CustomerBranch> CustomerBranchCreatedByNavigations { get; set; } = new List<CustomerBranch>();
 
     public virtual ICollection<CustomerBranch> CustomerBranchUpdatedByNavigations { get; set; } = new List<CustomerBranch>();

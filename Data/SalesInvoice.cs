@@ -27,8 +27,6 @@ public partial class SalesInvoice
 
     public string OrderType { get; set; } = null!;
 
-    public DateOnly OrderDate { get; set; }
-
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual Customer Customer { get; set; } = null!;

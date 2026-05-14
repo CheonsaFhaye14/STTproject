@@ -13,6 +13,8 @@
 @inject IUserContextService userContext
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject STTproject.Features.User.SalesInvoice.Services.DownloadTemplateService downloadTemplateService
+@inject STTproject.Services.IMapItemService mapItemService
 
 @implements IAsyncDisposable
 
@@ -21,8 +23,16 @@
 <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
              OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
+@if (showDownloadSuccess)
+{
+    <div class="alert alert-success" role="alert">
+        @downloadSuccessMessage
+        <button class="btn btn-sm btn-link" @onclick="() => showDownloadSuccess = false">Dismiss</button>
+    </div>
+}
+
 <div class="top-buttons">
-    <button class="btn-primary">Download Template</button>
+    <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">Download Template</button>
     <button class="btn-primary">Import</button>
 </div>
 
@@ -79,4 +89,28 @@
         <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
     }
 </div>
+
+@code {
+    private async Task DownloadTemplate()
+    {
+        try
+        {
+            var templateData = await mapItemService.GetTemplateDataAsync(invoice.SubdistributorId, null);
+            await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
+
+            downloadSuccessMessage = "Template downloaded successfully.";
+            showDownloadSuccess = true;
+            StateHasChanged();
+            await Task.Delay(3000);
+            showDownloadSuccess = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+            errorMessage = $"Failed to generate template: {baseMsg}";
+            showErrorModal = true;
+        }
+    }
+}
 

@@ -135,17 +135,5 @@
 <InvoiceDetail Show="showInvoiceDetailsModal"
                InvoiceCode="selectedInvoiceCode"
                InvoiceDetails="selectedInvoiceDetails"
-               ErrorMessage="deleteInvoiceErrorMessage"
                OnClose="CloseInvoiceDetails"
-               OnEdit="EditInvoiceDetails"
-               OnDelete="ShowDeleteInvoiceConfirm" />
-
-@if (showDeleteInvoiceConfirmModal)
-{
-    <ConfirmModal Show="showDeleteInvoiceConfirmModal" Title="Delete Invoice"
-                  Message="@($"Are you sure you want to delete invoice {selectedInvoiceCode}?")" OnYes="ConfirmDeleteInvoiceAsync"
-                  OnNo="CancelDeleteInvoice" />
-}
-
-<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@deleteInvoiceErrorMessage" ShowError="true"
-              OnErrorConfirm="CloseErrorModal" />
+               OnEdit="EditInvoiceDetails"/>

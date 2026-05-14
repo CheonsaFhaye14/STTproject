@@ -8,7 +8,6 @@ public static class SalesInvoiceValidation
     {
         public static readonly SalesInvoiceField InvoiceNumber = new(nameof(InvoiceNumber), "Sales Invoice Code", true, "Sales Invoice Code is required.");
         public static readonly SalesInvoiceField InvoiceDate = new(nameof(InvoiceDate), "Sales Invoice Date", true, "Invoice date is required.");
-        public static readonly SalesInvoiceField OrderDate = new(nameof(OrderDate), "Order Date", true, "Order date is required.");
         public static readonly SalesInvoiceField OrderType = new(nameof(OrderType), "Order Type", true, "Order type is required.");
         public static readonly SalesInvoiceField CustomerCode = new(nameof(CustomerCode), "Customer Code", true, "Customer code is required.");
         public static readonly SalesInvoiceField CustomerName = new(nameof(CustomerName), "Customer Name", true, "Customer name is required.");
@@ -55,11 +54,6 @@ public static class SalesInvoiceValidation
         if (invoice.InvoiceDate == default)
         {
             errors[Header.InvoiceDate.Key] = Header.InvoiceDate.ErrorMessage;
-        }
-
-        if (invoice.OrderDate == default)
-        {
-            errors[Header.OrderDate.Key] = Header.OrderDate.ErrorMessage;
         }
 
         if (string.IsNullOrWhiteSpace(invoice.OrderType))

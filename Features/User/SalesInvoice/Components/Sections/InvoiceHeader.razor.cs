@@ -13,7 +13,6 @@ public partial class InvoiceHeader
 {
     private ElementReference invoiceNumberInput;
     private ElementReference invoiceDateInput;
-    private ElementReference orderDateInput;
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
     private GenericAutocomplete<Customer>? customerNameAutocomplete;
@@ -141,12 +140,12 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             }
             ClearFieldError(SalesInvoiceValidation.Header.InvoiceDate.Key);
             await Task.Delay(10);
-            await orderDateInput.FocusAsync();
+            await orderTypeSelect.FocusAsync();
         }
         else if (e.Key == "Tab" && !e.ShiftKey)
         {
             await Task.Delay(10);
-            await orderDateInput.FocusAsync();
+            await orderTypeSelect.FocusAsync();
         }
     }
 
@@ -169,44 +168,6 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return OnDraftChanged.InvokeAsync();
     }
 
-    private async Task HandleOrderDateKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            if (Invoice.OrderDate == default)
-            {
-                SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
-                return;
-            }
-            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
-            await Task.Delay(10);
-            await orderTypeSelect.FocusAsync();
-        }
-        else if (e.Key == "Tab" && !e.ShiftKey)
-        {
-            await Task.Delay(10);
-            await orderTypeSelect.FocusAsync();
-        }
-    }
-
-    private Task HandleOrderDateBlur(FocusEventArgs _)
-    {
-        if (Invoice.OrderDate == default)
-        {
-            SetFieldError(SalesInvoiceValidation.Header.OrderDate.Key, SalesInvoiceValidation.Header.OrderDate.ErrorMessage);
-        }
-        else
-        {
-            ClearFieldError(SalesInvoiceValidation.Header.OrderDate.Key);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private Task HandleOrderDateChanged()
-    {
-        return OnDraftChanged.InvokeAsync();
-    }
 
     private async Task HandleOrderTypeKeyDown(KeyboardEventArgs e)
     {
@@ -440,11 +401,6 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         set => Invoice.InvoiceDate = value ?? default;
     }
 
-    private DateOnly? OrderDateValue
-    {
-        get => Invoice.OrderDate != default(DateOnly) ? Invoice.OrderDate : null;
-        set => Invoice.OrderDate = value ?? default;
-    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

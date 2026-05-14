@@ -615,6 +615,10 @@ public partial class SalesInvoice
     string? errorMessage;
     bool showErrorModal = false;
 
+    // Download template notification
+    bool showDownloadSuccess = false;
+    string downloadSuccessMessage = string.Empty;
+
     InputInvoiceModel invoice = new();
     List<InputItemModel> items = new();
     List<SubdItem> subdItems = new();

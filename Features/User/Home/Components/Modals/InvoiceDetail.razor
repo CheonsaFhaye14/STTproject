@@ -17,10 +17,6 @@
                             <input type="date" value="@InvoiceDetails.InvoiceDate.ToString("yyyy-MM-dd")" disabled />
                         </div>
                         <div class="form-group">
-                            <label>Order Date</label>
-                            <input type="date" value="@InvoiceDetails.OrderDate.ToString("yyyy-MM-dd")" disabled />
-                        </div>
-                        <div class="form-group">
                             <label>Order Type</label>
                             <input value="@InvoiceDetails.OrderType" disabled />
                         </div>
@@ -87,7 +83,6 @@
             </div>
             <div class="modal-actions">
                 <button class="btn-primary" @onclick="async () => await OnEdit.InvokeAsync()">Edit</button>
-                <button class="btn-secondary" @onclick="async () => await OnDelete.InvokeAsync()">Delete</button>
                 <button class="btn-secondary" @onclick="async () => await OnClose.InvokeAsync()">Close (Esc)</button>
             </div>
         </div>
