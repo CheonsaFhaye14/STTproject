@@ -1,12 +1,90 @@
+/* Topbar */
 .user-topbar {
-    height: 50px;
-    background: rgba(224, 184, 255, 0.45);
+    height: 60px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient( 135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100% );
     backdrop-filter: blur(10px);
+    box-shadow: 0 4px 16px rgba(150, 100, 200, 0.15), inset 0 0 10px rgba(255,255,255,0.3);
+    border-bottom: 1px solid rgba(155, 133, 204, 0.3);
 }
 
-    .user-topbar .site-logo {
-        width: 32px;
-        height: 32px;
-        object-fit: contain;
-       
+/* Left Side */
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Right Side */
+.topbar-right {
+    display: flex;
+    align-items: center;
+}
+
+/* Menu Button */
+.menu-btn {
+    border: none;
+    font-size: 24px;
+    color: #4b357d;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.3s ease;
+}
+
+    .menu-btn:hover {
+        color: #2d1f52;
+        transform: scale(1.05);
     }
+
+/* Logo */
+.site-logo {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+}
+
+/* Website Name */
+.site-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #3a2870;
+    letter-spacing: 0.5px;
+}
+
+/* Logout Button */
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: #5A4890;
+    font-weight: 600;
+    font-size: 15px;
+    transition: 0.3s ease;
+}
+
+    /* Logout Hover */
+    .logout-btn:hover {
+        color: #2f2157;
+    }
+
+/* Responsive */
+@media (max-width: 600px) {
+
+    .user-topbar {
+        padding: 0 14px;
+    }
+
+    .site-name {
+        font-size: 18px;
+    }
+
+    .logout-btn {
+        font-size: 14px;
+    }
+}

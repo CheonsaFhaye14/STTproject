@@ -1,9 +1,15 @@
-﻿/* =========================
+﻿.body {
+    overflow: hidden;
+}
+
+/* =========================
    WHOLE PAGE
 ========================= */
 .login-page {
-    height: 90vh;
-    background: url('/images/loginpageBG.png') no-repeat center center/cover;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    background: url('/images/LoginLogo.png') no-repeat center center/cover;
     display: flex;
     flex-direction: column;
     overflow: hidden;

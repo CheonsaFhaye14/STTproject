@@ -1,6 +1,6 @@
 ﻿/* ACTIVITY */
 .activity {
-    background: #F9DFDF;
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 40%, #9B85CC 100%);
     padding: 20px;
     border-radius: 15px;
     margin-left: 70px;
@@ -8,19 +8,20 @@
     margin-top: 50px;
     height: 50vh;
     overflow-y: auto;
-    box-shadow: 5px 5px 2px #888888;
+    box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
 }
 
 .activity-header {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    background: white;
+    background: rgba(255, 255, 255, 0.6);
     padding: 10px;
     border-radius: 20px;
     font-weight: bold;
     text-align: center;
     margin-bottom: 10px;
-    box-shadow: 2px 2px 2px #888888;
+    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+    color: #3a2870;
 }
 
 .activity-table {
@@ -29,42 +30,52 @@
     border-spacing: 0 10px;
 }
 
-.activity-table thead th {
-    background: white;
-    padding: 10px;
-    font-weight: bold;
-    text-align: center;
-    box-shadow: 2px 2px 2px #888888;
-}
+    .activity-table thead th {
+        background: rgba(255, 255, 255, 0.6);
+        padding: 10px;
+        font-weight: bold;
+        text-align: center;
+        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+        color: #3a2870;
+    }
 
-.activity-table thead th:first-child {
-    border-radius: 10px 0 0 10px;
-}
+        .activity-table thead th:first-child {
+            border-radius: 10px 0 0 10px;
+        }
 
-.activity-table thead th:last-child {
-    border-radius: 0 10px 10px 0;
-}
+        .activity-table thead th:last-child {
+            border-radius: 0 10px 10px 0;
+        }
 
-.activity-table tbody td {
-    background: white;
-    padding: 10px;
-    font-weight: bold;
-    text-align: center;
-    box-shadow: 2px 2px 2px #888888;
-}
+    .activity-table tbody td {
+        background: rgba(255, 255, 255, 0.6);
+        padding: 10px;
+        font-weight: bold;
+        text-align: center;
+        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+        color: #5A4890;
+    }
 
-.activity-table tbody td:first-child {
-    border-radius: 10px 0 0 10px;
-}
+        .activity-table tbody td:first-child {
+            border-radius: 10px 0 0 10px;
+        }
 
-.activity-table tbody td:last-child {
-    border-radius: 0 10px 10px 0;
-}
+        .activity-table tbody td:last-child {
+            border-radius: 0 10px 10px 0;
+        }
 
-.activity-table .btn-primary {
-    width: 120px;
-    height: 32px;
-}
+    .activity-table .btn-primary {
+        width: 120px;
+        height: 32px;
+        background-color: #7A65B0;
+        border: none;
+        box-shadow: 3px 3px 4px #9B85CC;
+    }
+
+        .activity-table .btn-primary:hover {
+            background-color: #C9B8E8;
+            color: #3a2870;
+        }
 
 .batch-details-modal {
     width: min(950px, 95vw);
@@ -78,20 +89,21 @@
     text-align: left;
 }
 
-.item-details-list li {
-    margin-bottom: 4px;
-}
+    .item-details-list li {
+        margin-bottom: 4px;
+    }
 
 .activity-row {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    background: #f5f5f5;
+    background: rgba(255, 255, 255, 0.6);
     padding: 15px;
     border-radius: 15px;
     margin-bottom: 10px;
     text-align: center;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
     transition: 0.2s;
+    color: #5A4890;
 }
 
     .activity-row:hover {
@@ -111,32 +123,34 @@
     align-items: center;
 }
 
-.view-toggle .btn-toggle {
-    padding: 8px 20px;
-    border: 2px solid #888888;
-    background: white;
-    border-radius: 20px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: 0.3s;
-    white-space: nowrap;
-    border: none;
-    box-shadow: 1px 1px 1px #888888;
-}
+    .view-toggle .btn-toggle {
+        padding: 8px 20px;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.3s;
+        white-space: nowrap;
+        border: none;
+        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+        color: #5A4890;
+    }
 
-.view-toggle .btn-toggle:hover {
-    background: #f0f0f0;
-}
+        .view-toggle .btn-toggle:hover {
+            background: rgba(255, 255, 255, 0.8);
+        }
 
-.view-toggle .btn-toggle.active {
-    background: #F5AFAF;
-    color: white;
-}
+        .view-toggle .btn-toggle.active {
+            background-color: #7A65B0;
+            color: white;
+        }
 
 /* INVOICE SUMMARY */
 .invoice-summary {
-    background: #f5f5f5;
+    background: rgba(255, 255, 255, 0.6);
     padding: 15px;
     border-radius: 10px;
     margin-bottom: 15px;
+    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+    color: #5A4890;
 }

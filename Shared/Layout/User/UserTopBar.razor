@@ -1,16 +1,37 @@
-<header class="user-topbar d-flex align-items-center justify-content-between p-2 border-bottom bg-white">
-	<div class="d-flex align-items-center">
-		<img src="/favicon.png" alt="Logo" class="site-logo me-2" />
-		<span class="site-name fs-5 fw-semibold">Entriél</span>
-	</div>
+<header class="user-topbar">
 
-	<div class="d-flex align-items-center">
-		<a class="btn btn-link text-decoration-none" href="/logout">
-			<span class="bi bi-box-arrow-right me-1" aria-hidden="true"></span> Logout
-		</a>
-	</div>
+    <!-- Left Side -->
+    <div class="topbar-left">
+
+        <button class="menu-btn"
+                @onclick="OnHamburgerClick">
+
+            <span class="bi bi-list"></span>
+
+        </button>
+
+        <img src="/favicon.png"
+             alt="Logo"
+             class="site-logo" />
+
+        <span class="site-name">
+            Entriél
+        </span>
+
+    </div>
+
+    <!-- Right Side -->
+    <div class="topbar-right">
+
+        <a class="logout-btn"
+           href="/logout">
+
+            <span class="bi bi-box-arrow-right"></span>
+
+            Logout
+
+        </a>
+
+    </div>
+
 </header>
-
-@code {
-
-}
