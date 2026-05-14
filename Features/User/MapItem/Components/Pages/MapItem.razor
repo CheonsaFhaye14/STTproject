@@ -1,15 +1,10 @@
 @page "/mapitem"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
-@using STTproject.Components.Helper
-@using STTproject.Models
-@using STTproject.Data
 @using STTproject.Services
-@using STTproject.Components.Shared
+@using STTproject.Shared.Components 
 @using STTproject.Features.User.MapItem.Components.Sections
 @using STTproject.Features.User.MapItem.Components.Modals
-@using STTproject.Features.User.MapItem.DTOs
-@using ClosedXML.Excel
 @implements IAsyncDisposable
 @inject NavigationManager Navigation
 @inject IHomeService homeService

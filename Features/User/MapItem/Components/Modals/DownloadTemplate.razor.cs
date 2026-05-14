@@ -23,7 +23,7 @@ public partial class DownloadTemplate
 
     private int selectedSubdistributorId = 0;
     private string? selectedPrincipal = string.Empty;
-
+     
     private async Task DownloadClicked()
     {
         await OnDownload.InvokeAsync((selectedSubdistributorId, selectedPrincipal));

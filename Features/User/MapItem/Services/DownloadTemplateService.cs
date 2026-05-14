@@ -73,24 +73,20 @@ public class DownloadTemplateService
                     // Pre-fill locked columns with same item data, leave UOM fields empty
                     worksheet.Cell(currentRow, 1).Value = item.SubDistributorCode;
                     worksheet.Cell(currentRow, 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-                    worksheet.Cell(currentRow, 1).Style.Protection.Locked = true;
-
+ 
                     worksheet.Cell(currentRow, 2).Value = item.Principal;
                     worksheet.Cell(currentRow, 2).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-                    worksheet.Cell(currentRow, 2).Style.Protection.Locked = true;
 
                     worksheet.Cell(currentRow, 3).Value = item.CompanyItemCode;
                     worksheet.Cell(currentRow, 3).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-                    worksheet.Cell(currentRow, 3).Style.Protection.Locked = true;
 
                     worksheet.Cell(currentRow, 4).Value = item.CompanyItemName;
                     worksheet.Cell(currentRow, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-                    worksheet.Cell(currentRow, 4).Style.Protection.Locked = true;
 
                     // Empty unlocked columns for user to fill in
                     for (int col = 5; col <= 9; col++)
                     {
-                        worksheet.Cell(currentRow, col).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
+                        worksheet.Cell(currentRow, col);
                         worksheet.Cell(currentRow, col).Style.Protection.Locked = false;
                     }
 

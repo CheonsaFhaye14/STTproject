@@ -1,7 +1,10 @@
 @page "/admin"
+@using STTproject.Features.Admin.Dashboard.Components.Sections
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 
 <div class="admin-page">
     <h1>DASHBOARD</h1>
-
+    <CustPerSubd></CustPerSubd>
+    <ActiveEncoder></ActiveEncoder>
+    <RecentActvityTable></RecentActvityTable>
 </div>

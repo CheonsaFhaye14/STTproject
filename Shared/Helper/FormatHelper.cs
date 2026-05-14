@@ -1,6 +1,6 @@
 ﻿using System.Globalization;
 
-namespace STTproject.Components.Helper
+namespace STTproject.Shared.Helper
 {
     public static class FormatHelper
     {
