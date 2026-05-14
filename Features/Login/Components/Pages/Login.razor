@@ -3,33 +3,42 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
-<div class="login-container">
-    <div class="login-card">
-        <h2 class="login-title">LOGIN</h2>
+<!-- Top Bar -->
+<div class="top-bar">
+    ENTRIÉL
+</div>
 
-        <form method="post" action="/login">
+<div class="login-page">
+    <div class="login-wrapper">
+        <div class="login-container">
 
-            <div class="login-field">
-                <label>Username</label>
-                <input name="username" placeholder="Enter username" value="@Username" />
-            </div>
+            <form method="post" action="/login">
 
-            <div class="login-field">
-                <label>Password
-                </label>
-                <div class="password-wrapper">
-                    <input id="passwordInput" name="password" type="password" placeholder="Enter password"
-                           class="password-input" />
+                <div class="input-group">
+                    <label>Username</label>
+                    <div class="input-wrapper">
+                        <input type="text"
+                               name="username"
+                               placeholder="Enter username"
+                               value="@Username" />
+                    </div>
                 </div>
-            </div>
 
-            @if (!string.IsNullOrWhiteSpace(loginErrorMessage))
-            {
-                <p class="login-error">@loginErrorMessage</p>
-            }
+                <div class="input-group">
+                    <label>Password</label>
+                    <div class="password-wrapper">
+                        <input id="passwordInput" name="password" type="password" placeholder="Enter password" class="password-input" />
+               
+                       
+                    </div>
+                </div>
 
-            <div class="login-field">
-                <div class="login-role-options">
+                @if (!string.IsNullOrWhiteSpace(loginErrorMessage))
+                {
+                    <p class="login-error">@loginErrorMessage</p>
+                }
+
+                <div class="role-options">
                     <label>
                         <input type="radio" name="role" value="Admin" checked="@IsAdminSelected" />
                         Admin
@@ -39,19 +48,20 @@
                         Encoder
                     </label>
                 </div>
-            </div>
 
-            <div class="login-field remember-me-field">
-                <label>
-                    <input type="checkbox" name="rememberMe" value="true" checked="@RememberMe" />
-                    Remember Me
-                </label>
-            </div>
+                <div class="remember">
+                    <label>
+                        <input type="checkbox" name="rememberMe" value="true" checked="@RememberMe" />
+                        Remember Me
+                    </label>
+                </div>
 
-            <button class="login-btn" type="submit">LOGIN</button>
-            <label>Forget Password?</label>
-        </form>
+                <button class="login-btn" type="submit">LOGIN</button>
+
+                <div class="links">
+                    <a href="#">Forgot Password?</a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
-
-
