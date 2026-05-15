@@ -1,96 +1,205 @@
-@using STTproject.Features.User.MapItem.DTOs
+@using STTproject.Features.User.MapItem.Services
 
 <div class="modal @(Show ? "show" : "")" style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
-	<div class="modal-dialog modal-lg">
-		<div class="modal-content">
-			<div class="modal-header">
-				<h5 class="modal-title">Import Results</h5>
-				<button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
-			</div>
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Import Results</h5>
+                <button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                @if (ImportResult == null)
+                {
+                    <p>No import result to display.</p>
+                }
+                else if (!GetMapItemCards().Any())
+                {
+                    <div class="alert alert-success">
+                        <strong>Import Successful!</strong>
+                        <p>@ImportResult.ImportedMapItemCount map item(s) imported with @ImportResult.ImportedRowCount total row(s).</p>
+                    </div>
+                }
+                else
+                {
+                    var MapItemCards = GetMapItemCards();
 
-			<div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
-				@if (ImportResult is null)
-				{
-					<p>No import result to display.</p>
-				}
-				else if (!ImportResult.Rows.Any())
-				{
-					<div class="alert alert-success">
-						<strong>Import Successful!</strong>
-						<p>@ImportResult.SuccessCount mapped with @ImportResult.Rows.Count total row(s).</p>
-					</div>
-				}
-				else
-				{
-					<div class="import-results">
-						@foreach (var row in ImportResult.Rows.OrderBy(row => row.RowNumber))
-						{
-							<div class="card mb-3 @(row.IsSuccess ? "border-success" : "border-danger")">
-								<div class="card-header d-flex justify-content-between align-items-center @(row.IsSuccess ? "bg-success text-white" : "bg-danger text-white")">
-									<div>
-										<h6 class="mb-0">Row @row.RowNumber - <strong>@row.SubdItemCode</strong></h6>
-									</div>
-									<div>
-										@if (row.IsSuccess)
-										{
-											<span class="badge bg-light text-success">Mapped</span>
-										}
-										else
-										{
-											<span class="badge bg-light text-danger">Has errors</span>
-										}
-									</div>
-								</div>
-								<div class="card-body">
-									<div class="mb-2">
-										<small class="text-muted">Sub Distributor:</small> @row.SubDistributorCode &nbsp; | &nbsp;
-										<small class="text-muted">Principal:</small> @row.Principal &nbsp; | &nbsp;
-										<small class="text-muted">Company Item:</small> @row.CompanyItemCode - @row.CompanyItemName &nbsp; | &nbsp;
-										<small class="text-muted">Subd Item:</small> @row.SubdItemCode - @row.SubdItemName &nbsp; | &nbsp;
-										<small class="text-muted">UOM:</small> @row.UomName &nbsp; | &nbsp;
-										<small class="text-muted">Conversion:</small> @(row.Conversion?.ToString("N2") ?? "-") &nbsp; | &nbsp;
-										<small class="text-muted">Price:</small> @(row.Price?.ToString("N2") ?? "-")
-									</div>
+                    <div class="import-results">
+                        @foreach (var card in MapItemCards)
+                        {
+                            <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
+                                <div class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
+                                    <div>
+                                        <h6 class="mb-0">SubdItem: <strong>@card.SubdItem - @card.SubdItemName</strong></h6>
+                                    </div>
+                                    <div>
+                                        @if (card.Prepared?.IsSaved == true)
+                                        {
+                                            <span class="badge bg-light text-success">Saved</span>
+                                        }
+                                        else if (card.HasErrors)
+                                        {
+                                            <span class="badge bg-light text-danger">@GetErrorBadgeText(card)</span>                                        
+                                        }
+                                        else if (card.Prepared != null)
+                                        {
+                                            <input type="checkbox" @bind="card.Prepared.Selected" />
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    @if (card.Prepared?.MapItem != null)
+                                    {
+                                        <div class="mb-2">
+                                            <small class="text-muted">Company Item:</small> @card.Prepared.MapItem.CompanyItemCode - @card.Prepared.MapItem.CompanyItemName &nbsp; | &nbsp;
+                                            <small class="text-muted">Principal:</small> @card.Prepared.MapItem.Principal &nbsp; | &nbsp;
+                                            <small class="text-muted">Category:</small> @card.Prepared.MapItem.Category &nbsp; | &nbsp;
+                                        </div>
+                                    }
 
-									@if (!row.IsSuccess)
-									{
-										<div class="mt-3">
-											<strong>Errors</strong>
-											<ul class="list-unstyled text-danger mb-0">
-												@foreach (var issue in row.Issues)
-												{
-													<li>@issue</li>
-												}
-											</ul>
-										</div>
-									}
-									else if (!string.IsNullOrWhiteSpace(row.Message))
-									{
-										<div class="mt-3 text-success">
-											@row.Message
-										</div>
-									}
-								</div>
-							</div>
-						}
-					</div>
-				}
-			</div>
+                                    @if (card.Prepared?.Uoms != null && card.Prepared.Uoms.Count > 0)
+                                    {
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Uom</th>
+                                                    <th>Conversion</th>
+                                                    <th>Price</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var Uom in card.Prepared.Uoms)
+                                                {
+                                                    <tr>
+                                                        <td>@Uom.UomName</td>
+                                                        <td>@Uom.Conversion</td>
+                                                        <td>@Uom.Price.ToString("N2")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
 
-			<div class="modal-footer">
-				<button type="button" class="btn btn-secondary" @onclick="OnClose">Close</button>
-			</div>
-		</div>
-	</div>
+                                    @if (card.HasErrors)
+                                    {
+                                        <div class="mt-2">
+                                            <ul class="list-unstyled text-danger mb-0">
+                                                @foreach (var issue in card.Issues)
+                                                {
+                                                    <li>
+                                                        <small class="text-muted">Row @issue.RowNumber</small>
+                                                        <span>: @issue.Message</span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                @if (ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Count > 0)
+                {
+                    <button type="button" class="btn btn-primary" disabled="@(!CanCommit)" @onclick="Commit">Commit Selected</button>
+                }
+                <button type="button" class="btn btn-secondary" @onclick="OnClose">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @code {
-	[Parameter]
-	public bool Show { get; set; }
+    [Parameter]
+    public bool Show { get; set; }
 
-	[Parameter]
-	public ImportMapItemResult? ImportResult { get; set; }
+    [Parameter]
+    public ImportMapItemResult? ImportResult { get; set; }
 
-	[Parameter]
-	public EventCallback OnClose { get; set; }
+    [Parameter]
+    public EventCallback OnCommit { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private bool CanCommit => ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
+
+    private List<MapItemViewModel> GetMapItemCards()
+    {
+        if (ImportResult == null)
+        {
+            return new List<MapItemViewModel>();
+        }
+
+        var preparedBySubdItem = (ImportResult.PreparedMapItems ?? new List<PreparedMapItem>())
+            .GroupBy(prepared => NormalizeSubdItemCode(prepared.SubdItemCode))
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var issuesByMapItem = ImportResult.Issues
+            .Concat((ImportResult.PreparedMapItems ?? new List<PreparedMapItem>()).SelectMany(prepared => prepared.Issues ?? new List<ImportMapItemIssue>()))
+            .GroupBy(issue => NormalizeSubdItemCode(issue.SubdItemCode))
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .GroupBy(issue => new { issue.RowNumber, issue.SubdItemCode, issue.ColumnName, issue.Message })
+                    .Select(issueGroup => issueGroup.First())
+                    .OrderBy(issue => issue.RowNumber)
+                    .ThenBy(issue => issue.ColumnName)
+                    .ThenBy(issue => issue.Message)
+                    .ToList());
+
+        var subdItemKeys = preparedBySubdItem.Keys
+            .Concat(issuesByMapItem.Keys)
+            .Distinct()
+            .OrderBy(key => preparedBySubdItem.TryGetValue(key, out var prepared) ? prepared.SubdItemCode : issuesByMapItem[key].FirstOrDefault()?.SubdItemCode ?? key)
+            .ToList();
+
+        var cards = new List<MapItemCardViewModel>();
+        foreach (var subdItemKey in subdItemKeys)
+        {
+            preparedBySubdItem.TryGetValue(subdItemKey, out var prepared);
+            issuesByMapItem.TryGetValue(subdItemKey, out var issues);
+
+            cards.Add(new MapItemCardViewModel(
+                prepared?.SubdItemCode ?? issues?.FirstOrDefault()?.SubdItemCode ?? subdItemKey,
+                prepared,
+                issues ?? new List<ImportMapItemIssue>()));
+        }
+
+        return cards
+            .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
+            .ThenBy(card => card.SubdItemCode)
+            .ToList();
+    }
+
+    private static string NormalizeSubdItemCode(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "[Header Issue]" : value.Trim();
+    }
+    private static string GetErrorBadgeText(MapItemCardViewModel card)
+    {
+        var errorCount = card.Issues.Count > 0
+            ? card.Issues.Count
+            : card.Prepared?.Issues?.Count ?? 0;
+
+        return errorCount == 1
+            ? "1 error"
+            : $"{errorCount} errors";
+    }
+    private sealed record MapItemCardViewModel(
+        string SubdItemCode,
+        PreparedMapItem? Prepared,
+        List<ImportMapItemIssue> Issues)
+    {
+        public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
+    }
+
+    private async Task Commit()
+    {
+        if (OnCommit.HasDelegate)
+        {
+            await OnCommit.InvokeAsync(null);
+        }
+    }
 }

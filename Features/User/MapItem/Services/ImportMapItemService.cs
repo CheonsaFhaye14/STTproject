@@ -1,7 +1,6 @@
 using System.Globalization;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using STTproject.Data;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Services;
@@ -11,19 +10,52 @@ namespace STTproject.Features.User.MapItem.Services;
 public sealed class ImportMapItemService
 {
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IMapItemService _mapItemService;
 	private readonly ILogger<ImportMapItemService> _logger;
 
 	public ImportMapItemService(
 		IDbContextFactory<SttprojectContext> contextFactory,
+        IMapItemService mapItemService,
 		ILogger<ImportMapItemService> logger)
 	{
 		_contextFactory = contextFactory;
+		_mapItemService = mapItemService;
 		_logger = logger;
 	}
 
 	public async Task<ImportMapItemResult> ImportFromExcelAsync(
 		Stream excelStream,
-		int subDistributorId,
+		int currentUserId,
+		CancellationToken cancellationToken = default)
+	{
+		var result = await PrepareFromExcelAsync(excelStream, currentUserId, cancellationToken);
+		if (result.PreparedMapItem.Count == 0)
+		{
+			return result;
+		}
+
+		var validPreparedMapItems = result.PreparedMapItems
+			.Where(prepared => prepared.Issues.Count == 0)
+			.ToList();
+
+        if (validPreparedMapItems.Count == 0)
+		{
+			return result;
+		}
+
+        var commitResult = await CommitPreparedMapItemsAsync(validPreparedMapItems, currentUserId, cancellationToken);
+		result.ImportedMapItemCount = commitResult.ImportedMapItemCount;
+		result.ImportedRowCount = commitResult.ImportedRowCount;
+foreach (var issue in commitResult.Issues)
+		{
+			result.Issues.Add(issue);
+		}
+
+		return result;
+	}
+
+	public async Task<ImportMapItemResult> PrepareFromExcelAsync(
+		Stream excelStream,
 		int currentUserId,
 		CancellationToken cancellationToken = default)
 	{
@@ -31,24 +63,21 @@ public sealed class ImportMapItemService
 
 		if (excelStream is null || !excelStream.CanRead)
 		{
-			result.Rows.Add(CreateErrorRow(0, "Import file is missing or unreadable."));
-			return result;
-		}
-
-		if (subDistributorId <= 0)
-		{
-			result.Rows.Add(CreateErrorRow(0, "A valid sub-distributor must be selected before importing."));
+			result.AddError(0, string.Empty, "Import file is missing or unreadable.");
 			return result;
 		}
 
 		if (currentUserId <= 0)
 		{
-			result.Rows.Add(CreateErrorRow(0, "Unable to identify the current user. Please sign in again."));
+			result.AddError(0, string.Empty, "Unable to identify the current user. Please sign in again.");
 			return result;
 		}
 
 		using var workbook = new XLWorkbook(excelStream);
-		var worksheet = workbook.Worksheets.FirstOrDefault(IsTemplateWorksheet) ?? workbook.Worksheets.First();
+		var worksheet = workbook.Worksheets
+			.FirstOrDefault(IsMapItemWorksheet)
+			?? workbook.Worksheets.First();
+
 		var headers = BuildHeaderMap(worksheet);
 		var requiredHeaders = new[]
 		{
@@ -59,246 +88,237 @@ public sealed class ImportMapItemService
 			"SubdItemCode",
 			"SubdItemName",
 			"UOM",
-			"Conversion",
-			"Price"
+            "Conversion",
+            "Price"
 		};
 
-		var missingHeaders = requiredHeaders.Where(header => !headers.ContainsKey(header)).ToList();
-		if (missingHeaders.Count > 0)
-		{
-			result.Rows.Add(CreateErrorRow(0, $"Missing required column(s): {string.Join(", ", missingHeaders)}."));
-			return result;
-		}
-
-		var parsedRows = ReadRows(worksheet, headers);
-		if (parsedRows.Count == 0)
-		{
-			result.Rows.Add(CreateErrorRow(0, "No import rows were found in the template."));
-			return result;
-		}
-
-		var templateSubdCodes = parsedRows
-			.Select(row => Normalize(row.SubDistributorCode))
-			.Where(code => !string.IsNullOrWhiteSpace(code))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
+		var missingHeaders = requiredHeaders
+			.Where(header => !headers.ContainsKey(header))
 			.ToList();
 
-		if (templateSubdCodes.Count == 0)
+		if (missingHeaders.Count > 0)
 		{
-			result.Rows.Add(CreateErrorRow(0, "SubDistributorCode is required in the template."));
+			result.AddError(0, string.Empty, $"Missing required column(s): {string.Join(", ", missingHeaders)}.");
 			return result;
 		}
 
-		if (templateSubdCodes.Count > 1)
+		var parsedRows = ReadRows(worksheet, headers, result);
+		if (parsedRows.Count == 0)
 		{
-			result.Rows.Add(CreateErrorRow(0, "All rows in the template must use the same SubDistributorCode."));
+			result.AddError(0, string.Empty, "No mapped item rows were found in the template.");
 			return result;
 		}
 
-		await using var context = _contextFactory.CreateDbContext();
-		var templateSubdCode = templateSubdCodes[0];
-		var subDistributor = await context.SubDistributors
-			.AsNoTracking()
-			.FirstOrDefaultAsync(subd => subd.IsActive && (
-				Normalize(subd.SubdCode) == templateSubdCode ||
-				Normalize(subd.CompanySubdCode) == templateSubdCode), cancellationToken);
-
-		if (subDistributor is null)
+		foreach (var MapItemGroup in parsedRows.GroupBy(row => row.SubdItemCode, StringComparer.OrdinalIgnoreCase))
 		{
-			result.Rows.Add(CreateErrorRow(0, $"Sub-distributor code '{templateSubdCode}' was not found."));
-			return result;
-		}
+			var MapItemRows = MapItemGroup.ToList();
+			var SubdItemCode = MapItemGroup.Key.Trim();
 
-		subDistributorId = subDistributor.SubDistributorId;
-
-		var companyItems = await context.CompanyItems
-			.AsNoTracking()
-			.Where(item => item.IsActive)
-			.ToListAsync(cancellationToken);
-
-		var companyByCode = companyItems.ToDictionary(item => Normalize(item.ItemCode));
-
-		var subdItems = await context.SubdItems
-			.AsNoTracking()
-			.Where(item => item.SubDistributorId == subDistributorId && item.IsActive)
-			.ToListAsync(cancellationToken);
-
-		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
-
-		foreach (var row in parsedRows)
-		{
-			var rowResult = new ImportMapItemRowResult
+			var preparedMapItem = new PreparedMapItem
 			{
-				RowNumber = row.RowNumber,
-				SubDistributorCode = row.SubDistributorCode,
-				Principal = row.Principal,
-				CompanyItemCode = row.CompanyItemCode,
-				CompanyItemName = row.CompanyItemName,
-				SubdItemCode = row.SubdItemCode,
-				SubdItemName = row.SubdItemName,
-				UomName = row.UomName,
-				Conversion = row.Conversion,
-				Price = row.Price
+				SubdItemCode = SubdItemCode,
+				
+                Uoms = new List<InputUomsModel>(),
+				Issues = new List<ImportMapItemIssue>(),
+				Selected = true
 			};
 
 			try
 			{
-				ValidateRow(row, subDistributor, companyByCode, rowResult);
-
-				if (rowResult.Issues.Count > 0)
+				var groupConsistencyError = ValidateGroupConsistency(MapItemRows);
+				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
-					rowResult.Message = string.Join(" ", rowResult.Issues);
-					result.Rows.Add(rowResult);
+					result.AddError(MapItemRows[0].RowNumber, MapItemRows[0].SubdItemCode, groupConsistencyError);
+					preparedMapItem.Issues.Add(new ImportMapItemIssue(MapItemRows[0].RowNumber, MapItemRows[0].SubdItemCode, groupConsistencyError));
+					result.PreparedMapItems.Add(preparedMapItem);
 					continue;
 				}
 
-				var companyItem = companyByCode[Normalize(row.CompanyItemCode)];
-				await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+				var firstRow = MapItemRows[0];
 
-				if (!subdItemByCode.TryGetValue(Normalize(row.SubdItemCode), out var subdItem))
+				preparedMapItem.Invoice = new InputUomsModel
 				{
-					subdItem = new SubdItem
+					SubDistributorCode = firstRow.SubDistributorCode,
+					InvoiceDate = firstRow.InvoiceDate,
+					OrderType = orderType,
+					CustomerId = customer.CustomerId,
+					CustomerCode = customer.CustomerCode,
+					CustomerName = customer.CustomerName,
+					CustomerType = customer.CustomerType,
+					CustomerBranchId = customerBranch.CustomerBranchId,
+					CustomerBranchName = customerBranch.BranchName,
+					SubdistributorId = subDistributorId
+				};
+
+				var items = new List<InputItemModel>();
+				foreach (var row in invoiceRows)
+				{
+					if (!subdItemByCode.TryGetValue(Normalize(row.SkuCode), out var subdItem))
 					{
-						SubdItemCode = row.SubdItemCode.Trim(),
-						ItemName = row.SubdItemName.Trim(),
-						SubDistributorId = subDistributorId,
-						IsActive = true,
-						CreatedDate = DateTime.UtcNow,
-						CreatedBy = currentUserId,
-						CompanyItemId = companyItem.CompanyItemId
-					};
+						var msg = $"SKU code '{row.SkuCode}' was not found.";
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode"));
+						result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
+						items.Clear();
+						break;
+					}
 
-					context.SubdItems.Add(subdItem);
-					await context.SaveChangesAsync(cancellationToken);
-					subdItemByCode[Normalize(subdItem.SubdItemCode)] = subdItem;
-				}
-				else
-				{
-					subdItem.CompanyItemId = companyItem.CompanyItemId;
-					subdItem.ItemName = row.SubdItemName.Trim();
-					subdItem.UpdatedBy = currentUserId;
-					subdItem.UpdatedDate = DateTime.UtcNow;
-				}
-
-				var existingUom = await context.ItemsUoms.FirstOrDefaultAsync(uom =>
-					uom.SubdItemId == subdItem.SubdItemId &&
-					Normalize(uom.UomName) == Normalize(row.UomName), cancellationToken);
-
-				if (existingUom is null)
-				{
-					existingUom = new ItemsUom
+					if (!uomLookup.TryGetValue((subdItem.SubdItemId, Normalize(row.UOM)), out var uom))
 					{
+						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'.";
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM"));
+						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
+						items.Clear();
+						break;
+					}
+
+					if (row.Quantity <= 0)
+					{
+						var msg = "Quantity must be greater than 0.";
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "Quantity"));
+						result.AddError(row.RowNumber, invoiceNumber, msg, "Quantity");
+						items.Clear();
+						break;
+					}
+
+					items.Add(new InputItemModel
+					{
+						ItemCode = subdItem.SubdItemCode,
+						ItemName = subdItem.ItemName,
 						SubdItemId = subdItem.SubdItemId,
-						UomName = row.UomName.Trim(),
-						ConversionToBase = row.Conversion ?? 0m,
-						IsBaseUnit = row.Conversion == 1,
-						Price = row.Price ?? 0m,
-						CreatedDate = DateTime.UtcNow,
-						CreatedBy = currentUserId
-					};
-
-					context.ItemsUoms.Add(existingUom);
+						ItemsUomId = uom.ItemsUomId,
+						UomName = uom.UomName,
+						Quantity = row.Quantity,
+						Amount = uom.Price * row.Quantity
+					});
 				}
-				else
+
+				if (items.Count == 0)
 				{
-					existingUom.ConversionToBase = row.Conversion ?? existingUom.ConversionToBase;
-					existingUom.IsBaseUnit = row.Conversion == 1;
-					existingUom.Price = row.Price ?? existingUom.Price;
-					existingUom.UpdatedBy = currentUserId;
-					existingUom.UpdatedDate = DateTime.UtcNow;
+					result.PreparedInvoices.Add(preparedInvoice);
+					continue;
 				}
 
-				await context.SaveChangesAsync(cancellationToken);
-				await transaction.CommitAsync(cancellationToken);
+				var aggregatedItems = items
+					.GroupBy(item => new { item.SubdItemId, item.ItemsUomId, item.ItemCode, item.ItemName, item.UomName })
+					.Select(group => new InputItemModel
+					{
+						ItemCode = group.Key.ItemCode,
+						ItemName = group.Key.ItemName,
+						SubdItemId = group.Key.SubdItemId,
+						ItemsUomId = group.Key.ItemsUomId,
+						UomName = group.Key.UomName,
+						Quantity = group.Sum(item => item.Quantity),
+						Amount = group.Sum(item => item.Amount)
+					})
+					.ToList();
 
-				rowResult.IsSuccess = true;
-				rowResult.SubdItemId = subdItem.SubdItemId;
-				rowResult.ItemsUomId = existingUom.ItemsUomId;
-				rowResult.Message = $"Mapped {row.SubdItemCode} successfully.";
-				result.Rows.Add(rowResult);
+				preparedInvoice.Items.AddRange(aggregatedItems);
+
+				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
+					preparedInvoice.Invoice!,
+					hasCustomerBranches,
+					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, 0, cancellationToken));
+
+				if (validationErrors.Count > 0)
+				{
+					var msg = string.Join(" ", validationErrors.Values);
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg));
+					result.AddError(firstRow.RowNumber, invoiceNumber, msg);
+					result.PreparedInvoices.Add(preparedInvoice);
+					continue;
+				}
+
+				result.PreparedInvoices.Add(preparedInvoice);
 			}
 			catch (Exception ex)
 			{
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
-				_logger.LogError(ex, "Failed to import map item row {RowNumber}: {Message}", row.RowNumber, baseMsg);
-				rowResult.Issues.Add($"Unexpected error while importing row {row.RowNumber}: {baseMsg}");
-				rowResult.Message = string.Join(" ", rowResult.Issues);
-				result.Rows.Add(rowResult);
+				_logger.LogError(ex, "Failed to prepare sales invoice {InvoiceNumber} from row {RowNumber}: {Message}", invoiceNumber, invoiceRows[0].RowNumber, baseMsg);
+				result.AddError(invoiceRows[0].RowNumber, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}");
+				preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}"));
+				result.PreparedInvoices.Add(preparedInvoice);
 			}
 		}
 
 		return result;
 	}
 
-	private static void ValidateRow(
-		ImportedMapItemRow row,
-		SubDistributor subDistributor,
-		IReadOnlyDictionary<string, CompanyItem> companyByCode,
-		ImportMapItemRowResult rowResult)
+	public async Task<ImportSalesInvoiceResult> CommitPreparedInvoicesAsync(IEnumerable<PreparedInvoice> preparedInvoices, int currentUserId, CancellationToken cancellationToken = default)
 	{
-		if (!string.Equals(Normalize(row.SubDistributorCode), Normalize(subDistributor.SubdCode), StringComparison.OrdinalIgnoreCase))
+		var result = new ImportSalesInvoiceResult();
+		if (preparedInvoices is null)
 		{
-			rowResult.Issues.Add($"SubDistributorCode '{row.SubDistributorCode}' does not match the selected sub-distributor.");
+			result.AddError(0, string.Empty, "No prepared invoices provided for commit.");
+			return result;
 		}
 
-		if (string.IsNullOrWhiteSpace(row.Principal))
+		foreach (var prepared in preparedInvoices)
 		{
-			rowResult.Issues.Add("Principal is required.");
-		}
+			if (prepared is null || !prepared.Selected)
+				continue;
 
-		if (string.IsNullOrWhiteSpace(row.CompanyItemCode))
-		{
-			rowResult.Issues.Add("Company item code is required.");
-		}
-		else if (!companyByCode.TryGetValue(Normalize(row.CompanyItemCode), out var companyItem))
-		{
-			rowResult.Issues.Add($"Company item code '{row.CompanyItemCode}' was not found.");
-		}
-		else
-		{
-			if (!string.IsNullOrWhiteSpace(row.CompanyItemName) && !string.Equals(Normalize(row.CompanyItemName), Normalize(companyItem.ItemName), StringComparison.OrdinalIgnoreCase))
+			if (prepared.Issues != null && prepared.Issues.Count > 0)
 			{
-				rowResult.Issues.Add($"Company item name '{row.CompanyItemName}' does not match '{companyItem.ItemName}'.");
+				continue;
 			}
 
-			if (!string.Equals(Normalize(row.Principal), Normalize(companyItem.Principal), StringComparison.OrdinalIgnoreCase))
+			try
 			{
-				rowResult.Issues.Add($"Principal '{row.Principal}' does not match the company item principal '{companyItem.Principal}'.");
+				var saveResult = await _salesInvoiceService.SaveInvoiceAsync(
+					prepared.Invoice!,
+					prepared.Items!,
+					0,
+					currentUserId,
+					cancellationToken);
+
+				if (saveResult.IsDuplicate)
+				{
+					var msg = $"Sales invoice '{prepared.InvoiceNumber}' already exists.";
+					result.AddError(0, prepared.InvoiceNumber, msg);
+					prepared.IsSaved = false;
+					prepared.SaveErrorMessage = msg;
+					continue;
+				}
+
+				if (!saveResult.IsSaved)
+				{
+					var msg = saveResult.ErrorMessage ?? "Unable to save invoice.";
+					result.AddError(0, prepared.InvoiceNumber, msg);
+					prepared.IsSaved = false;
+					prepared.SaveErrorMessage = msg;
+					continue;
+				}
+
+				prepared.IsSaved = true;
+				result.ImportedInvoiceCount++;
+				result.ImportedRowCount += prepared.Items?.Count ?? 0;
+			}
+			catch (Exception ex)
+			{
+				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+				result.AddError(0, prepared.InvoiceNumber, $"Unexpected error while saving invoice '{prepared.InvoiceNumber}': {baseMsg}");
+				prepared.IsSaved = false;
+				prepared.SaveErrorMessage = baseMsg;
 			}
 		}
 
-		if (string.IsNullOrWhiteSpace(row.SubdItemCode))
-		{
-			rowResult.Issues.Add("Subd item code is required.");
-		}
-
-		if (string.IsNullOrWhiteSpace(row.SubdItemName))
-		{
-			rowResult.Issues.Add("Subd item name is required.");
-		}
-
-		if (string.IsNullOrWhiteSpace(row.UomName))
-		{
-			rowResult.Issues.Add("UOM is required.");
-		}
-
-		if (!row.Conversion.HasValue || row.Conversion <= 0)
-		{
-			rowResult.Issues.Add("Conversion must be greater than 0.");
-		}
-
-		if (!row.Price.HasValue || row.Price <= 0)
-		{
-			rowResult.Issues.Add("Price must be greater than 0.");
-		}
+		return result;
 	}
 
-	private static List<ImportedMapItemRow> ReadRows(IXLWorksheet worksheet, IReadOnlyDictionary<string, int> headers)
+	private static bool IsSalesInvoiceWorksheet(IXLWorksheet worksheet)
 	{
-		var rows = new List<ImportedMapItemRow>();
+		return BuildHeaderMap(worksheet).ContainsKey("InvoiceCode");
+	}
+
+	private static List<ImportedInvoiceRow> ReadRows(
+		IXLWorksheet worksheet,
+		IReadOnlyDictionary<string, int> headers,
+		ImportSalesInvoiceResult result)
+	{
+		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
 
-		for (var rowNumber = 2; rowNumber <= lastRow; rowNumber++)
+		for (int rowNumber = 2; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
 			if (row.CellsUsed().All(cell => cell.IsEmpty()))
@@ -306,17 +326,78 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			rows.Add(new ImportedMapItemRow(
+			var invoiceCode = GetString(row, headers["InvoiceCode"]);
+			var customerCode = GetString(row, headers["CustomerCode"]);
+			var customerBranch = headers.TryGetValue("CustomerBranch", out var branchColumn)
+				? GetString(row, branchColumn)
+				: string.Empty;
+			var orderType = GetString(row, headers["OrderType"]);
+			var skuCode = GetString(row, headers["SkuCode"]);
+			var uom = GetString(row, headers["UOM"]);
+			var blankRequiredColumns = new List<string>();
+
+			if (string.IsNullOrWhiteSpace(invoiceCode)) blankRequiredColumns.Add("InvoiceCode");
+			if (row.Cell(headers["InvoiceDate"]).IsEmpty()) blankRequiredColumns.Add("InvoiceDate");
+			if (string.IsNullOrWhiteSpace(customerCode)) blankRequiredColumns.Add("CustomerCode");
+			if (string.IsNullOrWhiteSpace(orderType)) blankRequiredColumns.Add("OrderType");
+			if (string.IsNullOrWhiteSpace(skuCode)) blankRequiredColumns.Add("SkuCode");
+			if (string.IsNullOrWhiteSpace(uom)) blankRequiredColumns.Add("UOM");
+			if (row.Cell(headers["Quantity"]).IsEmpty()) blankRequiredColumns.Add("Quantity");
+
+			if (string.IsNullOrWhiteSpace(invoiceCode) && string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(skuCode))
+			{
+				continue;
+			}
+
+			if (string.IsNullOrWhiteSpace(invoiceCode))
+			{
+				result.AddError(rowNumber, string.Empty, "Invoice code is required.", "InvoiceCode");
+				continue;
+			}
+
+			if (blankRequiredColumns.Count > 0)
+			{
+				foreach (var columnName in blankRequiredColumns)
+				{
+					var message = columnName switch
+					{
+						"InvoiceCode" => "Invoice code is required.",
+						"InvoiceDate" => "Invoice date is required.",
+						"CustomerCode" => "Customer code is required.",
+						"OrderType" => "Order type is required.",
+						"SkuCode" => "SKU code is required.",
+						"UOM" => "UOM is required.",
+						"Quantity" => "Quantity is required.",
+						_ => $"{columnName} is required."
+					};
+
+					result.AddError(rowNumber, invoiceCode, message, columnName);
+				}
+				continue;
+			}
+
+			if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out var invoiceDate))
+			{
+				result.AddError(rowNumber, invoiceCode, "Invoice date is invalid.", "InvoiceDate");
+				continue;
+			}
+
+			if (!TryGetInt(row.Cell(headers["Quantity"]), out var quantity) || quantity <= 0)
+			{
+				result.AddError(rowNumber, invoiceCode, "Quantity must be a whole number greater than 0.", "Quantity");
+				continue;
+			}
+
+			rows.Add(new ImportedInvoiceRow(
 				rowNumber,
-				GetString(row, headers["SubDistributorCode"]),
-				GetString(row, headers["Principal"]),
-				GetString(row, headers["CompanyItemCode"]),
-				GetString(row, headers["CompanyItemName"]),
-				GetString(row, headers["SubdItemCode"]),
-				GetString(row, headers["SubdItemName"]),
-				GetString(row, headers["UOM"]),
-				TryGetDecimal(row.Cell(headers["Conversion"]), out var conversion) ? conversion : null,
-				TryGetDecimal(row.Cell(headers["Price"]), out var price) ? price : null));
+				invoiceCode,
+				invoiceDate,
+				customerCode,
+				customerBranch,
+				orderType,
+				skuCode,
+				uom,
+				quantity));
 		}
 
 		return rows;
@@ -335,78 +416,135 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			if (header is "subdistributorcode" or "subdcode")
+			if (header is "invoicecode" or "invoice number" or "salesinvoicecode")
 			{
-				headers.TryAdd("SubDistributorCode", cell.Address.ColumnNumber);
+				headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "principal")
+			if (header is "invoicedate" or "salesinvoicedate")
 			{
-				headers.TryAdd("Principal", cell.Address.ColumnNumber);
+				headers.TryAdd("InvoiceDate", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "companyitemcode")
+			if (header is "customercode")
 			{
-				headers.TryAdd("CompanyItemCode", cell.Address.ColumnNumber);
+				headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "companyitemname")
+			if (header is "customerbranch" or "branchname" or "customerbranchname")
 			{
-				headers.TryAdd("CompanyItemName", cell.Address.ColumnNumber);
+				headers.TryAdd("CustomerBranch", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "subditemcode")
+			if (header is "ordertype")
 			{
-				headers.TryAdd("SubdItemCode", cell.Address.ColumnNumber);
+				headers.TryAdd("OrderType", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "subditemname")
+			if (header is "skucode" or "subditemcode")
 			{
-				headers.TryAdd("SubdItemName", cell.Address.ColumnNumber);
+				headers.TryAdd("SkuCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "uom")
+			if (header is "uom" or "unitofmeasure")
 			{
 				headers.TryAdd("UOM", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "conversion")
+			if (header is "quantity")
 			{
-				headers.TryAdd("Conversion", cell.Address.ColumnNumber);
-				continue;
-			}
-
-			if (header is "price")
-			{
-				headers.TryAdd("Price", cell.Address.ColumnNumber);
+				headers.TryAdd("Quantity", cell.Address.ColumnNumber);
 			}
 		}
 
 		return headers;
 	}
 
-	private static bool IsTemplateWorksheet(IXLWorksheet worksheet)
+	private static string ValidateGroupConsistency(List<ImportedInvoiceRow> rows)
 	{
-		return BuildHeaderMap(worksheet).ContainsKey("SubDistributorCode");
+		if (rows.Select(row => row.InvoiceDate).Distinct().Count() > 1)
+		{
+			return "Invoice date values must be the same for all rows in the same invoice.";
+		}
+
+		if (rows.Select(row => Normalize(row.CustomerCode)).Distinct().Count() > 1)
+		{
+			return "Customer code values must be the same for all rows in the same invoice.";
+		}
+
+		if (rows.Select(row => Normalize(row.CustomerBranch)).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().Count() > 1)
+		{
+			return "Customer branch values must be the same for all rows in the same invoice.";
+		}
+
+		if (rows.Select(row => Normalize(row.OrderType)).Distinct().Count() > 1)
+		{
+			return "Order type values must be the same for all rows in the same invoice.";
+		}
+
+		return string.Empty;
 	}
 
-	private static bool TryGetDecimal(IXLCell cell, out decimal value)
+	private static bool TryResolveBranch(
+		string branchName,
+		int customerId,
+		List<CustomerBranch>? customerBranchList,
+		out CustomerBranch customerBranch,
+		out string errorMessage)
 	{
-		if (cell.DataType == XLDataType.Number)
+		customerBranch = null!;
+		errorMessage = string.Empty;
+
+		if (customerBranchList is null || customerBranchList.Count == 0)
 		{
-			value = (decimal)cell.GetDouble();
+			errorMessage = "Selected customer has no branch configured.";
+			return false;
+		}
+
+		if (!string.IsNullOrWhiteSpace(branchName))
+		{
+			var selectedBranch = customerBranchList.FirstOrDefault(branch =>
+				branch.CustomerId == customerId &&
+				Normalize(branch.BranchName) == Normalize(branchName));
+
+			if (selectedBranch is not null)
+			{
+				customerBranch = selectedBranch;
+				return true;
+			}
+
+			errorMessage = $"Customer branch '{branchName}' was not found for the selected customer.";
+			return false;
+		}
+
+		customerBranch = customerBranchList.FirstOrDefault(branch => branch.IsDefault)
+			?? customerBranchList[0];
+		return true;
+	}
+
+	private static bool TryParseOrderType(string orderType, out string normalizedOrderType)
+	{
+		if (string.Equals(orderType, "Invoice", StringComparison.OrdinalIgnoreCase))
+		{
+			normalizedOrderType = "Invoice";
 			return true;
 		}
 
-		return decimal.TryParse(cell.GetString().Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out value)
-			|| decimal.TryParse(cell.GetString().Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out value);
+		if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase))
+		{
+			normalizedOrderType = "Credit";
+			return true;
+		}
+
+		normalizedOrderType = string.Empty;
+		return false;
 	}
 
 	private static string GetString(IXLRow row, int columnNumber)
@@ -414,30 +552,98 @@ public sealed class ImportMapItemService
 		return row.Cell(columnNumber).GetString().Trim();
 	}
 
+	private static bool TryGetInt(IXLCell cell, out int value)
+	{
+		if (cell.DataType == XLDataType.Number)
+		{
+			value = (int)cell.GetDouble();
+			return true;
+		}
+
+		if (int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+		{
+			return true;
+		}
+
+		return int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
+	}
+
+	private static bool TryGetDateOnly(IXLCell cell, out DateOnly date)
+	{
+		if (cell.DataType == XLDataType.DateTime)
+		{
+			date = DateOnly.FromDateTime(cell.GetDateTime());
+			return true;
+		}
+
+		if (cell.TryGetValue<DateTime>(out var dateTime))
+		{
+			date = DateOnly.FromDateTime(dateTime);
+			return true;
+		}
+
+		var text = cell.GetString().Trim();
+		if (DateOnly.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out date))
+		{
+			return true;
+		}
+
+		if (DateOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out date))
+		{
+			return true;
+		}
+
+		if (DateTime.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out dateTime))
+		{
+			date = DateOnly.FromDateTime(dateTime);
+			return true;
+		}
+
+		date = default;
+		return false;
+	}
+
 	private static string Normalize(string value)
 	{
 		return value.Trim().ToLowerInvariant();
 	}
 
-	private static ImportMapItemRowResult CreateErrorRow(int rowNumber, string message)
-	{
-		return new ImportMapItemRowResult
-		{
-			RowNumber = rowNumber,
-			Message = message,
-			IsSuccess = false
-		};
-	}
-
-	private sealed record ImportedMapItemRow(
+	private sealed record ImportedInvoiceRow(
 		int RowNumber,
-		string SubDistributorCode,
-		string Principal,
-		string CompanyItemCode,
-		string CompanyItemName,
-		string SubdItemCode,
-		string SubdItemName,
-		string UomName,
-		decimal? Conversion,
-		decimal? Price);
+		string InvoiceCode,
+		DateOnly InvoiceDate,
+		string CustomerCode,
+		string CustomerBranch,
+		string OrderType,
+		string SkuCode,
+		string UOM,
+		int Quantity);
 }
+
+public sealed class PreparedInvoice
+{
+	public string InvoiceNumber { get; set; } = string.Empty;
+	public InputInvoiceModel Invoice { get; set; } = null!;
+	public List<InputItemModel> Items { get; set; } = new();
+	public List<ImportSalesInvoiceIssue> Issues { get; set; } = new();
+	public bool Selected { get; set; }
+	public bool IsSaved { get; set; }
+	public string? SaveErrorMessage { get; set; }
+}
+
+public sealed class ImportSalesInvoiceResult
+{
+	public List<PreparedInvoice> PreparedInvoices { get; } = new();
+	public int ImportedInvoiceCount { get; set; }
+	public int ImportedRowCount { get; set; }
+	public List<ImportSalesInvoiceIssue> Issues { get; } = new();
+
+	public bool HasIssues => Issues.Count > 0;
+
+	public void AddError(int rowNumber, string invoiceNumber, string message, string? columnName = null)
+	{
+		Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceNumber, message, columnName));
+	}
+}
+
+public sealed record ImportSalesInvoiceIssue(int RowNumber, string InvoiceNumber, string Message, string? ColumnName = null);
