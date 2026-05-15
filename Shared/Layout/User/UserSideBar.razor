@@ -8,77 +8,69 @@
 
 <div class="layout-container">
 
-    <!-- Topbar -->
-    <UserTopBar />
+    <!-- Sidebar (full height, left) -->
+    <nav class="@sidebarClass">
 
-    <!-- Main Layout -->
-    <div class="main-layout">
+        <!-- Sidebar Header: Hamburger + Encoder -->
+        <div class="sidebar-header">
+            <button class="hamburger-btn" @onclick="ToggleSidebar">
+                <span class="bi bi-list"></span>
+            </button>
+            <h5 class="sidebar-label">Encoder</h5>
+        </div>
 
-        <!-- Sidebar -->
-        <nav class="sidebar">
+        <ul class="sidebar-menu">
 
-            <div class="sidebar-header">
-                <h5>Encoder</h5>
-            </div>
+            <li>
+                <NavLink class="sidebar-link"
+                         href="home"
+                         Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door-fill"></span>
+                    <span class="sidebar-label">Home</span>
+                </NavLink>
+            </li>
 
-            <ul class="sidebar-menu">
+            <li>
+                <NavLink class="sidebar-link"
+                         href="mapitem">
+                    <span class="bi bi-plus-square-fill"></span>
+                    <span class="sidebar-label">Map Items</span>
+                </NavLink>
+            </li>
 
-                <li>
-                    <NavLink class="sidebar-link"
-                             href="home"
-                             Match="NavLinkMatch.All">
+            <li>
+                <NavLink class="sidebar-link"
+                         href="profile">
+                    <span class="bi bi-person"></span>
+                    <span class="sidebar-label">Profile</span>
+                </NavLink>
+            </li>
 
-                        <span class="bi bi-house-door-fill"></span>
-                        Home
+            <li>
+                <NavLink class="sidebar-link"
+                         href="settings">
+                    <span class="bi bi-gear"></span>
+                    <span class="sidebar-label">Settings</span>
+                </NavLink>
+            </li>
 
-                    </NavLink>
-                </li>
+            <li>
+                <NavLink class="sidebar-link"
+                         href="help">
+                    <span class="bi bi-question-circle"></span>
+                    <span class="sidebar-label">Help</span>
+                </NavLink>
+            </li>
 
-                <li>
-                    <NavLink class="sidebar-link"
-                             href="mapitem">
+        </ul>
 
-                        <span class="bi bi-plus-square-fill"></span>
-                        Map Items
+    </nav>
 
-                    </NavLink>
-                </li>
+    <!-- Right Column: TopBar + Content -->
+    <div class="right-column">
 
-                <li>
-                    <NavLink class="sidebar-link"
-                             href="profile">
+        <UserTopBar />
 
-                        <span class="bi bi-person"></span>
-                        Profile
-
-                    </NavLink>
-                </li>
-
-                <li>
-                    <NavLink class="sidebar-link"
-                             href="settings">
-
-                        <span class="bi bi-gear"></span>
-                        Settings
-
-                    </NavLink>
-                </li>
-
-                <li>
-                    <NavLink class="sidebar-link"
-                             href="help">
-
-                        <span class="bi bi-question-circle"></span>
-                        Help
-
-                    </NavLink>
-                </li>
-
-            </ul>
-
-        </nav>
-
-        <!-- Content -->
         <main class="main-content">
             @Body
         </main>
@@ -86,3 +78,14 @@
     </div>
 
 </div>
+
+@code {
+    private bool sidebarOpen = true;
+
+    private string sidebarClass => sidebarOpen ? "sidebar sidebar-open" : "sidebar sidebar-closed";
+
+    private void ToggleSidebar()
+    {
+        sidebarOpen = !sidebarOpen;
+    }
+}
