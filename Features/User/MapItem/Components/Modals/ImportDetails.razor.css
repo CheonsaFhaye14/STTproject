@@ -1,0 +1,31 @@
+::deep .modal.show {
+	background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+::deep .import-results .card {
+	border-left: 4px solid #dc3545;
+}
+
+::deep .import-results .card-header {
+	background-color: #f8d7da !important;
+	border-color: #f5c6cb;
+	color: #721c24;
+}
+
+::deep .import-results .card-header h6 {
+	color: #721c24;
+}
+
+::deep .import-results .card-body {
+	background-color: #fff;
+	padding: 1rem;
+}
+
+::deep .import-results .list-unstyled li {
+	padding: 0.5rem 0;
+	border-bottom: 1px solid #e9ecef;
+}
+
+::deep .import-results .list-unstyled li:last-child {
+	border-bottom: none;
+}

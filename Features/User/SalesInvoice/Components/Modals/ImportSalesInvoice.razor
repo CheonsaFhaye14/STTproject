@@ -1,0 +1,209 @@
+@using STTproject.Features.User.SalesInvoice.Services
+
+<div class="modal @(Show ? "show" : "")" style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Import Results</h5>
+                <button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                @if (ImportResult == null)
+                {
+                    <p>No import result to display.</p>
+                }
+                else if (!GetInvoiceCards().Any())
+                {
+                    <div class="alert alert-success">
+                        <strong>Import Successful!</strong>
+                        <p>@ImportResult.ImportedInvoiceCount invoice(s) imported with @ImportResult.ImportedRowCount total row(s).</p>
+                    </div>
+                }
+                else
+                {
+                    var invoiceCards = GetInvoiceCards();
+
+                    <div class="import-results">
+                        @foreach (var card in invoiceCards)
+                        {
+                            <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
+                                <div class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
+                                    <div>
+                                        <h6 class="mb-0">Invoice: <strong>@card.InvoiceNumber</strong></h6>
+                                    </div>
+                                    <div>
+                                        @if (card.Prepared?.IsSaved == true)
+                                        {
+                                            <span class="badge bg-light text-success">Saved</span>
+                                        }
+                                        else if (card.HasErrors)
+                                        {
+                                            <span class="badge bg-light text-danger">@GetErrorBadgeText(card)</span>                                        
+                                        }
+                                        else if (card.Prepared != null)
+                                        {
+                                            <input type="checkbox" @bind="card.Prepared.Selected" />
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    @if (card.Prepared?.Invoice != null)
+                                    {
+                                        <div class="mb-2">
+                                            <small class="text-muted">Date:</small> @card.Prepared.Invoice.InvoiceDate.ToString("d") &nbsp; | &nbsp;
+                                            <small class="text-muted">Customer:</small> @card.Prepared.Invoice.CustomerCode - @card.Prepared.Invoice.CustomerName &nbsp; | &nbsp;
+                                            <small class="text-muted">Branch:</small> @card.Prepared.Invoice.CustomerBranchName &nbsp; | &nbsp;
+                                            <small class="text-muted">Order Type:</small> @card.Prepared.Invoice.OrderType &nbsp; | &nbsp;
+                                            <small class="text-muted">Total Amount:</small> @card.Prepared.Items.Sum(item => item.Amount).ToString("N2")
+                                        </div>
+                                    }
+
+                                    @if (card.Prepared?.Items != null && card.Prepared.Items.Count > 0)
+                                    {
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>SKU</th>
+                                                    <th>UOM</th>
+                                                    <th class="text-end">Quantity</th>
+                                                    <th class="text-end">Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var it in card.Prepared.Items)
+                                                {
+                                                    <tr>
+                                                        <td>@it.ItemCode</td>
+                                                        <td>@it.UomName</td>
+                                                        <td class="text-end">@it.Quantity</td>
+                                                        <td class="text-end">@it.Amount.ToString("N2")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+
+                                    @if (card.HasErrors)
+                                    {
+                                        <div class="mt-2">
+                                            <ul class="list-unstyled text-danger mb-0">
+                                                @foreach (var issue in card.Issues)
+                                                {
+                                                    <li>
+                                                        <small class="text-muted">Row @issue.RowNumber</small>
+                                                        <span>: @issue.Message</span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                @if (ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Count > 0)
+                {
+                    <button type="button" class="btn btn-primary" disabled="@(!CanCommit)" @onclick="Commit">Commit Selected</button>
+                }
+                <button type="button" class="btn btn-secondary" @onclick="OnClose">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public ImportSalesInvoiceResult? ImportResult { get; set; }
+
+    [Parameter]
+    public EventCallback OnCommit { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private bool CanCommit => ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
+
+    private List<InvoiceCardViewModel> GetInvoiceCards()
+    {
+        if (ImportResult == null)
+        {
+            return new List<InvoiceCardViewModel>();
+        }
+
+        var preparedByInvoice = (ImportResult.PreparedInvoices ?? new List<PreparedInvoice>())
+            .GroupBy(prepared => NormalizeInvoiceNumber(prepared.InvoiceNumber))
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var issuesByInvoice = ImportResult.Issues
+            .Concat((ImportResult.PreparedInvoices ?? new List<PreparedInvoice>()).SelectMany(prepared => prepared.Issues ?? new List<ImportSalesInvoiceIssue>()))
+            .GroupBy(issue => NormalizeInvoiceNumber(issue.InvoiceNumber))
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .GroupBy(issue => new { issue.RowNumber, issue.InvoiceNumber, issue.ColumnName, issue.Message })
+                    .Select(issueGroup => issueGroup.First())
+                    .OrderBy(issue => issue.RowNumber)
+                    .ThenBy(issue => issue.ColumnName)
+                    .ThenBy(issue => issue.Message)
+                    .ToList());
+
+        var invoiceKeys = preparedByInvoice.Keys
+            .Concat(issuesByInvoice.Keys)
+            .Distinct()
+            .OrderBy(key => preparedByInvoice.TryGetValue(key, out var prepared) ? prepared.InvoiceNumber : issuesByInvoice[key].FirstOrDefault()?.InvoiceNumber ?? key)
+            .ToList();
+
+        var cards = new List<InvoiceCardViewModel>();
+        foreach (var invoiceKey in invoiceKeys)
+        {
+            preparedByInvoice.TryGetValue(invoiceKey, out var prepared);
+            issuesByInvoice.TryGetValue(invoiceKey, out var issues);
+
+            cards.Add(new InvoiceCardViewModel(
+                prepared?.InvoiceNumber ?? issues?.FirstOrDefault()?.InvoiceNumber ?? invoiceKey,
+                prepared,
+                issues ?? new List<ImportSalesInvoiceIssue>()));
+        }
+
+        return cards
+            .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
+            .ThenBy(card => card.InvoiceNumber)
+            .ToList();
+    }
+
+    private static string NormalizeInvoiceNumber(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "[Header Issue]" : value.Trim();
+    }
+    private static string GetErrorBadgeText(InvoiceCardViewModel card)
+    {
+        var errorCount = card.Issues.Count > 0
+            ? card.Issues.Count
+            : card.Prepared?.Issues?.Count ?? 0;
+
+        return errorCount == 1
+            ? "1 error"
+            : $"{errorCount} errors";
+    }
+    private sealed record InvoiceCardViewModel(
+        string InvoiceNumber,
+        PreparedInvoice? Prepared,
+        List<ImportSalesInvoiceIssue> Issues)
+    {
+        public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
+    }
+
+    private async Task Commit()
+    {
+        if (OnCommit.HasDelegate)
+        {
+            await OnCommit.InvokeAsync(null);
+        }
+    }
+}

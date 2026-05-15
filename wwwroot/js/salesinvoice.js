@@ -182,6 +182,19 @@ export function openDatalist(inputElement) {
     }
 }
 
+export function clickElement(selector) {
+    if (!selector) {
+        return;
+    }
+
+    const element = document.querySelector(selector);
+    if (!element || element.disabled) {
+        return;
+    }
+
+    element.click();
+}
+
 export function saveSalesInvoiceDraft(storageKey, draftJson) {
     if (!storageKey) {
         return;

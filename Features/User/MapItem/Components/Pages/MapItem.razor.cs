@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Data;
@@ -37,7 +38,9 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private string? confirmedCompanyItemSummary;
         private bool showErrorModal = false;
         private bool showDownloadTemplateModal = false;
+        private bool showImportDetailsModal = false;
         private bool showClearConfirmModal = false;
+        private ImportMapItemResult? lastImportResult;
         private bool shouldHydrateClientStateAfterRender = false;
         private bool hasHydratedClientState = false;
         [Parameter] public EventCallback OnDraftChanged { get; set; }
@@ -61,6 +64,55 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             showDownloadTemplateModal = false;
             return Task.CompletedTask;
+        }
+
+        private async Task OpenImportFilePicker()
+        {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            await jsModule.InvokeVoidAsync("clickElement", "#mapitem-import-file");
+        }
+
+        private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
+        {
+            var file = e.File;
+            if (file is null)
+            {
+                return;
+            }
+
+            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                itemActionErrorMessage = "Please select a valid .xlsx file.";
+                showErrorModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await browserStream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            lastImportResult = await importMapItemService.ImportFromExcelAsync(
+                ms,
+                selectedSubdId,
+                userContext.UserId ?? 0);
+
+            showImportDetailsModal = true;
+
+            if (lastImportResult?.SuccessCount > 0)
+            {
+                await _LoadMapTablesAsyncInternal();
+            }
+
+            StateHasChanged();
+        }
+
+        private void CloseImportDetailsModal()
+        {
+            showImportDetailsModal = false;
+            lastImportResult = null;
+            StateHasChanged();
         }
 
         private Task OpenAddUomModal()

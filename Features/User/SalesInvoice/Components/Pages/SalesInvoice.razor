@@ -4,6 +4,7 @@
 
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @using STTproject.Features.User.SalesInvoice.Components.Sections
 @using STTproject.Services
@@ -14,6 +15,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject STTproject.Features.User.SalesInvoice.Services.DownloadTemplateService downloadTemplateService
+@inject STTproject.Features.User.SalesInvoice.Services.ImportSalesInvoiceService importSalesInvoiceService
 @inject STTproject.Services.IMapItemService mapItemService
 
 @implements IAsyncDisposable
@@ -33,7 +35,8 @@
 
 <div class="top-buttons">
     <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">Download Template</button>
-    <button class="btn-primary">Import</button>
+    <button class="btn-primary" type="button" @onclick="OpenImportFilePicker" disabled="@(invoice.SubdistributorId <= 0)">Import</button>
+    <InputFile id="salesinvoice-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
 </div>
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
@@ -51,6 +54,12 @@
 
 <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
               Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
+
+<ConfirmModal Show="showImportConfirmModal" Title="Import Sales Invoices"
+              Message="@($"Import invoices from Excel file to [{subdList.FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId)?.SubdName ?? "Unknown"}]?")"
+              OnYes="ConfirmImport" OnNo="CancelImport" />
+
+<ImportSalesInvoice Show="showImportResultsModal" ImportResult="lastImportResult" OnClose="CloseImportResultsModal" OnCommit="CommitSelectedImportedInvoices" />
 
 <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"

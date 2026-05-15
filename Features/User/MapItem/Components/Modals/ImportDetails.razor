@@ -1,0 +1,96 @@
+@using STTproject.Features.User.MapItem.DTOs
+
+<div class="modal @(Show ? "show" : "")" style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Import Results</h5>
+				<button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
+			</div>
+
+			<div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+				@if (ImportResult is null)
+				{
+					<p>No import result to display.</p>
+				}
+				else if (!ImportResult.Rows.Any())
+				{
+					<div class="alert alert-success">
+						<strong>Import Successful!</strong>
+						<p>@ImportResult.SuccessCount mapped with @ImportResult.Rows.Count total row(s).</p>
+					</div>
+				}
+				else
+				{
+					<div class="import-results">
+						@foreach (var row in ImportResult.Rows.OrderBy(row => row.RowNumber))
+						{
+							<div class="card mb-3 @(row.IsSuccess ? "border-success" : "border-danger")">
+								<div class="card-header d-flex justify-content-between align-items-center @(row.IsSuccess ? "bg-success text-white" : "bg-danger text-white")">
+									<div>
+										<h6 class="mb-0">Row @row.RowNumber - <strong>@row.SubdItemCode</strong></h6>
+									</div>
+									<div>
+										@if (row.IsSuccess)
+										{
+											<span class="badge bg-light text-success">Mapped</span>
+										}
+										else
+										{
+											<span class="badge bg-light text-danger">Has errors</span>
+										}
+									</div>
+								</div>
+								<div class="card-body">
+									<div class="mb-2">
+										<small class="text-muted">Sub Distributor:</small> @row.SubDistributorCode &nbsp; | &nbsp;
+										<small class="text-muted">Principal:</small> @row.Principal &nbsp; | &nbsp;
+										<small class="text-muted">Company Item:</small> @row.CompanyItemCode - @row.CompanyItemName &nbsp; | &nbsp;
+										<small class="text-muted">Subd Item:</small> @row.SubdItemCode - @row.SubdItemName &nbsp; | &nbsp;
+										<small class="text-muted">UOM:</small> @row.UomName &nbsp; | &nbsp;
+										<small class="text-muted">Conversion:</small> @(row.Conversion?.ToString("N2") ?? "-") &nbsp; | &nbsp;
+										<small class="text-muted">Price:</small> @(row.Price?.ToString("N2") ?? "-")
+									</div>
+
+									@if (!row.IsSuccess)
+									{
+										<div class="mt-3">
+											<strong>Errors</strong>
+											<ul class="list-unstyled text-danger mb-0">
+												@foreach (var issue in row.Issues)
+												{
+													<li>@issue</li>
+												}
+											</ul>
+										</div>
+									}
+									else if (!string.IsNullOrWhiteSpace(row.Message))
+									{
+										<div class="mt-3 text-success">
+											@row.Message
+										</div>
+									}
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</div>
+
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" @onclick="OnClose">Close</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public bool Show { get; set; }
+
+	[Parameter]
+	public ImportMapItemResult? ImportResult { get; set; }
+
+	[Parameter]
+	public EventCallback OnClose { get; set; }
+}
