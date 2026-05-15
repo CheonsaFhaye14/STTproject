@@ -1,18 +1,18 @@
 .card-section {
-    background-color: #f9dfdf;
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     padding: 16px;
     border-radius: 12px;
-    box-shadow: 5px 5px 2px #888888;
+    box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
     height: 65vh;
     overflow-y: auto;
 }
 
-.card-section h3 {
-    margin-bottom: 12px;
-    font-size: 18px;
-    font-weight: bold;
-    color: #333;
-}
+    .card-section h3 {
+        margin-bottom: 12px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #3a2870;
+    }
 
 .principal-list {
     list-style: none;
@@ -20,35 +20,36 @@
     margin: 0;
 }
 
-.principal-list li {
-    background: #fff;
-    margin-bottom: 8px;
-    padding: 8px;
-    border-radius: 8px;
-    text-align: center;
-    font-weight: 500;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: 0.3s ease;
-    cursor: pointer;
-}
+    .principal-list li {
+        background: rgba(255, 255, 255, 0.6);
+        margin-bottom: 8px;
+        padding: 8px;
+        border-radius: 10px;
+        text-align: center;
+        font-weight: 500;
+        color: #5A4890;
+        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
+        transition: 0.3s ease;
+        cursor: pointer;
+    }
 
-.principal-list li.principal-selected {
-    background: linear-gradient(135deg, #ac7a7a, #8e5d5d);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-    transform: scale(1.03);
-}
+        .principal-list li.principal-selected {
+            background: linear-gradient(135deg, #9B85CC, #7A65B0);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            box-shadow: 0 4px 12px rgba(124, 77, 255, 0.3);
+            transform: scale(1.03);
+        }
 
-.principal-list li.principal-selected:hover {
-    background: linear-gradient(135deg, #ac7a7a, #8e5d5d);
-    color: #fff;
-    transform: scale(1.03);
-}
+            .principal-list li.principal-selected:hover {
+                background: linear-gradient(135deg, #9B85CC, #7A65B0);
+                color: #fff;
+                transform: scale(1.03);
+            }
 
-.principal-list li:hover {
-    background-color: #ac7a7a;
-    color: #fff;
-    transform: scale(1.05);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-}
+        .principal-list li:hover {
+            background: linear-gradient(135deg, #C9B8E8, #9B85CC);
+            color: #3a2870;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(124, 77, 255, 0.25);
+        }

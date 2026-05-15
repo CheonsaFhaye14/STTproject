@@ -5,7 +5,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient( 135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100% );
+    background: rgba(135, 68, 211, 0.47);;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 16px rgba(150, 100, 200, 0.15), inset 0 0 10px rgba(255,255,255,0.3);
     border-bottom: 1px solid rgba(155, 133, 204, 0.3);
