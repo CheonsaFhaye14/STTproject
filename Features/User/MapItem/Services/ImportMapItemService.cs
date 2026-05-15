@@ -1,56 +1,52 @@
 using System.Globalization;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using STTproject.Data;
-using STTproject.Features.User.SalesInvoice.Validators;
-using STTproject.Models;
+using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Services;
 
-namespace STTproject.Features.User.SalesInvoice.Services;
+namespace STTproject.Features.User.MapItem.Services;
 
-public sealed class ImportSalesInvoiceService
+public sealed class ImportMapItemService
 {
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
-	private readonly ISalesInvoiceService _salesInvoiceService;
-	private readonly ILogger<ImportSalesInvoiceService> _logger;
+    private readonly IMapItemService _mapItemService;
+	private readonly ILogger<ImportMapItemService> _logger;
 
-	public ImportSalesInvoiceService(
+	public ImportMapItemService(
 		IDbContextFactory<SttprojectContext> contextFactory,
-		ISalesInvoiceService salesInvoiceService,
-		ILogger<ImportSalesInvoiceService> logger)
+        IMapItemService mapItemService,
+		ILogger<ImportMapItemService> logger)
 	{
 		_contextFactory = contextFactory;
-		_salesInvoiceService = salesInvoiceService;
+		_mapItemService = mapItemService;
 		_logger = logger;
 	}
 
-	public async Task<ImportSalesInvoiceResult> ImportFromExcelAsync(
+	public async Task<ImportMapItemResult> ImportFromExcelAsync(
 		Stream excelStream,
-		int subDistributorId,
 		int currentUserId,
 		CancellationToken cancellationToken = default)
 	{
-		var result = await PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, cancellationToken);
-		if (result.PreparedInvoices.Count == 0)
+		var result = await PrepareFromExcelAsync(excelStream, currentUserId, cancellationToken);
+		if (result.PreparedMapItem.Count == 0)
 		{
 			return result;
 		}
 
-		var validPreparedInvoices = result.PreparedInvoices
+		var validPreparedMapItems = result.PreparedMapItems
 			.Where(prepared => prepared.Issues.Count == 0)
 			.ToList();
 
-		if (validPreparedInvoices.Count == 0)
+        if (validPreparedMapItems.Count == 0)
 		{
 			return result;
 		}
 
-		var commitResult = await CommitPreparedInvoicesAsync(validPreparedInvoices, currentUserId, cancellationToken);
-		result.ImportedInvoiceCount = commitResult.ImportedInvoiceCount;
+        var commitResult = await CommitPreparedMapItemsAsync(validPreparedMapItems, currentUserId, cancellationToken);
+		result.ImportedMapItemCount = commitResult.ImportedMapItemCount;
 		result.ImportedRowCount = commitResult.ImportedRowCount;
-
-		foreach (var issue in commitResult.Issues)
+foreach (var issue in commitResult.Issues)
 		{
 			result.Issues.Add(issue);
 		}
@@ -58,23 +54,16 @@ public sealed class ImportSalesInvoiceService
 		return result;
 	}
 
-	public async Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
+	public async Task<ImportMapItemResult> PrepareFromExcelAsync(
 		Stream excelStream,
-		int subDistributorId,
 		int currentUserId,
 		CancellationToken cancellationToken = default)
 	{
-		var result = new ImportSalesInvoiceResult();
+		var result = new ImportMapItemResult();
 
 		if (excelStream is null || !excelStream.CanRead)
 		{
 			result.AddError(0, string.Empty, "Import file is missing or unreadable.");
-			return result;
-		}
-
-		if (subDistributorId <= 0)
-		{
-			result.AddError(0, string.Empty, "A valid subdistributor is required before importing sales invoices.");
 			return result;
 		}
 
@@ -86,19 +75,21 @@ public sealed class ImportSalesInvoiceService
 
 		using var workbook = new XLWorkbook(excelStream);
 		var worksheet = workbook.Worksheets
-			.FirstOrDefault(IsSalesInvoiceWorksheet)
+			.FirstOrDefault(IsMapItemWorksheet)
 			?? workbook.Worksheets.First();
 
 		var headers = BuildHeaderMap(worksheet);
 		var requiredHeaders = new[]
 		{
-			"InvoiceCode",
-			"InvoiceDate",
-			"CustomerCode",
-			"OrderType",
-			"SkuCode",
+			"SubDistributorCode",
+			"Principal",
+			"CompanyItemCode",
+			"CompanyItemName",
+			"SubdItemCode",
+			"SubdItemName",
 			"UOM",
-			"Quantity"
+            "Conversion",
+            "Price"
 		};
 
 		var missingHeaders = requiredHeaders
@@ -114,101 +105,40 @@ public sealed class ImportSalesInvoiceService
 		var parsedRows = ReadRows(worksheet, headers, result);
 		if (parsedRows.Count == 0)
 		{
-			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
+			result.AddError(0, string.Empty, "No mapped item rows were found in the template.");
 			return result;
 		}
 
-		await using var context = _contextFactory.CreateDbContext();
-		var customers = await context.Customers
-			.AsNoTracking()
-			.Where(customer => customer.SubDistributorId == subDistributorId && customer.IsActive)
-			.ToListAsync(cancellationToken);
-
-		var customerBranches = await context.CustomerBranches
-			.AsNoTracking()
-			.Where(branch => branch.IsActive)
-			.ToListAsync(cancellationToken);
-
-		var subdItems = await context.SubdItems
-			.AsNoTracking()
-			.Where(item => item.SubDistributorId == subDistributorId && item.IsActive)
-			.ToListAsync(cancellationToken);
-
-		var subdItemIds = subdItems.Select(item => item.SubdItemId).Distinct().ToList();
-		var uoms = await context.ItemsUoms
-			.AsNoTracking()
-			.Where(uom => subdItemIds.Contains(uom.SubdItemId))
-			.ToListAsync(cancellationToken);
-
-		var customerByCode = customers.ToDictionary(customer => Normalize(customer.CustomerCode));
-		var branchesByCustomerId = customerBranches
-			.GroupBy(branch => branch.CustomerId)
-			.ToDictionary(
-				group => group.Key,
-				group => group.ToList());
-		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
-		var uomLookup = uoms
-			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
-			.ToDictionary(group => group.Key, group => group.First());
-
-		foreach (var invoiceGroup in parsedRows.GroupBy(row => row.InvoiceCode, StringComparer.OrdinalIgnoreCase))
+		foreach (var MapItemGroup in parsedRows.GroupBy(row => row.SubdItemCode, StringComparer.OrdinalIgnoreCase))
 		{
-			var invoiceRows = invoiceGroup.ToList();
-			var invoiceNumber = invoiceGroup.Key.Trim();
+			var MapItemRows = MapItemGroup.ToList();
+			var SubdItemCode = MapItemGroup.Key.Trim();
 
-			var preparedInvoice = new PreparedInvoice
+			var preparedMapItem = new PreparedMapItem
 			{
-				InvoiceNumber = invoiceNumber,
-				Items = new List<InputItemModel>(),
-				Issues = new List<ImportSalesInvoiceIssue>(),
+				SubdItemCode = SubdItemCode,
+				
+                Uoms = new List<InputUomsModel>(),
+				Issues = new List<ImportMapItemIssue>(),
 				Selected = true
 			};
 
 			try
 			{
-				var groupConsistencyError = ValidateGroupConsistency(invoiceRows);
+				var groupConsistencyError = ValidateGroupConsistency(MapItemRows);
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
-					result.AddError(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError);
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError));
-					result.PreparedInvoices.Add(preparedInvoice);
+					result.AddError(MapItemRows[0].RowNumber, MapItemRows[0].SubdItemCode, groupConsistencyError);
+					preparedMapItem.Issues.Add(new ImportMapItemIssue(MapItemRows[0].RowNumber, MapItemRows[0].SubdItemCode, groupConsistencyError));
+					result.PreparedMapItems.Add(preparedMapItem);
 					continue;
 				}
 
-				var firstRow = invoiceRows[0];
+				var firstRow = MapItemRows[0];
 
-				if (!customerByCode.TryGetValue(Normalize(firstRow.CustomerCode), out var customer))
+				preparedMapItem.Invoice = new InputUomsModel
 				{
-					var msg = $"Customer code '{firstRow.CustomerCode}' was not found.";
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode"));
-					result.PreparedInvoices.Add(preparedInvoice);
-					continue;
-				}
-
-				var hasCustomerBranches = branchesByCustomerId.TryGetValue(customer.CustomerId, out var customerBranchList)
-					&& customerBranchList.Count > 0;
-
-				if (!TryResolveBranch(firstRow.CustomerBranch, customer.CustomerId, customerBranchList, out var customerBranch, out var branchError))
-				{
-					result.AddError(firstRow.RowNumber, invoiceNumber, branchError, "CustomerBranch");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, branchError, "CustomerBranch"));
-					result.PreparedInvoices.Add(preparedInvoice);
-					continue;
-				}
-
-				if (!TryParseOrderType(firstRow.OrderType, out var orderType))
-				{
-					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "OrderType");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "OrderType"));
-					result.PreparedInvoices.Add(preparedInvoice);
-					continue;
-				}
-
-				preparedInvoice.Invoice = new InputInvoiceModel
-				{
-					InvoiceNumber = invoiceNumber,
+					SubDistributorCode = firstRow.SubDistributorCode,
 					InvoiceDate = firstRow.InvoiceDate,
 					OrderType = orderType,
 					CustomerId = customer.CustomerId,

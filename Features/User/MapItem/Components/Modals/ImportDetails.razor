@@ -1,4 +1,4 @@
-@using STTproject.Features.User.SalesInvoice.Services
+@using STTproject.Features.User.MapItem.Services
 
 <div class="modal @(Show ? "show" : "")" style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
     <div class="modal-dialog modal-lg">
@@ -12,24 +12,24 @@
                 {
                     <p>No import result to display.</p>
                 }
-                else if (!GetInvoiceCards().Any())
+                else if (!GetMapItemCards().Any())
                 {
                     <div class="alert alert-success">
                         <strong>Import Successful!</strong>
-                        <p>@ImportResult.ImportedInvoiceCount invoice(s) imported with @ImportResult.ImportedRowCount total row(s).</p>
+                        <p>@ImportResult.ImportedMapItemCount map item(s) imported with @ImportResult.ImportedRowCount total row(s).</p>
                     </div>
                 }
                 else
                 {
-                    var invoiceCards = GetInvoiceCards();
+                    var MapItemCards = GetMapItemCards();
 
                     <div class="import-results">
-                        @foreach (var card in invoiceCards)
+                        @foreach (var card in MapItemCards)
                         {
                             <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
                                 <div class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
                                     <div>
-                                        <h6 class="mb-0">Invoice: <strong>@card.InvoiceNumber</strong></h6>
+                                        <h6 class="mb-0">SubdItem: <strong>@card.SubdItem - @card.SubdItemName</strong></h6>
                                     </div>
                                     <div>
                                         @if (card.Prepared?.IsSaved == true)
@@ -47,36 +47,32 @@
                                     </div>
                                 </div>
                                 <div class="card-body">
-                                    @if (card.Prepared?.Invoice != null)
+                                    @if (card.Prepared?.MapItem != null)
                                     {
                                         <div class="mb-2">
-                                            <small class="text-muted">Date:</small> @card.Prepared.Invoice.InvoiceDate.ToString("d") &nbsp; | &nbsp;
-                                            <small class="text-muted">Customer:</small> @card.Prepared.Invoice.CustomerCode - @card.Prepared.Invoice.CustomerName &nbsp; | &nbsp;
-                                            <small class="text-muted">Branch:</small> @card.Prepared.Invoice.CustomerBranchName &nbsp; | &nbsp;
-                                            <small class="text-muted">Order Type:</small> @card.Prepared.Invoice.OrderType &nbsp; | &nbsp;
-                                            <small class="text-muted">Total Amount:</small> @card.Prepared.Items.Sum(item => item.Amount).ToString("N2")
+                                            <small class="text-muted">Company Item:</small> @card.Prepared.MapItem.CompanyItemCode - @card.Prepared.MapItem.CompanyItemName &nbsp; | &nbsp;
+                                            <small class="text-muted">Principal:</small> @card.Prepared.MapItem.Principal &nbsp; | &nbsp;
+                                            <small class="text-muted">Category:</small> @card.Prepared.MapItem.Category &nbsp; | &nbsp;
                                         </div>
                                     }
 
-                                    @if (card.Prepared?.Items != null && card.Prepared.Items.Count > 0)
+                                    @if (card.Prepared?.Uoms != null && card.Prepared.Uoms.Count > 0)
                                     {
                                         <table class="table table-sm">
                                             <thead>
                                                 <tr>
-                                                    <th>SKU</th>
-                                                    <th>UOM</th>
-                                                    <th class="text-end">Quantity</th>
-                                                    <th class="text-end">Amount</th>
+                                                    <th>Uom</th>
+                                                    <th>Conversion</th>
+                                                    <th>Price</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach (var it in card.Prepared.Items)
+                                                @foreach (var Uom in card.Prepared.Uoms)
                                                 {
                                                     <tr>
-                                                        <td>@it.ItemCode</td>
-                                                        <td>@it.UomName</td>
-                                                        <td class="text-end">@it.Quantity</td>
-                                                        <td class="text-end">@it.Amount.ToString("N2")</td>
+                                                        <td>@Uom.UomName</td>
+                                                        <td>@Uom.Conversion</td>
+                                                        <td>@Uom.Price.ToString("N2")</td>
                                                     </tr>
                                                 }
                                             </tbody>
@@ -104,7 +100,7 @@
                 }
             </div>
             <div class="modal-footer">
-                @if (ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Count > 0)
+                @if (ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Count > 0)
                 {
                     <button type="button" class="btn btn-primary" disabled="@(!CanCommit)" @onclick="Commit">Commit Selected</button>
                 }
@@ -119,7 +115,7 @@
     public bool Show { get; set; }
 
     [Parameter]
-    public ImportSalesInvoiceResult? ImportResult { get; set; }
+    public ImportMapItemResult? ImportResult { get; set; }
 
     [Parameter]
     public EventCallback OnCommit { get; set; }
@@ -127,61 +123,61 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    private bool CanCommit => ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
+    private bool CanCommit => ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
 
-    private List<InvoiceCardViewModel> GetInvoiceCards()
+    private List<MapItemViewModel> GetMapItemCards()
     {
         if (ImportResult == null)
         {
-            return new List<InvoiceCardViewModel>();
+            return new List<MapItemViewModel>();
         }
 
-        var preparedByInvoice = (ImportResult.PreparedInvoices ?? new List<PreparedInvoice>())
-            .GroupBy(prepared => NormalizeInvoiceNumber(prepared.InvoiceNumber))
+        var preparedBySubdItem = (ImportResult.PreparedMapItems ?? new List<PreparedMapItem>())
+            .GroupBy(prepared => NormalizeSubdItemCode(prepared.SubdItemCode))
             .ToDictionary(group => group.Key, group => group.First());
 
-        var issuesByInvoice = ImportResult.Issues
-            .Concat((ImportResult.PreparedInvoices ?? new List<PreparedInvoice>()).SelectMany(prepared => prepared.Issues ?? new List<ImportSalesInvoiceIssue>()))
-            .GroupBy(issue => NormalizeInvoiceNumber(issue.InvoiceNumber))
+        var issuesByMapItem = ImportResult.Issues
+            .Concat((ImportResult.PreparedMapItems ?? new List<PreparedMapItem>()).SelectMany(prepared => prepared.Issues ?? new List<ImportMapItemIssue>()))
+            .GroupBy(issue => NormalizeSubdItemCode(issue.SubdItemCode))
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .GroupBy(issue => new { issue.RowNumber, issue.InvoiceNumber, issue.ColumnName, issue.Message })
+                    .GroupBy(issue => new { issue.RowNumber, issue.SubdItemCode, issue.ColumnName, issue.Message })
                     .Select(issueGroup => issueGroup.First())
                     .OrderBy(issue => issue.RowNumber)
                     .ThenBy(issue => issue.ColumnName)
                     .ThenBy(issue => issue.Message)
                     .ToList());
 
-        var invoiceKeys = preparedByInvoice.Keys
-            .Concat(issuesByInvoice.Keys)
+        var subdItemKeys = preparedBySubdItem.Keys
+            .Concat(issuesByMapItem.Keys)
             .Distinct()
-            .OrderBy(key => preparedByInvoice.TryGetValue(key, out var prepared) ? prepared.InvoiceNumber : issuesByInvoice[key].FirstOrDefault()?.InvoiceNumber ?? key)
+            .OrderBy(key => preparedBySubdItem.TryGetValue(key, out var prepared) ? prepared.SubdItemCode : issuesByMapItem[key].FirstOrDefault()?.SubdItemCode ?? key)
             .ToList();
 
-        var cards = new List<InvoiceCardViewModel>();
-        foreach (var invoiceKey in invoiceKeys)
+        var cards = new List<MapItemCardViewModel>();
+        foreach (var subdItemKey in subdItemKeys)
         {
-            preparedByInvoice.TryGetValue(invoiceKey, out var prepared);
-            issuesByInvoice.TryGetValue(invoiceKey, out var issues);
+            preparedBySubdItem.TryGetValue(subdItemKey, out var prepared);
+            issuesByMapItem.TryGetValue(subdItemKey, out var issues);
 
-            cards.Add(new InvoiceCardViewModel(
-                prepared?.InvoiceNumber ?? issues?.FirstOrDefault()?.InvoiceNumber ?? invoiceKey,
+            cards.Add(new MapItemCardViewModel(
+                prepared?.SubdItemCode ?? issues?.FirstOrDefault()?.SubdItemCode ?? subdItemKey,
                 prepared,
-                issues ?? new List<ImportSalesInvoiceIssue>()));
+                issues ?? new List<ImportMapItemIssue>()));
         }
 
         return cards
             .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
-            .ThenBy(card => card.InvoiceNumber)
+            .ThenBy(card => card.SubdItemCode)
             .ToList();
     }
 
-    private static string NormalizeInvoiceNumber(string value)
+    private static string NormalizeSubdItemCode(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? "[Header Issue]" : value.Trim();
     }
-    private static string GetErrorBadgeText(InvoiceCardViewModel card)
+    private static string GetErrorBadgeText(MapItemCardViewModel card)
     {
         var errorCount = card.Issues.Count > 0
             ? card.Issues.Count
@@ -191,10 +187,10 @@
             ? "1 error"
             : $"{errorCount} errors";
     }
-    private sealed record InvoiceCardViewModel(
-        string InvoiceNumber,
-        PreparedInvoice? Prepared,
-        List<ImportSalesInvoiceIssue> Issues)
+    private sealed record MapItemCardViewModel(
+        string SubdItemCode,
+        PreparedMapItem? Prepared,
+        List<ImportMapItemIssue> Issues)
     {
         public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
     }

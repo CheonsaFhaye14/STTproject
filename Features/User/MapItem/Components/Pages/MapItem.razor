@@ -12,6 +12,7 @@
 @inject IUserContextService userContext
 @inject IJSRuntime JS
 @inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
+@inject STTproject.Features.User.MapItem.Services.ImportMapItemService importMapItemService
 @inject STTproject.Features.User.MapItem.Services.MapItemDraftService draftService
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
@@ -37,7 +38,8 @@
     <!-- DOWNLOAD TEMPLATE + IMPORT -->
     <div class="top-buttons">
         <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
-        <button class="btn-primary">Import Excel</button>
+        <button class="btn-primary" @onclick="OpenImportFilePicker">Import Excel</button>
+        <InputFile id="mapitem-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
         <button class="btn-primary">Export Data</button>
     </div>
 
@@ -109,6 +111,7 @@
 
     <DownloadTemplate ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
+    <ImportDetails Show="showImportDetailsModal" ImportResult="lastImportResult" OnClose="CloseImportDetailsModal" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" />

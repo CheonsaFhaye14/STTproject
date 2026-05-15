@@ -50,6 +50,10 @@ public class DownloadTemplateService
             worksheet.Cell(1, 9).Value = "Price";
             worksheet.SheetView.FreezeRows(1);
             worksheet.Columns().AdjustToContents();
+
+            // change number format to text for code columns to preserve formatting (e.g. leading zeros)
+            worksheet.Range("E2:G1000").Style.NumberFormat.Format = "@";
+    
             // Style headers
             var headerRow = worksheet.Row(1);
             headerRow.Style.Font.Bold = true;
@@ -100,15 +104,15 @@ public class DownloadTemplateService
             // Conversion validation: Decimal > 0
             var conversionRange = worksheet.Range($"H2:H{lastDataRow}");
             var conversionValidation = conversionRange.CreateDataValidation();
-            conversionValidation.Decimal.GreaterThan(0);
+            conversionValidation.WholeNumber.GreaterThan(0);
             conversionValidation.IgnoreBlanks = true;
             conversionValidation.ShowInputMessage = true;
             conversionValidation.InputTitle = "Conversion";
-            conversionValidation.InputMessage = "Must be a number greater than 0. Example: 1.5";
+            conversionValidation.InputMessage = "Must be a whole number greater than 0.";
             conversionValidation.ShowErrorMessage = true;
             conversionValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
             conversionValidation.ErrorTitle = "Invalid Conversion Value";
-            conversionValidation.ErrorMessage = "Conversion must be a number greater than 0.";
+            conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0.";
 
             // Price validation: Decimal > 0
             var priceRange = worksheet.Range($"I2:I{lastDataRow}");
@@ -173,23 +177,18 @@ public class DownloadTemplateService
 
         // Unlocked columns: SubdItemCode, SubdItemName, UOM, Conversion, Price
         worksheet.Cell(row, 5).Value = item.SubdItemCode;
-        worksheet.Cell(row, 5).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
         worksheet.Cell(row, 5).Style.Protection.Locked = false;
 
         worksheet.Cell(row, 6).Value = item.SubdItemName;
-        worksheet.Cell(row, 6).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
         worksheet.Cell(row, 6).Style.Protection.Locked = false;
 
         worksheet.Cell(row, 7).Value = item.UOM;
-        worksheet.Cell(row, 7).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
         worksheet.Cell(row, 7).Style.Protection.Locked = false;
 
         worksheet.Cell(row, 8).Value = item.Conversion;
-        worksheet.Cell(row, 8).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
         worksheet.Cell(row, 8).Style.Protection.Locked = false;
 
-        worksheet.Cell(row, 9).Value = item.Price;
-        worksheet.Cell(row, 9).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.White;
+        worksheet.Cell(row, 9).Value = item.Price;        
         worksheet.Cell(row, 9).Style.Protection.Locked = false;
     }
 }

@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using STTproject.Data;
 using STTproject.Features.User.SalesInvoice.Components.Modals;
+using STTproject.Features.User.SalesInvoice.Services;
 using STTproject.Models;
 using STTproject.Services;
 using System.Text.Json;
@@ -17,6 +19,9 @@ public partial class SalesInvoice
     private bool showClearConfirmModal = false;
     private int addItemsConfirmCount = 0;
     private string editItemsConfirmMessage = "";
+    private bool showImportConfirmModal = false;
+    private bool showImportResultsModal = false;
+    private ImportSalesInvoiceResult? lastImportResult;
     private AddInvoiceItems? addItemsModalRef;
     private EditInvoiceItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
@@ -61,6 +66,133 @@ public partial class SalesInvoice
         showEditItemsModal = false;
         showAddItemsModal = true;
         await PersistDraftAsync();
+    }
+
+    private async Task OpenImportFilePicker()
+    {
+        if (invoice.SubdistributorId <= 0)
+        {
+            errorMessage = "Please select a subdistributor before importing.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
+
+        showImportConfirmModal = true;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmImport()
+    {
+        showImportConfirmModal = false;
+        if (jsModule is null)
+        {
+            return;
+        }
+
+        await jsModule.InvokeVoidAsync("clickElement", "#salesinvoice-import-file");
+    }
+
+    private void CancelImport()
+    {
+        showImportConfirmModal = false;
+    }
+
+    private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
+    {
+        if (invoice.SubdistributorId <= 0)
+        {
+            errorMessage = "Select a subdistributor before importing a file.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
+
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        var fileName = file.Name ?? string.Empty;
+        if (!fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Please select a valid .xlsx file.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
+
+        using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+        using var ms = new System.IO.MemoryStream();
+        await browserStream.CopyToAsync(ms);
+        ms.Position = 0;
+
+        var importResult = await importSalesInvoiceService.PrepareFromExcelAsync(
+            ms,
+            invoice.SubdistributorId,
+            userContext.UserId ?? 0);
+
+        lastImportResult = importResult;
+        showImportResultsModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseImportResultsModal()
+    {
+        showImportResultsModal = false;
+        lastImportResult = null;
+        StateHasChanged();
+    }
+
+    private async Task CommitSelectedImportedInvoices()
+    {
+        if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
+        {
+            errorMessage = "No prepared invoices to commit.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
+
+        var toCommit = lastImportResult.PreparedInvoices
+            .Where(p => p.Selected && (p.Issues == null || p.Issues.Count == 0))
+            .ToList();
+        if (toCommit.Count == 0)
+        {
+            errorMessage = "No valid invoices selected for commit.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
+
+        var commitResult = await importSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, userContext.UserId ?? 0);
+
+        // merge commit errors and saved flags back into lastImportResult
+        foreach (var prepared in toCommit)
+        {
+            var savedFlag = prepared.IsSaved;
+            var existing = lastImportResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
+            if (existing != null)
+            {
+                existing.IsSaved = prepared.IsSaved;
+                existing.SaveErrorMessage = prepared.SaveErrorMessage;
+                existing.Selected = !existing.IsSaved; // unselect saved
+            }
+        }
+
+        // surface commit issues
+        if (commitResult.HasIssues)
+        {
+            foreach (var issue in commitResult.Issues)
+            {
+                lastImportResult.Issues.Add(issue);
+            }
+        }
+
+        // show updated modal with results
+        showImportResultsModal = true;
+        StateHasChanged();
     }
 
     async Task CloseAddItemsModal()
