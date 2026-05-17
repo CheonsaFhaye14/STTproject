@@ -126,14 +126,8 @@
 </div>
 
 <!-- MODALS -->
-<BatchDetail Show="showBatchDetailsModal" 
-             BatchId="selectedBatchId" 
-             BatchInvoices="selectedBatchInvoices"
-             OnClose="CloseBatchDetails"
-             OnViewInvoiceDetails="async (id) => await OpenInvoiceDetailsByIdAsync(id)" />
+<BatchDetail Show="showBatchDetailsModal" BatchId="@selectedBatchId" BatchInvoices="selectedBatchInvoices"
+             OnClose="CloseBatchDetails" OnViewInvoiceDetails="async (id) => await OpenInvoiceDetailsByIdAsync(id)" />
 
-<InvoiceDetail Show="showInvoiceDetailsModal"
-               InvoiceCode="selectedInvoiceCode"
-               InvoiceDetails="selectedInvoiceDetails"
-               OnClose="CloseInvoiceDetails"
-               OnEdit="EditInvoiceDetails"/>
+<InvoiceDetail Show="showInvoiceDetailsModal" InvoiceCode="@selectedInvoiceCode" InvoiceDetails="selectedInvoiceDetails"
+               OnClose="CloseInvoiceDetails" OnEdit="EditInvoiceDetails" />

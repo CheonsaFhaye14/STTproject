@@ -39,7 +39,7 @@
                     </div>
 
                     <h5>Item Details</h5>
-                   
+
                     <table class="activity-table">
                         <thead>
                             <tr>
@@ -51,7 +51,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                     
+
                             @if (InvoiceDetails.ItemDetails.Any())
                             {
                                 @foreach (var item in InvoiceDetails.ItemDetails)
@@ -64,11 +64,12 @@
                                         <td>@FormatHelper.FormatPrice(item.Price)</td>
                                     </tr>
                                 }
-                        
+
                                 <div class="mb-2">
-                                    <strong>Total Amount:</strong> @FormatHelper.FormatPrice(InvoiceDetails.ItemDetails.Sum(item => item.Price))
+                                    <strong>Total Amount:</strong> @FormatHelper.FormatPrice(InvoiceDetails.ItemDetails.Sum(item =>
+                                                            item.Price))
                                 </div>
-                    
+
                             }
                             else
                             {

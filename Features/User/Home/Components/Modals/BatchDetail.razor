@@ -28,10 +28,11 @@
                                     <td>@invoiceRow.SubdName</td>
                                     <td>@invoiceRow.CustomerName</td>
                                     <td>
-                                            <button class="btn-primary"
-                                                @onclick="async () => await OnViewInvoiceDetails.InvokeAsync(invoiceRow.SalesInvoiceId)">View
-                                                Details</button>
-                                            </td>
+                                        <button class="btn-primary"
+                                                @onclick="async () => await OnViewInvoiceDetails.InvokeAsync(invoiceRow.SalesInvoiceId)">
+                                            View Details
+                                        </button>
+                                    </td>
                                 </tr>
                             }
                         }

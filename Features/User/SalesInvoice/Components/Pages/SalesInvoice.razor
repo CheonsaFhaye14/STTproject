@@ -53,6 +53,9 @@
                   Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
                   OnNo="CancelAddItemsConfirm" />
 
+    <ConfirmModal Show="showAddItemsErrorModal" Title="Save Items" ShowError="true"
+                  ErrorMessage="Please add at least one item before saving." OnErrorConfirm="CloseAddItemsErrorModal" />
+
     <ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
                   OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
 

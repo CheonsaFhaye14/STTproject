@@ -25,6 +25,7 @@ public partial class AddInvoiceItems
     private bool ShowValidationErrors;
 
     private bool skipNextSkuBlurValidation;
+    private string? SaveErrorMessage;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
 
     [Parameter] public bool ShowModal { get; set; }
@@ -169,6 +170,7 @@ SelectedSubdistributorId);
 
     private async Task AddItemToQueue()
     {
+        SaveErrorMessage = null;
         ShowValidationErrors = true;
         ValidateDraft();
 
@@ -210,20 +212,22 @@ SelectedSubdistributorId);
 
     private async Task SaveModal()
     {
-        if (!modalItems.Any())
-        {
-            return;
-        }
+        SaveErrorMessage = null;
 
         // Trigger confirmation before saving
         if (OnBeforeSave.HasDelegate)
         {
             await OnBeforeSave.InvokeAsync(modalItems.ToList());
+            return;
         }
-        else
+
+        if (!modalItems.Any())
         {
-            await SaveItemsInternal();
+            SaveErrorMessage = "Please add at least one item before saving.";
+            return;
         }
+
+        await SaveItemsInternal();
     }
 
     public async Task SaveFromShortcutAsync()
@@ -264,6 +268,10 @@ SelectedSubdistributorId);
     private void RemoveQueuedItem(InputItemModel item)
     {
         modalItems.Remove(item);
+        if (!modalItems.Any())
+        {
+            SaveErrorMessage = null;
+        }
         _ = OnDraftChanged.InvokeAsync();
     }
 
@@ -275,6 +283,7 @@ SelectedSubdistributorId);
         CurrentUom = null;
         ShowValidationErrors = false;
         ValidationErrors.Clear();
+        SaveErrorMessage = null;
     }
 
     private static InputItemModel CreateNewItem()
