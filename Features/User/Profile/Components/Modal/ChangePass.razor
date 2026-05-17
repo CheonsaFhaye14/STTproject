@@ -1,0 +1,50 @@
+<button class="btn-primary" @onclick="() => OpenModal()" disabled="@(!UserId.HasValue)">
+    <i class="fa-solid fa-key"></i> Change Password
+</button>
+
+@if (ShowPasswordModal)
+{
+    <div class="modal-overlay" @onclick="() => OnBackdropClick()">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4><i class="fa-solid fa-key"></i> Change Password</h4>
+                <button class="btn-secondary" @onclick="() => CloseModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(PasswordErrorMessage))
+                {
+                    <div class="alert alert-danger">
+                        <i class="fa-solid fa-circle-exclamation"></i> @PasswordErrorMessage
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label class="form-label">Current Password</label>
+                    <input type="password" class="form-control" @bind="CurrentPassword"
+                           placeholder="Enter current password" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <input type="password" class="form-control" @bind="NewPassword" placeholder="Enter new password" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm New Password</label>
+                    <input type="password" class="form-control" @bind="ConfirmPassword"
+                           placeholder="Confirm new password" />
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-save" @onclick="() => ChangePasswordAsync()" disabled="@IsSubmitting">
+                    <i class="fa-solid fa-check"></i> @(IsSubmitting ? "Changing..." : "Change Password")
+                </button>
+                <button class="btn-secondary" @onclick="() => CloseModal()" disabled="@IsSubmitting">
+                    <i class="fa-solid fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}

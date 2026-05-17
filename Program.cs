@@ -6,6 +6,7 @@ using STTproject.Data;
 using STTproject.Services;
 using STTproject.Features.User.MapItem.Services;
 using STTproject.Features.Login.Services;
+using STTproject.Features.User.Profile.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,7 @@ builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IMapItemService, MapItemService>();
 builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<AddUomService>();
 builder.Services.AddScoped<MapItemDraftService>();
@@ -32,6 +34,7 @@ builder.Services.AddScoped<DownloadTemplateService>();
 builder.Services.AddScoped<ImportMapItemService>();
 builder.Services.AddScoped<STTproject.Features.User.SalesInvoice.Services.DownloadTemplateService>();
 builder.Services.AddScoped<STTproject.Features.User.SalesInvoice.Services.ImportSalesInvoiceService>();
+builder.Services.AddHostedService<PriceIncreaseWorker>();
 
 var app = builder.Build();
 

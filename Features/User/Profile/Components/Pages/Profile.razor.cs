@@ -1,17 +1,29 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Http;
+using STTproject.Features.User.Profile.Services;
+using STTproject.Services;
+using STTproject.Features.User.Profile.DTOS;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
-using STTproject.Services;
 
 namespace STTproject.Features.User.Profile.Components.Pages;
 
+
 public partial class Profile
 {
-    [Inject]
-    private IUserContextService UserContext { get; set; } = null!;
+    private const string UserIdStateKey = "profile-user-id";
 
     [Inject]
-    private IDbContextFactory<SttprojectContext> DbContextFactory { get; set; } = null!;
+    private IProfileService? ProfileService { get; set; }
+
+    [Inject]
+    private IDbContextFactory<SttprojectContext>? DbContextFactory { get; set; }
+
+    [Inject]
+    private IHttpContextAccessor? HttpContextAccessor { get; set; }
+
+    [Inject]
+    private PersistentComponentState? ApplicationState { get; set; }
 
     private STTproject.Data.User? CurrentUser;
     private STTproject.Data.User? EditingUser;
@@ -19,16 +31,32 @@ public partial class Profile
     private string? SuccessMessage;
     private bool IsLoading = true;
     private bool IsEditMode = false;
-    private bool ShowPasswordModal = false;
-
-    private string? CurrentPassword;
-    private string? NewPassword;
-    private string? ConfirmPassword;
-    private string? PasswordErrorMessage;
+    private int? UserId;
+    private PersistingComponentStateSubscription? PersistingSubscription;
 
     protected override async Task OnInitializedAsync()
     {
+        if (ApplicationState != null)
+        {
+            if (!ApplicationState.TryTakeFromJson<int?>(UserIdStateKey, out var restoredUserId))
+            {
+                restoredUserId = HttpContextAccessor?.HttpContext?.Request.Cookies.TryGetValue(UserContextService.UserIdCookieName, out var cookieValue) == true &&
+                    int.TryParse(cookieValue, out var parsedUserId)
+                    ? parsedUserId
+                    : null;
+            }
+
+            UserId = restoredUserId;
+            PersistingSubscription = ApplicationState.RegisterOnPersisting(PersistUserState);
+        }
+
         await LoadUserAsync();
+    }
+
+    private Task PersistUserState()
+    {
+        ApplicationState?.PersistAsJson(UserIdStateKey, UserId);
+        return Task.CompletedTask;
     }
 
     private async Task LoadUserAsync()
@@ -36,31 +64,37 @@ public partial class Profile
         try
         {
             IsLoading = true;
-            if (UserContext.UserId.HasValue)
+            if (UserId.HasValue && ProfileService != null && DbContextFactory != null)
             {
-                using var context = await DbContextFactory.CreateDbContextAsync();
-                CurrentUser = await context.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.UserId == UserContext.UserId.Value);
+                var userId = UserId.Value;
+                var profileData = await ProfileService.GetProfileDataAsync(userId);
 
-                if (CurrentUser == null)
+                if (profileData == null)
                 {
                     ErrorMessage = "User not found.";
                 }
                 else
                 {
-                    EditingUser = new STTproject.Data.User
+                    using var context = await DbContextFactory.CreateDbContextAsync();
+                    CurrentUser = await context.Users
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.UserId == userId);
+
+                    if (CurrentUser != null)
                     {
-                        UserId = CurrentUser.UserId,
-                        Username = CurrentUser.Username,
-                        FullName = CurrentUser.FullName,
-                        Email = CurrentUser.Email,
-                        Role = CurrentUser.Role,
-                        IsActive = CurrentUser.IsActive,
-                        CreatedDate = CurrentUser.CreatedDate,
-                        UpdatedDate = CurrentUser.UpdatedDate,
-                        Password = CurrentUser.Password
-                    };
+                        EditingUser = new STTproject.Data.User
+                        {
+                            UserId = CurrentUser.UserId,
+                            Username = CurrentUser.Username,
+                            FullName = CurrentUser.FullName,
+                            Email = CurrentUser.Email,
+                            Role = CurrentUser.Role,
+                            IsActive = CurrentUser.IsActive,
+                            CreatedDate = CurrentUser.CreatedDate,
+                            UpdatedDate = CurrentUser.UpdatedDate,
+                            Password = CurrentUser.Password
+                        };
+                    }
                 }
             }
             else
@@ -97,42 +131,37 @@ public partial class Profile
                 return;
             }
 
-            if (CurrentUser == null)
+            if (CurrentUser == null || ProfileService == null)
             {
                 ErrorMessage = "User context not available.";
                 return;
             }
 
-            using var context = await DbContextFactory.CreateDbContextAsync();
-            var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == CurrentUser.UserId);
-
-            if (user == null)
+            var profileData = new ProfileData
             {
-                ErrorMessage = "User not found.";
-                return;
-            }
-
-            user.FullName = EditingUser.FullName;
-            user.Email = EditingUser.Email;
-            user.UpdatedDate = DateTime.Now;
-
-            await context.SaveChangesAsync();
-
-            CurrentUser = new STTproject.Data.User
-            {
-                UserId = user.UserId,
-                Username = user.Username,
-                FullName = user.FullName,
-                Email = user.Email,
-                Role = user.Role,
-                IsActive = user.IsActive,
-                CreatedDate = user.CreatedDate,
-                UpdatedDate = user.UpdatedDate,
-                Password = user.Password
+                Username = EditingUser!.Username,
+                FullName = EditingUser.FullName,
+                Email = EditingUser.Email ?? string.Empty,
+                Role = EditingUser.Role,
+                CreatedDate = EditingUser.CreatedDate,
+                UpdatedDate = DateTime.UtcNow
             };
 
-            IsEditMode = false;
-            SuccessMessage = "Profile updated successfully!";
+            var success = await ProfileService.UpdateProfileAsync(CurrentUser.UserId, profileData);
+
+            if (success)
+            {
+                CurrentUser.FullName = EditingUser.FullName;
+                CurrentUser.Email = EditingUser.Email;
+                CurrentUser.UpdatedDate = DateTime.UtcNow;
+
+                IsEditMode = false;
+                SuccessMessage = "Profile updated successfully!";
+            }
+            else
+            {
+                ErrorMessage = "Failed to update profile.";
+            }
         }
         catch (Exception ex)
         {
@@ -161,99 +190,6 @@ public partial class Profile
         }
     }
 
-    private void OpenPasswordModal()
-    {
-        ShowPasswordModal = true;
-        CurrentPassword = null;
-        NewPassword = null;
-        ConfirmPassword = null;
-        PasswordErrorMessage = null;
-    }
-
-    private async Task ChangePasswordAsync()
-    {
-        try
-        {
-            PasswordErrorMessage = null;
-
-            if (string.IsNullOrWhiteSpace(CurrentPassword))
-            {
-                PasswordErrorMessage = "Current password is required.";
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(NewPassword))
-            {
-                PasswordErrorMessage = "New password is required.";
-                return;
-            }
-
-            if (NewPassword.Length < 6)
-            {
-                PasswordErrorMessage = "New password must be at least 6 characters long.";
-                return;
-            }
-
-            if (NewPassword != ConfirmPassword)
-            {
-                PasswordErrorMessage = "New password and confirm password do not match.";
-                return;
-            }
-
-            if (CurrentPassword == NewPassword)
-            {
-                PasswordErrorMessage = "New password must be different from current password.";
-                return;
-            }
-
-            if (CurrentUser == null)
-            {
-                PasswordErrorMessage = "User context not available.";
-                return;
-            }
-
-            using var context = await DbContextFactory.CreateDbContextAsync();
-            var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == CurrentUser.UserId);
-
-            if (user == null)
-            {
-                PasswordErrorMessage = "User not found.";
-                return;
-            }
-
-            // Verify current password
-            if (user.Password != CurrentPassword)
-            {
-                PasswordErrorMessage = "Current password is incorrect.";
-                return;
-            }
-
-            user.Password = NewPassword;
-            user.UpdatedDate = DateTime.Now;
-
-            await context.SaveChangesAsync();
-
-            ShowPasswordModal = false;
-            SuccessMessage = "Password changed successfully!";
-            CurrentPassword = null;
-            NewPassword = null;
-            ConfirmPassword = null;
-        }
-        catch (Exception ex)
-        {
-            PasswordErrorMessage = $"Error changing password: {ex.Message}";
-        }
-    }
-
-    private void ClosePasswordModal()
-    {
-        ShowPasswordModal = false;
-        CurrentPassword = null;
-        NewPassword = null;
-        ConfirmPassword = null;
-        PasswordErrorMessage = null;
-    }
-
     private string FormatDate(DateTime? date)
     {
         return date?.ToString("MMMM dd, yyyy HH:mm:ss") ?? "N/A";
@@ -267,5 +203,10 @@ public partial class Profile
     private string GetStatusClass(bool isActive)
     {
         return isActive ? "badge bg-success" : "badge bg-danger";
+    }
+
+    public void Dispose()
+    {
+        PersistingSubscription?.Dispose();
     }
 }

@@ -1,0 +1,39 @@
+<div class="edit-mode">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-control" @bind="EditingUser.Username" placeholder="Enter username"
+                       disabled />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control" @bind="EditingUser.FullName" placeholder="Enter full name" />
+            </div>
+        </div>
+    </div>
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" @bind="EditingUser.Email" placeholder="Enter email address" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <input type="text" class="form-control" @bind="EditingUser.Role" placeholder="Role" disabled />
+            </div>
+        </div>
+    </div>
+    <div class="action-buttons">
+        <button class="btn-save" @onclick="OnSaveClick" disabled="@IsSaving">
+            <i class="fa-solid fa-check"></i> @(IsSaving ? "Saving..." : "Save Changes")
+        </button>
+        <button class="btn-cancel" @onclick="OnCancelClick" disabled="@IsSaving">
+            <i class="fa-solid fa-times"></i> Cancel
+        </button>
+    </div>
+</div>

@@ -1,13 +1,12 @@
 ﻿@page "/profile"
-@using STTproject.Services
-@using STTproject.Data
+@rendermode InteractiveServer
 
 <div class="profile-container">
     <div class="profile-header">
         <h1><i class="fa-solid fa-user-circle"></i> User Profile</h1>
         @if (CurrentUser != null && !IsEditMode)
         {
-            <button class="btn-primary" @onclick="EnableEditMode" title="Edit profile">
+            <button type="button" class="btn-primary" @onclick="EnableEditMode" title="Edit profile">
                 <i class="fa-solid fa-pen-to-square"></i> Edit Profile
             </button>
         }
@@ -39,30 +38,15 @@
         <div class="profile-card">
             @if (IsEditMode)
             {
-                <div class="edit-mode">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label class="form-label">Full Name</label>
-                                <input type="text" class="form-control" @bind="EditingUser.FullName"
-                                       placeholder="Enter full name" />
-                            </div>
+                <div class="modal-overlay" @onclick="CancelEdit">
+                    <div class="modal-content" @onclick:stopPropagation="true">
+                        <div class="modal-header">
+                            <h4>Edit Profile</h4>
+                            <button class="btn-close" @onclick="CancelEdit" title="Close">&times;</button>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label class="form-label">Email</label>
-                                <input type="email" class="form-control" @bind="EditingUser.Email"
-                                       placeholder="Enter email address" />
-                            </div>
+                        <div class="modal-body">
+                            <EditProfile EditingUser="EditingUser" OnSave="SaveChangesAsync" OnCancel="CancelEdit" />
                         </div>
-                    </div>
-                    <div class="action-buttons">
-                        <button class="btn-save" @onclick="SaveChangesAsync">
-                            <i class="fa-solid fa-check"></i> Save Changes
-                        </button>
-                        <button class="btn-cancel" @onclick="CancelEdit">
-                            <i class="fa-solid fa-times"></i> Cancel
-                        </button>
                     </div>
                 </div>
             }
@@ -84,7 +68,7 @@
                                 <div class="detail-item">
                                     <label class="detail-label">Email:</label>
                                     <span class="detail-value">@(string.IsNullOrEmpty(CurrentUser.Email) ? "Not provided" :
-                                                                                                                CurrentUser.Email)</span>
+                                                                                                                                                                                                                                                                                                                        CurrentUser.Email)</span>
                                     </div>
                                 </div>
                             </div>
@@ -133,9 +117,7 @@
                         </div>
 
                         <div class="action-buttons">
-                            <button class="btn btn-primary" @onclick="OpenPasswordModal">
-                                <i class="fa-solid fa-key"></i> Change Password
-                            </button>
+                            <ChangePass UserId="CurrentUser.UserId" />
                         </div>
                     </div>
                 }
@@ -147,376 +129,4 @@
                 <i class="fa-solid fa-triangle-exclamation"></i> No user data available.
             </div>
         }
-
-        @if (ShowPasswordModal)
-        {
-            <div class="modal-overlay" @onclick="ClosePasswordModal">
-                <div class="modal-content" @onclick:stopPropagation="true">
-                    <div class="modal-header">
-                        <h4><i class="fa-solid fa-key"></i> Change Password</h4>
-                        <button class="btn-secondary" @onclick="ClosePasswordModal">&times;</button>
-                    </div>
-
-                    <div class="modal-body">
-                        @if (!string.IsNullOrEmpty(PasswordErrorMessage))
-                        {
-                            <div class="alert alert-danger">
-                                <i class="fa-solid fa-circle-exclamation"></i> @PasswordErrorMessage
-                            </div>
-                        }
-
-                        <div class="form-group">
-                            <label class="form-label">Current Password</label>
-                            <input type="password" class="form-control" @bind="CurrentPassword"
-                                   placeholder="Enter current password" />
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">New Password</label>
-                            <input type="password" class="form-control" @bind="NewPassword" placeholder="Enter new password" />
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control" @bind="ConfirmPassword"
-                                   placeholder="Confirm new password" />
-                        </div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button class="btn-save" @onclick="ChangePasswordAsync">
-                            <i class="fa-solid fa-check"></i> Change Password
-                        </button>
-                        <button class="btn-secondary" @onclick="ClosePasswordModal">
-                            <i class="fa-solid fa-times"></i> Cancel
-                        </button>
-                    </div>
-                </div>
-            </div>
-        }
     </div>
-
-    <style>
-        :root {
-            --violet-primary: #7c3aed;
-            --violet-dark: #6d28d9;
-            --violet-light: #ede9fe;
-            --violet-lighter: #f5f3ff;
-        }
-
-        .profile-container {
-            padding: 30px 20px;
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-
-        .profile-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 3px solid var(--violet-primary);
-        }
-
-        .profile-header h1 {
-            color: var(--violet-primary);
-            font-weight: 700;
-            margin: 0;
-            font-size: 2rem;
-        }
-
-        .btn-edit {
-            background: var(--violet-primary);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-edit:hover {
-            background: var(--violet-dark);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-        }
-
-        .profile-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.1);
-            padding: 30px;
-        }
-
-        .detail-section {
-            background: var(--violet-lighter);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 5px solid var(--violet-primary);
-        }
-
-        .section-title {
-            color: var(--violet-primary);
-            font-weight: 700;
-            margin-bottom: 15px;
-            margin-top: 0;
-            font-size: 1.1rem;
-        }
-
-        .detail-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.2);
-        }
-
-        .detail-item:last-child {
-            border-bottom: none;
-        }
-
-        .detail-label {
-            font-weight: 600;
-            color: var(--violet-dark);
-            min-width: 150px;
-        }
-
-        .detail-value {
-            color: #333;
-            text-align: right;
-            flex: 1;
-            padding-left: 15px;
-        }
-
-        .edit-mode {
-            animation: fadeIn 0.3s ease;
-        }
-
-        @@keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--violet-primary);
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 15px;
-            border: 2px solid var(--violet-light);
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--violet-primary);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 25px;
-            justify-content: flex-end;
-        }
-
-        .btn-save,
-        .btn-password {
-            background: var(--violet-primary);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-save:hover,
-        .btn-password:hover {
-            background: var(--violet-dark);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-        }
-
-        .btn-cancel {
-            background: #e5e7eb;
-            color: #333;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-cancel:hover {
-            background: #d1d5db;
-            transform: translateY(-2px);
-        }
-
-        .loading-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--violet-primary);
-        }
-
-        .loading-state .spinner-border {
-            margin-bottom: 15px;
-            color: var(--violet-primary);
-        }
-
-        .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .alert-danger {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .alert-success {
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-
-        .alert-warning {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fcd34d;
-        }
-
-        .badge {
-            font-size: 0.875rem;
-            padding: 0.4em 0.8em;
-            border-radius: 12px;
-        }
-
-        .bg-violet {
-            background-color: var(--violet-primary);
-            color: white;
-        }
-
-        .bg-success {
-            background-color: #10b981;
-            color: white;
-        }
-
-        .bg-danger {
-            background-color: #ef4444;
-            color: white;
-        }
-
-        /* Modal Styles */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.2);
-            max-width: 500px;
-            width: 90%;
-            animation: slideIn 0.3s ease;
-        }
-
-        @@keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-50px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .modal-header {
-            padding: 20px;
-            border-bottom: 2px solid var(--violet-light);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h4 {
-            color: var(--violet-primary);
-            margin: 0;
-            font-weight: 700;
-        }
-
-        .btn-close {
-            background: none;
-            border: none;
-            font-size: 28px;
-            color: var(--violet-primary);
-            cursor: pointer;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-        }
-
-        .btn-close:hover {
-            color: var(--violet-dark);
-            transform: rotate(90deg);
-        }
-
-        .modal-body {
-            padding: 25px;
-        }
-
-        .modal-footer {
-            padding: 20px;
-            border-top: 2px solid var(--violet-light);
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-    </style>
