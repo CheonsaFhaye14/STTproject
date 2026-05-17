@@ -51,14 +51,16 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 // Add headers for sales invoice template
                 worksheet.Cell(1, 1).Value = "InvoiceCode";
                 worksheet.Cell(1, 2).Value = "InvoiceDate";
-                worksheet.Cell(1, 3).Value = "CustomerCode"; 
-                worksheet.Cell(1, 4).Value = "CustomerBranch"; 
-                worksheet.Cell(1, 5).Value = "OrderType"; 
+                worksheet.Cell(1, 3).Value = "CustomerCode";
+                worksheet.Cell(1, 4).Value = "CustomerBranch";
+                worksheet.Cell(1, 5).Value = "OrderType";
                 worksheet.Cell(1, 6).Value = "SkuCode";
-                worksheet.Cell(1, 7).Value = "UOM"; 
+                worksheet.Cell(1, 7).Value = "UOM";
                 worksheet.Cell(1, 8).Value = "Quantity";
                 worksheet.Row(1).Style.Protection.Locked = true;
                 worksheet.Range("A2:H1000").Style.Protection.Locked = false;
+                // Extra unlocked cells for user scratch space; the import parser ignores these columns.
+                worksheet.Range("I2:Z1000").Style.Protection.Locked = false;
                 worksheet.SheetView.FreezeRows(1);
 
                 // format codes as text to prevent Excel auto-formatting (e.g. long numeric codes, leading zeros)
@@ -79,10 +81,10 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 dateValidation.IgnoreBlanks = true;
                 dateValidation.ShowInputMessage = true;
                 dateValidation.InputTitle = "Invoice Date";
-                dateValidation.InputMessage ="Enter date in format: dd/MM/yyyy (e.g., 15/05/2026)";
+                dateValidation.InputMessage = "Enter date in format: dd/MM/yyyy (e.g., 15/05/2026)";
                 dateValidation.ShowErrorMessage = true;
                 dateValidation.ErrorTitle = "Invalid Date";
-                dateValidation.ErrorMessage ="Please enter a valid date.";
+                dateValidation.ErrorMessage = "Please enter a valid date.";
 
                 // Add dropdown for OrderType
                 var orderTypeRange = worksheet.Range("E2:E1000").CreateDataValidation();
@@ -122,7 +124,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     uomValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
                     uomValidation.ErrorTitle = "Invalid UOM";
                     uomValidation.ErrorMessage = "Please select a valid UOM from the dropdown.";
-                } 
+                }
 
                 // Style headers
                 var headerRow = worksheet.Row(1);

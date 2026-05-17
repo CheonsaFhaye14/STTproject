@@ -21,14 +21,17 @@ namespace STTproject.Migrations
                 {
                     CompanyItemId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    ItemCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ItemCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
                     ItemName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
-                    Principal = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false)
+                    Principal = table.Column<string>(type: "varchar(150)", unicode: false, maxLength: 150, nullable: false),
+                    Category = table.Column<string>(type: "varchar(100)", unicode: false, maxLength: 100, nullable: false),
+                    EffectivityDate = table.Column<DateTime>(type: "datetime", nullable: true),
+                    PriceIncreasePercent = table.Column<decimal>(type: "decimal(5,2)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -45,53 +48,15 @@ namespace STTproject.Migrations
                     Username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     Password = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
                     FullName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Role = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Role = table.Column<string>(type: "varchar(20)", unicode: false, maxLength: 20, nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
-                    UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true)
+                    UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
+                    Email = table.Column<string>(type: "varchar(255)", unicode: false, maxLength: 255, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK__Users__1788CC4CD89976AC", x => x.UserId);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ItemsUom",
-                schema: "ojt",
-                columns: table => new
-                {
-                    ItemsUomId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CompanyItemId = table.Column<int>(type: "int", nullable: false),
-                    UomName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    ConversionToBase = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
-                    IsBaseUnit = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
-                    CreatedBy = table.Column<int>(type: "int", nullable: true),
-                    UpdatedBy = table.Column<int>(type: "int", nullable: true),
-                    UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK__ItemsUom__537249573414BFF9", x => x.ItemsUomId);
-                    table.ForeignKey(
-                        name: "FK_ItemsUom_CompanyItemId",
-                        column: x => x.CompanyItemId,
-                        principalSchema: "ojt",
-                        principalTable: "CompanyItem",
-                        principalColumn: "CompanyItemId");
-                    table.ForeignKey(
-                        name: "FK_ItemsUom_CreatedBy",
-                        column: x => x.CreatedBy,
-                        principalSchema: "ojt",
-                        principalTable: "Users",
-                        principalColumn: "UserId");
-                    table.ForeignKey(
-                        name: "FK_ItemsUom_UpdatedBy",
-                        column: x => x.UpdatedBy,
-                        principalSchema: "ojt",
-                        principalTable: "Users",
-                        principalColumn: "UserId");
                 });
 
             migrationBuilder.CreateTable(
@@ -101,8 +66,8 @@ namespace STTproject.Migrations
                 {
                     SubDistributorId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    SubdCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    SubdName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    SubdCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
+                    SubdName = table.Column<string>(type: "varchar(150)", unicode: false, maxLength: 150, nullable: false),
                     CityMunicipality = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Province = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     EncoderId = table.Column<int>(type: "int", nullable: true),
@@ -111,7 +76,7 @@ namespace STTproject.Migrations
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
-                    CompanySubdCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
+                    CompanySubdCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -143,9 +108,9 @@ namespace STTproject.Migrations
                 {
                     CustomerId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    CustomerCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    CustomerName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    CustomerType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    CustomerCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
+                    CustomerName = table.Column<string>(type: "varchar(150)", unicode: false, maxLength: 150, nullable: false),
+                    CustomerType = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
                     SubDistributorId = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
@@ -183,7 +148,7 @@ namespace STTproject.Migrations
                 {
                     SubdItemId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    SubdItemCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    SubdItemCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
                     ItemName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
                     SubDistributorId = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
@@ -191,9 +156,7 @@ namespace STTproject.Migrations
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
-                    CompanyItemId = table.Column<int>(type: "int", nullable: false),
-                    Price = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    ItemsUomId = table.Column<int>(type: "int", nullable: false)
+                    CompanyItemId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -210,12 +173,6 @@ namespace STTproject.Migrations
                         principalSchema: "ojt",
                         principalTable: "Users",
                         principalColumn: "UserId");
-                    table.ForeignKey(
-                        name: "FK_SubdItem_ItemsUomId",
-                        column: x => x.ItemsUomId,
-                        principalSchema: "ojt",
-                        principalTable: "ItemsUom",
-                        principalColumn: "ItemsUomId");
                     table.ForeignKey(
                         name: "FK_SubdItem_SubDistributor",
                         column: x => x.SubDistributorId,
@@ -238,11 +195,11 @@ namespace STTproject.Migrations
                     CustomerBranchId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CustomerId = table.Column<int>(type: "int", nullable: false),
-                    BranchName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false, defaultValue: "Main"),
+                    BranchName = table.Column<string>(type: "varchar(100)", unicode: false, maxLength: 100, nullable: false, defaultValue: "Main"),
                     AddressLine = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
                     City = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Province = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    ZipCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ZipCode = table.Column<int>(type: "int", nullable: false),
                     IsDefault = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
@@ -274,13 +231,53 @@ namespace STTproject.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ItemsUom",
+                schema: "ojt",
+                columns: table => new
+                {
+                    ItemsUomId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UomName = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
+                    ConversionToBase = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
+                    IsBaseUnit = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
+                    CreatedBy = table.Column<int>(type: "int", nullable: true),
+                    UpdatedBy = table.Column<int>(type: "int", nullable: true),
+                    UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
+                    Price = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    SubdItemId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK__ItemsUom__537249573414BFF9", x => x.ItemsUomId);
+                    table.ForeignKey(
+                        name: "FK_ItemsUom_CreatedBy",
+                        column: x => x.CreatedBy,
+                        principalSchema: "ojt",
+                        principalTable: "Users",
+                        principalColumn: "UserId");
+                    table.ForeignKey(
+                        name: "FK_ItemsUom_SubdItemId",
+                        column: x => x.SubdItemId,
+                        principalSchema: "ojt",
+                        principalTable: "SubdItem",
+                        principalColumn: "SubdItemId");
+                    table.ForeignKey(
+                        name: "FK_ItemsUom_UpdatedBy",
+                        column: x => x.UpdatedBy,
+                        principalSchema: "ojt",
+                        principalTable: "Users",
+                        principalColumn: "UserId");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "SalesInvoice",
                 schema: "ojt",
                 columns: table => new
                 {
                     SalesInvoiceId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    SalesInvoiceCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    SalesInvoiceCode = table.Column<string>(type: "varchar(50)", unicode: false, maxLength: 50, nullable: false),
                     SalesInvoiceDate = table.Column<DateOnly>(type: "date", nullable: false),
                     CustomerId = table.Column<int>(type: "int", nullable: false),
                     CustomerBranchId = table.Column<int>(type: "int", nullable: false),
@@ -289,9 +286,8 @@ namespace STTproject.Migrations
                     UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
-                    OrderType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false, defaultValue: "Invoice")
-                        .Annotation("Relational:DefaultConstraintName", "DF_SalesInvoice_OrderType"),
-                    OrderDate = table.Column<DateOnly>(type: "date", nullable: false)
+                    OrderType = table.Column<string>(type: "varchar(20)", unicode: false, maxLength: 20, nullable: false, defaultValue: "Invoice")
+                        .Annotation("Relational:DefaultConstraintName", "DF_SalesInvoice_OrderType")
                 },
                 constraints: table =>
                 {
@@ -329,6 +325,40 @@ namespace STTproject.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ItemsUomPriceHistory",
+                schema: "ojt",
+                columns: table => new
+                {
+                    ItemsUomPriceHistoryId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ItemsUomId = table.Column<int>(type: "int", nullable: false),
+                    CompanyItemId = table.Column<int>(type: "int", nullable: false),
+                    OldPrice = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    NewPrice = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PriceIncreasePercent = table.Column<decimal>(type: "decimal(5,2)", nullable: true),
+                    EffectivityDate = table.Column<DateTime>(type: "datetime", nullable: false),
+                    AppliedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
+                    CreatedDate = table.Column<DateTime>(type: "datetime", nullable: false, defaultValueSql: "(getdate())"),
+                    CreatedBy = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK__ItemsUom__4D74DA340C04A45B", x => x.ItemsUomPriceHistoryId);
+                    table.ForeignKey(
+                        name: "FK_ItemsUomPriceHistory_CompanyItem",
+                        column: x => x.CompanyItemId,
+                        principalSchema: "ojt",
+                        principalTable: "CompanyItem",
+                        principalColumn: "CompanyItemId");
+                    table.ForeignKey(
+                        name: "FK_ItemsUomPriceHistory_ItemsUom",
+                        column: x => x.ItemsUomId,
+                        principalSchema: "ojt",
+                        principalTable: "ItemsUom",
+                        principalColumn: "ItemsUomId");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "SalesInvoiceItem",
                 schema: "ojt",
                 columns: table => new
@@ -342,7 +372,8 @@ namespace STTproject.Migrations
                     UpdatedDate = table.Column<DateTime>(type: "datetime", nullable: true),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ItemsUomId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -354,6 +385,12 @@ namespace STTproject.Migrations
                         principalTable: "SalesInvoice",
                         principalColumn: "SalesInvoiceId");
                     table.ForeignKey(
+                        name: "FK_SalesInvoiceItem_ItemsUom",
+                        column: x => x.ItemsUomId,
+                        principalSchema: "ojt",
+                        principalTable: "ItemsUom",
+                        principalColumn: "ItemsUomId");
+                    table.ForeignKey(
                         name: "FK_SalesInvoiceItem_SubdItem",
                         column: x => x.SubdItemId,
                         principalSchema: "ojt",
@@ -362,7 +399,7 @@ namespace STTproject.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "UQ__CompanyI__3ECC0FEAA338318A",
+                name: "UQ__CompanyI__3ECC0FEA1D5CA35D",
                 schema: "ojt",
                 table: "CompanyItem",
                 column: "ItemCode",
@@ -390,7 +427,14 @@ namespace STTproject.Migrations
                 name: "UQ_ojt_Customer_Code",
                 schema: "ojt",
                 table: "Customer",
-                column: "CustomerCode",
+                columns: new[] { "CustomerCode", "SubDistributorId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_ojt_Customer_Name",
+                schema: "ojt",
+                table: "Customer",
+                columns: new[] { "CustomerName", "SubDistributorId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -404,6 +448,13 @@ namespace STTproject.Migrations
                 schema: "ojt",
                 table: "CustomerBranch",
                 column: "UpdatedBy");
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_CustomerBranch_BranchName_PerCustomer",
+                schema: "ojt",
+                table: "CustomerBranch",
+                columns: new[] { "CustomerId", "BranchName" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "UX_CustomerBranch_Default",
@@ -426,19 +477,31 @@ namespace STTproject.Migrations
                 column: "UpdatedBy");
 
             migrationBuilder.CreateIndex(
-                name: "UQ_ItemsUom_CompanyItem_Uom",
+                name: "UQ_ItemsUom_SubdItem_Uom",
                 schema: "ojt",
                 table: "ItemsUom",
-                columns: new[] { "CompanyItemId", "UomName" },
+                columns: new[] { "SubdItemId", "UomName" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "UX_ItemsUom_OneBaseUnit",
                 schema: "ojt",
                 table: "ItemsUom",
-                column: "CompanyItemId",
+                column: "SubdItemId",
                 unique: true,
                 filter: "([IsBaseUnit]=(1))");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ItemsUomPriceHistory_CompanyItemId",
+                schema: "ojt",
+                table: "ItemsUomPriceHistory",
+                column: "CompanyItemId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ItemsUomPriceHistory_ItemsUomId",
+                schema: "ojt",
+                table: "ItemsUomPriceHistory",
+                column: "ItemsUomId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_SalesInvoice_CreatedBy",
@@ -471,11 +534,17 @@ namespace STTproject.Migrations
                 column: "UpdatedBy");
 
             migrationBuilder.CreateIndex(
-                name: "UQ__SalesInv__C94B6607EE7F5D76",
+                name: "UQ__SalesInv__C94B6607BF057E81",
                 schema: "ojt",
                 table: "SalesInvoice",
                 column: "SalesInvoiceCode",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SalesInvoiceItem_ItemsUomId",
+                schema: "ojt",
+                table: "SalesInvoiceItem",
+                column: "ItemsUomId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_SalesInvoiceItem_SalesInvoiceId",
@@ -508,17 +577,17 @@ namespace STTproject.Migrations
                 column: "UpdatedBy");
 
             migrationBuilder.CreateIndex(
-                name: "UQ__SubDistr__67B828E0F70364CF",
-                schema: "ojt",
-                table: "SubDistributor",
-                column: "SubdCode",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "UQ_SubDistributor_CompanySubdCode",
                 schema: "ojt",
                 table: "SubDistributor",
                 column: "CompanySubdCode",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_SubDistributor_SubdCode",
+                schema: "ojt",
+                table: "SubDistributor",
+                column: "SubdCode",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -534,19 +603,20 @@ namespace STTproject.Migrations
                 column: "CreatedBy");
 
             migrationBuilder.CreateIndex(
-                name: "IX_SubdItem_ItemsUomId",
-                schema: "ojt",
-                table: "SubdItem",
-                column: "ItemsUomId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_SubdItem_UpdatedBy",
                 schema: "ojt",
                 table: "SubdItem",
                 column: "UpdatedBy");
 
             migrationBuilder.CreateIndex(
-                name: "UQ_SubdItem_Code_Per_Subd",
+                name: "UQ_SubdItem_Subd_CompanyItem",
+                schema: "ojt",
+                table: "SubdItem",
+                columns: new[] { "SubDistributorId", "CompanyItemId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_SubdItem_SubdId_Code",
                 schema: "ojt",
                 table: "SubdItem",
                 columns: new[] { "SubDistributorId", "SubdItemCode" },
@@ -564,6 +634,10 @@ namespace STTproject.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "ItemsUomPriceHistory",
+                schema: "ojt");
+
+            migrationBuilder.DropTable(
                 name: "SalesInvoiceItem",
                 schema: "ojt");
 
@@ -572,7 +646,7 @@ namespace STTproject.Migrations
                 schema: "ojt");
 
             migrationBuilder.DropTable(
-                name: "SubdItem",
+                name: "ItemsUom",
                 schema: "ojt");
 
             migrationBuilder.DropTable(
@@ -580,7 +654,7 @@ namespace STTproject.Migrations
                 schema: "ojt");
 
             migrationBuilder.DropTable(
-                name: "ItemsUom",
+                name: "SubdItem",
                 schema: "ojt");
 
             migrationBuilder.DropTable(

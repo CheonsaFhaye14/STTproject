@@ -51,9 +51,12 @@ public class DownloadTemplateService
             worksheet.SheetView.FreezeRows(1);
             worksheet.Columns().AdjustToContents();
 
+            // Extra unlocked cells for user scratch space; the import parser ignores these columns.
+            worksheet.Range("J2:Z1000").Style.Protection.Locked = false;
+
             // change number format to text for code columns to preserve formatting (e.g. leading zeros)
             worksheet.Range("E2:G1000").Style.NumberFormat.Format = "@";
-    
+
             // Style headers
             var headerRow = worksheet.Row(1);
             headerRow.Style.Font.Bold = true;
@@ -77,7 +80,7 @@ public class DownloadTemplateService
                     // Pre-fill locked columns with same item data, leave UOM fields empty
                     worksheet.Cell(currentRow, 1).Value = item.SubDistributorCode;
                     worksheet.Cell(currentRow, 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
- 
+
                     worksheet.Cell(currentRow, 2).Value = item.Principal;
                     worksheet.Cell(currentRow, 2).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
@@ -188,7 +191,7 @@ public class DownloadTemplateService
         worksheet.Cell(row, 8).Value = item.Conversion;
         worksheet.Cell(row, 8).Style.Protection.Locked = false;
 
-        worksheet.Cell(row, 9).Value = item.Price;        
+        worksheet.Cell(row, 9).Value = item.Price;
         worksheet.Cell(row, 9).Style.Protection.Locked = false;
     }
 }

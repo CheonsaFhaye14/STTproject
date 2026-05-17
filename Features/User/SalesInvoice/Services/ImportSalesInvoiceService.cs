@@ -111,13 +111,6 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		var parsedRows = ReadRows(worksheet, headers, result);
-		if (parsedRows.Count == 0)
-		{
-			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
-			return result;
-		}
-
 		await using var context = _contextFactory.CreateDbContext();
 		var customers = await context.Customers
 			.AsNoTracking()
@@ -151,10 +144,25 @@ public sealed class ImportSalesInvoiceService
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		foreach (var invoiceGroup in parsedRows.GroupBy(row => row.InvoiceCode, StringComparer.OrdinalIgnoreCase))
+		var parsedRows = ReadRows(worksheet, headers, result, customerByCode, branchesByCustomerId, subdItemByCode);
+		if (parsedRows.Count == 0)
+		{
+			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
+			return result;
+		}
+
+		// Group by invoice code plus customer and key header fields so rows with the same invoice code
+		// but different customer/branch/order/date are treated as separate prepared invoices.
+		foreach (var invoiceGroup in parsedRows.GroupBy(row =>
+					 string.Join("|",
+						 (row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
+						 (row.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
+						 (row.CustomerBranch ?? string.Empty).Trim().ToUpperInvariant(),
+						 (row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
+						 row.InvoiceDate.ToString("yyyy-MM-dd")), StringComparer.OrdinalIgnoreCase))
 		{
 			var invoiceRows = invoiceGroup.ToList();
-			var invoiceNumber = invoiceGroup.Key.Trim();
+			var invoiceNumber = invoiceRows.First().InvoiceCode.Trim();
 
 			var preparedInvoice = new PreparedInvoice
 			{
@@ -383,7 +391,10 @@ public sealed class ImportSalesInvoiceService
 	private static List<ImportedInvoiceRow> ReadRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
-		ImportSalesInvoiceResult result)
+		ImportSalesInvoiceResult result,
+		IReadOnlyDictionary<string, Customer> customerByCode,
+		IReadOnlyDictionary<int, List<CustomerBranch>> branchesByCustomerId,
+		IReadOnlyDictionary<string, SubdItem> subdItemByCode)
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -391,11 +402,6 @@ public sealed class ImportSalesInvoiceService
 		for (int rowNumber = 2; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
-			if (row.CellsUsed().All(cell => cell.IsEmpty()))
-			{
-				continue;
-			}
-
 			var invoiceCode = GetString(row, headers["InvoiceCode"]);
 			var customerCode = GetString(row, headers["CustomerCode"]);
 			var customerBranch = headers.TryGetValue("CustomerBranch", out var branchColumn)
@@ -404,57 +410,93 @@ public sealed class ImportSalesInvoiceService
 			var orderType = GetString(row, headers["OrderType"]);
 			var skuCode = GetString(row, headers["SkuCode"]);
 			var uom = GetString(row, headers["UOM"]);
-			var blankRequiredColumns = new List<string>();
 
-			if (string.IsNullOrWhiteSpace(invoiceCode)) blankRequiredColumns.Add("InvoiceCode");
-			if (row.Cell(headers["InvoiceDate"]).IsEmpty()) blankRequiredColumns.Add("InvoiceDate");
-			if (string.IsNullOrWhiteSpace(customerCode)) blankRequiredColumns.Add("CustomerCode");
-			if (string.IsNullOrWhiteSpace(orderType)) blankRequiredColumns.Add("OrderType");
-			if (string.IsNullOrWhiteSpace(skuCode)) blankRequiredColumns.Add("SkuCode");
-			if (string.IsNullOrWhiteSpace(uom)) blankRequiredColumns.Add("UOM");
-			if (row.Cell(headers["Quantity"]).IsEmpty()) blankRequiredColumns.Add("Quantity");
-
-			if (string.IsNullOrWhiteSpace(invoiceCode) && string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(skuCode))
+			if (string.IsNullOrWhiteSpace(invoiceCode) &&
+				string.IsNullOrWhiteSpace(customerCode) &&
+				string.IsNullOrWhiteSpace(customerBranch) &&
+				string.IsNullOrWhiteSpace(orderType) &&
+				string.IsNullOrWhiteSpace(skuCode) &&
+				string.IsNullOrWhiteSpace(uom) &&
+				row.Cell(headers["InvoiceDate"]).IsEmpty() &&
+				row.Cell(headers["Quantity"]).IsEmpty())
 			{
 				continue;
+			}
+			var rowHasErrors = false;
+			DateOnly invoiceDate = default;
+			CustomerBranch? resolvedCustomerBranch = null;
+			string normalizedOrderType = string.Empty;
+			int quantity = 0;
+
+			void AddRowError(string message, string? columnName = null)
+			{
+				result.AddError(rowNumber, invoiceCode, message, columnName);
+				rowHasErrors = true;
 			}
 
 			if (string.IsNullOrWhiteSpace(invoiceCode))
 			{
-				result.AddError(rowNumber, string.Empty, "Invoice code is required.", "InvoiceCode");
-				continue;
+				AddRowError("Invoice code is required.", "InvoiceCode");
 			}
 
-			if (blankRequiredColumns.Count > 0)
+			if (row.Cell(headers["InvoiceDate"]).IsEmpty())
 			{
-				foreach (var columnName in blankRequiredColumns)
+				AddRowError("Invoice date is required.", "InvoiceDate");
+			}
+			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate))
+			{
+				AddRowError("Invoice date is invalid.", "InvoiceDate");
+			}
+
+			if (string.IsNullOrWhiteSpace(customerCode))
+			{
+				AddRowError("Customer code is required.", "CustomerCode");
+			}
+			else if (!customerByCode.TryGetValue(Normalize(customerCode), out var customer))
+			{
+				AddRowError($"Customer code '{customerCode}' was not found.", "CustomerCode");
+			}
+			else
+			{
+				if (branchesByCustomerId.TryGetValue(customer.CustomerId, out var customerBranchList) && customerBranchList.Count > 0)
 				{
-					var message = columnName switch
+					if (!TryResolveBranch(customerBranch, customer.CustomerId, customerBranchList, out resolvedCustomerBranch, out var branchError))
 					{
-						"InvoiceCode" => "Invoice code is required.",
-						"InvoiceDate" => "Invoice date is required.",
-						"CustomerCode" => "Customer code is required.",
-						"OrderType" => "Order type is required.",
-						"SkuCode" => "SKU code is required.",
-						"UOM" => "UOM is required.",
-						"Quantity" => "Quantity is required.",
-						_ => $"{columnName} is required."
-					};
-
-					result.AddError(rowNumber, invoiceCode, message, columnName);
+						AddRowError(branchError, "CustomerBranch");
+					}
 				}
-				continue;
+
+				if (!TryParseOrderType(orderType, out normalizedOrderType))
+				{
+					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+				}
 			}
 
-			if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out var invoiceDate))
+			if (string.IsNullOrWhiteSpace(skuCode))
 			{
-				result.AddError(rowNumber, invoiceCode, "Invoice date is invalid.", "InvoiceDate");
-				continue;
+				AddRowError("SKU code is required.", "SkuCode");
+			}
+			else if (!subdItemByCode.ContainsKey(Normalize(skuCode)))
+			{
+				AddRowError($"SKU code '{skuCode}' was not found.", "SkuCode");
 			}
 
-			if (!TryGetInt(row.Cell(headers["Quantity"]), out var quantity) || quantity <= 0)
+			if (string.IsNullOrWhiteSpace(uom))
 			{
-				result.AddError(rowNumber, invoiceCode, "Quantity must be a whole number greater than 0.", "Quantity");
+				AddRowError("UOM is required.", "UOM");
+			}
+
+			if (row.Cell(headers["Quantity"]).IsEmpty())
+			{
+				AddRowError("Quantity is required.", "Quantity");
+			}
+			else if (!TryGetInt(row.Cell(headers["Quantity"]), out quantity) || quantity <= 0)
+			{
+				AddRowError("Quantity must be a whole number greater than 0.", "Quantity");
+			}
+
+			if (rowHasErrors)
+			{
 				continue;
 			}
 
@@ -464,7 +506,7 @@ public sealed class ImportSalesInvoiceService
 				invoiceDate,
 				customerCode,
 				customerBranch,
-				orderType,
+				normalizedOrderType,
 				skuCode,
 				uom,
 				quantity));

@@ -12,8 +12,8 @@ using STTproject.Data;
 namespace STTproject.Migrations
 {
     [DbContext(typeof(SttprojectContext))]
-    [Migration("20260509141059_RedefineCascadeDelete")]
-    partial class RedefineCascadeDelete
+    [Migration("20260516162206_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -368,9 +368,6 @@ namespace STTproject.Migrations
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
 
-                    b.Property<DateOnly>("OrderDate")
-                        .HasColumnType("date");
-
                     b.Property<string>("OrderType")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -616,6 +613,11 @@ namespace STTproject.Migrations
                         .HasColumnType("datetime")
                         .HasDefaultValueSql("(getdate())");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -714,7 +716,6 @@ namespace STTproject.Migrations
                     b.HasOne("STTproject.Data.SubdItem", "SubdItem")
                         .WithOne("ItemsUom")
                         .HasForeignKey("STTproject.Data.ItemsUom", "SubdItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("FK_ItemsUom_SubdItemId");
 

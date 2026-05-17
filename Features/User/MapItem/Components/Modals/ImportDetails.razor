@@ -1,114 +1,214 @@
-@using STTproject.Features.User.MapItem.Services
+@using STTproject.Features.User.MapItem.DTOs
 
-<div class="modal @(Show ? "show" : "")" style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
+<div class="modal @(Show ? "show" : "")"
+     style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Import Results</h5>
-                <button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
+                <button type="button" class="btn-close" @onclick="HandleClose" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
                 @if (ImportResult == null)
                 {
                     <p>No import result to display.</p>
                 }
-                else if (!GetMapItemCards().Any())
+                else if (!GetGlobalIssues().Any() && !ImportResult.Rows.Any())
                 {
-                    <div class="alert alert-success">
-                        <strong>Import Successful!</strong>
-                        <p>@ImportResult.ImportedMapItemCount map item(s) imported with @ImportResult.ImportedRowCount total row(s).</p>
+                    <div class="alert alert-warning">
+                        <strong>No rows to import</strong>
+                        <p>The import file did not contain any valid rows to process.</p>
                     </div>
                 }
                 else
                 {
-                    var MapItemCards = GetMapItemCards();
+                    var globalIssues = GetGlobalIssues();
+                    var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+
+                    foreach (var g in groups)
+                    {
+                        if (g.Rows.Any())
+                        {
+                            var key = BuildGroupKey(g.Rows.First());
+                            g.Selected = SelectedGroupKeys.Contains(key);
+                        }
+                    }
+
+                    var hasSuccessGroups = groups.Any(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count ==
+                0));
+                    var hasErrorGroups = groups.Any(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0));
+                    var selectableCount = groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count ==
+                0) && !g.IsSaved);
+                    var selectedCount = groups.Count(g => g.Selected && !g.IsSaved && (g.Issues?.Count ?? 0) == 0 &&
+                g.Rows.All(r => r.Issues.Count == 0));
+
+                    if (globalIssues.Any())
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Import Failed</strong>
+                            <ul class="mb-0 mt-2">
+                                @foreach (var issue in globalIssues)
+                                {
+                                    <li>
+                                        <small class="text-muted">Row @issue.RowNumber</small>
+                                        <span>: @issue.Message</span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2 mb-3">
+                        @if (selectableCount > 0)
+                        {
+                            <div class="form-check d-flex align-items-center me-2">
+                                <input class="form-check-input me-2" type="checkbox"
+                                       checked="@(selectedCount == selectableCount)"
+                                       @onchange="(e) => ToggleSelectAllCards(e.Value)" />
+                                <label class="form-check-label">Select All (@selectedCount/@selectableCount)</label>
+                            </div>
+                        }
+
+                        @if (hasSuccessGroups)
+                        {
+                            <button type="button"
+                                    class="btn @(groupFilter == GroupFilter.SuccessOnly ? "btn-success" : "btn-outline-success")"
+                                    @onclick="ToggleSuccessOnly">
+                                Success Only
+                            </button>
+                        }
+
+                        @if (hasErrorGroups)
+                        {
+                            <button type="button"
+                                    class="btn @(groupFilter == GroupFilter.ErrorOnly ? "btn-danger" : "btn-outline-danger")"
+                                    @onclick="ToggleErrorOnly">
+                                Error Only
+                            </button>
+                        }
+                    </div>
 
                     <div class="import-results">
-                        @foreach (var card in MapItemCards)
+                        @foreach (var group in groups
+                            .Where(ShouldShowGroup)
+                            .OrderBy(GetGroupSortKey))
                         {
-                            <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
-                                <div class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
+                            var groupRows = group.Rows!;
+                            var hasErrors = (group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0);
+                            var first = groupRows.FirstOrDefault();
+                            var displayName = first == null
+                                ? "[Orphan]"
+                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                    {first.CompanyItemName}");
+
+                            <div class="card mb-3 @(hasErrors ? "border-danger" : "border-success")">
+                                <div
+                                    class="card-header d-flex justify-content-between align-items-center @(hasErrors ? "bg-danger text-white" : "bg-success text-white")">
                                     <div>
-                                        <h6 class="mb-0">SubdItem: <strong>@card.SubdItem - @card.SubdItemName</strong></h6>
+                                        <h6 class="mb-0">Company Item: <strong>@displayName</strong></h6>
                                     </div>
                                     <div>
-                                        @if (card.Prepared?.IsSaved == true)
+                                        @if (group.IsSaved)
                                         {
                                             <span class="badge bg-light text-success">Saved</span>
                                         }
-                                        else if (card.HasErrors)
+                                        else if (hasErrors)
                                         {
-                                            <span class="badge bg-light text-danger">@GetErrorBadgeText(card)</span>                                        
+                                            var groupErrorCount = GetGroupErrorRowCount(group);
+                                            <span class="badge bg-light text-danger">@((groupErrorCount == 1) ? "1 error" :
+                                                                                                                                                                                                                                                                                                                                                                                    $"{groupErrorCount} errors")</span>
+                                            }
+                                        else if (groupRows.Count > 0)
+                                            {
+                                                <input type="checkbox" checked="@group.Selected"
+                                                       @onchange="(e) => ToggleGroupSelectionLocal(group, e.Value)" />
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        @if (first != null)
+                                        {
+                                            <div class="mb-2">
+                                                <small class="text-muted">Principal:</small> @first.Principal &nbsp; | &nbsp;
+                                                <small class="text-muted">Subdistributor:</small> @first.SubDistributorCode -
+                                                @first.SubDistributorName &nbsp; |
+                                                &nbsp;
+                                                <small class="text-muted">Subdistributor Item:</small> @first.SubdItemCode -
+                                                @first.SubdItemName
+                                            </div>
+
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Row</th>
+                                                        <th>UOM</th>
+                                                        <th>Conversion</th>
+                                                        <th>Price</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var row in groupRows.OrderBy(r => r.RowNumber))
+                                                    {
+                                                        <tr>
+                                                            <td>@row.RowNumber</td>
+                                                            <td>@row.UomName</td>
+                                                            <td>@row.Conversion</td>
+                                                            <td>@row.Price?.ToString("N2")</td>
+                                                            <td>
+                                                                @if (row.Issues.Count > 0)
+                                                                {
+                                                                    <span class="badge bg-danger">@((GetDisplayRowErrorCount(row) == 1) ? "1 error" : $"{GetDisplayRowErrorCount(row)} errors")</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge bg-success">Valid</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
                                         }
-                                        else if (card.Prepared != null)
+
+                                        @if ((group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0))
                                         {
-                                            <input type="checkbox" @bind="card.Prepared.Selected" />
+                                            <div class="mt-2">
+                                                <ul class="list-unstyled text-danger mb-0">
+                                                    @foreach (var rowGroup in (group.Issues ?? new List<ImportMapItemIssue>())
+                                                        .Concat(groupRows.SelectMany(r => r.Issues.Select(i => new
+                                    ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))))
+                                                        .GroupBy(i => new { i.RowNumber, i.Message })
+                                                        .Select(g => g.First())
+                                                        .GroupBy(i => i.RowNumber)
+                                                        .OrderBy(g => g.Key))
+                                                    {
+                                                        var rowNum = rowGroup.Key;
+                                                        var combined = string.Join(" ", rowGroup.Select(i => i.Message));
+                                                        <li>
+                                                            <small class="text-muted">Row @rowNum</small>
+                                                            <span>: @combined</span>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
                                         }
                                     </div>
                                 </div>
-                                <div class="card-body">
-                                    @if (card.Prepared?.MapItem != null)
-                                    {
-                                        <div class="mb-2">
-                                            <small class="text-muted">Company Item:</small> @card.Prepared.MapItem.CompanyItemCode - @card.Prepared.MapItem.CompanyItemName &nbsp; | &nbsp;
-                                            <small class="text-muted">Principal:</small> @card.Prepared.MapItem.Principal &nbsp; | &nbsp;
-                                            <small class="text-muted">Category:</small> @card.Prepared.MapItem.Category &nbsp; | &nbsp;
-                                        </div>
-                                    }
-
-                                    @if (card.Prepared?.Uoms != null && card.Prepared.Uoms.Count > 0)
-                                    {
-                                        <table class="table table-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>Uom</th>
-                                                    <th>Conversion</th>
-                                                    <th>Price</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var Uom in card.Prepared.Uoms)
-                                                {
-                                                    <tr>
-                                                        <td>@Uom.UomName</td>
-                                                        <td>@Uom.Conversion</td>
-                                                        <td>@Uom.Price.ToString("N2")</td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    }
-
-                                    @if (card.HasErrors)
-                                    {
-                                        <div class="mt-2">
-                                            <ul class="list-unstyled text-danger mb-0">
-                                                @foreach (var issue in card.Issues)
-                                                {
-                                                    <li>
-                                                        <small class="text-muted">Row @issue.RowNumber</small>
-                                                        <span>: @issue.Message</span>
-                                                    </li>
-                                                }
-                                            </ul>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-            <div class="modal-footer">
-                @if (ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Count > 0)
-                {
-                    <button type="button" class="btn btn-primary" disabled="@(!CanCommit)" @onclick="Commit">Commit Selected</button>
-                }
-                <button type="button" class="btn btn-secondary" @onclick="OnClose">Close</button>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (ImportResult != null && GetSelectedCardCount() > 0)
+                    {
+                        <button type="button" class="btn btn-primary" disabled="@(!CanCommit)"
+                                @onclick="OpenCommitConfirmModal">Commit Mapped Items</button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="HandleClose">Close</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
 @code {
     [Parameter]
@@ -123,83 +223,211 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    private bool CanCommit => ImportResult != null && ImportResult.PreparedMapItems != null && ImportResult.PreparedMapItems.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
+    [Parameter]
+    public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    private List<MapItemViewModel> GetMapItemCards()
+    private bool showCommitConfirmModal;
+
+    private bool CanCommit => ImportResult != null && GetSelectedCardCount() > 0;
+
+    private List<ImportMapItemIssue> GetGlobalIssues()
     {
         if (ImportResult == null)
         {
-            return new List<MapItemViewModel>();
+            return new List<ImportMapItemIssue>();
         }
 
-        var preparedBySubdItem = (ImportResult.PreparedMapItems ?? new List<PreparedMapItem>())
-            .GroupBy(prepared => NormalizeSubdItemCode(prepared.SubdItemCode))
-            .ToDictionary(group => group.Key, group => group.First());
-
-        var issuesByMapItem = ImportResult.Issues
-            .Concat((ImportResult.PreparedMapItems ?? new List<PreparedMapItem>()).SelectMany(prepared => prepared.Issues ?? new List<ImportMapItemIssue>()))
-            .GroupBy(issue => NormalizeSubdItemCode(issue.SubdItemCode))
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .GroupBy(issue => new { issue.RowNumber, issue.SubdItemCode, issue.ColumnName, issue.Message })
-                    .Select(issueGroup => issueGroup.First())
-                    .OrderBy(issue => issue.RowNumber)
-                    .ThenBy(issue => issue.ColumnName)
-                    .ThenBy(issue => issue.Message)
-                    .ToList());
-
-        var subdItemKeys = preparedBySubdItem.Keys
-            .Concat(issuesByMapItem.Keys)
-            .Distinct()
-            .OrderBy(key => preparedBySubdItem.TryGetValue(key, out var prepared) ? prepared.SubdItemCode : issuesByMapItem[key].FirstOrDefault()?.SubdItemCode ?? key)
+        var headerIssues = ImportResult.Issues
+            .Where(i => i.RowNumber == 0)
             .ToList();
 
-        var cards = new List<MapItemCardViewModel>();
-        foreach (var subdItemKey in subdItemKeys)
+        var rowHeaderIssues = ImportResult.Rows
+            .Where(row => row.RowNumber == 0)
+            .SelectMany(row => row.Issues.Select(issue => new ImportMapItemIssue(row.RowNumber, row.SubdItemCode, issue)))
+            .ToList();
+
+        var preparedHeaderIssues = ImportResult.PreparedGroups
+            .SelectMany(g => g.Issues)
+            .Where(i => i.RowNumber == 0)
+            .ToList();
+
+        return headerIssues
+            .Concat(rowHeaderIssues)
+            .Concat(preparedHeaderIssues)
+            .GroupBy(i => new { i.RowNumber, i.SubdItemCode, i.Message })
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    
+
+    private GroupFilter groupFilter = GroupFilter.All;
+
+    private void ToggleSuccessOnly()
+    {
+        groupFilter = groupFilter == GroupFilter.SuccessOnly ? GroupFilter.All : GroupFilter.SuccessOnly;
+    }
+
+    private void ToggleErrorOnly()
+    {
+        groupFilter = groupFilter == GroupFilter.ErrorOnly ? GroupFilter.All : GroupFilter.ErrorOnly;
+    }
+
+    private int GetSelectedCardCount()
+    {
+        if (ImportResult == null)
         {
-            preparedBySubdItem.TryGetValue(subdItemKey, out var prepared);
-            issuesByMapItem.TryGetValue(subdItemKey, out var issues);
+            return 0;
+        }
+        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        return groups.Count(g => g.Rows.Any() && SelectedGroupKeys.Contains(BuildGroupKey(g.Rows.First())) && (g.Issues?.Count
+?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
+    }
 
-            cards.Add(new MapItemCardViewModel(
-                prepared?.SubdItemCode ?? issues?.FirstOrDefault()?.SubdItemCode ?? subdItemKey,
-                prepared,
-                issues ?? new List<ImportMapItemIssue>()));
+    private void ToggleSelectAllCards(object? checkedValue)
+    {
+        if (checkedValue is not bool isChecked || ImportResult == null)
+        {
+            return;
         }
 
-        return cards
-            .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
-            .ThenBy(card => card.SubdItemCode)
-            .ToList();
+        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        foreach (var g in groups)
+        {
+            if (g.Rows == null || g.Rows.Count == 0) continue;
+            if ((g.Issues?.Count ?? 0) > 0) continue;
+            var key = BuildGroupKey(g.Rows.First());
+            if (isChecked)
+            {
+                SelectedGroupKeys.Add(key);
+                g.Selected = true;
+            }
+            else
+            {
+                SelectedGroupKeys.Remove(key);
+                g.Selected = false;
+            }
+        }
     }
 
-    private static string NormalizeSubdItemCode(string value)
+    private enum GroupFilter
     {
-        return string.IsNullOrWhiteSpace(value) ? "[Header Issue]" : value.Trim();
-    }
-    private static string GetErrorBadgeText(MapItemCardViewModel card)
-    {
-        var errorCount = card.Issues.Count > 0
-            ? card.Issues.Count
-            : card.Prepared?.Issues?.Count ?? 0;
-
-        return errorCount == 1
-            ? "1 error"
-            : $"{errorCount} errors";
-    }
-    private sealed record MapItemCardViewModel(
-        string SubdItemCode,
-        PreparedMapItem? Prepared,
-        List<ImportMapItemIssue> Issues)
-    {
-        public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
+        All,
+        SuccessOnly,
+        ErrorOnly
     }
 
-    private async Task Commit()
+    private static string BuildGroupKey(ImportMapItemRowResult row)
+    {
+        static string NormalizePart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
+        return string.Join("|",
+            NormalizePart(row.SubDistributorCode),
+            NormalizePart(row.CompanyItemCode),
+            NormalizePart(row.CompanyItemName));
+    }
+
+    private void OpenCommitConfirmModal()
+    {
+        showCommitConfirmModal = true;
+    }
+
+    private void CancelCommit()
+    {
+        showCommitConfirmModal = false;
+    }
+
+    private async Task ConfirmCommit()
+    {
+        showCommitConfirmModal = false;
+        await HandleCommit();
+    }
+
+    private async Task HandleCommit()
     {
         if (OnCommit.HasDelegate)
         {
             await OnCommit.InvokeAsync(null);
         }
     }
+
+    private async Task HandleClose()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync(null);
+        }
+    }
+
+    private void ToggleGroupSelectionLocal(PreparedItemGroup? prepared, object? checkedValue)
+    {
+        if (prepared == null || checkedValue is not bool isChecked) return;
+
+        if (prepared.Rows.Any())
+        {
+            var key = BuildGroupKey(prepared.Rows.First());
+            if (isChecked)
+            {
+                SelectedGroupKeys.Add(key);
+            }
+            else
+            {
+                SelectedGroupKeys.Remove(key);
+            }
+        }
+    }
+
+    private bool ShouldShowGroup(PreparedItemGroup group)
+    {
+        var rows = group.Rows;
+        var hasRowIssues = rows.Any(r => r.Issues.Count > 0);
+        var hasGroupIssues = (group.Issues?.Count ?? 0) > 0;
+
+        return groupFilter switch
+        {
+            GroupFilter.SuccessOnly => !hasGroupIssues && !hasRowIssues,
+            GroupFilter.ErrorOnly => hasGroupIssues || hasRowIssues,
+            _ => true
+        };
+    }
+
+    private static int GetGroupSortKey(PreparedItemGroup group)
+    {
+        var rows = group.Rows;
+        return rows.Count > 0 ? rows.Min(r => r.RowNumber) : int.MaxValue;
+    }
+
+    private static int GetDisplayRowErrorCount(ImportMapItemRowResult row)
+    {
+        return row.Issues.Count;
+    }
+
+    private static int GetGroupErrorRowCount(PreparedItemGroup group)
+    {
+        var affectedRows = new HashSet<int>(group.Rows
+            .Where(row => row.Issues.Count > 0)
+            .Select(row => row.RowNumber));
+
+        if (group.Issues != null)
+        {
+            foreach (var issue in group.Issues)
+            {
+                if (issue.RowNumber > 0)
+                {
+                    affectedRows.Add(issue.RowNumber);
+                }
+            }
+
+            if (group.Issues.Any(issue => issue.RowNumber == 0))
+            {
+                return affectedRows.Count + 1;
+            }
+        }
+
+        return affectedRows.Count;
+    }
 }
+
+
+<ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items"
+              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")" OnYes="ConfirmCommit" OnNo="CancelCommit"
+              CloseOnOverlayClick="true" />

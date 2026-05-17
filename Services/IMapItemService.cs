@@ -19,7 +19,7 @@ public interface IMapItemService
     Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> SubdItemCodeExistsAsync(int subDistributorId, string subdItemCode, int? excludeSubdItemId = null, CancellationToken cancellationToken = default);
-    Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default);
+    Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default);
     Task<List<TemplateRow>> GetTemplateDataAsync(int subDistributorId, string? principal, CancellationToken cancellationToken = default);
 }
 
@@ -307,7 +307,7 @@ public class MapItemService : IMapItemService
         }
     }
 
-    public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, CancellationToken cancellationToken = default)
+    public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
         try
@@ -337,7 +337,7 @@ public class MapItemService : IMapItemService
                         existing.ConversionToBase = entry.Conversion;
                         existing.Price = entry.Price ?? 0m;
                         existing.IsBaseUnit = string.Equals(name, "Piece", StringComparison.OrdinalIgnoreCase);
-                        existing.UpdatedBy = entry.IsAutoCalculated ? null : entry.IsAutoCalculated == false ? existing.UpdatedBy : existing.UpdatedBy;
+                        existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
                         existing.UpdatedDate = DateTime.UtcNow;
                         context.ItemsUoms.Update(existing);
                     }
@@ -352,8 +352,8 @@ public class MapItemService : IMapItemService
                             SubdItemId = subdItemId,
                             CreatedDate = DateTime.UtcNow,
                             UpdatedDate = DateTime.UtcNow,
-                            CreatedBy = null,
-                            UpdatedBy = null
+                            CreatedBy = currentUserId > 0 ? currentUserId : null,
+                            UpdatedBy = currentUserId > 0 ? currentUserId : null
                         };
                         context.ItemsUoms.Add(created);
                     }

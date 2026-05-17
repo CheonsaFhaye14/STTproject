@@ -38,9 +38,11 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private string? confirmedCompanyItemSummary;
         private bool showErrorModal = false;
         private bool showDownloadTemplateModal = false;
+        private bool showImportConfirmModal = false;
         private bool showImportDetailsModal = false;
         private bool showClearConfirmModal = false;
         private ImportMapItemResult? lastImportResult;
+        private HashSet<string> selectedImportItemGroupKeys = new(StringComparer.OrdinalIgnoreCase);
         private bool shouldHydrateClientStateAfterRender = false;
         private bool hasHydratedClientState = false;
         [Parameter] public EventCallback OnDraftChanged { get; set; }
@@ -72,6 +74,23 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await jsModule.InvokeVoidAsync("clickElement", "#mapitem-import-file");
         }
 
+        private void ShowImportConfirmModal()
+        {
+            showImportConfirmModal = true;
+        }
+
+        private async Task ConfirmImport()
+        {
+            showImportConfirmModal = false;
+            await OpenImportFilePicker();
+        }
+
+        private Task CancelImport()
+        {
+            showImportConfirmModal = false;
+            return Task.CompletedTask;
+        }
+
         private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
         {
             var file = e.File;
@@ -93,16 +112,73 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await browserStream.CopyToAsync(ms);
             ms.Position = 0;
 
-            lastImportResult = await importMapItemService.ImportFromExcelAsync(
-                ms,
-                selectedSubdId,
-                userContext.UserId ?? 0);
+            lastImportResult = await importMapItemService.ImportFromExcelAsync(ms, userContext.UserId ?? 0);
+            selectedImportItemGroupKeys = BuildDefaultSelectedImportGroupKeys(lastImportResult);
 
             showImportDetailsModal = true;
 
-            if (lastImportResult?.SuccessCount > 0)
+            StateHasChanged();
+        }
+
+        private async Task HandleCommitImportAsync()
+        {
+            if (lastImportResult is null || !userContext.UserId.HasValue)
             {
-                await _LoadMapTablesAsyncInternal();
+                return;
+            }
+
+            var selectedRows = lastImportResult.Rows
+                .Where(row => row.IsSuccess && row.Issues.Count == 0)
+                .Where(row => selectedImportItemGroupKeys.Contains(BuildImportItemGroupKey(row)))
+                .ToList();
+
+            if (selectedRows.Count == 0)
+            {
+                itemActionErrorMessage = "No valid mapping group selected for commit.";
+                showErrorModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            try
+            {
+                var committedGroups = await importMapItemService.CommitPreparedRowsAsync(selectedRows, userContext.UserId.Value);
+                if (committedGroups <= 0)
+                {
+                    itemActionErrorMessage = "Commit did not save any item groups. Please re-check your selected rows.";
+                    showErrorModal = true;
+                    StateHasChanged();
+                    return;
+                }
+
+                var committedSubdCode = selectedRows
+                    .Select(row => row.SubDistributorCode)
+                    .FirstOrDefault(code => !string.IsNullOrWhiteSpace(code));
+                if (!string.IsNullOrWhiteSpace(committedSubdCode))
+                {
+                    var matchedSubd = subdList.FirstOrDefault(subd =>
+                        string.Equals(subd.SubdCode, committedSubdCode.Trim(), StringComparison.OrdinalIgnoreCase));
+                    if (matchedSubd != null && matchedSubd.SubDistributorId != selectedSubdId)
+                    {
+                        selectedSubdId = matchedSubd.SubDistributorId;
+                        UpdateSelectedSubdLocation();
+                        await PersistLastSelectedSubdAsync();
+                    }
+                }
+
+                // Reset filters so newly committed rows are immediately visible in the table.
+                selectedPrincipal = null;
+                selectedCompanyItemIdForFilter = null;
+                await LoadMapTablesAsync();
+
+                showImportDetailsModal = false;
+                lastImportResult = null;
+                selectedImportItemGroupKeys.Clear();
+            }
+            catch (Exception ex)
+            {
+                itemActionErrorMessage = $"Commit failed: {ex.Message}";
+                showErrorModal = true;
             }
 
             StateHasChanged();
@@ -112,7 +188,38 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             showImportDetailsModal = false;
             lastImportResult = null;
+            selectedImportItemGroupKeys.Clear();
             StateHasChanged();
+        }
+
+        private static HashSet<string> BuildDefaultSelectedImportGroupKeys(ImportMapItemResult? result)
+        {
+            var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (result is null || result.Rows.Count == 0)
+            {
+                return selected;
+            }
+
+            var validGroups = result.Rows
+                .GroupBy(BuildImportItemGroupKey)
+                .Where(group => group.All(row => row.IsSuccess && row.Issues.Count == 0))
+                .Select(group => group.Key);
+
+            foreach (var key in validGroups)
+            {
+                selected.Add(key);
+            }
+
+            return selected;
+        }
+
+        private static string BuildImportItemGroupKey(ImportMapItemRowResult row)
+        {
+            static string NormalizePart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
+            return string.Join("|",
+                NormalizePart(row.SubDistributorCode),
+                NormalizePart(row.CompanyItemCode),
+                NormalizePart(row.CompanyItemName));
         }
 
         private Task OpenAddUomModal()
@@ -348,6 +455,13 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return Task.CompletedTask;
             }
 
+            if (showImportConfirmModal)
+            {
+                showImportConfirmModal = false;
+                StateHasChanged();
+                return Task.CompletedTask;
+            }
+
             GoBackToHome();
             return Task.CompletedTask;
         }
@@ -357,7 +471,9 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             showConfirmModal ||
             showClearConfirmModal ||
             showErrorModal ||
-            showDownloadTemplateModal;
+            showDownloadTemplateModal ||
+            showImportConfirmModal ||
+            showImportDetailsModal;
 
         protected override async Task OnParametersSetAsync()
         {
@@ -1043,7 +1159,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     {
                         // persist all UOMs separately
                         var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
-    uomEntries);
+    uomEntries, userContext.UserId ?? 0);
                         if (!saved)
                         {
                             itemActionErrorMessage = "Unable to save UOM prices.";
@@ -1070,7 +1186,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     // item.SubdItemId is set by EF on save; use it directly to persist UOM rows
                     if (item.SubdItemId > 0)
                     {
-                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries);
+                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0);
                         if (!saved)
                         {
                             itemActionErrorMessage = "Unable to save UOM prices.";

@@ -2,7 +2,7 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using STTproject.Services
-@using STTproject.Shared.Components 
+@using STTproject.Shared.Components
 @using STTproject.Features.User.MapItem.Components.Sections
 @using STTproject.Features.User.MapItem.Components.Modals
 @implements IAsyncDisposable
@@ -38,9 +38,8 @@
     <!-- DOWNLOAD TEMPLATE + IMPORT -->
     <div class="top-buttons">
         <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
-        <button class="btn-primary" @onclick="OpenImportFilePicker">Import Excel</button>
+        <button class="btn-primary" @onclick="ShowImportConfirmModal">Import Excel</button>
         <InputFile id="mapitem-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
-        <button class="btn-primary">Export Data</button>
     </div>
 
     <MapItemInputHeader @ref="mapItemInputHeader" IsSubDistributorSelected="@IsSubDistributorSelected"
@@ -106,12 +105,17 @@
                       OnNo="CancelClearConfirm" />
     }
 
+    <ConfirmModal Show="showImportConfirmModal" Title="Import Map Items"
+                  Message="Import map item rows from the selected Excel file?" OnYes="ConfirmImport" OnNo="CancelImport" />
+
     <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@itemActionErrorMessage" ShowError="true"
                   OnErrorConfirm="CloseErrorModal" />
 
     <DownloadTemplate ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
-    <ImportDetails Show="showImportDetailsModal" ImportResult="lastImportResult" OnClose="CloseImportDetailsModal" />
+    <ImportDetails Show="showImportDetailsModal" ImportResult="lastImportResult"
+                   SelectedGroupKeys="selectedImportItemGroupKeys" OnCommit="HandleCommitImportAsync"
+                   OnClose="CloseImportDetailsModal" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" />
