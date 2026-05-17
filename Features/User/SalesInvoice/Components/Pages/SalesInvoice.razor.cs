@@ -15,6 +15,7 @@ public partial class SalesInvoice
     private bool showEditItemsModal = false;
     private bool showCommitConfirmModal = false;
     private bool showAddItemsConfirmModal = false;
+    private bool showAddItemsErrorModal = false;
     private bool showEditItemsConfirmModal = false;
     private bool showClearConfirmModal = false;
     private int addItemsConfirmCount = 0;
@@ -270,7 +271,12 @@ public partial class SalesInvoice
         {
             addItemsConfirmCount = itemsToAdd.Count;
             showAddItemsConfirmModal = true;
+            showAddItemsErrorModal = false;
+            return;
         }
+
+        showAddItemsConfirmModal = false;
+        showAddItemsErrorModal = true;
         await Task.CompletedTask;
     }
 
@@ -287,6 +293,11 @@ public partial class SalesInvoice
     {
         showAddItemsConfirmModal = false;
         addItemsConfirmCount = 0;
+    }
+
+    private void CloseAddItemsErrorModal()
+    {
+        showAddItemsErrorModal = false;
     }
 
     async Task OnEditItemsBeforeSave(List<InputItemModel> itemsToSave)
@@ -785,7 +796,7 @@ public partial class SalesInvoice
             onParametersSetLock.Release();
         }
     }
-    
+
 
     private async Task _OnParametersSetAsyncInternal()
     {
@@ -911,7 +922,7 @@ public partial class SalesInvoice
         await PersistDraftAsync();
     }
 
-        private async Task DownloadTemplate()
+    private async Task DownloadTemplate()
     {
         try
         {
