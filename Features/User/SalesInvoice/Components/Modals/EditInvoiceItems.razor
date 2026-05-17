@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @namespace STTproject.Features.User.SalesInvoice.Components.Modals
+@inject STTproject.Services.ISalesInvoiceService salesInvoiceService
 @inject IJSRuntime JS
 
 @if (ShowModal)
@@ -80,20 +81,20 @@
                         {
                             <div class="empty-state">No items to edit.</div>
                         }
-        <div class="modal-actions">
-            <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
-                    @onkeydown="HandleCancelKeyDown">
-                Cancel (Esc)
-            </button>
-            <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
-                    @onkeydown="HandleSaveKeyDown">
-                Save Changes (Ctrl+S)
-            </button>
-            <button type="button" class="btn-secondary" @onclick="RemoveSelectedItem"
-                    @onkeydown="HandleRemoveKeyDown">
-                Remove Selected Item
-            </button>
-        </div>
+                        <div class="modal-actions">
+                            <button @ref="cancelButtonRef" type="button" class="btn-secondary" @onclick="CancelModal"
+                                    @onkeydown="HandleCancelKeyDown">
+                                Cancel (Esc)
+                            </button>
+                            <button @ref="saveButtonRef" type="button" class="btn-primary" @onclick="SaveModal"
+                                    @onkeydown="HandleSaveKeyDown">
+                                Save Changes (Ctrl+S)
+                            </button>
+                            <button type="button" class="btn-secondary" @onclick="RemoveSelectedItem"
+                                    @onkeydown="HandleRemoveKeyDown">
+                                Remove Selected Item
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

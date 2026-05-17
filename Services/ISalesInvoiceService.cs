@@ -8,6 +8,7 @@ public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
     Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
+    Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
     Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
         List<InputItemModel> items,
@@ -31,7 +32,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     public async Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         var customers = await context.Customers
             .AsNoTracking()
             .Where(c => c.IsActive)
@@ -75,6 +76,12 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         await using var context = _contextFactory.CreateDbContext();
         return await context.SalesInvoices
             .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+    }
+
+    public async Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        return await ResolveUomPriceAsync(context, itemsUomId, invoiceDate, cancellationToken);
     }
 
     public async Task<SaveInvoiceResult> SaveInvoiceAsync(
@@ -175,6 +182,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         try
         {
+            await NormalizeItemAmountsAsync(context, invoice, items, cancellationToken);
+
             var duplicateExists = await context.SalesInvoices
                 .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
 
@@ -378,10 +387,66 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         }
     }
 
+    private async Task NormalizeItemAmountsAsync(
+        SttprojectContext context,
+        InputInvoiceModel invoice,
+        List<InputItemModel> items,
+        CancellationToken cancellationToken)
+    {
+        var priceCache = new Dictionary<int, decimal>();
+
+        foreach (var item in items)
+        {
+            if (item.ItemsUomId <= 0 || item.Quantity <= 0)
+            {
+                continue;
+            }
+
+            if (!priceCache.TryGetValue(item.ItemsUomId, out var unitPrice))
+            {
+                unitPrice = await ResolveUomPriceAsync(context, item.ItemsUomId, invoice.InvoiceDate, cancellationToken);
+                priceCache[item.ItemsUomId] = unitPrice;
+            }
+
+            item.Amount = unitPrice * item.Quantity;
+        }
+    }
+
+    private static async Task<decimal> ResolveUomPriceAsync(
+        SttprojectContext context,
+        int itemsUomId,
+        DateOnly invoiceDate,
+        CancellationToken cancellationToken)
+    {
+        var currentPrice = await context.ItemsUoms
+            .AsNoTracking()
+            .Where(u => u.ItemsUomId == itemsUomId)
+            .Select(u => (decimal?)u.Price)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!currentPrice.HasValue)
+        {
+            return 0m;
+        }
+
+        var invoiceCutoff = invoiceDate.ToDateTime(TimeOnly.MaxValue);
+
+        var historicalPrice = await context.ItemsUomPriceHistories
+            .AsNoTracking()
+            .Where(h => h.ItemsUomId == itemsUomId && h.EffectivityDate <= invoiceCutoff)
+            .OrderByDescending(h => h.EffectivityDate)
+            .ThenByDescending(h => h.AppliedDate)
+            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
+            .Select(h => (decimal?)h.NewPrice)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return historicalPrice ?? currentPrice.Value;
+    }
+
     public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        
+
         var invoice = await context.SalesInvoices
             .AsNoTracking()
             .Where(si => si.SalesInvoiceId == invoiceId)

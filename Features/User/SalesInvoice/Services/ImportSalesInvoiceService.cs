@@ -229,6 +229,17 @@ public sealed class ImportSalesInvoiceService
 				};
 
 				var items = new List<InputItemModel>();
+				var unitPriceCache = new Dictionary<int, decimal>();
+				async Task<decimal> GetUnitPriceAsync(int itemsUomId, DateOnly invoiceDate)
+				{
+					if (!unitPriceCache.TryGetValue(itemsUomId, out var cachedPrice))
+					{
+						cachedPrice = await _salesInvoiceService.ResolveUomPriceAsync(itemsUomId, invoiceDate, cancellationToken);
+						unitPriceCache[itemsUomId] = cachedPrice;
+					}
+
+					return cachedPrice;
+				}
 				foreach (var row in invoiceRows)
 				{
 					if (!subdItemByCode.TryGetValue(Normalize(row.SkuCode), out var subdItem))
@@ -258,6 +269,8 @@ public sealed class ImportSalesInvoiceService
 						break;
 					}
 
+					var unitPrice = await GetUnitPriceAsync(uom.ItemsUomId, firstRow.InvoiceDate);
+
 					items.Add(new InputItemModel
 					{
 						ItemCode = subdItem.SubdItemCode,
@@ -266,7 +279,7 @@ public sealed class ImportSalesInvoiceService
 						ItemsUomId = uom.ItemsUomId,
 						UomName = uom.UomName,
 						Quantity = row.Quantity,
-						Amount = uom.Price * row.Quantity
+						Amount = unitPrice * row.Quantity
 					});
 				}
 

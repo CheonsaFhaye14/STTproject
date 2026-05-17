@@ -16,6 +16,7 @@ public partial class EditInvoiceItems
     [Parameter] public List<InputItemModel> Items { get; set; } = new();
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
+    [Parameter] public DateOnly InvoiceDate { get; set; }
 
     private ElementReference itemNameSelectRef;
     private ElementReference uomSelectRef;
@@ -39,7 +40,7 @@ public partial class EditInvoiceItems
             ? editableItems[selectedItemIndex]
             : null;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (ShowModal && !wasShown)
         {
@@ -59,6 +60,11 @@ public partial class EditInvoiceItems
             wasShown = false;
             focusItemNameOnRender = false;
             uomEnterPrimed = false;
+        }
+
+        if (ShowModal && editableItems.Any())
+        {
+            await RecalculateAmountsAsync();
         }
     }
 
@@ -105,7 +111,7 @@ public partial class EditInvoiceItems
         }
     }
 
-    private void OnUomChanged(ChangeEventArgs e)
+    private async Task OnUomChanged(ChangeEventArgs e)
     {
         var item = SelectedItem;
         if (item is null)
@@ -123,7 +129,8 @@ public partial class EditInvoiceItems
 
         if (selectedUom != null)
         {
-            item.Amount = selectedUom.Price * item.Quantity;
+            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
+            item.Amount = unitPrice * item.Quantity;
             item.UomName = selectedUom.UomName;
         }
 
@@ -131,16 +138,13 @@ public partial class EditInvoiceItems
         ValidateDraft();
     }
 
-    private void OnQuantityInput(ChangeEventArgs e)
+    private async Task OnQuantityInput(ChangeEventArgs e)
     {
         var item = SelectedItem;
         if (item is null)
         {
             return;
         }
-
-        var previousQuantity = item.Quantity > 0 ? item.Quantity : 1;
-        var unitPrice = item.Amount / previousQuantity;
 
         if (!int.TryParse(e.Value?.ToString(), out var quantity))
         {
@@ -153,8 +157,8 @@ public partial class EditInvoiceItems
 
         if (quantity > 0)
         {
-            var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
-            item.Amount = (selectedUom?.Price ?? unitPrice) * item.Quantity;
+            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(item.ItemsUomId, InvoiceDate);
+            item.Amount = unitPrice * item.Quantity;
         }
 
         ValidateDraft();
@@ -465,6 +469,20 @@ public partial class EditInvoiceItems
     private void ValidateDraft()
     {
         ValidationErrors = SalesInvoiceValidation.ValidateEditItemDraft(SelectedItem, SelectedItem != null);
+    }
+
+    private async Task RecalculateAmountsAsync()
+    {
+        foreach (var item in editableItems)
+        {
+            if (item.ItemsUomId <= 0 || item.Quantity <= 0)
+            {
+                continue;
+            }
+
+            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(item.ItemsUomId, InvoiceDate);
+            item.Amount = unitPrice * item.Quantity;
+        }
     }
 
     private string GetFieldError(string fieldKey)

@@ -84,11 +84,11 @@
     <AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
                      OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                      AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-                     OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
+                     InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
 
     <EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
                       OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
-                      OnBeforeSave="OnEditItemsBeforeSave" />
+                      InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnEditItemsBeforeSave" />
 
     <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                        AvailableUoms="availableUoms" />

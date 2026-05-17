@@ -40,6 +40,7 @@ public partial class AddInvoiceItems
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
     [Parameter] public bool HeaderIsSaved { get; set; } = false;
+    [Parameter] public DateOnly InvoiceDate { get; set; }
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
 
@@ -47,6 +48,12 @@ public partial class AddInvoiceItems
     public InputItemModel NewItem { get; set; } = CreateNewItem();
     private SubdItem? CurrentSubdItem { get; set; }
     private ItemsUom? CurrentUom { get; set; }
+    private decimal? CurrentUnitPrice { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await UpdateCurrentUnitPriceAsync();
+    }
 
     private string NewSku
     {
@@ -63,11 +70,11 @@ public partial class AddInvoiceItems
         };
     }
 
-    public Task RestoreDraftStateAsync(InvoiceItemsDraftState? draft)
+    public async Task RestoreDraftStateAsync(InvoiceItemsDraftState? draft)
     {
         if (draft is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         NewItem = draft.NewItem is null ? CreateNewItem() : CloneItem(draft.NewItem);
@@ -75,10 +82,14 @@ public partial class AddInvoiceItems
         CurrentSubdItem = AvailableItems.FirstOrDefault(i =>
             i.SubdItemId == NewItem.SubdItemId && i.SubDistributorId == SelectedSubdistributorId);
         CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == NewItem.ItemsUomId);
+        if (CurrentUom != null)
+        {
+            CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
+            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
+        }
         ShowValidationErrors = false;
         skipNextSkuBlurValidation = false;
         ValidationErrors.Clear();
-        return Task.CompletedTask;
     }
 
     private void OnSkuChanged(string sku)
@@ -96,6 +107,7 @@ SelectedSubdistributorId);
             NewItem.ItemName = selected.ItemName;
             NewItem.ItemsUomId = 0;
             CurrentUom = null;
+            CurrentUnitPrice = null;
         }
         else
         {
@@ -104,6 +116,7 @@ SelectedSubdistributorId);
             NewItem.ItemName = string.Empty;
             NewItem.ItemsUomId = 0;
             CurrentUom = null;
+            CurrentUnitPrice = null;
         }
 
         RevalidateIfNeeded();
@@ -119,6 +132,7 @@ SelectedSubdistributorId);
             NewItem.SubdItemId = 0;
             NewItem.ItemsUomId = 0;
             CurrentUom = null;
+            CurrentUnitPrice = null;
             RevalidateIfNeeded();
             _ = OnDraftChanged.InvokeAsync();
             return Task.CompletedTask;
@@ -130,12 +144,13 @@ SelectedSubdistributorId);
         NewItem.SubdItemId = selected.SubdItemId;
         NewItem.ItemsUomId = 0;
         CurrentUom = null;
+        CurrentUnitPrice = null;
         RevalidateIfNeeded();
         _ = OnDraftChanged.InvokeAsync();
         return Task.CompletedTask;
     }
 
-    private void OnUomChanged(ChangeEventArgs e)
+    private async Task OnUomChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int uomId))
         {
@@ -144,8 +159,13 @@ SelectedSubdistributorId);
 
             if (CurrentSubdItem != null && CurrentUom != null)
             {
-                NewItem.Amount = CurrentUom.Price * NewItem.Quantity;
+                CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
+                NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
                 NewItem.UomName = CurrentUom.UomName;
+            }
+            else
+            {
+                CurrentUnitPrice = null;
             }
         }
 
@@ -164,6 +184,10 @@ SelectedSubdistributorId);
         }
 
         NewItem.Quantity = quantity;
+        if (CurrentUom != null && CurrentUnitPrice.HasValue)
+        {
+            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
+        }
         RevalidateIfNeeded();
         _ = OnDraftChanged.InvokeAsync();
     }
@@ -180,7 +204,8 @@ SelectedSubdistributorId);
         }
 
         var selectedUom = CurrentUom!;
-        var lineTotalPrice = NewItem.Quantity * selectedUom.Price;
+        CurrentUnitPrice ??= await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
+        var lineTotalPrice = NewItem.Quantity * CurrentUnitPrice.Value;
 
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
@@ -281,6 +306,7 @@ SelectedSubdistributorId);
         NewItem.Quantity = 1;
         CurrentSubdItem = null;
         CurrentUom = null;
+        CurrentUnitPrice = null;
         ShowValidationErrors = false;
         ValidationErrors.Clear();
         SaveErrorMessage = null;
@@ -428,7 +454,23 @@ SelectedSubdistributorId);
     {
         return CurrentUom is null
             ? string.Empty
-            : FormatHelper.FormatPrice(CurrentUom.Price);
+            : FormatHelper.FormatPrice(CurrentUnitPrice ?? CurrentUom.Price);
+    }
+
+    private async Task UpdateCurrentUnitPriceAsync()
+    {
+        if (CurrentUom is null)
+        {
+            CurrentUnitPrice = null;
+            return;
+        }
+
+        CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
+
+        if (NewItem.ItemsUomId == CurrentUom.ItemsUomId && NewItem.Quantity > 0)
+        {
+            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
+        }
     }
 
     private void ValidateDraft()
