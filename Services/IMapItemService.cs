@@ -66,6 +66,8 @@ public class MapItemService : IMapItemService
     {
         await using var context = _contextFactory.CreateDbContext();
 
+        var recentCutoff = DateTime.Now.AddDays(-7);
+
         var query = context.CompanyItems
             .AsNoTracking()
             .Where(ci => ci.IsActive)
@@ -76,6 +78,13 @@ public class MapItemService : IMapItemService
                 Principal = ci.Principal,
                 Category = ci.Category,
                 CompanyItemId = ci.CompanyItemId,
+                EffectivityDate = ci.EffectivityDate,
+                PriceIncreasePercent = ci.PriceIncreasePercent,
+                RecentAppliedDate = ci.ItemsUomPriceHistories
+                    .Where(h => h.AppliedDate >= recentCutoff)
+                    .OrderByDescending(h => h.AppliedDate)
+                    .Select(h => (DateTime?)h.AppliedDate)
+                    .FirstOrDefault(),
             });
 
         if (!string.IsNullOrWhiteSpace(principal))
@@ -589,6 +598,9 @@ public sealed class MapCompanyItemRow
     public string Category { get; set; } = string.Empty;
     public int CompanyItemId { get; set; }
     public string UomName { get; set; } = string.Empty;
+    public DateTime? EffectivityDate { get; set; }
+    public decimal? PriceIncreasePercent { get; set; }
+    public DateTime? RecentAppliedDate { get; set; }
 }
 
 public sealed class DeleteSubdItemResult

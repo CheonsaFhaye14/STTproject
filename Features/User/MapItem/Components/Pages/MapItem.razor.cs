@@ -793,6 +793,17 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     CompanyItemCode = group.Key.CompanyItemCode,
                     ItemName = group.Key.Description,
                     Category = group.Key.Category,
+                    EffectivityDate = group.Where(x => x.EffectivityDate.HasValue)
+                        .Select(x => x.EffectivityDate)
+                        .OrderByDescending(date => date)
+                        .FirstOrDefault(),
+                    PriceIncreasePercent = group.Where(x => x.PriceIncreasePercent.HasValue)
+                        .Select(x => x.PriceIncreasePercent)
+                        .FirstOrDefault(),
+                    RecentAppliedDate = group.Where(x => x.RecentAppliedDate.HasValue)
+                        .Select(x => x.RecentAppliedDate)
+                        .OrderByDescending(d => d)
+                        .FirstOrDefault(),
                     UomName = string.Join(", ", group
                         .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
                         .Select(x => $"{x.UomName} - {x.Price:N2}"))

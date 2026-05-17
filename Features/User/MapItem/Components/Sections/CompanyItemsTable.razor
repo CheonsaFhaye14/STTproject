@@ -42,11 +42,26 @@
                 @foreach (var item in CompanyItems)
                 {
                     var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
+                    var isPriceIncreaseScheduled = item.EffectivityDate.HasValue && item.EffectivityDate.Value > DateTime.Now;
                     <tr @onclick="() => HandleRowClicked(item)"
                         class="company-items-row @(isSelected ? "selected-row" : string.Empty)">
                         <td>@item.CompanyItemCode</td>
                         <td>@item.Category</td>
-                        <td>@item.ItemName</td>
+                        <td>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <span>@item.ItemName</span>
+                                @if (isPriceIncreaseScheduled)
+                                {
+                                    <span class="badge bg-warning text-dark" style="align-self: flex-start;">
+                                        Price increase scheduled @item.EffectivityDate?.ToString("MMM dd, yyyy")
+                                        @if (item.PriceIncreasePercent.HasValue)
+                                        {
+                                            <span>@($" (+{item.PriceIncreasePercent.Value:N2}%)")</span>
+                                        }
+                                    </span>
+                                }
+                            </div>
+                        </td>
                     </tr>
                 }
             }
