@@ -15,30 +15,28 @@ a, .btn-link {
 }
 
 .btn-primary {
-    background-color: #AC7A7A;
+    background-color: #7A65B0;
     color: white;
     border-radius: 10px;
     border: none;
-    box-shadow: 5px 5px 2px #888888;
+    box-shadow: 3px 3px 4px #9B85CC;
 }
     .btn-primary:hover {
-        background-color: #F5AFAF;
+        background-color: #C9B8E8;
         color: black;
-        border-radius: 10px;
-        border: none;
     }
 
 .btn-secondary {
-    background-color: #F5AFAF;
-    color: black;
+    background-color: white;
+    color: #4c2d99;
     border-radius: 10px;
-    border: none;
-    box-shadow: 5px 5px 2px #888888;
+    border: #7A65B0 solid 1px;
+    box-shadow: 3px 3px 4px #9B85CC;
 }
 
     .btn-secondary:hover {
-        background-color: #AC7A7A;
-        color: white;
+        background-color: #b693f8;
+        color: black;
         border-radius: 10px;
         border: none;
     }
