@@ -150,6 +150,34 @@ public sealed class ImportMapItemService
 			.Where(ci => ci.IsActive)
 			.ToDictionaryAsync(ci => Normalize(ci.ItemCode), cancellationToken);
 
+		// Preload any existing SubdItems for the subdistributors found in the file
+		var parsedSubdCodes = parsedRows.Select(r => Normalize(r.SubDistributorCode)).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+		var subdIds = subdDistributors
+			.Where(kvp => parsedSubdCodes.Contains(kvp.Key))
+			.Select(kvp => kvp.Value.SubDistributorId)
+			.ToList();
+
+		var existingSubdItems = new List<SubdItem>();
+		if (subdIds.Count > 0)
+		{
+			existingSubdItems = await context.SubdItems
+				.AsNoTracking()
+				.Where(si => si.IsActive && subdIds.Contains(si.SubDistributorId))
+				.ToListAsync(cancellationToken);
+		}
+
+		var existingBySubdAndCode = new Dictionary<(string, string), SubdItem>();
+		foreach (var si in existingSubdItems)
+		{
+			var subdCode = subdDistributors.FirstOrDefault(k => k.Value.SubDistributorId == si.SubDistributorId).Key ?? string.Empty;
+			var key = (Normalize(subdCode), Normalize(si.SubdItemCode));
+			existingBySubdAndCode[key] = si;
+		}
+
+		var existingBySubdAndCompany = existingSubdItems
+			.Where(si => si.CompanyItemId > 0)
+			.ToDictionary(si => (si.SubDistributorId, si.CompanyItemId));
+
 		// Group rows by the item identity shown in the UI.
 		foreach (var rowGroup in parsedRows.GroupBy(row => new
 		{
@@ -194,6 +222,64 @@ public sealed class ImportMapItemService
 			// Validate row consistency against the first row in the code group.
 			var rowErrors = ValidateGroupConsistency(groupRows);
 			MergeRowErrors(rowErrors, groupRows, crossGroupIdentityErrors);
+
+			// Validate company item exists
+			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem))
+			{
+				var createdRows = new List<ImportMapItemRowResult>();
+				foreach (var row in groupRows)
+				{
+					var rowResult = new ImportMapItemRowResult
+					{
+						RowNumber = row.RowNumber,
+						SubDistributorCode = row.SubDistributorCode,
+						SubDistributorName = subdDistributor.SubdName,
+						Principal = row.Principal,
+						CompanyItemCode = row.CompanyItemCode,
+						CompanyItemName = row.CompanyItemName,
+						SubdItemCode = row.SubdItemCode,
+						SubdItemName = row.SubdItemName,
+						IsSuccess = false,
+						Message = $"Company Item '{firstRow.CompanyItemCode}' not found."
+					};
+					rowResult.Issues.Add($"Company Item '{firstRow.CompanyItemCode}' not found.");
+					result.Rows.Add(rowResult);
+					createdRows.Add(rowResult);
+				}
+
+				var prepared = new PreparedItemGroup(createdRows) { Selected = false };
+				prepared.Issues.Add(new ImportMapItemIssue(firstRow.RowNumber, firstRow.SubdItemCode, $"Company Item '{firstRow.CompanyItemCode}' not found."));
+				result.PreparedGroups.Add(prepared);
+
+				continue;
+			}
+
+			// Check if any rows already exist in the database
+			var subdDistributorKey = (Normalize(firstRow.SubDistributorCode), Normalize(firstRow.SubdItemCode));
+			var companyItemKey = (subdDistributor.SubDistributorId, companyItem.CompanyItemId);
+			var alreadyExistsByCode = existingBySubdAndCode.TryGetValue(subdDistributorKey, out var existingCode) && existingCode != null;
+			var alreadyExistsByCompany = existingBySubdAndCompany.TryGetValue(companyItemKey, out var existingCompany) && existingCompany != null;
+
+			if (alreadyExistsByCode || alreadyExistsByCompany)
+			{
+				foreach (var row in groupRows)
+				{
+					if (!rowErrors.TryGetValue(row.RowNumber, out var issues))
+					{
+						issues = new List<string>();
+						rowErrors[row.RowNumber] = issues;
+					}
+					if (alreadyExistsByCode)
+					{
+						issues.Add($"SubdItem code '{firstRow.SubdItemCode}' already exists in the database for this SubDistributor.");
+					}
+					if (alreadyExistsByCompany)
+					{
+						issues.Add("This Company Item is already mapped for this SubDistributor.");
+					}
+				}
+			}
+
 			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors.Values.SelectMany(x => x).ToList());
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
@@ -235,37 +321,6 @@ public sealed class ImportMapItemService
 						prepared.Issues.Add(new ImportMapItemIssue(kvp.Key, firstRow.SubdItemCode, msg));
 					}
 				}
-				result.PreparedGroups.Add(prepared);
-
-				continue;
-			}
-
-			// Validate company item exists
-			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem))
-			{
-				var createdRows = new List<ImportMapItemRowResult>();
-				foreach (var row in groupRows)
-				{
-					var rowResult = new ImportMapItemRowResult
-					{
-						RowNumber = row.RowNumber,
-						SubDistributorCode = row.SubDistributorCode,
-						SubDistributorName = subdDistributor.SubdName,
-						Principal = row.Principal,
-						CompanyItemCode = row.CompanyItemCode,
-						CompanyItemName = row.CompanyItemName,
-						SubdItemCode = row.SubdItemCode,
-						SubdItemName = row.SubdItemName,
-						IsSuccess = false,
-						Message = $"Company Item '{firstRow.CompanyItemCode}' not found."
-					};
-					rowResult.Issues.Add($"Company Item '{firstRow.CompanyItemCode}' not found.");
-					result.Rows.Add(rowResult);
-					createdRows.Add(rowResult);
-				}
-
-				var prepared = new PreparedItemGroup(createdRows) { Selected = false };
-				prepared.Issues.Add(new ImportMapItemIssue(firstRow.RowNumber, firstRow.SubdItemCode, $"Company Item '{firstRow.CompanyItemCode}' not found."));
 				result.PreparedGroups.Add(prepared);
 
 				continue;
@@ -407,42 +462,39 @@ public sealed class ImportMapItemService
 					$"Commit conflict for SubDistributor '{firstRow.SubDistributorCode}' and SubdItemCode '{subdItemCode}'. Existing mappings conflict with company item '{firstRow.CompanyItemCode}'.");
 			}
 
-			var subdItem = existingByCompanyItem ?? existingByCode;
-			if (subdItem is null)
+			if (existingByCompanyItem != null || existingByCode != null)
 			{
-				subdItem = new SubdItem
-				{
-					SubDistributorId = subdDistributor.SubDistributorId,
-					CompanyItemId = companyItem.CompanyItemId,
-					SubdItemCode = subdItemCode,
-					ItemName = firstRow.SubdItemName,
-					IsActive = true,
-					CreatedDate = DateTime.UtcNow,
-					UpdatedDate = DateTime.UtcNow,
-					CreatedBy = currentUserId,
-					UpdatedBy = currentUserId
-				};
+				var conflictInfo = "";
+				if (existingByCode != null)
+					conflictInfo += $"SubdItem code '{subdItemCode}' already exists. ";
+				if (existingByCompanyItem != null)
+					conflictInfo += $"This SubDistributor/CompanyItem mapping already exists. ";
+				throw new InvalidOperationException($"Cannot commit: {conflictInfo.Trim()} Please review the import and try again.");
+			}
 
-				context.SubdItems.Add(subdItem);
-				await context.SaveChangesAsync(cancellationToken);
-			}
-			else
+			var subdItem = new SubdItem
 			{
-				subdItem.CompanyItemId = companyItem.CompanyItemId;
-				subdItem.SubdItemCode = subdItemCode;
-				subdItem.ItemName = firstRow.SubdItemName;
-				subdItem.IsActive = true;
-				subdItem.UpdatedDate = DateTime.UtcNow;
-				subdItem.UpdatedBy = currentUserId;
-				await context.SaveChangesAsync(cancellationToken);
-			}
+				SubDistributorId = subdDistributor.SubDistributorId,
+				CompanyItemId = companyItem.CompanyItemId,
+				SubdItemCode = subdItemCode,
+				ItemName = firstRow.SubdItemName,
+				IsActive = true,
+				CreatedDate = DateTime.UtcNow,
+				UpdatedDate = DateTime.UtcNow,
+				CreatedBy = currentUserId,
+				UpdatedBy = currentUserId
+			};
+
+			context.SubdItems.Add(subdItem);
+			await context.SaveChangesAsync(cancellationToken);
 
 			var uomEntries = new Dictionary<string, UomEntry>();
 			foreach (var row in subdItemRows)
 			{
 				if (!string.IsNullOrWhiteSpace(row.UomName) && row.Conversion > 0 && row.Price > 0)
 				{
-					uomEntries[row.UomName] = new UomEntry
+					var canonicalUom = CanonicalizeUomName(row.UomName);
+					uomEntries[canonicalUom] = new UomEntry
 					{
 						Conversion = (int)row.Conversion,
 						Price = row.Price
@@ -664,11 +716,21 @@ public sealed class ImportMapItemService
 			{
 				AddError(row.RowNumber, "SubdItem name must be unique within the item group.");
 			}
+
+			if (IsPieceUom(row.UOM) && row.Conversion != 1)
+			{
+				AddError(row.RowNumber, "UOM 'Piece/PCS' must have conversion 1.");
+			}
+
+			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
+			{
+				AddError(row.RowNumber, "Only UOM 'Piece/PCS' can have conversion 1.");
+			}
 		}
 
 		var duplicateUomGroups = rows
 			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
-			.GroupBy(row => Normalize(row.UOM))
+			.GroupBy(row => NormalizeUomKey(row.UOM))
 			.Where(group => group.Count() > 1)
 			.ToList();
 
@@ -696,6 +758,22 @@ public sealed class ImportMapItemService
 		}
 
 		return errors;
+	}
+
+	private static bool IsPieceUom(string? uom)
+	{
+		var normalized = Normalize(uom ?? string.Empty);
+		return normalized is "piece" or "pcs";
+	}
+
+	private static string NormalizeUomKey(string? uom)
+	{
+		return IsPieceUom(uom) ? "piece" : Normalize(uom ?? string.Empty);
+	}
+
+	private static string CanonicalizeUomName(string? uom)
+	{
+		return IsPieceUom(uom) ? "Piece" : (uom ?? string.Empty).Trim();
 	}
 
 	private static void MergeRowErrors(
