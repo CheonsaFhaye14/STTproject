@@ -8,7 +8,7 @@
 @using Microsoft.JSInterop
 @using STTproject.Features.User.SalesInvoice.Components.Sections
 @using STTproject.Services
-@using STTproject.Shared.Components 
+@using STTproject.Shared.Components
 @inject ISalesInvoiceService salesInvoiceService
 @inject IHomeService homeService
 @inject IUserContextService userContext
@@ -21,7 +21,9 @@
 @implements IAsyncDisposable
 
 @rendermode InteractiveServer
-<button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
+<button class="btn-secondary" @onclick="GoBackToHome" title="Press Esc to go back">
+    <i class="fa-solid fa-arrow-left"></i> Back
+</button>
 <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
              OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
@@ -34,70 +36,73 @@
 }
 
 <div class="top-buttons">
-    <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">Download Template</button>
-    <button class="btn-primary" type="button" @onclick="OpenImportFilePicker" disabled="@(invoice.SubdistributorId <= 0)">Import</button>
-    <InputFile id="salesinvoice-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
-</div>
-
-<ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
-              OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
-
-<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
-              OnErrorConfirm="CloseErrorModal" />
-
-<ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
-              Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
-              OnNo="CancelAddItemsConfirm" />
-
-<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
-              OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
-
-<ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
-              Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
-
-<ConfirmModal Show="showImportConfirmModal" Title="Import Sales Invoices"
-              Message="@($"Import invoices from Excel file to [{subdList.FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId)?.SubdName ?? "Unknown"}]?")"
-              OnYes="ConfirmImport" OnNo="CancelImport" />
-
-<ImportSalesInvoice Show="showImportResultsModal" ImportResult="lastImportResult" OnClose="CloseImportResultsModal" OnCommit="CommitSelectedImportedInvoices" />
-
-<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
-               OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"
-               SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />
-
-@if (isSaved)
-{
-    <div class="item-actions">
-        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
-        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
+    <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">Download
+        Template</button>
+        <button class="btn-primary" type="button" @onclick="OpenImportFilePicker"
+                disabled="@(invoice.SubdistributorId <= 0)">Import</button>
+        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
     </div>
-}
 
-<AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
-                 OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-                 AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-                 OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
+    <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
+                  OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
 
-<EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-                  OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
-                  OnBeforeSave="OnEditItemsBeforeSave" />
+    <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
+                  OnErrorConfirm="CloseErrorModal" />
 
-<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-                   AvailableUoms="availableUoms" />
+    <ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
+                  Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
+                  OnNo="CancelAddItemsConfirm" />
 
+    <ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
+                  OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
 
+    <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
+                  Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
 
-<div class="commit-actions">
-    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-            disabled="@(invoice.SubdistributorId <= 0)">
-        Clear Draft
-    </button>
+    <ConfirmModal Show="showImportConfirmModal" Title="Import Sales Invoices"
+                  Message="@($"Import invoices from Excel file to [{subdList.FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId)?.SubdName ?? "Unknown"}]?")"
+                  OnYes="ConfirmImport" OnNo="CancelImport" />
+
+    <ImportSalesInvoice Show="showImportResultsModal" ImportResult="lastImportResult" OnClose="CloseImportResultsModal"
+                        OnCommit="CommitSelectedImportedInvoices" />
+
+    <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
+                   OnDraftChanged="PersistDraftAsync" Customers="customers" CustomerBranches="customerBranches"
+                   SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />
+
     @if (isSaved)
     {
-        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
-        <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
+        <div class="item-actions">
+            <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
+            <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
+        </div>
     }
-</div>
+
+    <AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
+                     OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                     AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
+                     OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
+
+    <EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
+                      OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
+                      OnBeforeSave="OnEditItemsBeforeSave" />
+
+    <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                       AvailableUoms="availableUoms" />
+
+
+
+    <div class="commit-actions">
+        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+                disabled="@(invoice.SubdistributorId <= 0)">
+            Clear Draft
+        </button>
+        @if (isSaved)
+        {
+            <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
+            <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
+        }
+    </div>
 
 
 

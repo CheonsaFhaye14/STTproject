@@ -40,8 +40,15 @@
                              Items="CompanyItemsForDropdown.ToList()" Value="@SelectedCompanyItemDisplayName"
                              ValueChanged="HandleCompanyItemValueChanged" OnSelected="OnAutocompleteSelected"
                              OnConfirmed="OnCompanyItemConfirmed" Placeholder="-- Select Company Item --"
-                             IsDisabled="@(!IsSubDistributorSelected)" ItemLabel="@(item => GetCompanyItemLabel(item))"
-                             ShowAllOnOpen="true" />
+                             IsDisabled="@(!IsSubDistributorSelected || CompanyItemsForDropdown.Count == 0)"
+                             ItemLabel="@(item => GetCompanyItemLabel(item))" ShowAllOnOpen="true" />
+        @if (IsSubDistributorSelected && CompanyItemsForDropdown.Count == 0)
+        {
+            <span class="info-text" style="color: #ff9800; margin-top: 5px; display: block;">
+                <i class="fa fa-info-circle"></i> No company items available for mapping. All items are already mapped for
+                this selection.
+            </span>
+        }
         @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))
         {
             <span class="error-text">@GetFieldError(MapItemValidation.Form.CompanyItem.Key)</span>

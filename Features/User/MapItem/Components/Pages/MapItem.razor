@@ -14,11 +14,12 @@
 @inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
 @inject STTproject.Features.User.MapItem.Services.ImportMapItemService importMapItemService
 @inject STTproject.Features.User.MapItem.Services.MapItemDraftService draftService
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <div>
     <!-- SUB DISTRIBUTOR + SEARCH + LOCATION -->
-    <button class="btn-primary" @onclick="GoBackToHome">Go Back (Esc)</button>
+    <button class="btn-secondary" @onclick="GoBackToHome" title="Press Esc to go back">
+        <i class="fa-solid fa-arrow-left"></i> Back
+    </button>
 
     <div class="header-with-search">
         <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>

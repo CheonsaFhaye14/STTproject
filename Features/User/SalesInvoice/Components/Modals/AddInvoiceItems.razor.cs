@@ -383,6 +383,13 @@ SelectedSubdistributorId);
 
     private Task HandleDraftFieldBlur(FocusEventArgs _)
     {
+        if (!HasAnyDraftInput())
+        {
+            ShowValidationErrors = false;
+            ValidationErrors.Clear();
+            return Task.CompletedTask;
+        }
+
         ShowValidationErrors = true;
         ValidateDraft();
         return Task.CompletedTask;
@@ -393,6 +400,13 @@ SelectedSubdistributorId);
         if (skipNextSkuBlurValidation)
         {
             skipNextSkuBlurValidation = false;
+            return Task.CompletedTask;
+        }
+
+        if (!HasAnyDraftInput())
+        {
+            ShowValidationErrors = false;
+            ValidationErrors.Clear();
             return Task.CompletedTask;
         }
 
@@ -419,6 +433,15 @@ SelectedSubdistributorId);
         {
             ValidateDraft();
         }
+    }
+
+    private bool HasAnyDraftInput()
+    {
+        return !string.IsNullOrWhiteSpace(NewItem.ItemCode)
+            || !string.IsNullOrWhiteSpace(NewItem.ItemName)
+            || NewItem.ItemsUomId != 0
+            || NewItem.SubdItemId != 0
+            || NewItem.Quantity != 1;
     }
 
     private string GetFieldError(string fieldKey)
