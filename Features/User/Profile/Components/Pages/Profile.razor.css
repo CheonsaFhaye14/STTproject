@@ -224,21 +224,7 @@
             font-size: 0.875rem;
             padding: 0.4em 0.8em;
             border-radius: 12px;
-        }
-
-        .bg-violet {
-            background-color: var(--violet-primary);
-            color: white;
-        }
-
-        .bg-success {
-            background-color: #10b981;
-            color: white;
-        }
-
-        .bg-danger {
-            background-color: #ef4444;
-            color: white;
+            color: black;
         }
 
         /* Modal Styles */

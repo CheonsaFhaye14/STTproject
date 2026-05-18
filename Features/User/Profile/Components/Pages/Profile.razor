@@ -27,14 +27,15 @@
             <i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage
         </div>
     }
-    else if (!string.IsNullOrEmpty(SuccessMessage))
-    {
-        <div class="alert alert-success">
-            <i class="fa-solid fa-check-circle"></i> @SuccessMessage
-        </div>
-    }
     else if (CurrentUser != null)
     {
+        @if (!string.IsNullOrEmpty(SuccessMessage))
+        {
+            <div class="alert alert-success">
+                <i class="fa-solid fa-check-circle"></i> @SuccessMessage
+            </div>
+        }
+
         <div class="profile-card">
             @if (IsEditMode)
             {
@@ -79,7 +80,7 @@
                                     <div class="detail-item">
                                         <label class="detail-label">Role:</label>
                                         <span class="detail-value">
-                                            <span class="badge bg-violet">@(string.IsNullOrEmpty(CurrentUser.Role) ? "No role assigned" : CurrentUser.Role)</span>
+                                            <span class="badge">@CurrentUser.Role</span>
                                         </span>
                                     </div>
                                     <div class="detail-item">

@@ -94,6 +94,7 @@ public partial class Profile
                             UpdatedDate = CurrentUser.UpdatedDate,
                             Password = CurrentUser.Password
                         };
+                        await InvokeAsync(StateHasChanged);
                     }
                 }
             }
@@ -109,6 +110,7 @@ public partial class Profile
         finally
         {
             IsLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -151,12 +153,20 @@ public partial class Profile
 
             if (success)
             {
+                CurrentUser.Role = EditingUser.Role;
                 CurrentUser.FullName = EditingUser.FullName;
                 CurrentUser.Email = EditingUser.Email;
                 CurrentUser.UpdatedDate = DateTime.UtcNow;
 
                 IsEditMode = false;
                 SuccessMessage = "Profile updated successfully!";
+                
+                // Clear success message after 3 seconds
+                _ = Task.Delay(3000).ContinueWith(_ =>
+                {
+                    SuccessMessage = null;
+                    InvokeAsync(StateHasChanged);
+                });
             }
             else
             {
