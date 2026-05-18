@@ -82,8 +82,8 @@
     @if (showConfirmModal)
     {
         <ConfirmModal Show="showConfirmModal" Title="@modalTitle" Message="@modalMessage" OnYes="ConfirmAction"
-                      OnNo="CancelConfirmation">
-            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary))
+                      OnNo="CancelConfirmation" ErrorMessage="@itemActionErrorMessage" ShowError="@(!string.IsNullOrWhiteSpace(itemActionErrorMessage))" OnErrorConfirm="CancelConfirmation">
+            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary) && string.IsNullOrWhiteSpace(itemActionErrorMessage))
             {
                 <div class="modal-help">
                     <div><strong>SKU:</strong> @itemCode</div>

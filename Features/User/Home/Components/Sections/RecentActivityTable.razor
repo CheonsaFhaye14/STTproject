@@ -1,4 +1,5 @@
 ﻿@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
 @using STTproject.Services
 @using System.Linq
 @using STTproject.Features.User.Home.Components.Modals
@@ -33,8 +34,8 @@
         </div>
 
         <div class="filter-group">
-            <label>CREATED DATE</label>
-            <input type="date" @bind="selectedDateFilter" />
+            <label>INVOICE DATE</label>
+            <InputDate @bind-Value="selectedDateFilter" TValue="System.DateOnly?" />
         </div>
 
     </div>
@@ -95,6 +96,7 @@
                     <th>Sales Invoice Date</th>
                     <th>SubDistributor Name</th>
                     <th>Customer Name</th>
+                    <th>Created Date</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -108,8 +110,8 @@
                             <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
                             <td>@row.SubdName</td>
                             <td>@row.CustomerName</td>
-                            <td>
-                                <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                            <td>@row.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td>
+                             <td>   <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
                             </td>
                         </tr>
                     }

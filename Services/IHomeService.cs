@@ -304,6 +304,7 @@ public class HomeService : IHomeService
                 SalesInvoiceId = si.SalesInvoiceId,
                 InvoiceCode = si.SalesInvoiceCode,
                 SalesInvoiceDate = si.SalesInvoiceDate,
+                CreatedDate = si.CreatedDate,
                 SubdName = si.SubDistributor.SubdName,
                 CustomerName = si.Customer != null ? si.Customer.CustomerName : string.Empty
             })
@@ -471,6 +472,7 @@ public sealed class HomeSalesInvoiceFlatRow
     public int SalesInvoiceId { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
     public DateOnly SalesInvoiceDate { get; set; }
+    public DateTime CreatedDate { get; set; }
     public string SubdName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
 }

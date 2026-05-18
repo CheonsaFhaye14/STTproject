@@ -45,10 +45,10 @@ namespace STTproject.Features.User.Home.Components.Sections
                     query = query.Where(r => r.SubdName.Contains(selectedSubdNameFilter, StringComparison.OrdinalIgnoreCase));
                 }
 
-                // Filter by Date
+                // Filter by Date (match batches whose invoice date range includes the selected date)
                 if (selectedDateFilter.HasValue)
                 {
-                    query = query.Where(r => r.BatchCreatedDate == selectedDateFilter.Value);
+                    query = query.Where(r => r.OldestInvoiceDate <= selectedDateFilter.Value && r.LatestInvoiceDate >= selectedDateFilter.Value);
                 }
 
                 // Sort

@@ -1118,9 +1118,26 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             await ValidateFormAsync();
 
-            if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue || !uomEntries.Any() ||
-    !uomEntries.Any(x => x.Value.Price.HasValue))
+            if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
             {
+                return;
+            }
+
+            // If there are no UOM entries or no priced UOMs, show an error on the confirmation modal when adding
+            if (!uomEntries.Any() || !uomEntries.Any(x => x.Value.Price.HasValue))
+            {
+                if (!IsEditingItem)
+                {
+                    modalTitle = "Add Item";
+                    modalMessage = string.Empty;
+                    pendingConfirmAction = ConfirmActionKind.Add;
+                    confirmedCompanyItemSummary = GetSelectedCompanyItemName();
+                    itemActionErrorMessage = "At least one UOM with a price must be added before adding this item.";
+                    showConfirmModal = true;
+                    await PersistDraftAsync();
+                    return;
+                }
+
                 return;
             }
 
