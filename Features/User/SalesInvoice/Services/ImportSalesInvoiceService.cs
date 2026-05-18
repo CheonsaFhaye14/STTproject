@@ -143,7 +143,7 @@ public sealed class ImportSalesInvoiceService
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		var parsedRows = ReadRows(worksheet, headers, result, customerByCode, branchesByCustomerId, subdItemByCode);
+		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, branchesByCustomerId, subdItemByCode);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -404,8 +404,8 @@ public sealed class ImportSalesInvoiceService
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
 		ImportSalesInvoiceResult result,
-		IReadOnlyDictionary<string, Customer> customerByCode,
-		IReadOnlyDictionary<int, List<CustomerBranch>> branchesByCustomerId,
+		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
+		IReadOnlyDictionary<int, List<STTproject.Data.CustomerBranch>> branchesByCustomerId,
 		IReadOnlyDictionary<string, SubdItem> subdItemByCode)
 	{
 		var rows = new List<ImportedInvoiceRow>();

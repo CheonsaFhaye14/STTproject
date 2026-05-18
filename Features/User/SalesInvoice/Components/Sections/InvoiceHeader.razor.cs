@@ -5,6 +5,8 @@ using STTproject.Shared.Components;
 using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;
+using CustomerDataModel = STTproject.Data.Customer;
+using CustomerBranchDataModel = STTproject.Data.CustomerBranch;
 
 
 namespace STTproject.Features.User.SalesInvoice.Components.Sections;
@@ -15,8 +17,8 @@ public partial class InvoiceHeader
     private ElementReference invoiceDateInput;
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
-    private GenericAutocomplete<Customer>? customerNameAutocomplete;
-    private GenericAutocomplete<CustomerBranch>? customerBranchAutocomplete;
+    private GenericAutocomplete<CustomerDataModel>? customerNameAutocomplete;
+    private GenericAutocomplete<CustomerBranchDataModel>? customerBranchAutocomplete;
     private ElementReference saveButton;
     private IJSObjectReference? jsModule;
     [Parameter] public EventCallback OnDraftChanged { get; set; }
@@ -449,13 +451,13 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId, cancellationToken);
     }
 
-    [Parameter] public List<Customer> Customers { get; set; } = new();
-    [Parameter] public List<CustomerBranch> CustomerBranches { get; set; } = new();
+    [Parameter] public List<CustomerDataModel> Customers { get; set; } = new();
+    [Parameter] public List<CustomerBranchDataModel> CustomerBranches { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
 
-    private List<CustomerBranch> FilteredCustomerBranches { get; set; } = new();
+    private List<CustomerBranchDataModel> FilteredCustomerBranches { get; set; } = new();
 
-    private IEnumerable<Customer> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId
+    private IEnumerable<CustomerDataModel> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId
 && c.IsActive);
 
     protected override void OnParametersSet()
@@ -501,7 +503,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         }
     }
 
-    private Task HandleCustomerAutocompleteSelected(Customer? customer)
+    private Task HandleCustomerAutocompleteSelected(CustomerDataModel? customer)
     {
         if (customer is null)
         {
@@ -525,7 +527,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         return OnDraftChanged.InvokeAsync();
     }
 
-    private Task HandleCustomerBranchAutocompleteSelected(CustomerBranch? branch)
+    private Task HandleCustomerBranchAutocompleteSelected(CustomerBranchDataModel? branch)
     {
         customerBranchEnterPrimed = false;
 
@@ -592,7 +594,7 @@ StringComparison.OrdinalIgnoreCase));
             Invoice.CustomerType = string.Empty;
             Invoice.CustomerAddress = string.Empty;
             Invoice.CustomerBranchId = 0;
-            FilteredCustomerBranches = new List<CustomerBranch>();
+            FilteredCustomerBranches = new List<CustomerBranchDataModel>();
             return;
         }
 

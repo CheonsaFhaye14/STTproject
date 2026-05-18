@@ -5,6 +5,7 @@ using STTproject.Services;
 using STTproject.Features.User.MapItem.Services;
 using STTproject.Features.Login.Services;
 using STTproject.Features.User.Profile.Services;
+using STTproject.Features.User.Customer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +27,7 @@ builder.Services.AddScoped<ISalesInvoiceService, SalesInvoiceService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<AddUomService>();
 builder.Services.AddScoped<MapItemDraftService>();
 builder.Services.AddScoped<DownloadTemplateService>();

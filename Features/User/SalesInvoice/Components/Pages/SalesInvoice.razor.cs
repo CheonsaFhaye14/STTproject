@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using STTproject.Data;
+using CustomerDataModel = STTproject.Data.Customer;
+using CustomerBranchDataModel = STTproject.Data.CustomerBranch;
 using STTproject.Features.User.SalesInvoice.Components.Modals;
 using STTproject.Features.User.SalesInvoice.Services;
 using STTproject.Models;
@@ -767,8 +769,8 @@ public partial class SalesInvoice
     List<SubdItem> subdItems = new();
     List<ItemsUom> availableUoms = new();
     List<SubDistributor> subdList = new();
-    List<Customer> customers = new();
-    List<CustomerBranch> customerBranches = new();
+    List<CustomerDataModel> customers = new();
+    List<CustomerBranchDataModel> customerBranches = new();
     private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
 
     [Parameter]

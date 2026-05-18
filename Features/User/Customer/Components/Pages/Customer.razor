@@ -1,0 +1,142 @@
+@page "/customer"
+@rendermode InteractiveServer
+
+<div class="customer-list-container">
+    <div class="customer-header">
+        <h4>Customers & Branches</h4>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading customer information...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage
+        </div>
+    }
+    else if (CustomerData != null)
+    {
+        <!-- Sub-Distributor Info Card -->
+        <div class="subd-info-card mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fa-solid fa-building"></i> Assigned Sub-Distributor
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="info-item">
+                                <label class="info-label">Sub-Distributor Code:</label>
+                                <span class="info-value">@CustomerData.SubDistributor.SubdCode</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="info-item">
+                                <label class="info-label">Sub-Distributor Name:</label>
+                                <span class="info-value">@CustomerData.SubDistributor.SubdName</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="info-item">
+                                <label class="info-label">City:</label>
+                                <span class="info-value">@CustomerData.SubDistributor.CityMunicipality</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="info-item">
+                                <label class="info-label">Province:</label>
+                                <span class="info-value">@CustomerData.SubDistributor.Province</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customers Table -->
+        @if (CustomerData.Customers.Any())
+        {
+            <div class="customers-section">
+                <div class="section-header mb-3">
+                    <h5><i class="fa-solid fa-users"></i> Active Customers (@CustomerData.Customers.Count)</h5>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 15%;">Customer Code</th>
+                                <th style="width: 20%;">Customer Name</th>
+                                <th style="width: 15%;">Type</th>
+                                <th style="width: 20%;">Branch Name</th>
+                                <th style="width: 30%;">Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var customer in CustomerData.Customers)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-info">@customer.CustomerCode</span>
+                                    </td>
+                                    <td>
+                                        <strong>@customer.CustomerName</strong>
+                                    </td>
+                                    <td>@customer.CustomerType</td>
+                                    <td>
+                                        @if (customer.Branch != null)
+                                        {
+                                            <span>@customer.Branch.BranchName</span>
+                                            @if (customer.Branch.IsDefault)
+                                            {
+                                                <span class="badge bg-success ms-2" title="Default Branch">Default</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (customer.Branch != null)
+                                        {
+                                            <small>
+                                                @customer.Branch.AddressLine<br />
+                                                @customer.Branch.City, @customer.Branch.Province @customer.Branch.ZipCode
+                                            </small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="fa-solid fa-info-circle"></i> No active customers found for this sub-distributor.
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-warning">
+            <i class="fa-solid fa-triangle-exclamation"></i> You do not have an assigned sub-distributor.
+        </div>
+    }
+</div>
