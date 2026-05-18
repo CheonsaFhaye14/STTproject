@@ -12,13 +12,13 @@
 				@if (selectedItem.EffectivityDate.HasValue && selectedItem.EffectivityDate.Value > DateTime.Now)
 				{
 					<span class="price-scheduled-badge">
-						@($"Price increase scheduled {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreasePercent:0.##}%)")
+						@($"Price increase scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreasePercent:0.##}%)")
 					</span>
 				}
 				else if (selectedItem.HasRecentIncrease)
 				{
 					<span class="price-increased-badge">
-						Price increased @selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")
+							@($"Price increased on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")} (+{selectedItem.PriceIncreasePercent:0.##}%)")
 					</span>
 				}
 			}

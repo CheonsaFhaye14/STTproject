@@ -53,7 +53,7 @@
                                 @if (isPriceIncreaseScheduled)
                                 {
                                     <span class="badge bg-warning text-dark" style="align-self: flex-start;">
-                                        Price increase scheduled @item.EffectivityDate?.ToString("MMM dd, yyyy")
+                                        Price increase scheduled on @item.EffectivityDate?.ToString("MMM dd, yyyy")
                                         @if (item.PriceIncreasePercent.HasValue)
                                         {
                                             <span>@($" (+{item.PriceIncreasePercent.Value:N2}%)")</span>
