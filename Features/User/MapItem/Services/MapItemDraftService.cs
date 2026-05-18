@@ -22,15 +22,27 @@ public sealed class MapItemDraftService
 
     public async Task<MapItemDraftStore> LoadDraftStoreAsync(string storageKey)
     {
-        var module = await GetModuleAsync();
-        var draftJson = await module.InvokeAsync<string?>("loadSalesInvoiceDraft", storageKey);
+        try
+        {
+            var module = await GetModuleAsync();
+            var draftJson = await module.InvokeAsync<string?>("loadSalesInvoiceDraft", storageKey);
 
-        if (string.IsNullOrWhiteSpace(draftJson))
+            if (string.IsNullOrWhiteSpace(draftJson))
+            {
+                return new MapItemDraftStore();
+            }
+
+            return JsonSerializer.Deserialize<MapItemDraftStore>(draftJson) ?? new MapItemDraftStore();
+        }
+        catch (OperationCanceledException)
+        {
+            return new MapItemDraftStore();
+        }
+        catch (JSDisconnectedException)
         {
             return new MapItemDraftStore();
         }
 
-        return JsonSerializer.Deserialize<MapItemDraftStore>(draftJson) ?? new MapItemDraftStore();
     }
 
     public async Task ClearDraftStoreAsync(string storageKey)

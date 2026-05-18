@@ -707,16 +707,6 @@ public sealed class ImportMapItemService
 				AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
 			}
 
-			if (!string.Equals(Normalize(row.SubdItemCode), Normalize(firstRow.SubdItemCode), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "SubdItem code must be unique within the item group.");
-			}
-
-			if (!string.Equals(Normalize(row.SubdItemName), Normalize(firstRow.SubdItemName), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "SubdItem name must be unique within the item group.");
-			}
-
 			if (IsPieceUom(row.UOM) && row.Conversion != 1)
 			{
 				AddError(row.RowNumber, "UOM 'Piece/PCS' must have conversion 1.");
