@@ -1,0 +1,15 @@
+﻿.modal-footer {
+    padding-bottom: 15px;
+    padding-right:10px;
+    gap: 5px;
+}
+.btn-primary  {
+    padding: 5px 12px;
+    font-size: 16px;
+   
+}
+.btn-secondary {
+    padding: 5px 12px;
+    font-size: 16px;
+    
+}
