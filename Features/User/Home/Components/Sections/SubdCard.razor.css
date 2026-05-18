@@ -1,13 +1,15 @@
 ﻿.card {
     padding: 20px;
     border-radius: 15px;
-    width: 300px;
+    width: clamp(250px, 24vw, 300px);
+    max-width: 100%;
     border: none;
     text-align: center;
     transition: 0.3s;
     background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 40%, #9B85CC 100%);
     backdrop-filter: blur(12px);
     box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
+    box-sizing: border-box;
 }
 
     .card:hover {
@@ -53,12 +55,34 @@
 }
 
 .card h3 {
-    font-size: 1.3rem;
+    font-size: clamp(1rem, 1.6vw, 1.3rem);
     font-weight: bold;
     color: #3a2870;
 }
 
 .card p {
-    font-size: 0.85rem;
+    font-size: clamp(0.78rem, 1vw, 0.85rem);
     color: #6e5aaa;
+}
+
+@media (max-width: 768px) {
+    .card-content {
+        padding: 8px;
+    }
+
+    .card-content button {
+        width: 130px;
+        height: 32px;
+    }
+}
+
+@media (max-width: 480px) {
+    .card {
+        width: 100%;
+    }
+
+    .card-content button {
+        width: 115px;
+        height: 30px;
+    }
 }

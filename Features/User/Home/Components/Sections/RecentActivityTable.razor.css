@@ -1,14 +1,16 @@
 ﻿/* ACTIVITY */
 .activity {
     background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 40%, #9B85CC 100%);
-    padding: 20px;
+    padding: clamp(12px, 2vw, 20px);
     border-radius: 15px;
-    margin-left: 70px;
-    margin-right: 70px;
-    margin-top: 50px;
+    margin: 50px auto 1px;
+    width: min(100%, 1700px);
+    padding-left: clamp(12px, 4vw, 70px);
+    padding-right: clamp(12px, 4vw, 70px);
     height: 50vh;
     overflow-y: auto;
     box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
+    box-sizing: border-box;
 }
 
 .activity-header {
@@ -28,15 +30,17 @@
     width: 100%;
     border-collapse: separate;
     border-spacing: 0 10px;
+    table-layout: fixed;
 }
 
     .activity-table thead th {
         background: rgba(255, 255, 255, 0.6);
-        padding: 10px;
+        padding: clamp(8px, 1vw, 10px);
         font-weight: bold;
         text-align: center;
         box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
         color: #3a2870;
+        overflow-wrap: anywhere;
     }
 
         .activity-table thead th:first-child {
@@ -49,11 +53,12 @@
 
     .activity-table tbody td {
         background: rgba(255, 255, 255, 0.6);
-        padding: 10px;
+        padding: clamp(8px, 1vw, 10px);
         font-weight: bold;
         text-align: center;
         box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
         color: #5A4890;
+        overflow-wrap: anywhere;
     }
 
         .activity-table tbody td:first-child {
@@ -65,7 +70,7 @@
         }
 
     .activity-table .btn-primary {
-        width: 120px;
+        width: clamp(92px, 10vw, 120px);
         height: 32px;
         background-color: #7A65B0;
         border: none;
@@ -116,6 +121,7 @@
     gap: 10px;
     margin-bottom: 15px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .view-toggle {
@@ -153,4 +159,37 @@
     margin-bottom: 15px;
     box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
     color: #5A4890;
+}
+
+@media (max-width: 768px) {
+    .activity {
+        height: auto;
+        max-height: 60vh;
+        margin-top: 30px;
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .activity-table thead th,
+    .activity-table tbody td {
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .activity {
+        max-height: 65vh;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .activity-table thead th,
+    .activity-table tbody td {
+        font-size: 0.72rem;
+    }
+
+    .view-toggle .btn-toggle {
+        padding: 7px 14px;
+        font-size: 0.85rem;
+    }
 }

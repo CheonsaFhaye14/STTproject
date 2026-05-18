@@ -9,20 +9,21 @@
 @inject IUserContextService userContext
 @inject NavigationManager Navigation
 
+<div class="home-page">
+    <div class="title">
+        <h2>Hello, @UserFullName</h2>
+    </div>
 
-<div class="title">
-    <h2>Hello, @UserFullName</h2>
+    <!-- CARDS -->
+    <div class="cards">
+        @foreach (var subd in subdList)
+        {
+            <SubdCard Subdistributor="subd" OnInputInvoice="InputSalesInvoice" />
+        }
+    </div>
+
+    <!-- RECENT ACTIVITY Table to be moved-->
+    <RecentActivityTable UserId="userid" SubdList="subdList" />
 </div>
-
-<!-- CARDS -->
-<div class="cards">
-    @foreach (var subd in subdList)
-    {
-        <SubdCard Subdistributor="subd" OnInputInvoice="InputSalesInvoice" />
-    }
-</div>
-
-<!-- RECENT ACTIVITY Table to be moved-->
-<RecentActivityTable UserId="userid" SubdList="subdList" />
 
 
