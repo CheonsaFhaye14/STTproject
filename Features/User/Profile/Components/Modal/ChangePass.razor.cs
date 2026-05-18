@@ -13,6 +13,7 @@ public partial class ChangePass
     public int? UserId { get; set; }
 
     private bool ShowPasswordModal = false;
+    private bool ShowConfirmationModal = false;
 
     private string? CurrentPassword;
     private string? NewPassword;
@@ -43,43 +44,54 @@ public partial class ChangePass
         }
     }
 
+    private async Task ShowConfirmationAsync()
+    {
+        // Validate form before showing confirmation
+        if (string.IsNullOrWhiteSpace(CurrentPassword))
+        {
+            PasswordErrorMessage = "Current password is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(NewPassword))
+        {
+            PasswordErrorMessage = "New password is required.";
+            return;
+        }
+
+        if (NewPassword.Length < 6)
+        {
+            PasswordErrorMessage = "New password must be at least 6 characters long.";
+            return;
+        }
+
+        if (NewPassword != ConfirmPassword)
+        {
+            PasswordErrorMessage = "New password and confirm password do not match.";
+            return;
+        }
+
+        if (CurrentPassword == NewPassword)
+        {
+            PasswordErrorMessage = "New password must be different from current password.";
+            return;
+        }
+
+        ShowConfirmationModal = true;
+    }
+
+    private void CloseConfirmation()
+    {
+        ShowConfirmationModal = false;
+    }
+
     private async Task ChangePasswordAsync()
     {
         try
         {
             PasswordErrorMessage = null;
             IsSubmitting = true;
-
-            // Validation
-            if (string.IsNullOrWhiteSpace(CurrentPassword))
-            {
-                PasswordErrorMessage = "Current password is required.";
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(NewPassword))
-            {
-                PasswordErrorMessage = "New password is required.";
-                return;
-            }
-
-            if (NewPassword.Length < 6)
-            {
-                PasswordErrorMessage = "New password must be at least 6 characters long.";
-                return;
-            }
-
-            if (NewPassword != ConfirmPassword)
-            {
-                PasswordErrorMessage = "New password and confirm password do not match.";
-                return;
-            }
-
-            if (CurrentPassword == NewPassword)
-            {
-                PasswordErrorMessage = "New password must be different from current password.";
-                return;
-            }
+            ShowConfirmationModal = false;
 
             if (!UserId.HasValue || ProfileService == null)
             {
@@ -90,8 +102,8 @@ public partial class ChangePass
             // Call the service to change password
             var success = await ProfileService.ChangePasswordAsync(
                 UserId.Value,
-                CurrentPassword,
-                NewPassword
+                CurrentPassword!,
+                NewPassword!
             );
 
             if (success)

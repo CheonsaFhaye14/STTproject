@@ -38,7 +38,7 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn-save" @onclick="() => ChangePasswordAsync()" disabled="@IsSubmitting">
+                <button class="btn-save" @onclick="() => ShowConfirmationAsync()" disabled="@IsSubmitting">
                     <i class="fa-solid fa-check"></i> @(IsSubmitting ? "Changing..." : "Change Password")
                 </button>
                 <button class="btn-secondary" @onclick="() => CloseModal()" disabled="@IsSubmitting">
@@ -47,4 +47,27 @@
             </div>
         </div>
     </div>
+}
+
+@if (ShowConfirmationModal)
+{
+    <div class="modal-overlay" @onclick="() => CloseConfirmation()">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h4><i class="fa-solid fa-exclamation-triangle"></i> Confirm Password Change</h4>
+                <button class="btn-secondary" @onclick="() => CloseConfirmation()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to change your password? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-save" @onclick="() => ChangePasswordAsync()" disabled="@IsSubmitting">
+                    <i class="fa-solid fa-check"></i> Yes, Change Password
+                </button>
+                <button class="btn-secondary" @onclick="() => CloseConfirmation()" disabled="@IsSubmitting">
+                    <i class="fa-solid fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+        </div>
 }

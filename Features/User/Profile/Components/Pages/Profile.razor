@@ -79,7 +79,7 @@
                                     <div class="detail-item">
                                         <label class="detail-label">Role:</label>
                                         <span class="detail-value">
-                                            <span class="badge bg-violet">@CurrentUser.Role</span>
+                                            <span class="badge bg-violet">@(string.IsNullOrEmpty(CurrentUser.Role) ? "No role assigned" : CurrentUser.Role)</span>
                                         </span>
                                     </div>
                                     <div class="detail-item">

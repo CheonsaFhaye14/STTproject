@@ -1,6 +1,3 @@
-@using Microsoft.AspNetCore.Components.Routing
-@using STTproject.Services
-
 @inherits LayoutComponentBase
 
 @inject IUserContextService userContext
@@ -11,11 +8,8 @@
     <!-- Sidebar (full height, left) -->
     <nav class="@sidebarClass">
 
-        <!-- Sidebar Header: Hamburger + Encoder -->
+        <!-- Sidebar Header: Encoder -->
         <div class="sidebar-header">
-            <button class="hamburger-btn" @onclick="ToggleSidebar">
-                <span class="bi bi-list"></span>
-            </button>
             <h5 class="sidebar-label">Encoder</h5>
         </div>
 
@@ -69,7 +63,7 @@
     <!-- Right Column: TopBar + Content -->
     <div class="right-column">
 
-        <UserTopBar />
+        <UserTopBar OnHamburgerClick="ToggleSidebar" />
 
         <main class="main-content">
             @Body
@@ -84,8 +78,10 @@
 
     private string sidebarClass => sidebarOpen ? "sidebar sidebar-open" : "sidebar sidebar-closed";
 
-    private void ToggleSidebar()
+    private Task ToggleSidebar()
     {
         sidebarOpen = !sidebarOpen;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 }

@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
 using STTproject.Components;
 using STTproject.Data;
 using STTproject.Services;

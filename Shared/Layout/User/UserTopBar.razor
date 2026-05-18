@@ -1,12 +1,18 @@
+
+
 <header class="user-topbar">
 
     <!-- Left Side -->
     <div class="topbar-left">
 
-        <button class="menu-btn"
-                @onclick="OnHamburgerClick">
-
-            <span class="bi bi-list"></span>
+        <button class="menu-btn" 
+        type="button" 
+        @onclick="() => OnHamburgerClick.InvokeAsync()">
+            <span class="hamburger-icon" aria-hidden="true">
+                <span></span>   
+                <span></span>
+                <span></span>
+            </span>
 
         </button>
 
@@ -35,3 +41,8 @@
     </div>
 
 </header>
+
+@code {
+    [Parameter]
+    public EventCallback OnHamburgerClick { get; set; }
+}

@@ -14,6 +14,17 @@ public partial class EditProfile
     public EventCallback OnCancel { get; set; }
 
     public bool IsSaving { get; set; } = false;
+    public bool ShowConfirmationModal { get; set; } = false;
+
+    private async Task ShowConfirmationAsync()
+    {
+        ShowConfirmationModal = true;
+    }
+
+    private void CloseConfirmation()
+    {
+        ShowConfirmationModal = false;
+    }
 
     private async Task OnSaveClick()
     {

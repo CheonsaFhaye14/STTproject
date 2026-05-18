@@ -14,18 +14,22 @@
     flex-direction: column;
     background: linear-gradient(180deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     overflow: hidden;
-    transition: width 0.3s ease, padding 0.3s ease;
+    transition: width 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
     min-height: 100vh;
 }
 
     .sidebar.sidebar-open {
         width: 260px;
         padding: 25px 18px;
+        opacity: 1;
+        pointer-events: auto;
     }
 
     .sidebar.sidebar-closed {
-        width: 72px;
-        padding: 25px 10px;
+        width: 0;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 
 /* Sidebar Header */
@@ -165,8 +169,7 @@
         flex-direction: column;
     }
 
-    .sidebar.sidebar-open,
-    .sidebar.sidebar-closed {
+    .sidebar.sidebar-open {
         width: 100%;
         min-height: unset;
     }
@@ -176,7 +179,7 @@
     }
 
     .sidebar.sidebar-closed {
-        padding: 10px 14px;
+        display: none;
     }
 
     .sidebar-menu {
