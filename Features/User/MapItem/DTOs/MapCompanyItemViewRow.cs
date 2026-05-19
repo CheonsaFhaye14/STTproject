@@ -11,4 +11,5 @@ public sealed class MapCompanyItemViewRow
     public decimal? PriceIncreasePercent { get; set; }
     public DateTime? RecentAppliedDate { get; set; }
     public bool HasRecentIncrease => RecentAppliedDate.HasValue;
+    public bool IsMapped { get; set; }
 }

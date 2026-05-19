@@ -43,8 +43,9 @@
                 {
                     var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
                     var isPriceIncreaseScheduled = item.EffectivityDate.HasValue && item.EffectivityDate.Value > DateTime.Now;
+                    var isMapped = item.IsMapped;
                     <tr @onclick="() => HandleRowClicked(item)"
-                        class="company-items-row @(isSelected ? "selected-row" : string.Empty)">
+                        class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
                         <td>@item.CompanyItemCode</td>
                         <td>@item.Category</td>
                         <td>

@@ -807,6 +807,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     UomName = string.Join(", ", group
                         .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
                         .Select(x => $"{x.UomName} - {x.Price:N2}"))
+                    ,
+                    IsMapped = subDistributorItems.Any(s => s.CompanyItemId == group.Key.CompanyItemId)
                 })
                 .OrderBy(x => x.CompanyItemCode)
                 .ToList();

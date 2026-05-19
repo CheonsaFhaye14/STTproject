@@ -1,14 +1,16 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
-    overflow-y: auto;
-}
-
-*, *::before, *::after {
-    box-sizing: border-box;
 }
 
 a, .btn-link {

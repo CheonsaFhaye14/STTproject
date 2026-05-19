@@ -111,3 +111,13 @@
         font-weight: bold;
         color: #3a2870;
     }
+
+  /* Mapped row styling */
+.company-items-row.mapped-row td {
+    background: rgba(58, 94, 255, 0.16);
+    color: #081458;
+}
+
+.company-items-row.mapped-row:hover td {
+    background: rgba(77, 88, 245, 0.28);
+}
