@@ -3,7 +3,7 @@
     padding: 16px;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
-    height: 65vh;
+    height: 60vh;
     overflow-y: auto;
 }
 
