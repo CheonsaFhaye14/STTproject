@@ -11,6 +11,8 @@ namespace STTproject.Features.User.SalesInvoice.Components.Modals;
 
 public partial class AddInvoiceItems
 {
+    private ElementReference PrincipalSelect;
+
     private ElementReference SkuCodeInput;
 
     private GenericAutocomplete<SubdItem>? itemNameAutocomplete;
@@ -43,6 +45,25 @@ public partial class AddInvoiceItems
     [Parameter] public DateOnly InvoiceDate { get; set; }
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
+    private string SelectedPrincipal { get; set; } = string.Empty;
+
+    private DateTime lastPrincipalEnterTime = DateTime.MinValue;
+
+    private List<SubdItem> FilteredAvailableItems => AvailableItems
+        .Where(i => i.SubDistributorId == SelectedSubdistributorId)
+        .Where(i => string.IsNullOrWhiteSpace(SelectedPrincipal)
+            || string.Equals(i.CompanyItem?.Principal, SelectedPrincipal, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<string> AvailablePrincipals => AvailableItems
+        .Where(i => i.SubDistributorId == SelectedSubdistributorId)
+        .Select(i => i.CompanyItem?.Principal)
+        .Where(p => !string.IsNullOrWhiteSpace(p))
+        .Select(p => p!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(p => p)
+        .ToList();
+
 
     private List<InputItemModel> modalItems = new();
     public InputItemModel NewItem { get; set; } = CreateNewItem();
@@ -52,7 +73,41 @@ public partial class AddInvoiceItems
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!string.IsNullOrWhiteSpace(SelectedPrincipal)
+            && !AvailablePrincipals.Any(p => string.Equals(p, SelectedPrincipal, StringComparison.OrdinalIgnoreCase)))
+        {
+            SelectedPrincipal = string.Empty;
+        }
+
         await UpdateCurrentUnitPriceAsync();
+    }
+
+    private Task OnPrincipalChanged(ChangeEventArgs e)
+    {
+        SelectedPrincipal = e.Value?.ToString() ?? string.Empty;
+
+        // Clear current draft fields when principal changes to avoid stale item/UOM selection.
+        ResetNewItem();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandlePrincipalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var timeSinceLastEnter = (DateTime.Now - lastPrincipalEnterTime).TotalMilliseconds;
+
+            if (timeSinceLastEnter < 500)
+            {
+                await Task.Delay(10);
+                await SkuCodeInput.FocusAsync();
+                lastPrincipalEnterTime = DateTime.MinValue;
+            }
+            else
+            {
+                lastPrincipalEnterTime = DateTime.Now;
+            }
+        }
     }
 
     private string NewSku
@@ -96,21 +151,23 @@ public partial class AddInvoiceItems
     {
         NewItem.ItemCode = sku;
 
-        var selected = AvailableItems
+        var selected = FilteredAvailableItems
             .FirstOrDefault(i => i.SubdItemCode.Equals(sku, StringComparison.OrdinalIgnoreCase) && i.SubDistributorId ==
 SelectedSubdistributorId);
 
         if (selected != null)
         {
+            SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
             CurrentSubdItem = selected;
             NewItem.SubdItemId = selected.SubdItemId;
-            NewItem.ItemName = selected.ItemName;
+            NewItem.ItemName = GetItemDisplayLabel(selected);
             NewItem.ItemsUomId = 0;
             CurrentUom = null;
             CurrentUnitPrice = null;
         }
         else
         {
+            SelectedPrincipal = string.Empty;
             CurrentSubdItem = null;
             NewItem.SubdItemId = 0;
             NewItem.ItemName = string.Empty;
@@ -127,6 +184,7 @@ SelectedSubdistributorId);
     {
         if (selected is null)
         {
+            SelectedPrincipal = string.Empty;
             NewItem.ItemCode = string.Empty;
             CurrentSubdItem = null;
             NewItem.SubdItemId = 0;
@@ -138,13 +196,34 @@ SelectedSubdistributorId);
             return Task.CompletedTask;
         }
 
-        NewItem.ItemName = selected.ItemName;
+    SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
+        NewItem.ItemName = GetItemDisplayLabel(selected);
         NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
         CurrentSubdItem = selected;
         NewItem.SubdItemId = selected.SubdItemId;
         NewItem.ItemsUomId = 0;
         CurrentUom = null;
         CurrentUnitPrice = null;
+        RevalidateIfNeeded();
+        _ = OnDraftChanged.InvokeAsync();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleItemNameValueChanged(string? value)
+    {
+        NewItem.ItemName = value ?? string.Empty;
+
+        if (!TryResolveSelectedItemByName())
+        {
+            SelectedPrincipal = string.Empty;
+            NewItem.ItemCode = string.Empty;
+            CurrentSubdItem = null;
+            NewItem.SubdItemId = 0;
+            NewItem.ItemsUomId = 0;
+            CurrentUom = null;
+            CurrentUnitPrice = null;
+        }
+
         RevalidateIfNeeded();
         _ = OnDraftChanged.InvokeAsync();
         return Task.CompletedTask;
@@ -207,11 +286,13 @@ SelectedSubdistributorId);
         CurrentUnitPrice ??= await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
         var lineTotalPrice = NewItem.Quantity * CurrentUnitPrice.Value;
 
+        var resolvedItemName = CurrentSubdItem?.ItemName ?? NewItem.ItemName;
+
         var existingItem = modalItems.FirstOrDefault(item =>
             item.SubdItemId == NewItem.SubdItemId &&
             item.ItemsUomId == NewItem.ItemsUomId &&
             item.ItemCode.Equals(NewItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
-            item.ItemName.Equals(NewItem.ItemName, StringComparison.OrdinalIgnoreCase));
+            item.ItemName.Equals(resolvedItemName, StringComparison.OrdinalIgnoreCase));
 
         if (existingItem != null)
         {
@@ -223,7 +304,7 @@ SelectedSubdistributorId);
             modalItems.Add(new InputItemModel
             {
                 ItemCode = NewItem.ItemCode,
-                ItemName = NewItem.ItemName,
+                ItemName = resolvedItemName,
                 SubdItemId = NewItem.SubdItemId,
                 ItemsUomId = NewItem.ItemsUomId,
                 Quantity = NewItem.Quantity,
@@ -307,6 +388,7 @@ SelectedSubdistributorId);
         CurrentSubdItem = null;
         CurrentUom = null;
         CurrentUnitPrice = null;
+        SelectedPrincipal = string.Empty;
         ShowValidationErrors = false;
         ValidationErrors.Clear();
         SaveErrorMessage = null;
@@ -368,6 +450,7 @@ SelectedSubdistributorId);
 
     private async Task HandleItemNameConfirmed()
     {
+        TryResolveSelectedItemByName();
         ShowValidationErrors = true;
         ValidateDraft();
 
@@ -378,6 +461,47 @@ SelectedSubdistributorId);
 
         await Task.Delay(10);
         await UomSelect.FocusAsync();
+    }
+
+    private bool TryResolveSelectedItemByName()
+    {
+        if (string.IsNullOrWhiteSpace(NewItem.ItemName))
+        {
+            return false;
+        }
+
+        var normalizedItemName = NewItem.ItemName;
+        var principalStart = normalizedItemName.LastIndexOf(" (", StringComparison.Ordinal);
+        if (principalStart > 0 && normalizedItemName.EndsWith(")", StringComparison.Ordinal))
+        {
+            normalizedItemName = normalizedItemName[..principalStart];
+        }
+
+        var selected = FilteredAvailableItems.FirstOrDefault(i =>
+            i.ItemName.Equals(normalizedItemName, StringComparison.OrdinalIgnoreCase));
+
+        if (selected is null)
+        {
+            return false;
+        }
+
+        SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
+        CurrentSubdItem = selected;
+        NewItem.SubdItemId = selected.SubdItemId;
+        NewItem.ItemCode = selected.SubdItemCode;
+        NewItem.ItemName = GetItemDisplayLabel(selected);
+        NewItem.ItemsUomId = 0;
+        CurrentUom = null;
+        CurrentUnitPrice = null;
+        return true;
+    }
+
+    private static string GetItemDisplayLabel(SubdItem item)
+    {
+        var principal = item.CompanyItem?.Principal;
+        return string.IsNullOrWhiteSpace(principal)
+            ? item.ItemName
+            : $"{item.ItemName} ({principal})";
     }
 
     private async Task HandleUomKeyDown(KeyboardEventArgs e)
