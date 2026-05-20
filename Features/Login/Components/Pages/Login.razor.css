@@ -122,7 +122,19 @@
 .password-input {
     padding-right: 40px;
 }
+    .password-toggle-icon {
+    position: absolute;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #868686;
+    right: 10px;
+    bottom: 17px;
+}
 
+.password-toggle-icon:hover {
+    color: #333;
+}
 
 
 
@@ -278,6 +290,7 @@
     .links {
         font-size: 12px;
     }
+
 }
 
 @media (max-height: 600px) {

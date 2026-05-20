@@ -28,10 +28,13 @@
                 <div class="input-group">
                     <label>Password</label>
                     <div class="password-wrapper">
-                        <input id="passwordInput" name="password" type="password" placeholder="Enter password" class="password-input" />
-               
-                       
+                        <input id="passwordInput" name="password" type="password" placeholder="Enter password" class="password-input" />   
+                                             <button type="button" class="password-toggle-icon" onclick="togglePasswordVisibility()"
+                            title="Show/hide password">
+                        <i id="toggleIcon" class="fas fa-eye"></i>
+                    </button>
                     </div>
+
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(loginErrorMessage))
@@ -66,3 +69,20 @@
         </div>
     </div>
 </div>
+
+<script>
+    function togglePasswordVisibility() {
+        const input = document.getElementById('passwordInput');
+        const icon = document.getElementById('toggleIcon');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+</script>
