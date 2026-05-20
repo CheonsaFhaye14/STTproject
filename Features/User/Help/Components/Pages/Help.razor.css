@@ -1,0 +1,16 @@
+.cards{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+.card-body{
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    overflow: hidden;
+    max-height: 500px; /* Adjust as needed */
+    padding: 15px;
+}
+
+.card-body.collapsed {
+    max-height: 0;
+    padding: 0 15px; /* Keep horizontal padding for better appearance */
+}

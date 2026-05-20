@@ -1,1 +1,111 @@
 @page "/help"
+<h1>Help</h1>
+<div class="cards">
+
+
+<div class="card">
+    <div class="card-header" @onclick="ToggleShortcutCollapse" style="cursor: pointer;">
+        <h5 class="card-title">Shortcut Keys</h5>
+    </div>
+    <div class="@GetCardBodyClass(IsShortcutCollapsed)">
+        <div class="card-section">
+            <h6>General Shortcuts</h6>
+            <div class="shortcut-keys">
+                <div class="shortcut-key">
+                    <span class="key">Esc</span>
+                    <span class="description">Close the current Modal or go back to Home Page</span>
+                </div>
+                <div class="shortcut-key">
+                    <span class="key">Tab or Enter</span>
+                    <span class="description">Move focus to the next input field or button</span>
+                </div>
+            </div>
+        </div>
+        <div class="card-section">
+            <h6>Sales Invoice Page</h6>
+            <div class="shortcut-keys">
+                <div class="shortcut-key">
+                    <span class="key">F3</span>
+                    <span class="description">Opens the Add Item Modal</span>
+                </div>
+                <div class="shortcut-key">
+                    <span class="key">F4</span>
+                    <span class="description">Opens the Edit Item Modal</span>
+                </div>
+                <div class="shortcut-key">
+                    <span class="key">Ctrl + S</span>
+                    <span class="description">Commit the current invoice or save items</span>
+                </div>
+                <div class="shortcut-key">
+                    <span class="key">Ctrl + D Not yet implemented</span>
+                    <span class="description">Delete the current invoice draft</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header" @onclick="ToggleManualCollapse" style="cursor: pointer;">
+        <h5 class="card-title">User Manual</h5>
+    </div>
+    <div class="@GetCardBodyClass(IsManualCollapsed)">
+        <h6>Getting Started</h6>
+        <p>Welcome to ENTRIÉL! This user manual will guide you through the features and functionalities of our application. Whether you're an admin or an encoder, you'll find helpful information to get started.</p>
+        <h6>Navigation</h6>
+        <p>Use the sidebar to navigate between different sections of the application. If sidebar is collapsed, you can expand it by clicking on the toggle button on the left side of the topbar.</p>
+        <h6>Creating Invoices</h6>
+        <p>To create an invoice, Go to home page and depending on which SubDistributor you want to input data for click the input invoice button.</p>
+        <p>Fill in the required fields and click the "Save" button to save the invoice header.</p>
+        <p>To add items to the invoice, click the "Add Item" button and fill in the items details or use the shortcut keys (F3). Click "Save" or (Ctrl+S) to add the item to the invoice.</p>
+        <p>To edit an item, click the "Edit" button next to the "Add item" button or use the shortcut keys (F4). Select the item you want to edit and make the necessary changes, click "Save" or (Ctrl+S) to update the item.</p>
+        <p>To delete an invoice draft, click the "Delete" button and confirm the action or use the shortcut keys (Ctrl+D).</p>
+        <h6>Downloading Template</h6>
+        <p>Download the Excel template from the Invoice Page click the "Download Template" button.</p>
+        <h6>Importing Data from Excel</h6>
+        <p>Fill in the required fields in the Excel template and save the file.</p>
+        <p>Go to the SubDistributor Input Invoice page and click the "Import" button and select the Excel file.</p>
+        <p>Review the imported data and click "Save" to add the items to the invoice.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header" @onclick="ToggleSupportCollapse" style="cursor: pointer;">
+        <h5 class="card-title">Contact Support</h5>
+    </div>
+    <div class="@GetCardBodyClass(IsSupportCollapsed)">
+        <p>If you need assistance, please contact our support team:</p>
+        <ul>
+            <li>Email: to be added</li>
+            <li>Phone: to be added</li>
+        </ul>
+    </div>
+</div>
+
+</div>
+
+
+@code{
+    private bool IsShortcutCollapsed { get; set; } = true;
+    private bool IsManualCollapsed { get; set; } = true;
+    private bool IsSupportCollapsed { get; set; } = true;
+
+    private string GetCardBodyClass(bool isCollapsed) => isCollapsed ? "card-body collapsed" : "card-body";
+
+    private void ToggleShortcutCollapse()
+    {
+        IsShortcutCollapsed = !IsShortcutCollapsed;
+    }
+
+    private void ToggleManualCollapse()
+    {
+        IsManualCollapsed = !IsManualCollapsed;
+    }
+
+    private void ToggleSupportCollapse()
+    {
+        IsSupportCollapsed = !IsSupportCollapsed;
+    }
+
+
+}
