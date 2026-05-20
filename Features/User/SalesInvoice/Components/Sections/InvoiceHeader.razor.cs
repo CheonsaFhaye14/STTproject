@@ -14,6 +14,7 @@ namespace STTproject.Features.User.SalesInvoice.Components.Sections;
 public partial class InvoiceHeader
 {
     private ElementReference invoiceNumberInput;
+    private ElementReference salesManNameInput;
     private ElementReference invoiceDateInput;
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
@@ -242,7 +243,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             }
             else
             {
-                await saveButton.FocusAsync();
+               await salesManNameInput.FocusAsync();
             }
         }
     }
@@ -306,7 +307,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
             }
             ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
             await Task.Delay(10);
-            await saveButton.FocusAsync();
+           await salesManNameInput.FocusAsync();
         }
     }
 
@@ -335,7 +336,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         }
         else
         {
-            await saveButton.FocusAsync();
+            await salesManNameInput.FocusAsync();
         }
     }
 
@@ -499,7 +500,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         }
         else
         {
-            await saveButton.FocusAsync();
+            await salesManNameInput.FocusAsync();
         }
     }
 
@@ -556,7 +557,42 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
         ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
         await Task.Delay(10);
-        await saveButton.FocusAsync();
+        await salesManNameInput.FocusAsync();
+    }
+
+    private Task HandleSalesManNameChanged()
+    {
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private async Task HandleSalesManNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrWhiteSpace(Invoice.SalesManName))
+            {
+                SetFieldError(SalesInvoiceValidation.Header.SalesManName.Key, SalesInvoiceValidation.Header.SalesManName.ErrorMessage);
+                return;
+            }
+
+            ClearFieldError(SalesInvoiceValidation.Header.SalesManName.Key);
+            await Task.Delay(10);
+            await saveButton.FocusAsync();
+        }
+    }
+
+    private Task HandleSalesManNameBlur(FocusEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(Invoice.SalesManName))
+        {
+            SetFieldError(SalesInvoiceValidation.Header.SalesManName.Key, SalesInvoiceValidation.Header.SalesManName.ErrorMessage);
+        }
+        else
+        {
+            ClearFieldError(SalesInvoiceValidation.Header.SalesManName.Key);
+        }
+
+        return Task.CompletedTask;
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

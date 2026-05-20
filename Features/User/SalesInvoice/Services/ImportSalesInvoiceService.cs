@@ -224,7 +224,8 @@ public sealed class ImportSalesInvoiceService
 					CustomerType = customer.CustomerType,
 					CustomerBranchId = customerBranch.CustomerBranchId,
 					CustomerBranchName = customerBranch.BranchName,
-					SubdistributorId = subDistributorId
+					SubdistributorId = subDistributorId,
+					SalesManName = firstRow.SalesManName
 				};
 
 				var items = new List<InputItemModel>();
@@ -422,6 +423,7 @@ public sealed class ImportSalesInvoiceService
 			var orderType = GetString(row, headers["OrderType"]);
 			var skuCode = GetString(row, headers["SkuCode"]);
 			var uom = GetString(row, headers["UOM"]);
+			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
 
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
 				string.IsNullOrWhiteSpace(customerCode) &&
@@ -519,6 +521,7 @@ public sealed class ImportSalesInvoiceService
 				customerCode,
 				customerBranch,
 				normalizedOrderType,
+				salesManName,
 				skuCode,
 				uom,
 				quantity));
@@ -585,6 +588,11 @@ public sealed class ImportSalesInvoiceService
 			if (header is "quantity")
 			{
 				headers.TryAdd("Quantity", cell.Address.ColumnNumber);
+			}
+
+			if (header is "salesman" or "salesmanname" or "salesman name" or "sales man")
+			{
+				headers.TryAdd("SalesManName", cell.Address.ColumnNumber);
 			}
 		}
 
@@ -739,6 +747,7 @@ public sealed class ImportSalesInvoiceService
 		string CustomerCode,
 		string CustomerBranch,
 		string OrderType,
+		string SalesManName,
 		string SkuCode,
 		string UOM,
 		int Quantity);

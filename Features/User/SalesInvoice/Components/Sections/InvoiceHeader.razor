@@ -91,7 +91,6 @@
             }
         </div>
 
-
         <div class="form-group">
             <label>Customer Type</label>
             <input @bind="Invoice.CustomerType" disabled />
@@ -100,6 +99,17 @@
         <div class="form-group">
             <label>Customer Address</label>
             <input @bind="Invoice.CustomerAddress" disabled />
+        </div>
+
+        <div class="form-group">
+            <label>@SalesInvoiceValidation.Header.SalesManName.Label<span class="required-asterisk"> *</span></label>
+            <input @ref="salesManNameInput" @bind="Invoice.SalesManName" @bind:event="oninput" disabled="@IsSaved"
+                   @bind:after="HandleSalesManNameChanged" @onkeydown="HandleSalesManNameKeyDown"
+                   @onblur="HandleSalesManNameBlur" />
+             @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.SalesManName.Key)))
+            {
+                <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.SalesManName.Key)</span>
+            }   
         </div>
     </div>
 

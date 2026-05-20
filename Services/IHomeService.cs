@@ -238,6 +238,7 @@ public class HomeService : IHomeService
                 SalesInvoiceId = si.SalesInvoiceId,
                 InvoiceNumber = si.SalesInvoiceCode,
                 InvoiceDate = si.SalesInvoiceDate,
+                SalesMan = si.SalesMan,
                 CreatedDate = si.CreatedDate,
                 TotalItems = si.SalesInvoiceItems.Count
             })
@@ -329,6 +330,7 @@ public class HomeService : IHomeService
                 InvoiceNumber = si.SalesInvoiceCode,
                 InvoiceDate = si.SalesInvoiceDate,
                 CreatedDate = si.CreatedDate,
+                SalesMan = si.SalesMan,
                 OrderType = si.OrderType,
                 CustomerName = si.Customer.CustomerName,
                 CustomerBranch = si.CustomerBranch.BranchName,
@@ -449,6 +451,7 @@ public sealed class HomeSalesInvoiceDetailRow
     public int SalesInvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = string.Empty;
     public DateOnly InvoiceDate { get; set; }
+    public string SalesMan { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; }
     public string OrderType { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;

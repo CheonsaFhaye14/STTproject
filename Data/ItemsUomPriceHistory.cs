@@ -19,7 +19,7 @@ public partial class ItemsUomPriceHistory
 
     public DateTime EffectivityDate { get; set; }
 
-    public DateTime AppliedDate { get; set; }
+    public DateTime? AppliedDate { get; set; }
 
     public DateTime CreatedDate { get; set; }
 

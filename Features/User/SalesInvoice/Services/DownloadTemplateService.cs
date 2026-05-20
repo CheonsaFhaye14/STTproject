@@ -54,11 +54,12 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 worksheet.Cell(1, 3).Value = "CustomerCode";
                 worksheet.Cell(1, 4).Value = "CustomerBranch";
                 worksheet.Cell(1, 5).Value = "OrderType";
-                worksheet.Cell(1, 6).Value = "SkuCode";
-                worksheet.Cell(1, 7).Value = "UOM";
-                worksheet.Cell(1, 8).Value = "Quantity";
+                worksheet.Cell(1, 6).Value = "SalesManName";
+                worksheet.Cell(1, 7).Value = "SkuCode";
+                worksheet.Cell(1, 8).Value = "UOM";
+                worksheet.Cell(1, 9).Value = "Quantity";
                 worksheet.Row(1).Style.Protection.Locked = true;
-                worksheet.Range("A2:H5000").Style.Protection.Locked = false;
+                worksheet.Range("A2:I5000").Style.Protection.Locked = false;
                 // Extra unlocked cells for user scratch space; the import parser ignores these columns.
                 worksheet.Range("I2:Z5000").Style.Protection.Locked = false;
                 worksheet.SheetView.FreezeRows(1);
@@ -113,7 +114,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 // UOM validation: dropdown from existing mapped UOMs
                 if (uomSourceRange != null)
                 {
-                    var uomRange = worksheet.Range("G2:G5000");
+                    var uomRange = worksheet.Range("H2:H5000");
                     var uomValidation = uomRange.CreateDataValidation();
                     uomValidation.List(uomSourceRange);
                     uomValidation.IgnoreBlanks = true;

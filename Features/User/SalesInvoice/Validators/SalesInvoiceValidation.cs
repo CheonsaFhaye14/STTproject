@@ -12,6 +12,7 @@ public static class SalesInvoiceValidation
         public static readonly SalesInvoiceField CustomerCode = new(nameof(CustomerCode), "Customer Code", true, "Customer code is required.");
         public static readonly SalesInvoiceField CustomerName = new(nameof(CustomerName), "Customer Name", true, "Customer name is required.");
         public static readonly SalesInvoiceField CustomerBranch = new(nameof(CustomerBranch), "Customer Branch", true, "Customer branch is required.");
+        public static readonly SalesInvoiceField SalesManName = new(nameof(SalesManName), "Sales Man Name", true, "Sales man name is required.");
     }
 
     public static class AddItem
@@ -49,6 +50,11 @@ public static class SalesInvoiceValidation
         else if (await invoiceNumberExistsAsync())
         {
             errors[Header.InvoiceNumber.Key] = "Sales invoice code already exists.";
+        }
+
+        if (string.IsNullOrWhiteSpace(invoice.SalesManName))
+        {
+            errors[Header.SalesManName.Key] = Header.SalesManName.ErrorMessage;
         }
 
         if (invoice.InvoiceDate == default)

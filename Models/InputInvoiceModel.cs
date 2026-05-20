@@ -13,5 +13,6 @@ namespace STTproject.Models
         public int CustomerBranchId { get; set; }
         public string CustomerBranchName { get; set; } = string.Empty;
         public int SubdistributorId { get; set; }
+        public string SalesManName { get; set; } = string.Empty;
     }
 }

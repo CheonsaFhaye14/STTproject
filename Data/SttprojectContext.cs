@@ -33,6 +33,12 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
+    public virtual DbSet<TestSalesInvoice> TestSalesInvoices { get; set; }
+
+    public virtual DbSet<TestSalesInvoiceCustomer> TestSalesInvoiceCustomers { get; set; }
+
+    public virtual DbSet<TestSalesInvoiceItem> TestSalesInvoiceItems { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -230,6 +236,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.SalesInvoiceCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.SalesMan).HasMaxLength(100);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.SalesInvoiceCreatedByNavigations)
@@ -361,6 +368,64 @@ public partial class SttprojectContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.SubdItemUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
+        });
+
+        modelBuilder.Entity<TestSalesInvoice>(entity =>
+        {
+            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__TestSale__BA05CD1A2BE487D1");
+
+            entity.ToTable("TestSalesInvoice");
+
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.SalesInvoiceCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SalesMan).HasMaxLength(100);
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<TestSalesInvoiceCustomer>(entity =>
+        {
+            entity.HasKey(e => e.SalesInvoiceCustomerId).HasName("PK__TestSale__9EF25C0C4C0DF44B");
+
+            entity.ToTable("TestSalesInvoiceCustomer");
+
+            entity.HasIndex(e => e.SalesInvoiceId, "IX_TestSalesInvoiceCustomer_SalesInvoiceId");
+
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.SalesInvoice).WithMany(p => p.TestSalesInvoiceCustomers)
+                .HasForeignKey(d => d.SalesInvoiceId)
+                .HasConstraintName("FK_TestSalesInvoiceCustomer_SalesInvoice");
+        });
+
+        modelBuilder.Entity<TestSalesInvoiceItem>(entity =>
+        {
+            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__TestSale__BA84EC6444C1EB4C");
+
+            entity.ToTable("TestSalesInvoiceItem");
+
+            entity.HasIndex(e => e.OrderType, "IX_TestSalesInvoiceItem_OrderType");
+
+            entity.HasIndex(e => e.SalesInvoiceCustomerId, "IX_TestSalesInvoiceItem_SalesInvoiceCustomerId");
+
+            entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.OrderType)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.SalesInvoiceCustomer).WithMany(p => p.TestSalesInvoiceItems)
+                .HasForeignKey(d => d.SalesInvoiceCustomerId)
+                .HasConstraintName("FK_SalesInvoiceItem_SalesInvoiceCustomer");
         });
 
         modelBuilder.Entity<User>(entity =>

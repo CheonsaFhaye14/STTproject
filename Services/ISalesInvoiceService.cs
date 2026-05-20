@@ -47,6 +47,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var subdItems = await context.SubdItems
             .AsNoTracking()
+            .Include(i => i.CompanyItem)
             .Where(i => i.SubDistributorId == subDistributorId && i.IsActive)
             .OrderBy(i => i.SubdItemCode)
             .ToListAsync(cancellationToken);
@@ -259,6 +260,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                         CustomerId = invoice.CustomerId,
                         CustomerBranchId = invoice.CustomerBranchId,
                         SubDistributorId = invoice.SubdistributorId,
+                        SalesMan = invoice.SalesManName,
                         CreatedBy = currentUserId,
                         UpdatedBy = currentUserId,
                         CreatedDate = DateTime.Now,
@@ -327,6 +329,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 existing.CustomerId = invoice.CustomerId;
                 existing.CustomerBranchId = invoice.CustomerBranchId;
                 existing.SubDistributorId = invoice.SubdistributorId;
+                existing.SalesMan = invoice.SalesManName;
                 existing.UpdatedBy = currentUserId;
                 existing.UpdatedDate = DateTime.Now;
 
@@ -457,6 +460,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 OrderType = si.OrderType,
                 CustomerId = si.CustomerId,
                 CustomerBranchId = si.CustomerBranchId,
+                SalesManName = si.SalesMan,
                 SubdistributorId = si.SubDistributorId
             })
             .FirstOrDefaultAsync(cancellationToken);
