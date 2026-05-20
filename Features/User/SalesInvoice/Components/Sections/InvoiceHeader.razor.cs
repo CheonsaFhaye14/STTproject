@@ -675,14 +675,33 @@ Invoice.CustomerBranchId))
 
     private static string FormatBranchAddress(CustomerBranch branch)
     {
-        var parts = new List<string> { branch.AddressLine, branch.City, branch.Province };
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(branch.AddressLine))
+        {
+            parts.Add(branch.AddressLine);
+        }
+
+        if (!string.IsNullOrWhiteSpace(branch.City))
+        {
+            parts.Add(branch.City);
+        }
+
+        if (!string.IsNullOrWhiteSpace(branch.Province))
+        {
+            parts.Add(branch.Province);
+        }
 
         if (branch.ZipCode > 0)
         {
-            parts.Add(branch.ZipCode.ToString());
+            var zip = branch.ZipCode.ToString();
+            if (!string.IsNullOrWhiteSpace(zip))
+            {
+                parts.Add(zip);
+            }
         }
 
-        return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+        return string.Join(", ", parts);
     }
 
 

@@ -460,7 +460,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 OrderType = si.OrderType,
                 CustomerId = si.CustomerId,
                 CustomerBranchId = si.CustomerBranchId,
-                SalesManName = si.SalesMan,
+                SalesManName = si.SalesMan ?? string.Empty,
                 SubdistributorId = si.SubDistributorId
             })
             .FirstOrDefaultAsync(cancellationToken);
