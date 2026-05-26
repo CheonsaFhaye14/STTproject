@@ -6,7 +6,6 @@ using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;
 using CustomerDataModel = STTproject.Data.Customer;
-using CustomerBranchDataModel = STTproject.Data.CustomerBranch;
 
 
 namespace STTproject.Features.User.SalesInvoice.Components.Sections;
@@ -19,11 +18,9 @@ public partial class InvoiceHeader
     private ElementReference orderTypeSelect;
     private ElementReference customerCodeInput;
     private GenericAutocomplete<CustomerDataModel>? customerNameAutocomplete;
-    private GenericAutocomplete<CustomerBranchDataModel>? customerBranchAutocomplete;
     private ElementReference saveButton;
     private IJSObjectReference? jsModule;
     [Parameter] public EventCallback OnDraftChanged { get; set; }
-    private bool customerBranchEnterPrimed;
     private Dictionary<string, string> ValidationErrors { get; set; } = new();
     private CancellationTokenSource? invoiceNumberCheckCts;
     private readonly SemaphoreSlim invoiceNumberCheckLock = new(1, 1);
@@ -236,15 +233,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
             await Task.Delay(10);
 
-            if (FilteredCustomerBranches.Any())
-            {
-                if (customerBranchAutocomplete != null)
-                    await customerBranchAutocomplete.GetInputRef().FocusAsync();
-            }
-            else
-            {
-               await salesManNameInput.FocusAsync();
-            }
+            await salesManNameInput.FocusAsync();
         }
     }
 
@@ -285,32 +274,6 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         return OnDraftChanged.InvokeAsync();
     }
 
-    private async Task HandleCustomerBranchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            if (!customerBranchEnterPrimed)
-            {
-                customerBranchEnterPrimed = true;
-                if (customerBranchAutocomplete != null)
-                    await customerBranchAutocomplete.OpenPopupAsync();
-                return;
-            }
-
-            customerBranchEnterPrimed = false;
-
-            if (Invoice.CustomerBranchId <= 0)
-            {
-                SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
-SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
-                return;
-            }
-            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
-            await Task.Delay(10);
-           await salesManNameInput.FocusAsync();
-        }
-    }
-
     private async Task HandleCustomerNameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter")
@@ -326,18 +289,9 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
         ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
         ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
-        customerBranchEnterPrimed = false;
         await Task.Delay(10);
 
-        if (FilteredCustomerBranches.Any())
-        {
-            if (customerBranchAutocomplete != null)
-                await customerBranchAutocomplete.GetInputRef().FocusAsync();
-        }
-        else
-        {
-            await salesManNameInput.FocusAsync();
-        }
+        await salesManNameInput.FocusAsync();
     }
 
     private Task HandleCustomerNameBlur(FocusEventArgs _)
@@ -353,29 +307,31 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         return Task.CompletedTask;
     }
 
-    private Task HandleCustomerBranchBlur(FocusEventArgs _)
+    private static string FormatCustomerAddress(CustomerDataModel customer)
     {
-        if (!FilteredCustomerBranches.Any())
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(customer.AddressLine))
         {
-            return Task.CompletedTask;
+            parts.Add(customer.AddressLine);
         }
 
-        if (Invoice.CustomerBranchId <= 0)
+        if (!string.IsNullOrWhiteSpace(customer.City))
         {
-            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
-SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
-        }
-        else
-        {
-            ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
+            parts.Add(customer.City);
         }
 
-        return Task.CompletedTask;
-    }
+        if (!string.IsNullOrWhiteSpace(customer.Province))
+        {
+            parts.Add(customer.Province);
+        }
 
-    private Task HandleCustomerBranchValueChanged(string? value)
-    {
-        return OnDraftChanged.InvokeAsync();
+        if (customer.ZipCode.HasValue)
+        {
+            parts.Add(customer.ZipCode.Value.ToString());
+        }
+
+        return string.Join(", ", parts);
     }
 
     private void SetFieldError(string fieldKey, string message)
@@ -427,7 +383,6 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         {
             ValidationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
                 Invoice,
-                FilteredCustomerBranches.Any(),
                 () => InvoiceNumberExistsAsync());
 
             if (ValidationErrors.Any())
@@ -453,10 +408,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
     }
 
     [Parameter] public List<CustomerDataModel> Customers { get; set; } = new();
-    [Parameter] public List<CustomerBranchDataModel> CustomerBranches { get; set; } = new();
     [Parameter] public int SelectedSubdistributorId { get; set; }
-
-    private List<CustomerBranchDataModel> FilteredCustomerBranches { get; set; } = new();
 
     private IEnumerable<CustomerDataModel> FilteredCustomers => Customers.Where(c => c.SubDistributorId == SelectedSubdistributorId
 && c.IsActive);
@@ -488,20 +440,9 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
     {
         ClearFieldError(SalesInvoiceValidation.Header.CustomerName.Key);
         ClearFieldError(SalesInvoiceValidation.Header.CustomerCode.Key);
-        customerBranchEnterPrimed = false;
         await Task.Delay(10);
 
-        if (FilteredCustomerBranches.Any())
-        {
-            if (customerBranchAutocomplete != null)
-            {
-                await customerBranchAutocomplete.GetInputRef().FocusAsync();
-            }
-        }
-        else
-        {
-            await salesManNameInput.FocusAsync();
-        }
+        await salesManNameInput.FocusAsync();
     }
 
     private Task HandleCustomerAutocompleteSelected(CustomerDataModel? customer)
@@ -509,6 +450,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         if (customer is null)
         {
             Invoice.CustomerId = 0;
+            Invoice.CustomerAddress = string.Empty;
             SyncCustomerState();
             return OnDraftChanged.InvokeAsync();
         }
@@ -517,47 +459,9 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
         Invoice.CustomerCode = customer.CustomerCode;
         Invoice.CustomerName = customer.CustomerName;
         Invoice.CustomerType = customer.CustomerType;
+        Invoice.CustomerAddress = FormatCustomerAddress(customer);
         SyncCustomerState();
         return OnDraftChanged.InvokeAsync();
-    }
-
-    private Task HandleBranchChanged()
-    {
-        customerBranchEnterPrimed = false;
-        ApplySelectedBranch(Invoice.CustomerBranchId);
-        return OnDraftChanged.InvokeAsync();
-    }
-
-    private Task HandleCustomerBranchAutocompleteSelected(CustomerBranchDataModel? branch)
-    {
-        customerBranchEnterPrimed = false;
-
-        if (branch is null)
-        {
-            Invoice.CustomerBranchId = 0;
-            Invoice.CustomerAddress = string.Empty;
-            return OnDraftChanged.InvokeAsync();
-        }
-
-        Invoice.CustomerBranchId = branch.CustomerBranchId;
-        ApplySelectedBranch(branch.CustomerBranchId);
-        return OnDraftChanged.InvokeAsync();
-    }
-
-    private async Task HandleCustomerBranchConfirmed()
-    {
-        customerBranchEnterPrimed = false;
-
-        if (Invoice.CustomerBranchId <= 0)
-        {
-            SetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key,
-                SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
-            return;
-        }
-
-        ClearFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key);
-        await Task.Delay(10);
-        await salesManNameInput.FocusAsync();
     }
 
     private Task HandleSalesManNameChanged()
@@ -629,8 +533,6 @@ StringComparison.OrdinalIgnoreCase));
             Invoice.CustomerName = string.Empty;
             Invoice.CustomerType = string.Empty;
             Invoice.CustomerAddress = string.Empty;
-            Invoice.CustomerBranchId = 0;
-            FilteredCustomerBranches = new List<CustomerBranchDataModel>();
             return;
         }
 
@@ -638,70 +540,7 @@ StringComparison.OrdinalIgnoreCase));
         Invoice.CustomerId = selectedCustomer.CustomerId;
         Invoice.CustomerName = selectedCustomer.CustomerName;
         Invoice.CustomerType = selectedCustomer.CustomerType;
-
-        FilteredCustomerBranches = CustomerBranches
-            .Where(branch => branch.CustomerId == selectedCustomer.CustomerId && branch.IsActive)
-            .OrderBy(branch => branch.BranchName)
-            .ToList();
-
-        if (FilteredCustomerBranches.Any())
-        {
-            if (Invoice.CustomerBranchId <= 0 || !FilteredCustomerBranches.Any(branch => branch.CustomerBranchId ==
-Invoice.CustomerBranchId))
-            {
-                var defaultBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.IsDefault);
-                Invoice.CustomerBranchId = (defaultBranch ?? FilteredCustomerBranches[0]).CustomerBranchId;
-            }
-        }
-        else
-        {
-            Invoice.CustomerBranchId = 0;
-            Invoice.CustomerAddress = string.Empty;
-        }
-    }
-
-    private void ApplySelectedBranch(int branchId)
-    {
-        var selectedBranch = FilteredCustomerBranches.FirstOrDefault(branch => branch.CustomerBranchId == branchId);
-
-        if (selectedBranch is null)
-        {
-            Invoice.CustomerAddress = string.Empty;
-            return;
-        }
-
-        Invoice.CustomerAddress = FormatBranchAddress(selectedBranch);
-    }
-
-    private static string FormatBranchAddress(CustomerBranch branch)
-    {
-        var parts = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(branch.AddressLine))
-        {
-            parts.Add(branch.AddressLine);
-        }
-
-        if (!string.IsNullOrWhiteSpace(branch.City))
-        {
-            parts.Add(branch.City);
-        }
-
-        if (!string.IsNullOrWhiteSpace(branch.Province))
-        {
-            parts.Add(branch.Province);
-        }
-
-        if (branch.ZipCode > 0)
-        {
-            var zip = branch.ZipCode.ToString();
-            if (!string.IsNullOrWhiteSpace(zip))
-            {
-                parts.Add(zip);
-            }
-        }
-
-        return string.Join(", ", parts);
+        Invoice.CustomerAddress = FormatCustomerAddress(selectedCustomer);
     }
 
 

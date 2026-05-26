@@ -71,27 +71,6 @@
 
 
         <div class="form-group">
-            <label>@SalesInvoiceValidation.Header.CustomerBranch.Label<span class="required-asterisk"> *</span></label>
-            @if (FilteredCustomerBranches.Any())
-            {
-                <GenericAutocomplete TItem="CustomerBranch" @ref="customerBranchAutocomplete"
-                                     Items="FilteredCustomerBranches" Value="@(FilteredCustomerBranches.FirstOrDefault(cb => cb.CustomerBranchId == Invoice.CustomerBranchId) is CustomerBranch sb ?
-                                                                                                                                      $"{sb.BranchName} - {sb.City}" : Invoice.CustomerAddress)"
-                                     ValueChanged="HandleCustomerBranchValueChanged" ItemLabel="@(b => $"{b.BranchName} - {b.City}")"
-                                         OnSelected="HandleCustomerBranchAutocompleteSelected" OnConfirmed="HandleCustomerBranchConfirmed" Placeholder="-- Select branch --"
-                                     IsDisabled="@IsSaved" ShowAllOnOpen="true" />
-                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidation.Header.CustomerBranch.Key)</span>
-                }
-            }
-            else
-            {
-                <input value="No branches available" disabled />
-            }
-        </div>
-
-        <div class="form-group">
             <label>Customer Type</label>
             <input @bind="Invoice.CustomerType" disabled />
         </div>

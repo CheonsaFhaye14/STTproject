@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using STTproject.Data;
 using CustomerDataModel = STTproject.Data.Customer;
-using CustomerBranchDataModel = STTproject.Data.CustomerBranch;
 using STTproject.Features.User.SalesInvoice.Components.Modals;
 using STTproject.Features.User.SalesInvoice.Services;
 using STTproject.Models;
@@ -770,7 +769,6 @@ public partial class SalesInvoice
     List<ItemsUom> availableUoms = new();
     List<SubDistributor> subdList = new();
     List<CustomerDataModel> customers = new();
-    List<CustomerBranchDataModel> customerBranches = new();
     private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
 
     [Parameter]
@@ -829,7 +827,6 @@ public partial class SalesInvoice
             if (!subdList.Any())
             {
                 customers = new();
-                customerBranches = new();
                 subdItems = new();
                 availableUoms = new();
                 invoice.SubdistributorId = 0;
@@ -860,7 +857,6 @@ public partial class SalesInvoice
 
             var pageData = await salesInvoiceService.GetPageDataAsync(selectedSubdId);
             customers = pageData.Customers;
-            customerBranches = pageData.CustomerBranches;
             subdItems = pageData.SubdItems;
             availableUoms = pageData.ItemUoms;
 
@@ -877,17 +873,12 @@ public partial class SalesInvoice
                     invoice.CustomerCode = selectedCustomer.CustomerCode ?? string.Empty;
                     invoice.CustomerName = selectedCustomer.CustomerName;
                     invoice.CustomerType = selectedCustomer.CustomerType ?? string.Empty;
-                }
-
-                var selectedBranch = customerBranches.FirstOrDefault(cb => cb.CustomerBranchId == invoice.CustomerBranchId);
-                if (selectedBranch != null)
-                {
                     invoice.CustomerAddress = string.Join(", ", new[]
                     {
-                        selectedBranch.AddressLine,
-                        selectedBranch.City,
-                        selectedBranch.Province,
-                        selectedBranch.ZipCode.ToString()
+                        selectedCustomer.AddressLine,
+                        selectedCustomer.City,
+                        selectedCustomer.Province,
+                        selectedCustomer.ZipCode?.ToString()
                     }.Where(value => !string.IsNullOrWhiteSpace(value)));
                 }
             }

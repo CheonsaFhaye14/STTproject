@@ -13,8 +13,6 @@ public partial class SalesInvoice
 
     public int CustomerId { get; set; }
 
-    public int CustomerBranchId { get; set; }
-
     public int SubDistributorId { get; set; }
 
     public DateTime CreatedDate { get; set; }
@@ -32,8 +30,6 @@ public partial class SalesInvoice
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual Customer Customer { get; set; } = null!;
-
-    public virtual CustomerBranch CustomerBranch { get; set; } = null!;
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 

@@ -9,17 +9,6 @@ public class SubDistributorInfoDto
     public string Province { get; set; } = null!;
 }
 
-public class CustomerBranchInfoDto
-{
-    public int CustomerBranchId { get; set; }
-    public string BranchName { get; set; } = null!;
-    public string? AddressLine { get; set; }
-    public string? City { get; set; }
-    public string? Province { get; set; }
-    public int? ZipCode { get; set; }
-    public bool IsDefault { get; set; }
-    public bool IsActive { get; set; }
-}
 
 public class CustomerInfoDto
 {
@@ -28,7 +17,11 @@ public class CustomerInfoDto
     public string CustomerName { get; set; } = null!;
     public string CustomerType { get; set; } = null!;
     public bool IsActive { get; set; }
-    public CustomerBranchInfoDto? Branch { get; set; }
+    // Address fields moved to the customer DTO (sourced from Customer table)
+    public string? AddressLine { get; set; }
+    public string? City { get; set; }
+    public string? Province { get; set; }
+    public int? ZipCode { get; set; }
 }
 
 public class CustomerListResponseDto

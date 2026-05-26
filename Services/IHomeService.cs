@@ -333,8 +333,7 @@ public class HomeService : IHomeService
                 SalesMan = si.SalesMan ?? string.Empty,
                 OrderType = si.OrderType,
                 CustomerName = si.Customer.CustomerName,
-                CustomerBranch = si.CustomerBranch.BranchName,
-                Address = si.CustomerBranch.AddressLine + ", " + si.CustomerBranch.City + ", " + si.CustomerBranch.Province,
+                Address = (si.Customer.AddressLine ?? string.Empty) + ", " + (si.Customer.City ?? string.Empty) + ", " + (si.Customer.Province ?? string.Empty),
                 TotalItems = si.SalesInvoiceItems.Count
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -455,7 +454,6 @@ public sealed class HomeSalesInvoiceDetailRow
     public DateTime CreatedDate { get; set; }
     public string OrderType { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
-    public string CustomerBranch { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     public int TotalItems { get; set; }
     public List<HomeSalesInvoiceItemDetailRow> ItemDetails { get; set; } = new();

@@ -25,9 +25,15 @@ public partial class Customer
 
     public int? UpdatedBy { get; set; }
 
-    public virtual User? CreatedByNavigation { get; set; }
+    public string? AddressLine { get; set; }
 
-    public virtual CustomerBranch? CustomerBranch { get; set; }
+    public string? City { get; set; }
+
+    public string? Province { get; set; }
+
+    public int? ZipCode { get; set; }
+
+    public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 

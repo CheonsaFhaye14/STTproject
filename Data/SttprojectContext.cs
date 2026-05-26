@@ -19,8 +19,6 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
-    public virtual DbSet<CustomerBranch> CustomerBranches { get; set; }
-
     public virtual DbSet<ItemsUom> ItemsUoms { get; set; }
 
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
@@ -79,6 +77,8 @@ public partial class SttprojectContext : DbContext
 
             entity.HasIndex(e => new { e.CustomerName, e.SubDistributorId }, "UQ_ojt_Customer_Name").IsUnique();
 
+            entity.Property(e => e.AddressLine).HasMaxLength(255);
+            entity.Property(e => e.City).HasMaxLength(100);
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -92,6 +92,7 @@ public partial class SttprojectContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Province).HasMaxLength(100);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CustomerCreatedByNavigations)
@@ -106,46 +107,6 @@ public partial class SttprojectContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CustomerUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_Customer_UpdatedBy");
-        });
-
-        modelBuilder.Entity<CustomerBranch>(entity =>
-        {
-            entity.HasKey(e => e.CustomerBranchId).HasName("PK__Customer__6F555BBD71F361FA");
-
-            entity.ToTable("CustomerBranch");
-
-            entity.HasIndex(e => new { e.CustomerId, e.BranchName }, "UQ_CustomerBranch_BranchName_PerCustomer").IsUnique();
-
-            entity.HasIndex(e => e.CustomerId, "UX_CustomerBranch_Default")
-                .IsUnique()
-                .HasFilter("([IsDefault]=(1))");
-
-            entity.Property(e => e.AddressLine).HasMaxLength(255);
-            entity.Property(e => e.BranchName)
-                .HasMaxLength(100)
-                .IsUnicode(false)
-                .HasDefaultValue("Main");
-            entity.Property(e => e.City).HasMaxLength(100);
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.IsDefault).HasDefaultValue(true);
-            entity.Property(e => e.Province).HasMaxLength(100);
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CustomerBranchCreatedByNavigations)
-                .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK_CustomerBranch_CreatedBy");
-
-            entity.HasOne(d => d.Customer).WithOne(p => p.CustomerBranch)
-                .HasForeignKey<CustomerBranch>(d => d.CustomerId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CustomerBranch_Customer");
-
-            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CustomerBranchUpdatedByNavigations)
-                .HasForeignKey(d => d.UpdatedBy)
-                .HasConstraintName("FK_CustomerBranch_UpdatedBy");
         });
 
         modelBuilder.Entity<ItemsUom>(entity =>
@@ -218,7 +179,7 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("SalesInvoice");
 
-            entity.HasIndex(e => new { e.SalesInvoiceCode, e.OrderType }, "UQ__SalesInv__Code_OrderType").IsUnique();
+            entity.HasIndex(e => new { e.SalesInvoiceCode, e.OrderType }, "UQ_SalesInvoice_Code_OrderType").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -236,11 +197,6 @@ public partial class SttprojectContext : DbContext
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.SalesInvoiceCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_SalesInvoice_CreatedBy");
-
-            entity.HasOne(d => d.CustomerBranch).WithMany(p => p.SalesInvoices)
-                .HasForeignKey(d => d.CustomerBranchId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SalesInvoice_CustomerBranch");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.SalesInvoices)
                 .HasForeignKey(d => d.CustomerId)

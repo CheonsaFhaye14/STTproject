@@ -27,11 +27,10 @@ public class CustomerService : ICustomerService
             return null;
         }
 
-        // Get all active customers for this sub-distributor with their branches
-        var customers = await context.Customers
+        // Get all active customers for this sub-distributor
+            var customers = await context.Customers
             .AsNoTracking()
             .Where(c => c.SubDistributorId == subDistributor.SubDistributorId && c.IsActive)
-            .Include(c => c.CustomerBranch)
             .OrderBy(c => c.CustomerName)
             .Select(c => new CustomerInfoDto
             {
@@ -40,17 +39,10 @@ public class CustomerService : ICustomerService
                 CustomerName = c.CustomerName,
                 CustomerType = c.CustomerType,
                 IsActive = c.IsActive,
-                Branch = c.CustomerBranch != null ? new CustomerBranchInfoDto
-                {
-                    CustomerBranchId = c.CustomerBranch.CustomerBranchId,
-                    BranchName = c.CustomerBranch.BranchName,
-                    AddressLine = c.CustomerBranch.AddressLine,
-                    City = c.CustomerBranch.City,
-                    Province = c.CustomerBranch.Province,
-                    ZipCode = c.CustomerBranch.ZipCode,
-                    IsDefault = c.CustomerBranch.IsDefault,
-                    IsActive = c.CustomerBranch.IsActive
-                } : null
+                AddressLine = c.AddressLine,
+                City = c.City,
+                Province = c.Province,
+                ZipCode = c.ZipCode
             })
             .ToListAsync(cancellationToken);
 

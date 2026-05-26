@@ -116,11 +116,6 @@ public sealed class ImportSalesInvoiceService
 			.Where(customer => customer.SubDistributorId == subDistributorId && customer.IsActive)
 			.ToListAsync(cancellationToken);
 
-		var customerBranches = await context.CustomerBranches
-			.AsNoTracking()
-			.Where(branch => branch.IsActive)
-			.ToListAsync(cancellationToken);
-
 		var subdItems = await context.SubdItems
 			.AsNoTracking()
 			.Where(item => item.SubDistributorId == subDistributorId && item.IsActive)
@@ -133,17 +128,12 @@ public sealed class ImportSalesInvoiceService
 			.ToListAsync(cancellationToken);
 
 		var customerByCode = customers.ToDictionary(customer => Normalize(customer.CustomerCode));
-		var branchesByCustomerId = customerBranches
-			.GroupBy(branch => branch.CustomerId)
-			.ToDictionary(
-				group => group.Key,
-				group => group.ToList());
 		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
 		var uomLookup = uoms
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, branchesByCustomerId, subdItemByCode);
+		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, subdItemByCode);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -151,12 +141,11 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		// Group by invoice code plus customer and key header fields so rows with the same invoice code
-		// but different customer/branch/order/date are treated as separate prepared invoices.
+		// but different customer/order/date are treated as separate prepared invoices.
 		foreach (var invoiceGroup in parsedRows.GroupBy(row =>
 					 string.Join("|",
 						 (row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
 						 (row.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
-						 (row.CustomerBranch ?? string.Empty).Trim().ToUpperInvariant(),
 						 (row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
 						 row.InvoiceDate.ToString("yyyy-MM-dd")), StringComparer.OrdinalIgnoreCase))
 		{
@@ -193,17 +182,6 @@ public sealed class ImportSalesInvoiceService
 					continue;
 				}
 
-				var hasCustomerBranches = branchesByCustomerId.TryGetValue(customer.CustomerId, out var customerBranchList)
-					&& customerBranchList.Count > 0;
-
-				if (!TryResolveBranch(firstRow.CustomerBranch, customer.CustomerId, customerBranchList, out var customerBranch, out var branchError))
-				{
-					result.AddError(firstRow.RowNumber, invoiceNumber, branchError, "CustomerBranch");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, branchError, "CustomerBranch"));
-					result.PreparedInvoices.Add(preparedInvoice);
-					continue;
-				}
-
 				if (!TryParseOrderType(firstRow.OrderType, out var orderType))
 				{
 					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
@@ -222,8 +200,6 @@ public sealed class ImportSalesInvoiceService
 					CustomerCode = customer.CustomerCode,
 					CustomerName = customer.CustomerName,
 					CustomerType = customer.CustomerType,
-					CustomerBranchId = customerBranch.CustomerBranchId,
-					CustomerBranchName = customerBranch.BranchName,
 					SubdistributorId = subDistributorId,
 					SalesManName = firstRow.SalesManName
 				};
@@ -307,7 +283,6 @@ public sealed class ImportSalesInvoiceService
 
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
-					hasCustomerBranches,
 					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, 0, cancellationToken));
 
 				if (validationErrors.Count > 0)
@@ -406,7 +381,6 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, int> headers,
 		ImportSalesInvoiceResult result,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
-		IReadOnlyDictionary<int, List<STTproject.Data.CustomerBranch>> branchesByCustomerId,
 		IReadOnlyDictionary<string, SubdItem> subdItemByCode)
 	{
 		var rows = new List<ImportedInvoiceRow>();
@@ -417,9 +391,6 @@ public sealed class ImportSalesInvoiceService
 			var row = worksheet.Row(rowNumber);
 			var invoiceCode = GetString(row, headers["InvoiceCode"]);
 			var customerCode = GetString(row, headers["CustomerCode"]);
-			var customerBranch = headers.TryGetValue("CustomerBranch", out var branchColumn)
-				? GetString(row, branchColumn)
-				: string.Empty;
 			var orderType = GetString(row, headers["OrderType"]);
 			var skuCode = GetString(row, headers["SkuCode"]);
 			var uom = GetString(row, headers["UOM"]);
@@ -427,7 +398,6 @@ public sealed class ImportSalesInvoiceService
 
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
 				string.IsNullOrWhiteSpace(customerCode) &&
-				string.IsNullOrWhiteSpace(customerBranch) &&
 				string.IsNullOrWhiteSpace(orderType) &&
 				string.IsNullOrWhiteSpace(skuCode) &&
 				string.IsNullOrWhiteSpace(uom) &&
@@ -438,7 +408,6 @@ public sealed class ImportSalesInvoiceService
 			}
 			var rowHasErrors = false;
 			DateOnly invoiceDate = default;
-			CustomerBranch? resolvedCustomerBranch = null;
 			string normalizedOrderType = string.Empty;
 			int quantity = 0;
 
@@ -472,14 +441,6 @@ public sealed class ImportSalesInvoiceService
 			}
 			else
 			{
-				if (branchesByCustomerId.TryGetValue(customer.CustomerId, out var customerBranchList) && customerBranchList.Count > 0)
-				{
-					if (!TryResolveBranch(customerBranch, customer.CustomerId, customerBranchList, out resolvedCustomerBranch, out var branchError))
-					{
-						AddRowError(branchError, "CustomerBranch");
-					}
-				}
-
 				if (!TryParseOrderType(orderType, out normalizedOrderType))
 				{
 					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
@@ -519,7 +480,6 @@ public sealed class ImportSalesInvoiceService
 				invoiceCode,
 				invoiceDate,
 				customerCode,
-				customerBranch,
 				normalizedOrderType,
 				salesManName,
 				skuCode,
@@ -561,11 +521,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "customerbranch" or "branchname" or "customerbranchname")
-			{
-				headers.TryAdd("CustomerBranch", cell.Address.ColumnNumber);
-				continue;
-			}
+            
 
 			if (header is "ordertype")
 			{
@@ -611,54 +567,12 @@ public sealed class ImportSalesInvoiceService
 			return "Customer code values must be the same for all rows in the same invoice.";
 		}
 
-		if (rows.Select(row => Normalize(row.CustomerBranch)).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().Count() > 1)
-		{
-			return "Customer branch values must be the same for all rows in the same invoice.";
-		}
-
 		if (rows.Select(row => Normalize(row.OrderType)).Distinct().Count() > 1)
 		{
 			return "Order type values must be the same for all rows in the same invoice.";
 		}
 
 		return string.Empty;
-	}
-
-	private static bool TryResolveBranch(
-		string branchName,
-		int customerId,
-		List<CustomerBranch>? customerBranchList,
-		out CustomerBranch customerBranch,
-		out string errorMessage)
-	{
-		customerBranch = null!;
-		errorMessage = string.Empty;
-
-		if (customerBranchList is null || customerBranchList.Count == 0)
-		{
-			errorMessage = "Selected customer has no branch configured.";
-			return false;
-		}
-
-		if (!string.IsNullOrWhiteSpace(branchName))
-		{
-			var selectedBranch = customerBranchList.FirstOrDefault(branch =>
-				branch.CustomerId == customerId &&
-				Normalize(branch.BranchName) == Normalize(branchName));
-
-			if (selectedBranch is not null)
-			{
-				customerBranch = selectedBranch;
-				return true;
-			}
-
-			errorMessage = $"Customer branch '{branchName}' was not found for the selected customer.";
-			return false;
-		}
-
-		customerBranch = customerBranchList.FirstOrDefault(branch => branch.IsDefault)
-			?? customerBranchList[0];
-		return true;
 	}
 
 	private static bool TryParseOrderType(string orderType, out string normalizedOrderType)
@@ -745,7 +659,6 @@ public sealed class ImportSalesInvoiceService
 		string InvoiceCode,
 		DateOnly InvoiceDate,
 		string CustomerCode,
-		string CustomerBranch,
 		string OrderType,
 		string SalesManName,
 		string SkuCode,

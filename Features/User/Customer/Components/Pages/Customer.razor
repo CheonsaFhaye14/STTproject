@@ -77,8 +77,8 @@
                                 <th style="width: 15%;">Customer Code</th>
                                 <th style="width: 20%;">Customer Name</th>
                                 <th style="width: 15%;">Type</th>
-                                <th style="width: 20%;">Branch Name</th>
-                                <th style="width: 30%;">Address</th>
+                                   <th style="width: 20%">Address Line</th>
+                                   <th style="width: 30%">City, Province, Zip Code</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -93,31 +93,20 @@
                                     </td>
                                     <td>@customer.CustomerType</td>
                                     <td>
-                                        @if (customer.Branch != null)
-                                        {
-                                            <span>@customer.Branch.BranchName</span>
-                                            @if (customer.Branch.IsDefault)
-                                            {
-                                                <span class="badge bg-success ms-2" title="Default Branch">Default</span>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
+                                           <span class="text-muted">-</span>
                                     </td>
                                     <td>
-                                        @if (customer.Branch != null)
-                                        {
-                                            <small>
-                                                @customer.Branch.AddressLine<br />
-                                                @customer.Branch.City, @customer.Branch.Province @customer.Branch.ZipCode
-                                            </small>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
+                                           @if (!string.IsNullOrWhiteSpace(customer.AddressLine) || !string.IsNullOrWhiteSpace(customer.City) || !string.IsNullOrWhiteSpace(customer.Province) || customer.ZipCode != null)
+                                           {
+                                               <small>
+                                                   @customer.AddressLine<br />
+                                                   @customer.City, @customer.Province @customer.ZipCode
+                                               </small>
+                                           }
+                                           else
+                                           {
+                                               <span class="text-muted">-</span>
+                                           }
                                     </td>
                                 </tr>
                             }

@@ -11,7 +11,7 @@ public static class SalesInvoiceValidation
         public static readonly SalesInvoiceField OrderType = new(nameof(OrderType), "Order Type", true, "Order type is required.");
         public static readonly SalesInvoiceField CustomerCode = new(nameof(CustomerCode), "Customer Code", true, "Customer code is required.");
         public static readonly SalesInvoiceField CustomerName = new(nameof(CustomerName), "Customer Name", true, "Customer name is required.");
-        public static readonly SalesInvoiceField CustomerBranch = new(nameof(CustomerBranch), "Customer Branch", true, "Customer branch is required.");
+        
         public static readonly SalesInvoiceField SalesManName = new(nameof(SalesManName), "Sales Man Name", true, "Sales man name is required.");
     }
 
@@ -38,7 +38,6 @@ public static class SalesInvoiceValidation
 
     public static async Task<Dictionary<string, string>> ValidateHeaderAsync(
         InputInvoiceModel invoice,
-        bool hasCustomerBranches,
         Func<Task<bool>> invoiceNumberExistsAsync)
     {
         var errors = new Dictionary<string, string>();
@@ -73,10 +72,6 @@ public static class SalesInvoiceValidation
             errors[Header.CustomerName.Key] = Header.CustomerName.ErrorMessage;
         }
 
-        if (hasCustomerBranches && invoice.CustomerBranchId <= 0)
-        {
-            errors[Header.CustomerBranch.Key] = Header.CustomerBranch.ErrorMessage;
-        }
 
         return errors;
     }

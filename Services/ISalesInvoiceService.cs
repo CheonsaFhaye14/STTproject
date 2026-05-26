@@ -16,6 +16,7 @@ public interface ISalesInvoiceService
         int currentUserId,
         CancellationToken cancellationToken = default);
     Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default);
+    Task<string> GetCustomerAddressAsync(int customerId, CancellationToken cancellationToken = default);
 }
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
@@ -39,12 +40,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .OrderBy(c => c.CustomerName)
             .ToListAsync(cancellationToken);
 
-        var customerBranches = await context.CustomerBranches
-            .AsNoTracking()
-            .Where(b => b.IsActive)
-            .OrderBy(b => b.BranchName)
-            .ToListAsync(cancellationToken);
-
         var subdItems = await context.SubdItems
             .AsNoTracking()
             .Include(i => i.CompanyItem)
@@ -66,7 +61,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         return new SalesInvoicePageData
         {
             Customers = customers,
-            CustomerBranches = customerBranches,
             SubdItems = subdItems,
             ItemUoms = itemUoms
         };
@@ -210,42 +204,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 };
             }
 
-            var customerHasBranches = await context.CustomerBranches
-                .AnyAsync(cb => cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
-
-            if (!customerHasBranches)
-            {
-                return new SaveInvoiceResult
-                {
-                    IsSaved = false,
-                    InvoiceId = currentInvoiceId,
-                    ErrorMessage = "Selected customer has no branch configured."
-                };
-            }
-
-            if (invoice.CustomerBranchId <= 0)
-            {
-                return new SaveInvoiceResult
-                {
-                    IsSaved = false,
-                    InvoiceId = currentInvoiceId,
-                    ErrorMessage = "Customer branch is required."
-                };
-            }
-
-            var customerBranchExists = await context.CustomerBranches
-                .AnyAsync(cb => cb.CustomerBranchId == invoice.CustomerBranchId && cb.CustomerId == invoice.CustomerId && cb.IsActive, cancellationToken);
-
-            if (!customerBranchExists)
-            {
-                return new SaveInvoiceResult
-                {
-                    IsSaved = false,
-                    InvoiceId = currentInvoiceId,
-                    ErrorMessage = "Selected customer branch is invalid."
-                };
-            }
-
             if (currentInvoiceId == 0)
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -258,7 +216,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                         SalesInvoiceDate = invoice.InvoiceDate,
                         OrderType = invoice.OrderType,
                         CustomerId = invoice.CustomerId,
-                        CustomerBranchId = invoice.CustomerBranchId,
                         SubDistributorId = invoice.SubdistributorId,
                         SalesMan = invoice.SalesManName,
                         CreatedBy = currentUserId,
@@ -327,7 +284,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 existing.SalesInvoiceDate = invoice.InvoiceDate;
                 existing.OrderType = invoice.OrderType;
                 existing.CustomerId = invoice.CustomerId;
-                existing.CustomerBranchId = invoice.CustomerBranchId;
                 existing.SubDistributorId = invoice.SubdistributorId;
                 existing.SalesMan = invoice.SalesManName;
                 existing.UpdatedBy = currentUserId;
@@ -459,7 +415,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 InvoiceDate = si.SalesInvoiceDate,
                 OrderType = si.OrderType,
                 CustomerId = si.CustomerId,
-                CustomerBranchId = si.CustomerBranchId,
                 SalesManName = si.SalesMan ?? string.Empty,
                 SubdistributorId = si.SubDistributorId
             })
@@ -468,6 +423,18 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         if (invoice == null)
         {
             return null;
+        }
+
+        var customer = await context.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.CustomerId == invoice.CustomerId, cancellationToken);
+
+        if (customer is not null)
+        {
+            invoice.CustomerCode = customer.CustomerCode;
+            invoice.CustomerName = customer.CustomerName;
+            invoice.CustomerType = customer.CustomerType;
+            invoice.CustomerAddress = FormatCustomerAddress(customer);
         }
 
         var items = await context.SalesInvoiceItems
@@ -487,12 +454,61 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         return (invoice, items);
     }
+
+    public async Task<string> GetCustomerAddressAsync(int customerId, CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        var customer = await context.Customers
+            .AsNoTracking()
+            .Where(c => c.CustomerId == customerId)
+            .Select(c => new { c.AddressLine, c.City, c.Province, c.ZipCode })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (customer is null)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(customer.AddressLine)) parts.Add(customer.AddressLine);
+        if (!string.IsNullOrWhiteSpace(customer.City)) parts.Add(customer.City);
+        if (!string.IsNullOrWhiteSpace(customer.Province)) parts.Add(customer.Province);
+        if (customer.ZipCode.HasValue) parts.Add(customer.ZipCode.Value.ToString());
+
+        return string.Join(", ", parts);
+    }
+
+    private static string FormatCustomerAddress(Customer customer)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(customer.AddressLine))
+        {
+            parts.Add(customer.AddressLine);
+        }
+
+        if (!string.IsNullOrWhiteSpace(customer.City))
+        {
+            parts.Add(customer.City);
+        }
+
+        if (!string.IsNullOrWhiteSpace(customer.Province))
+        {
+            parts.Add(customer.Province);
+        }
+
+        if (customer.ZipCode.HasValue)
+        {
+            parts.Add(customer.ZipCode.Value.ToString());
+        }
+
+        return string.Join(", ", parts);
+    }
 }
 
 public sealed class SalesInvoicePageData
 {
     public List<Customer> Customers { get; set; } = new();
-    public List<CustomerBranch> CustomerBranches { get; set; } = new();
     public List<SubdItem> SubdItems { get; set; } = new();
     public List<ItemsUom> ItemUoms { get; set; } = new();
 }

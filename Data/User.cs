@@ -23,10 +23,6 @@ public partial class User
 
     public string? Email { get; set; }
 
-    public virtual ICollection<CustomerBranch> CustomerBranchCreatedByNavigations { get; set; } = new List<CustomerBranch>();
-
-    public virtual ICollection<CustomerBranch> CustomerBranchUpdatedByNavigations { get; set; } = new List<CustomerBranch>();
-
     public virtual ICollection<Customer> CustomerCreatedByNavigations { get; set; } = new List<Customer>();
 
     public virtual ICollection<Customer> CustomerUpdatedByNavigations { get; set; } = new List<Customer>();

@@ -48,31 +48,34 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 }
                 var orderTypeSourceRange = orderTypeSheet.Range(1, 1, orderTypes.Length, 1);
 
-                // Add headers for sales invoice template
+                // Add headers for sales invoice template (no CustomerBranch)
                 worksheet.Cell(1, 1).Value = "InvoiceCode";
                 worksheet.Cell(1, 2).Value = "InvoiceDate";
                 worksheet.Cell(1, 3).Value = "CustomerCode";
-                worksheet.Cell(1, 4).Value = "CustomerBranch";
-                worksheet.Cell(1, 5).Value = "OrderType";
-                worksheet.Cell(1, 6).Value = "SalesManName";
-                worksheet.Cell(1, 7).Value = "SkuCode";
-                worksheet.Cell(1, 8).Value = "UOM";
-                worksheet.Cell(1, 9).Value = "Quantity";
+                worksheet.Cell(1, 4).Value = "OrderType";
+                worksheet.Cell(1, 5).Value = "SalesManName";
+                worksheet.Cell(1, 6).Value = "SkuCode";
+                worksheet.Cell(1, 7).Value = "UOM";
+                worksheet.Cell(1, 8).Value = "Quantity";
                 worksheet.Row(1).Style.Protection.Locked = true;
-                worksheet.Range("A2:I5000").Style.Protection.Locked = false;
-                // Extra unlocked cells for user scratch space; the import parser ignores these columns.
-                worksheet.Range("I2:Z5000").Style.Protection.Locked = false;
+                // Unlock whole input columns (A..H) and scratch columns (I..Z) so there is no fixed row limit.
+                worksheet.Columns(1, 8).Style.Protection.Locked = false;
+                worksheet.Columns(9, 26).Style.Protection.Locked = false;
+                // Ensure header row remains locked
+                worksheet.Range("A1:H1").Style.Protection.Locked = true;
                 worksheet.SheetView.FreezeRows(1);
 
                 // format codes as text to prevent Excel auto-formatting (e.g. long numeric codes, leading zeros)
-                worksheet.Range("A2:A5000").Style.NumberFormat.Format = "@";
-                worksheet.Range("C2:D5000").Style.NumberFormat.Format = "@";
-                worksheet.Range("D2:F5000").Style.NumberFormat.Format = "@";
-                worksheet.Range("F2:G5000").Style.NumberFormat.Format = "@";
+                // Format key code columns as text to prevent Excel auto-formatting
+                worksheet.Column(1).Style.NumberFormat.Format = "@"; // InvoiceCode
+                worksheet.Column(3).Style.NumberFormat.Format = "@"; // CustomerCode
+                worksheet.Column(4).Style.NumberFormat.Format = "@"; // OrderType (codes)
+                worksheet.Column(6).Style.NumberFormat.Format = "@"; // SkuCode
+                worksheet.Column(7).Style.NumberFormat.Format = "@"; // UOM
 
 
                 // Add data validation for InvoiceDate column
-                var dateRange = worksheet.Range("B2:B5000");
+                var dateRange = worksheet.Range("B2:B1048576");
                 dateRange.Style.DateFormat.Format = "dd/MM/yyyy";
                 var dateValidation = dateRange.CreateDataValidation();
                 dateValidation.Date.Between(
@@ -87,8 +90,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 dateValidation.ErrorTitle = "Invalid Date";
                 dateValidation.ErrorMessage = "Please enter a valid date.";
 
-                // Add dropdown for OrderType
-                var orderTypeRange = worksheet.Range("E2:E5000").CreateDataValidation();
+                // Add dropdown for OrderType (column D)
+                var orderTypeRange = worksheet.Range("D2:D1048576").CreateDataValidation();
                 orderTypeRange.List(orderTypeSourceRange);
                 orderTypeRange.InCellDropdown = true;
                 orderTypeRange.IgnoreBlanks = true;
@@ -101,7 +104,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 orderTypeRange.ErrorMessage = "Please select either Invoice or Credit";
 
                 // Add data validation for Quantity column
-                var qtyValidation = worksheet.Range("H2:H5000").CreateDataValidation();
+                var qtyValidation = worksheet.Range("H2:H1048576").CreateDataValidation();
                 qtyValidation.WholeNumber.GreaterThan(0);
                 qtyValidation.IgnoreBlanks = true;
                 qtyValidation.ShowInputMessage = true;
@@ -111,10 +114,10 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 qtyValidation.ErrorTitle = "Invalid Quantity";
                 qtyValidation.ErrorMessage = "Quantity must be a whole number greater than 0";
 
-                // UOM validation: dropdown from existing mapped UOMs
+                // UOM validation: dropdown from existing mapped UOMs (column G)
                 if (uomSourceRange != null)
                 {
-                    var uomRange = worksheet.Range("H2:H5000");
+                    var uomRange = worksheet.Range("G2:G1048576");
                     var uomValidation = uomRange.CreateDataValidation();
                     uomValidation.List(uomSourceRange);
                     uomValidation.IgnoreBlanks = true;
