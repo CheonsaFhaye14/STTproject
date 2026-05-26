@@ -13,10 +13,10 @@ public class CustomerBranchInfoDto
 {
     public int CustomerBranchId { get; set; }
     public string BranchName { get; set; } = null!;
-    public string AddressLine { get; set; } = null!;
-    public string City { get; set; } = null!;
-    public string Province { get; set; } = null!;
-    public int ZipCode { get; set; }
+    public string? AddressLine { get; set; }
+    public string? City { get; set; }
+    public string? Province { get; set; }
+    public int? ZipCode { get; set; }
     public bool IsDefault { get; set; }
     public bool IsActive { get; set; }
 }
