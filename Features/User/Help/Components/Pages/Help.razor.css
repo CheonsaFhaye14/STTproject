@@ -1,16 +1,221 @@
-.cards{
+.cards {
     display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-}
-.card-body{
-    transition: max-height 0.3s ease, padding 0.3s ease;
-    overflow: hidden;
-    max-height: 500px; /* Adjust as needed */
-    padding: 15px;
+    flex-direction: column;
+    gap: 0;
 }
 
-.card-body.collapsed {
+.card {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #C9B8E8;
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 2px 2px 10px rgba(154, 133, 204, 0.15);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    transition: opacity 0.15s;
+}
+
+    .card-header:hover {
+        opacity: 0.92;
+    }
+
+.card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+    .card-header-left i {
+        font-size: 18px;
+        color: #3a2870;
+    }
+
+.card-header h5 {
+    font-size: 15px;
+    font-weight: 500;
+    color: #3a2870;
+    margin: 0;
+}
+
+.chevron {
+    font-size: 16px;
+    color: #5c3fa8;
+    transition: transform 0.2s;
+}
+
+    .chevron.open {
+        transform: rotate(180deg);
+    }
+
+.card-body {
+    padding: 0 1.25rem;
     max-height: 0;
-    padding: 0 15px; /* Keep horizontal padding for better appearance */
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.2s;
+}
+
+    .card-body.open {
+        max-height: 2000px;
+        padding: 0 1.25rem 1.25rem;
+    }
+
+.divider {
+    height: 1px;
+    background: linear-gradient(90deg, #C9B8E8, #E8DFF5);
+}
+
+.section-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #9B85CC;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    margin-top: 1rem;
+}
+
+.shortcut-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(232, 223, 245, 0.4);
+    border-radius: 10px;
+    border: 1px solid #C9B8E8;
+}
+
+.key-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid #C9B8E8;
+    border-radius: 8px;
+    padding: 3px 9px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #3a2870;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-shadow: 2px 2px 6px rgba(154, 133, 204, 0.25);
+}
+
+.shortcut-desc {
+    font-size: 13px;
+    color: #6b5499;
+    line-height: 1.5;
+}
+
+.wip-badge {
+    font-size: 11px;
+    background: #E8DFF5;
+    color: #9B85CC;
+    border-radius: 6px;
+    padding: 2px 7px;
+    border: 1px solid #C9B8E8;
+    vertical-align: 2px;
+}
+
+.intro-text {
+    font-size: 14px;
+    color: #6b5499;
+    line-height: 1.6;
+    padding-top: 1rem;
+    padding-bottom: 0.75rem;
+}
+
+.manual-step {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(201, 184, 232, 0.4);
+}
+
+    .manual-step:last-child {
+        border-bottom: none;
+    }
+
+.step-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #E8DFF5, #C9B8E8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 2px 2px 6px rgba(154, 133, 204, 0.2);
+}
+
+    .step-icon i {
+        font-size: 16px;
+        color: #5c3fa8;
+    }
+
+.step-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #3a2870;
+    margin: 0;
+}
+
+.step-content p {
+    font-size: 13px;
+    color: #6b5499;
+    line-height: 1.6;
+    margin-top: 3px;
+    margin-bottom: 0;
+}
+
+.contact-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(201, 184, 232, 0.4);
+}
+
+    .contact-row:last-child {
+        border-bottom: none;
+    }
+
+    .contact-row i {
+        font-size: 16px;
+        color: #9B85CC;
+    }
+
+.contact-label {
+    font-size: 13px;
+    color: #9B85CC;
+    width: 60px;
+}
+
+.tag {
+    font-size: 11px;
+    background: rgba(232, 223, 245, 0.6);
+    color: #9B85CC;
+    border-radius: 8px;
+    padding: 3px 10px;
+    border: 1px solid #C9B8E8;
+}
+
+@media (max-width: 520px) {
+    .shortcut-grid {
+        grid-template-columns: 1fr;
+    }
 }

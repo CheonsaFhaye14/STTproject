@@ -2,15 +2,6 @@
 @rendermode InteractiveServer
 
 <div class="profile-container">
-    <div class="profile-header">
-        <h1><i class="fa-solid fa-user-circle"></i> User Profile</h1>
-        @if (CurrentUser != null && !IsEditMode)
-        {
-            <button type="button" class="btn-primary" @onclick="EnableEditMode" title="Edit profile">
-                <i class="fa-solid fa-pen-to-square"></i> Edit Profile
-            </button>
-        }
-    </div>
 
     @if (IsLoading)
     {
@@ -36,98 +27,85 @@
             </div>
         }
 
+        <div class="profile-header">
+            <h1>User Profile</h1>
+            <button type="button" class="btn-edit-profile" @onclick="EnableEditMode">
+                <i class="fa-solid fa-pen-to-square"></i> Edit Profile
+            </button>
+        </div>
+
         <div class="profile-card">
-            @if (IsEditMode)
-            {
-                <div class="modal-overlay" @onclick="CancelEdit">
-                    <div class="modal-content" @onclick:stopPropagation="true">
-                        <div class="modal-header">
-                            <h4>Edit Profile</h4>
-                            <button class="btn-close" @onclick="CancelEdit" title="Close">&times;</button>
-                        </div>
-                        <div class="modal-body">
-                            <EditProfile EditingUser="EditingUser" OnSave="SaveChangesAsync" OnCancel="CancelEdit" />
-                        </div>
+
+            @* Avatar banner *@
+            <div class="card-banner">
+                <div class="avatar">@GetInitials(CurrentUser.FullName)</div>
+                <div class="banner-info">
+                    <p class="banner-name">@CurrentUser.FullName</p>
+                    <p class="banner-sub">
+                        @CurrentUser.Role
+                        <span class="status-pill @(CurrentUser.IsActive ? "pill-active" : "pill-inactive")">
+                            <span class="dot"></span>
+                            @GetStatusBadge(CurrentUser.IsActive)
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            @* Field rows *@
+            <div class="fields">
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-at"></i> Username</span>
+                    <span class="field-value">@CurrentUser.Username</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-user"></i> Full Name</span>
+                    <span class="field-value">@CurrentUser.FullName</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-envelope"></i> Email</span>
+                    <span class="field-value">@(string.IsNullOrEmpty(CurrentUser.Email) ? "Not provided" : CurrentUser.Email)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-shield"></i> Role</span>
+                    <span class="field-value">@CurrentUser.Role</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-calendar-plus"></i> Created</span>
+                    <span class="field-value muted">@FormatDate(CurrentUser.CreatedDate)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label"><i class="fa-solid fa-clock"></i> Last Updated</span>
+                    <span class="field-value muted">@FormatDate(CurrentUser.UpdatedDate)</span>
+                </div>
+            </div>
+
+            @* Footer *@
+            <div class="card-footer">
+                <ChangePass UserId="CurrentUser.UserId" />
+            </div>
+
+        </div>
+
+        @* Edit modal *@
+        @if (IsEditMode)
+        {
+            <div class="modal-overlay" @onclick="CancelEdit">
+                <div class="modal-content" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h4>Edit Profile</h4>
+                       
+                    </div>
+                    <div class="modal-body">
+                        <EditProfile EditingUser="EditingUser" OnSave="SaveChangesAsync" OnCancel="CancelEdit" />
                     </div>
                 </div>
-            }
-            else
-            {
-                <div class="view-mode">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="detail-section">
-                                <h5 class="section-title"><i class="fa-solid fa-info-circle"></i> Basic Information</h5>
-                                <div class="detail-item">
-                                    <label class="detail-label">Username:</label>
-                                    <span class="detail-value">@CurrentUser.Username</span>
-                                </div>
-                                <div class="detail-item">
-                                    <label class="detail-label">Full Name:</label>
-                                    <span class="detail-value">@CurrentUser.FullName</span>
-                                </div>
-                                <div class="detail-item">
-                                    <label class="detail-label">Email:</label>
-                                    <span class="detail-value">@(string.IsNullOrEmpty(CurrentUser.Email) ? "Not provided" :
-                                                                                                                                                                                                                                                                                                                        CurrentUser.Email)</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-section">
-                                    <h5 class="section-title"><i class="fa-solid fa-shield"></i> Access & Status</h5>
-                                    <div class="detail-item">
-                                        <label class="detail-label">Role:</label>
-                                        <span class="detail-value">
-                                            <span class="badge">@CurrentUser.Role</span>
-                                        </span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <label class="detail-label">Status:</label>
-                                        <span class="detail-value">
-                                            <span class="@GetStatusClass(CurrentUser.IsActive)">
-                                                @GetStatusBadge(CurrentUser.IsActive)
-                                            </span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <div class="detail-section">
-                                    <h5 class="section-title"><i class="fa-solid fa-calendar-plus"></i> Created</h5>
-                                    <div class="detail-item">
-                                        <label class="detail-label">Date:</label>
-                                        <span class="detail-value">@FormatDate(CurrentUser.CreatedDate)</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-section">
-                                    <h5 class="section-title"><i class="fa-solid fa-calendar-check"></i> Last Updated</h5>
-                                    <div class="detail-item">
-                                        <label class="detail-label">Date:</label>
-                                        <span class="detail-value">@FormatDate(CurrentUser.UpdatedDate)</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="action-buttons">
-                            <ChangePass UserId="CurrentUser.UserId" />
-                        </div>
-                    </div>
-                }
             </div>
         }
+    }
     else
-        {
-            <div class="alert alert-warning">
-                <i class="fa-solid fa-triangle-exclamation"></i> No user data available.
-            </div>
-        }
-    </div>
+    {
+        <div class="alert alert-warning">
+            <i class="fa-solid fa-triangle-exclamation"></i> No user data available.
+        </div>
+    }
+</div>

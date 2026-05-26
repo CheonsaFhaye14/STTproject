@@ -8,7 +8,6 @@ using STTproject.Data;
 
 namespace STTproject.Features.User.Profile.Components.Pages;
 
-
 public partial class Profile
 {
     private const string UserIdStateKey = "profile-user-id";
@@ -160,8 +159,7 @@ public partial class Profile
 
                 IsEditMode = false;
                 SuccessMessage = "Profile updated successfully!";
-                
-                // Clear success message after 3 seconds
+
                 _ = Task.Delay(3000).ContinueWith(_ =>
                 {
                     SuccessMessage = null;
@@ -198,6 +196,15 @@ public partial class Profile
                 Password = CurrentUser.Password
             };
         }
+    }
+
+    private string GetInitials(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "?";
+        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+            : parts[0][0].ToString().ToUpper();
     }
 
     private string FormatDate(DateTime? date)

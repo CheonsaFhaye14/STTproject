@@ -15,7 +15,8 @@
 .topbar-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 2px;
+    flex: 0 0 auto;
 }
 
 /* Right Side */
@@ -70,9 +71,9 @@
 
 /* Logo */
 .site-logo {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
+    width: 100px;
+    height: 90px;
+
 }
 
 /* Website Name */

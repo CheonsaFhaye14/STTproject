@@ -1,58 +1,52 @@
 @if (EditingUser != null)
 {
-<div class="edit-mode">
-    <div class="row mb-4">
-        <div class="col-md-6">
+    @if (ShowConfirmationModal)
+    {
+        <div class="confirm-box">
+            <p class="confirm-text">Are you sure you want to save these changes to your profile?</p>
+            <div class="action-buttons">
+                <button class="btn-save" @onclick="OnSaveClick" disabled="@IsSaving">
+                    @(IsSaving ? "Saving..." : "Yes, Save Changes")
+                </button>
+                <button class="btn-cancel" @onclick="() => CloseConfirmation()" disabled="@IsSaving">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="edit-mode">
             <div class="form-group">
                 <label class="form-label">Username</label>
-                <input type="text" class="form-control" @bind="EditingUser.Username" placeholder="Enter username"/>
+                <div class="input-wrapper">
+                    <i class="fa-solid fa-at" aria-hidden="true"></i>
+                    <input type="text" class="form-control" @bind="EditingUser.Username" placeholder="Enter username" />
+                </div>
             </div>
-        </div>
-        <div class="col-md-6">
             <div class="form-group">
                 <label class="form-label">Full Name</label>
-                <input type="text" class="form-control" @bind="EditingUser.FullName" placeholder="Enter full name" />
+                <div class="input-wrapper">
+                    <i class="fa-solid fa-user" aria-hidden="true"></i>
+                    <input type="text" class="form-control" @bind="EditingUser.FullName" placeholder="Enter full name" />
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="row mb-4">
-        <div class="col-md-6">
             <div class="form-group">
                 <label class="form-label">Email</label>
-                <input type="email" class="form-control" @bind="EditingUser.Email" placeholder="Enter email address" />
+                <div class="input-wrapper">
+                    <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                    <input type="email" class="form-control" @bind="EditingUser.Email" placeholder="Enter email address" />
+                </div>
             </div>
-        </div>
-       </div>
-    <div class="action-buttons">
-        <button class="btn-save" @onclick="ShowConfirmationAsync" disabled="@IsSaving">
-            <i class="fa-solid fa-check"></i> @(IsSaving ? "Saving..." : "Save Changes")
-        </button>
-        <button class="btn-cancel" @onclick="OnCancelClick" disabled="@IsSaving">
-            <i class="fa-solid fa-times"></i> Cancel
-        </button>
 
-    </div>
-</div>
-@if (ShowConfirmationModal)
-{
-    <div class="modal-overlay" @onclick="() => CloseConfirmation()">
-        <div class="modal-content" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h4><i class="fa-solid fa-exclamation-triangle"></i> Confirm Changes</h4>
-                <button class="btn-secondary" @onclick="() => CloseConfirmation()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to save these changes to your profile?</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-save" @onclick="OnSaveClick" disabled="@IsSaving">
-                    <i class="fa-solid fa-check"></i> Yes, Save Changes
+            <div class="action-buttons">
+                <button class="btn-save" @onclick="ShowConfirmationAsync" disabled="@IsSaving">
+                    Save Changes
                 </button>
-                <button class="btn-secondary" @onclick="() => CloseConfirmation()" disabled="@IsSaving">
-                    <i class="fa-solid fa-times"></i> Cancel
+                <button class="btn-cancel" @onclick="OnCancelClick" disabled="@IsSaving">
+                    Cancel
                 </button>
             </div>
         </div>
-    </div>
-}
+    }
 }

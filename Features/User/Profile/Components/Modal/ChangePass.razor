@@ -1,73 +1,70 @@
-<button class="btn-primary" @onclick="() => OpenModal()" disabled="@(!UserId.HasValue)">
+<button class="btn-change-pass" @onclick="() => OpenModal()" disabled="@(!UserId.HasValue)">
     <i class="fa-solid fa-key"></i> Change Password
 </button>
 
 @if (ShowPasswordModal)
 {
-    <div class="modal-overlay" @onclick="() => OnBackdropClick()">
-        <div class="modal-content" @onclick:stopPropagation="true">
-            <div class="modal-header">
+    <div class="cp-overlay" @onclick="() => OnBackdropClick()">
+        <div class="cp-modal" @onclick:stopPropagation="true">
+
+            <div class="cp-header">
                 <h4><i class="fa-solid fa-key"></i> Change Password</h4>
-                <button class="btn-secondary" @onclick="() => CloseModal()">&times;</button>
             </div>
 
-            <div class="modal-body">
+            <div class="cp-body">
                 @if (!string.IsNullOrEmpty(PasswordErrorMessage))
                 {
-                    <div class="alert alert-danger">
+                    <div class="cp-alert">
                         <i class="fa-solid fa-circle-exclamation"></i> @PasswordErrorMessage
                     </div>
                 }
 
-                <div class="form-group">
-                    <label class="form-label">Current Password</label>
-                    <input type="password" class="form-control" @bind="CurrentPassword"
-                           placeholder="Enter current password" />
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">New Password</label>
-                    <input type="password" class="form-control" @bind="NewPassword" placeholder="Enter new password" />
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Confirm New Password</label>
-                    <input type="password" class="form-control" @bind="ConfirmPassword"
-                           placeholder="Confirm new password" />
-                </div>
+                @if (ShowConfirmationModal)
+                {
+                    <p class="cp-confirm-text">Are you sure you want to change your password? This action cannot be undone.</p>
+                    <div class="cp-actions">
+                        <button class="cp-btn-save" @onclick="() => ChangePasswordAsync()" disabled="@IsSubmitting">
+                            @(IsSubmitting ? "Changing..." : "Yes, Change Password")
+                        </button>
+                        <button class="cp-btn-cancel" @onclick="() => CloseConfirmation()" disabled="@IsSubmitting">
+                            Cancel
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label class="cp-label">Current Password</label>
+                        <div class="cp-input-wrapper">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" class="cp-input" @bind="CurrentPassword" placeholder="Enter current password" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="cp-label">New Password</label>
+                        <div class="cp-input-wrapper">
+                            <i class="fa-solid fa-lock-open"></i>
+                            <input type="password" class="cp-input" @bind="NewPassword" placeholder="Enter new password" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="cp-label">Confirm New Password</label>
+                        <div class="cp-input-wrapper">
+                            <i class="fa-solid fa-lock-open"></i>
+                            <input type="password" class="cp-input" @bind="ConfirmPassword" placeholder="Confirm new password" />
+                        </div>
+                    </div>
+                    <div class="cp-actions">
+                        <button class="cp-btn-save" @onclick="() => ShowConfirmationAsync()" disabled="@IsSubmitting">
+                            Change Password
+                        </button>
+                        <button class="cp-btn-cancel" @onclick="() => CloseModal()" disabled="@IsSubmitting">
+                            Cancel
+                        </button>
+                    </div>
+                }
             </div>
 
-            <div class="modal-footer">
-                <button class="btn-save" @onclick="() => ShowConfirmationAsync()" disabled="@IsSubmitting">
-                    <i class="fa-solid fa-check"></i> @(IsSubmitting ? "Changing..." : "Change Password")
-                </button>
-                <button class="btn-secondary" @onclick="() => CloseModal()" disabled="@IsSubmitting">
-                    <i class="fa-solid fa-times"></i> Cancel
-                </button>
-            </div>
         </div>
     </div>
-}
-
-@if (ShowConfirmationModal)
-{
-    <div class="modal-overlay" @onclick="() => CloseConfirmation()">
-        <div class="modal-content" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h4><i class="fa-solid fa-exclamation-triangle"></i> Confirm Password Change</h4>
-                <button class="btn-secondary" @onclick="() => CloseConfirmation()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to change your password? This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-save" @onclick="() => ChangePasswordAsync()" disabled="@IsSubmitting">
-                    <i class="fa-solid fa-check"></i> Yes, Change Password
-                </button>
-                <button class="btn-secondary" @onclick="() => CloseConfirmation()" disabled="@IsSubmitting">
-                    <i class="fa-solid fa-times"></i> Cancel
-                </button>
-            </div>
-        </div>
-        </div>
 }

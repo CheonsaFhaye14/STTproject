@@ -1,0 +1,237 @@
+﻿.btn-change-pass {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    background: transparent;
+    color: #7F77DD;
+    border: 1.5px solid #c4c0ee;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .btn-change-pass:hover {
+        background: #f5f5fc;
+    }
+
+    .btn-change-pass:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+.cp-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 27, 60, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    backdrop-filter: blur(2px);
+    animation: cpFadeIn 0.18s ease;
+}
+
+@keyframes cpFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.cp-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 420px;
+    overflow: hidden;
+    border: 1px solid rgba(127, 119, 221, 0.18);
+    box-shadow: 0 8px 32px rgba(30, 27, 60, 0.16);
+    animation: cpSlideUp 0.2s ease;
+}
+
+@keyframes cpSlideUp {
+    from {
+        transform: translateY(16px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.cp-header {
+    background: linear-gradient(135deg, #7F77DD 0%, #AFA9EC 100%);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+    .cp-header h4 {
+        margin: 0;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+.cp-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #fff;
+    cursor: pointer;
+    line-height: 1;
+}
+
+    .cp-close:hover {
+        background: rgba(255, 255, 255, 0.35);
+    }
+
+.cp-body {
+    padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.cp-alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 1rem;
+}
+
+.cp-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #8b8fa8;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.cp-input-wrapper {
+    position: relative;
+}
+
+    .cp-input-wrapper i {
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 13px;
+        color: #b0b3c8;
+        pointer-events: none;
+    }
+
+.cp-input {
+    padding: 9px 12px 9px 32px;
+    font-size: 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e4ef;
+    background: #fafafe;
+    color: #2d2d3a;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+    .cp-input:hover {
+        border-color: #c4c0ee;
+    }
+
+    .cp-input:focus {
+        border-color: #7F77DD;
+        box-shadow: 0 0 0 3px rgba(127, 119, 221, 0.14);
+        background: #fff;
+        outline: none;
+    }
+
+    .cp-input::placeholder {
+        color: #c2c4d4;
+    }
+
+.cp-confirm-text {
+    font-size: 14px;
+    color: #4a4a6a;
+    margin-bottom: 1.25rem;
+    line-height: 1.6;
+}
+
+.cp-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 1.25rem;
+}
+
+.cp-btn-save,
+.cp-btn-cancel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+    .cp-btn-save:active,
+    .cp-btn-cancel:active {
+        transform: scale(0.98);
+    }
+
+    .cp-btn-save:disabled,
+    .cp-btn-cancel:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+.cp-btn-save {
+    background: linear-gradient(135deg, #7F77DD, #9b94e8);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(127, 119, 221, 0.3);
+}
+
+    .cp-btn-save:hover:not(:disabled) {
+        opacity: 0.9;
+    }
+
+.cp-btn-cancel {
+    background: transparent;
+    color: #7F77DD;
+    border: 1.5px solid #c4c0ee;
+}
+
+    .cp-btn-cancel:hover:not(:disabled) {
+        background: #f5f5fc;
+    }
