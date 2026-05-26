@@ -50,7 +50,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             {
                 if (await InvoiceNumberExistsAsync(cts.Token))
                 {
-                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists for this order type.");
                     return;
                 }
 
@@ -85,7 +85,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
             {
                 if (await InvoiceNumberExistsAsync(cts.Token))
                 {
-                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                    SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists for this order type.");
                     return;
                 }
                 ClearFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key);
@@ -119,7 +119,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
         {
             if (await InvoiceNumberExistsAsync(cts.Token))
             {
-                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists.");
+                SetFieldError(SalesInvoiceValidation.Header.InvoiceNumber.Key, "Sales invoice code already exists for this order type.");
                 return;
             }
 
@@ -449,7 +449,7 @@ SalesInvoiceValidation.Header.CustomerBranch.ErrorMessage);
 
     private Task<bool> InvoiceNumberExistsAsync(CancellationToken cancellationToken = default)
     {
-        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, CurrentInvoiceId, cancellationToken);
+        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, Invoice.OrderType, CurrentInvoiceId, cancellationToken);
     }
 
     [Parameter] public List<CustomerDataModel> Customers { get; set; } = new();

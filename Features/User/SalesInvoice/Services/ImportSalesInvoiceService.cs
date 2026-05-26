@@ -308,7 +308,7 @@ public sealed class ImportSalesInvoiceService
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
 					hasCustomerBranches,
-					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, 0, cancellationToken));
+					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, 0, cancellationToken));
 
 				if (validationErrors.Count > 0)
 				{
@@ -364,7 +364,7 @@ public sealed class ImportSalesInvoiceService
 
 				if (saveResult.IsDuplicate)
 				{
-					var msg = $"Sales invoice '{prepared.InvoiceNumber}' already exists.";
+					var msg = $"Sales invoice '{prepared.InvoiceNumber}' already exists for this order type.";
 					result.AddError(0, prepared.InvoiceNumber, msg);
 					prepared.IsSaved = false;
 					prepared.SaveErrorMessage = msg;

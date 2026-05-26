@@ -49,7 +49,7 @@ public static class SalesInvoiceValidation
         }
         else if (await invoiceNumberExistsAsync())
         {
-            errors[Header.InvoiceNumber.Key] = "Sales invoice code already exists.";
+            errors[Header.InvoiceNumber.Key] = "Sales invoice code already exists for this order type.";
         }
 
         if (string.IsNullOrWhiteSpace(invoice.SalesManName))

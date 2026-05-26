@@ -218,7 +218,7 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("SalesInvoice");
 
-            entity.HasIndex(e => e.SalesInvoiceCode, "UQ__SalesInv__C94B6607BF057E81").IsUnique();
+            entity.HasIndex(e => new { e.SalesInvoiceCode, e.OrderType }, "UQ__SalesInv__Code_OrderType").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
