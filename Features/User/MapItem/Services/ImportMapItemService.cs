@@ -709,12 +709,12 @@ public sealed class ImportMapItemService
 
 			if (IsPieceUom(row.UOM) && row.Conversion != 1)
 			{
-				AddError(row.RowNumber, "UOM 'Piece/PCS' must have conversion 1.");
+				AddError(row.RowNumber, "UOM 'Piece/PC' must have conversion 1.");
 			}
 
 			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
 			{
-				AddError(row.RowNumber, "Only UOM 'Piece/PCS' can have conversion 1.");
+				AddError(row.RowNumber, "Only UOM 'Piece/PC' can have conversion 1.");
 			}
 		}
 
@@ -753,7 +753,7 @@ public sealed class ImportMapItemService
 	private static bool IsPieceUom(string? uom)
 	{
 		var normalized = Normalize(uom ?? string.Empty);
-		return normalized is "piece" or "pcs";
+		return normalized is "piece" or "pcs" or "pc";
 	}
 
 	private static string NormalizeUomKey(string? uom)
