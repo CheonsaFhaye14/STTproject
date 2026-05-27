@@ -84,7 +84,8 @@
     <AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
                      OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
                      AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-                     InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync" />
+                     InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync"
+                     IsCredit="@(string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))" />
 
     <EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
                       OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"

@@ -44,44 +44,10 @@ public partial class AddInvoiceItems
     [Parameter] public bool HeaderIsSaved { get; set; } = false;
     [Parameter] public DateOnly InvoiceDate { get; set; }
     [Parameter] public EventCallback OnDraftChanged { get; set; }
+    [Parameter] public bool IsCredit { get; set; }
 
-    private string _selectedPrincipal = string.Empty;
-    private string _selectedCategory = string.Empty;
-
-    private string SelectedPrincipal
-    {
-        get => _selectedPrincipal;
-        set
-        {
-            var newVal = value?.Trim() ?? string.Empty;
-            if (string.Equals(_selectedPrincipal, newVal, StringComparison.OrdinalIgnoreCase))
-                return;
-            _selectedPrincipal = newVal;
-
-            // Clear category when principal changes so user can pick appropriate category.
-            _selectedCategory = string.Empty;
-
-            // Reset draft fields (but keep principal/category selection via backing fields)
-            ResetNewItem();
-
-            _ = OnDraftChanged.InvokeAsync();
-        }
-    }
-
-    private string SelectedCategory
-    {
-        get => _selectedCategory;
-        set
-        {
-            var newVal = value?.Trim() ?? string.Empty;
-            if (string.Equals(_selectedCategory, newVal, StringComparison.OrdinalIgnoreCase))
-                return;
-            _selectedCategory = newVal;
-
-            ResetNewItem();
-            _ = OnDraftChanged.InvokeAsync();
-        }
-    }
+    private string SelectedPrincipal { get; set; } = string.Empty;
+    private string SelectedCategory { get; set; } = string.Empty;
 
     private DateTime lastPrincipalEnterTime = DateTime.MinValue;
 
@@ -135,7 +101,27 @@ public partial class AddInvoiceItems
 
         await UpdateCurrentUnitPriceAsync();
     }
-    // Change handlers removed — logic handled in SelectedPrincipal/SelectedCategory setters
+
+    private Task OnPrincipalChanged(ChangeEventArgs e)
+    {
+        SelectedPrincipal = e.Value?.ToString()?.Trim() ?? string.Empty;
+
+        // Clear category when principal changes so user can pick appropriate category.
+        SelectedCategory = string.Empty;
+
+        // Clear current draft fields when principal changes to avoid stale item/UOM selection.
+        ResetNewItem();
+        return OnDraftChanged.InvokeAsync();
+    }
+
+    private Task OnCategoryChanged(ChangeEventArgs e)
+    {
+        SelectedCategory = e.Value?.ToString()?.Trim() ?? string.Empty;
+
+        // Clear current draft fields when category changes to avoid stale item/UOM selection.
+        ResetNewItem();
+        return OnDraftChanged.InvokeAsync();
+    }
 
     private async Task HandlePrincipalKeyDown(KeyboardEventArgs e)
     {
@@ -332,6 +318,7 @@ SelectedSubdistributorId);
         var selectedUom = CurrentUom!;
         CurrentUnitPrice ??= await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
         var lineTotalPrice = NewItem.Quantity * CurrentUnitPrice.Value;
+        var signedLineAmount = IsCredit ? -Math.Abs(lineTotalPrice) : lineTotalPrice;
 
         var resolvedItemName = CurrentSubdItem?.ItemName ?? NewItem.ItemName;
 
@@ -344,7 +331,7 @@ SelectedSubdistributorId);
         if (existingItem != null)
         {
             existingItem.Quantity += NewItem.Quantity;
-            existingItem.Amount += lineTotalPrice;
+            existingItem.Amount += signedLineAmount;
         }
         else
         {
@@ -355,7 +342,7 @@ SelectedSubdistributorId);
                 SubdItemId = NewItem.SubdItemId,
                 ItemsUomId = NewItem.ItemsUomId,
                 Quantity = NewItem.Quantity,
-                Amount = lineTotalPrice // Amount based on rules
+                Amount = signedLineAmount // Amount based on rules
             });
         }
 
@@ -435,7 +422,8 @@ SelectedSubdistributorId);
         CurrentSubdItem = null;
         CurrentUom = null;
         CurrentUnitPrice = null;
-        // Do not clear SelectedPrincipal/SelectedCategory here; selection should persist.
+        SelectedPrincipal = string.Empty;
+        SelectedCategory = string.Empty;
         ShowValidationErrors = false;
         ValidationErrors.Clear();
         SaveErrorMessage = null;
@@ -546,10 +534,7 @@ SelectedSubdistributorId);
 
     private static string GetItemDisplayLabel(SubdItem item)
     {
-        var principal = item.CompanyItem?.Principal;
-        return string.IsNullOrWhiteSpace(principal)
-            ? item.ItemName
-            : $"{item.ItemName} ({principal})";
+        return item.ItemName;
     }
 
     private async Task HandleUomKeyDown(KeyboardEventArgs e)

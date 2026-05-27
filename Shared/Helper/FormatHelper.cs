@@ -36,11 +36,7 @@ namespace STTproject.Shared.Helper
 
         public static string FormatPrice(decimal price)
         {
-            if (price < 0)
-            {
-                return $"({Math.Abs(price).ToString("N2")})";
-            }
-
+            // Use a standard numeric format so negatives show with a leading minus (e.g. -50.00)
             return price.ToString("N2");
         }
     }
