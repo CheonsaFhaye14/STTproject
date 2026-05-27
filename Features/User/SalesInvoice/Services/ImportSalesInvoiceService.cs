@@ -89,15 +89,13 @@ public sealed class ImportSalesInvoiceService
 			?? workbook.Worksheets.First();
 
 		var headers = BuildHeaderMap(worksheet);
+		var hasSplitQuantityHeaders = headers.ContainsKey("CaseQuantity") || headers.ContainsKey("DozenQuantity") || headers.ContainsKey("PieceQuantity");
 		var requiredHeaders = new[]
 		{
 			"InvoiceCode",
 			"InvoiceDate",
 			"CustomerCode",
-			"OrderType",
-			"SkuCode",
-			"UOM",
-			"Quantity"
+			"SkuCode"
 		};
 
 		var missingHeaders = requiredHeaders
@@ -109,6 +107,22 @@ public sealed class ImportSalesInvoiceService
 			result.AddError(0, string.Empty, $"Missing required column(s): {string.Join(", ", missingHeaders)}.");
 			return result;
 		}
+
+		if (!hasSplitQuantityHeaders)
+		{
+			if (!headers.ContainsKey("UOM") || !headers.ContainsKey("Quantity"))
+			{
+				result.AddError(0, string.Empty, "Missing required column(s): UOM and Quantity, or provide case/piece quantity columns.");
+				return result;
+			}
+		}
+		else if (!headers.ContainsKey("CaseQuantity") && !headers.ContainsKey("DozenQuantity") && !headers.ContainsKey("PieceQuantity"))
+		{
+			result.AddError(0, string.Empty, "Missing required column(s): case/dozen/piece quantity columns.");
+			return result;
+		}
+
+		// NetAmount is optional; OrderType may be provided per-row or inferred from quantities/net where available.
 
 		await using var context = _contextFactory.CreateDbContext();
 		var customers = await context.Customers
@@ -227,7 +241,7 @@ public sealed class ImportSalesInvoiceService
 						break;
 					}
 
-					if (!uomLookup.TryGetValue((subdItem.SubdItemId, Normalize(row.UOM)), out var uom))
+					if (!TryResolveUom(subdItem.SubdItemId, row.UOM, uomLookup, out var uom))
 					{
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM"));
@@ -385,16 +399,25 @@ public sealed class ImportSalesInvoiceService
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var hasUomColumn = headers.TryGetValue("UOM", out var uomColumn);
+		var hasQuantityColumn = headers.TryGetValue("Quantity", out var quantityColumn);
+		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
+		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
+		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
+		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn;
 
 		for (int rowNumber = 2; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
 			var invoiceCode = GetString(row, headers["InvoiceCode"]);
 			var customerCode = GetString(row, headers["CustomerCode"]);
-			var orderType = GetString(row, headers["OrderType"]);
+			var hasOrderTypeColumn = headers.TryGetValue("OrderType", out var orderTypeColumn);
+			var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
+			var orderType = hasOrderTypeColumn ? GetString(row, orderTypeColumn) : string.Empty;
 			var skuCode = GetString(row, headers["SkuCode"]);
-			var uom = GetString(row, headers["UOM"]);
+			var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
 			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
+			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
 
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
 				string.IsNullOrWhiteSpace(customerCode) &&
@@ -402,14 +425,19 @@ public sealed class ImportSalesInvoiceService
 				string.IsNullOrWhiteSpace(skuCode) &&
 				string.IsNullOrWhiteSpace(uom) &&
 				row.Cell(headers["InvoiceDate"]).IsEmpty() &&
-				row.Cell(headers["Quantity"]).IsEmpty())
+				(!hasQuantityColumn || row.Cell(quantityColumn).IsEmpty()) &&
+				(!hasCaseQuantityColumn || row.Cell(caseQuantityColumn).IsEmpty()) &&
+				(!hasDozenQuantityColumn || row.Cell(dozenQuantityColumn).IsEmpty()) &&
+				(!hasPieceQuantityColumn || row.Cell(pieceQuantityColumn).IsEmpty()) &&
+				(netAmountCell is null || netAmountCell.IsEmpty()))
 			{
 				continue;
 			}
+
 			var rowHasErrors = false;
 			DateOnly invoiceDate = default;
 			string normalizedOrderType = string.Empty;
-			int quantity = 0;
+			var emittedRows = new List<ImportedInvoiceRow>();
 
 			void AddRowError(string message, string? columnName = null)
 			{
@@ -441,9 +469,41 @@ public sealed class ImportSalesInvoiceService
 			}
 			else
 			{
-				if (!TryParseOrderType(orderType, out normalizedOrderType))
+				if (!string.IsNullOrWhiteSpace(orderType))
 				{
-					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+					if (!TryParseOrderType(orderType, out normalizedOrderType))
+					{
+						AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+					}
+				}
+				else if (hasNetAmountColumn)
+				{
+					if (netAmountCell is null || netAmountCell.IsEmpty())
+					{
+						AddRowError("Net amount is required when OrderType is empty.", "NetAmount");
+					}
+					else if (!TryGetDecimal(netAmountCell, out var netAmount))
+					{
+						AddRowError("Net amount must be a valid number.", "NetAmount");
+					}
+					else if (netAmount > 0)
+					{
+						normalizedOrderType = "Invoice";
+					}
+					else if (netAmount < 0)
+					{
+						normalizedOrderType = "Credit";
+					}
+					else
+					{
+						AddRowError("Net amount cannot be 0 when mapping to OrderType.", "NetAmount");
+					}
+				}
+				else
+				{
+					// No explicit OrderType and no NetAmount column to infer from — warn but default to Invoice.
+					result.Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceCode, "Order type missing and NetAmount column not present; defaulting to Invoice.", "OrderType"));
+					normalizedOrderType = "Invoice";
 				}
 			}
 
@@ -456,18 +516,124 @@ public sealed class ImportSalesInvoiceService
 				AddRowError($"SKU code '{skuCode}' was not found.", "SkuCode");
 			}
 
-			if (string.IsNullOrWhiteSpace(uom))
+			if (!useSplitQuantities)
 			{
-				AddRowError("UOM is required.", "UOM");
-			}
+				if (string.IsNullOrWhiteSpace(uom))
+				{
+					uom = "pc";
+				}
 
-			if (row.Cell(headers["Quantity"]).IsEmpty())
-			{
-				AddRowError("Quantity is required.", "Quantity");
+				if (row.Cell(quantityColumn).IsEmpty())
+				{
+					AddRowError("Quantity is required.", "Quantity");
+				}
+				else if (!TryGetInt(row.Cell(quantityColumn), out var quantity) || quantity == 0)
+				{
+					AddRowError("Quantity must be a whole number and not zero.", "Quantity");
+				}
+				else
+				{
+					if (string.IsNullOrWhiteSpace(normalizedOrderType) && quantity < 0)
+					{
+						normalizedOrderType = "Credit";
+					}
+
+					if (!rowHasErrors)
+					{
+						emittedRows.Add(new ImportedInvoiceRow(
+							rowNumber,
+							invoiceCode,
+							invoiceDate,
+							customerCode,
+							normalizedOrderType,
+							salesManName,
+							skuCode,
+							uom,
+							quantity));
+					}
+				}
 			}
-			else if (!TryGetInt(row.Cell(headers["Quantity"]), out quantity) || quantity <= 0)
+			else
 			{
-				AddRowError("Quantity must be a whole number greater than 0.", "Quantity");
+				if (hasCaseQuantityColumn && !row.Cell(caseQuantityColumn).IsEmpty())
+				{
+					if (!TryGetInt(row.Cell(caseQuantityColumn), out var caseQuantity))
+					{
+						AddRowError("Case quantity must be a whole number.", "CaseQuantity");
+					}
+					else if (caseQuantity != 0)
+					{
+						if (string.IsNullOrWhiteSpace(normalizedOrderType) && caseQuantity < 0)
+						{
+							normalizedOrderType = "Credit";
+						}
+						emittedRows.Add(new ImportedInvoiceRow(
+							rowNumber,
+							invoiceCode,
+							invoiceDate,
+							customerCode,
+							normalizedOrderType,
+							salesManName,
+							skuCode,
+							NormalizeUomName("case"),
+							caseQuantity));
+					}
+				}
+
+				if (hasDozenQuantityColumn && !row.Cell(dozenQuantityColumn).IsEmpty())
+				{
+					if (!TryGetInt(row.Cell(dozenQuantityColumn), out var dozenQuantity))
+					{
+						AddRowError("Dozen quantity must be a whole number.", "DozenQuantity");
+					}
+					else if (dozenQuantity != 0)
+					{
+						if (string.IsNullOrWhiteSpace(normalizedOrderType) && dozenQuantity < 0)
+						{
+							normalizedOrderType = "Credit";
+						}
+						emittedRows.Add(new ImportedInvoiceRow(
+							rowNumber,
+							invoiceCode,
+							invoiceDate,
+							customerCode,
+							normalizedOrderType,
+							salesManName,
+							skuCode,
+							NormalizeUomName("dozen"),
+							dozenQuantity));
+					}
+				}
+
+				if (hasPieceQuantityColumn && !row.Cell(pieceQuantityColumn).IsEmpty())
+				{
+					if (!TryGetInt(row.Cell(pieceQuantityColumn), out var pieceQuantity))
+					{
+						AddRowError("Piece quantity must be a whole number.", "PieceQuantity");
+					}
+					else if (pieceQuantity != 0)
+					{
+						if (string.IsNullOrWhiteSpace(normalizedOrderType) && pieceQuantity < 0)
+						{
+							normalizedOrderType = "Credit";
+						}
+						emittedRows.Add(new ImportedInvoiceRow(
+							rowNumber,
+							invoiceCode,
+							invoiceDate,
+							customerCode,
+							normalizedOrderType,
+							salesManName,
+							skuCode,
+							NormalizeUomName("piece"),
+							pieceQuantity));
+					}
+				}
+
+				if (emittedRows.Count == 0)
+				{
+					AddRowError("Case or piece quantity is required.", hasCaseQuantityColumn ? "CaseQuantity" : "PieceQuantity");
+				}
 			}
 
 			if (rowHasErrors)
@@ -475,16 +641,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			rows.Add(new ImportedInvoiceRow(
-				rowNumber,
-				invoiceCode,
-				invoiceDate,
-				customerCode,
-				normalizedOrderType,
-				salesManName,
-				skuCode,
-				uom,
-				quantity));
+			rows.AddRange(emittedRows);
 		}
 
 		return rows;
@@ -494,6 +651,9 @@ public sealed class ImportSalesInvoiceService
 	{
 		var headerRow = worksheet.Row(1);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		int? unitHeaderColumn = null;
+		int? caseQuantityHeaderColumn = null;
+		int? pieceQuantityHeaderColumn = null;
 
 		foreach (var cell in headerRow.CellsUsed())
 		{
@@ -503,52 +663,117 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "invoicecode" or "invoice number" or "salesinvoicecode")
+			if (header is "num" or "invoicecode" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "po number" or "invoice#" or "invoice #" or "invoice no." or "invoice")
 			{
 				headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "invoicedate" or "salesinvoicedate")
+			if (header is "invoicedate" or "salesinvoicedate" or "invoice date" or "inv date" or "invoicedt" or "lst_date" or "si_date" or "date" or "p.o date" or "inv date" or "date-no." or "d_date")
 			{
 				headers.TryAdd("InvoiceDate", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "customercode")
+			if (header is "customercode" or "cust./supp." or "customer code" or "lst_cust1" or "so" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
 			{
 				headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-            
 
-			if (header is "ordertype")
+
+			if (header is "ordertype" or "order type" or "type" or "trx type" or "trxtype")
 			{
 				headers.TryAdd("OrderType", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "skucode" or "subditemcode")
+			if (header is "lst_net2" or "net")
+			{
+				headers.TryAdd("NetAmount", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "skucode" or "subditemcode" or "lst_head1" or "item_code" or "item code" or "item no." or "skuid" or "item number" or "stock_no" or "padsa item code" or "code" or "item_number")
 			{
 				headers.TryAdd("SkuCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "uom" or "unitofmeasure")
+			if (header is "uom" or "unitofmeasure" or "unit" or "um" or "u/m" or "pckg" or "stock unit: units")
 			{
-				headers.TryAdd("UOM", cell.Address.ColumnNumber);
+				if (header is "unit")
+				{
+					unitHeaderColumn ??= cell.Address.ColumnNumber;
+				}
+				else
+				{
+					headers.TryAdd("UOM", cell.Address.ColumnNumber);
+				}
 				continue;
 			}
 
-			if (header is "quantity")
+			if (header is "case_total")
+			{
+				headers.TryAdd("CaseQuantity", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "dozen_total")
+			{
+				headers.TryAdd("DozenQuantity", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "pieces_total")
+			{
+				headers.TryAdd("PieceQuantity", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "lst_qnty1" or "case" or "cs")
+			{
+				caseQuantityHeaderColumn ??= cell.Address.ColumnNumber;
+				continue;
+			}
+
+			if (header is "lst_qnty2" or "pc" or "pcs" or "piece")
+			{
+				pieceQuantityHeaderColumn ??= cell.Address.ColumnNumber;
+				continue;
+			}
+
+			if (header is "quantity" or "lst_qnty" or "item_qty_piece" or "qty" or "um_qty" or "qty. sold" or "qty_received")
 			{
 				headers.TryAdd("Quantity", cell.Address.ColumnNumber);
 			}
 
-			if (header is "salesman" or "salesmanname" or "salesman name" or "sales man")
+			if (header is "salesman" or "salesmanname" or "salesman name" or "sales man" or "lst_agent2" or "salesrep" or "agent" or "sales person" or "pic name" or "sales rep" or "sales_man" or "salesman_name" or "sales rep (employee): branch")
 			{
 				headers.TryAdd("SalesManName", cell.Address.ColumnNumber);
+			}
+		}
+
+		if (caseQuantityHeaderColumn.HasValue)
+		{
+			headers.TryAdd("CaseQuantity", caseQuantityHeaderColumn.Value);
+		}
+
+		if (pieceQuantityHeaderColumn.HasValue)
+		{
+			headers.TryAdd("PieceQuantity", pieceQuantityHeaderColumn.Value);
+		}
+
+		if (unitHeaderColumn.HasValue)
+		{
+			if (caseQuantityHeaderColumn.HasValue)
+			{
+				headers.TryAdd("PieceQuantity", unitHeaderColumn.Value);
+			}
+			else
+			{
+				headers.TryAdd("UOM", unitHeaderColumn.Value);
 			}
 		}
 
@@ -577,13 +802,16 @@ public sealed class ImportSalesInvoiceService
 
 	private static bool TryParseOrderType(string orderType, out string normalizedOrderType)
 	{
-		if (string.Equals(orderType, "Invoice", StringComparison.OrdinalIgnoreCase))
+		if (string.Equals(orderType, "Invoice", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(orderType, "Order", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(orderType, "Sales", StringComparison.OrdinalIgnoreCase))
 		{
 			normalizedOrderType = "Invoice";
 			return true;
 		}
 
-		if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase))
+		if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(orderType, "Returns", StringComparison.OrdinalIgnoreCase))
 		{
 			normalizedOrderType = "Credit";
 			return true;
@@ -614,6 +842,107 @@ public sealed class ImportSalesInvoiceService
 		return int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
 	}
 
+	private static bool TryResolveUom(
+		int subdItemId,
+		string value,
+		IReadOnlyDictionary<(int SubdItemId, string UomName), ItemsUom> uomLookup,
+		out ItemsUom uom)
+	{
+		foreach (var candidate in GetUomLookupCandidates(value))
+		{
+			if (uomLookup.TryGetValue((subdItemId, Normalize(candidate)), out var foundUom))
+			{
+				uom = foundUom;
+				return true;
+			}
+		}
+
+		uom = null!;
+		return false;
+	}
+
+	private static IEnumerable<string> GetUomLookupCandidates(string value)
+	{
+		var rawValue = value.Trim();
+		if (string.IsNullOrWhiteSpace(rawValue))
+		{
+			yield break;
+		}
+
+		foreach (var candidate in GetUomSynonyms(rawValue))
+		{
+			yield return candidate;
+		}
+	}
+
+	private static IEnumerable<string> GetUomSynonyms(string value)
+	{
+		var normalized = Normalize(value);
+
+		switch (normalized)
+		{
+			case "cs":
+			case "case":
+				yield return "case";
+				yield return "cs";
+				yield break;
+			case "dz":
+			case "dozen":
+				yield return "dozen";
+				yield return "dz";
+				yield break;
+			case "pc":
+			case "pcs":
+			case "piece":
+				yield return "piece";
+				yield return "pc";
+				yield return "pcs";
+				yield break;
+			case "pckg":
+			case "pck":
+			case "pack":
+			case "package":
+				yield return "package";
+				yield return "pckg";
+				yield break;
+			default:
+				yield return value.Trim();
+				yield break;
+		}
+	}
+
+	private static bool TryGetDecimal(IXLCell cell, out decimal value)
+	{
+		if (cell.DataType == XLDataType.Number)
+		{
+			value = Convert.ToDecimal(cell.GetDouble(), CultureInfo.InvariantCulture);
+			return true;
+		}
+
+		var text = cell.GetString().Trim();
+		if (decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.InvariantCulture, out value))
+		{
+			return true;
+		}
+
+		return decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.CurrentCulture, out value);
+	}
+
+	private static string NormalizeUomName(string value)
+	{
+		var normalized = Normalize(value);
+
+		return normalized switch
+		{
+			"cs" or "case" => "Case",
+			"dz" or "dozen" => "Dozen",
+			"pc" or "pcs" or "piece" => "Piece",
+			"pckg" or "package" => "Package",
+			"pck" or "pack" => value.Trim(),
+			_ => value.Trim()
+		};
+	}
+
 	private static bool TryGetDateOnly(IXLCell cell, out DateOnly date)
 	{
 		if (cell.DataType == XLDataType.DateTime)
@@ -629,6 +958,14 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		var text = cell.GetString().Trim();
+
+		if (string.IsNullOrWhiteSpace(text))
+		{
+			date = default;
+			return false;
+		}
+
+		// Try DateOnly parsing first
 		if (DateOnly.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out date))
 		{
 			return true;
@@ -639,7 +976,40 @@ public sealed class ImportSalesInvoiceService
 			return true;
 		}
 
+		// Try flexible DateTime parsing with both cultures
 		if (DateTime.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out dateTime))
+		{
+			date = DateOnly.FromDateTime(dateTime);
+			return true;
+		}
+
+		if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out dateTime))
+		{
+			date = DateOnly.FromDateTime(dateTime);
+			return true;
+		}
+
+		// Try several common explicit formats
+		var formats = new[]
+		{
+			"M/d/yyyy",
+			"M/d/yy",
+			"MM/dd/yyyy",
+			"dd/MM/yyyy",
+			"d/M/yyyy",
+			"yyyy-MM-dd",
+			"dd-MMM-yyyy",
+			"dd MMM yyyy",
+			"MMM dd, yyyy"
+		};
+
+		if (DateTime.TryParseExact(text, formats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out dateTime))
+		{
+			date = DateOnly.FromDateTime(dateTime);
+			return true;
+		}
+
+		if (DateTime.TryParseExact(text, formats, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out dateTime))
 		{
 			date = DateOnly.FromDateTime(dateTime);
 			return true;
