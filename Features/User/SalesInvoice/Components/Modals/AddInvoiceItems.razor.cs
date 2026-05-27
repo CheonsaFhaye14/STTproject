@@ -45,23 +45,71 @@ public partial class AddInvoiceItems
     [Parameter] public DateOnly InvoiceDate { get; set; }
     [Parameter] public EventCallback OnDraftChanged { get; set; }
 
-    private string SelectedPrincipal { get; set; } = string.Empty;
+    private string _selectedPrincipal = string.Empty;
+    private string _selectedCategory = string.Empty;
+
+    private string SelectedPrincipal
+    {
+        get => _selectedPrincipal;
+        set
+        {
+            var newVal = value?.Trim() ?? string.Empty;
+            if (string.Equals(_selectedPrincipal, newVal, StringComparison.OrdinalIgnoreCase))
+                return;
+            _selectedPrincipal = newVal;
+
+            // Clear category when principal changes so user can pick appropriate category.
+            _selectedCategory = string.Empty;
+
+            // Reset draft fields (but keep principal/category selection via backing fields)
+            ResetNewItem();
+
+            _ = OnDraftChanged.InvokeAsync();
+        }
+    }
+
+    private string SelectedCategory
+    {
+        get => _selectedCategory;
+        set
+        {
+            var newVal = value?.Trim() ?? string.Empty;
+            if (string.Equals(_selectedCategory, newVal, StringComparison.OrdinalIgnoreCase))
+                return;
+            _selectedCategory = newVal;
+
+            ResetNewItem();
+            _ = OnDraftChanged.InvokeAsync();
+        }
+    }
 
     private DateTime lastPrincipalEnterTime = DateTime.MinValue;
 
     private List<SubdItem> FilteredAvailableItems => AvailableItems
         .Where(i => i.SubDistributorId == SelectedSubdistributorId)
         .Where(i => string.IsNullOrWhiteSpace(SelectedPrincipal)
-            || string.Equals(i.CompanyItem?.Principal, SelectedPrincipal, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(i.CompanyItem?.Principal?.Trim(), SelectedPrincipal?.Trim(), StringComparison.OrdinalIgnoreCase))
+        .Where(i => string.IsNullOrWhiteSpace(SelectedCategory)
+            || string.Equals(i.CompanyItem?.Category?.Trim(), SelectedCategory?.Trim(), StringComparison.OrdinalIgnoreCase))
         .ToList();
 
     private List<string> AvailablePrincipals => AvailableItems
         .Where(i => i.SubDistributorId == SelectedSubdistributorId)
         .Select(i => i.CompanyItem?.Principal)
         .Where(p => !string.IsNullOrWhiteSpace(p))
-        .Select(p => p!)
+        .Select(p => p!.Trim())
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .OrderBy(p => p)
+        .ToList();
+
+    private List<string> AvailableCategories => AvailableItems
+        .Where(i => i.SubDistributorId == SelectedSubdistributorId)
+        .Where(i => string.IsNullOrWhiteSpace(SelectedPrincipal) || string.Equals(i.CompanyItem?.Principal?.Trim(), SelectedPrincipal?.Trim(), StringComparison.OrdinalIgnoreCase))
+        .Select(i => i.CompanyItem?.Category)
+        .Where(c => !string.IsNullOrWhiteSpace(c))
+        .Select(c => c!.Trim())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(c => c)
         .ToList();
 
 
@@ -74,22 +122,20 @@ public partial class AddInvoiceItems
     protected override async Task OnParametersSetAsync()
     {
         if (!string.IsNullOrWhiteSpace(SelectedPrincipal)
-            && !AvailablePrincipals.Any(p => string.Equals(p, SelectedPrincipal, StringComparison.OrdinalIgnoreCase)))
+            && !AvailablePrincipals.Any(p => string.Equals(p, SelectedPrincipal?.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
             SelectedPrincipal = string.Empty;
         }
 
+        if (!string.IsNullOrWhiteSpace(SelectedCategory)
+            && !AvailableCategories.Any(c => string.Equals(c, SelectedCategory?.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            SelectedCategory = string.Empty;
+        }
+
         await UpdateCurrentUnitPriceAsync();
     }
-
-    private Task OnPrincipalChanged(ChangeEventArgs e)
-    {
-        SelectedPrincipal = e.Value?.ToString() ?? string.Empty;
-
-        // Clear current draft fields when principal changes to avoid stale item/UOM selection.
-        ResetNewItem();
-        return OnDraftChanged.InvokeAsync();
-    }
+    // Change handlers removed — logic handled in SelectedPrincipal/SelectedCategory setters
 
     private async Task HandlePrincipalKeyDown(KeyboardEventArgs e)
     {
@@ -157,7 +203,8 @@ SelectedSubdistributorId);
 
         if (selected != null)
         {
-            SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
+            SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
+            SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
             CurrentSubdItem = selected;
             NewItem.SubdItemId = selected.SubdItemId;
             NewItem.ItemName = GetItemDisplayLabel(selected);
@@ -195,8 +242,8 @@ SelectedSubdistributorId);
             _ = OnDraftChanged.InvokeAsync();
             return Task.CompletedTask;
         }
-
-    SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
+        SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
+        SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
         NewItem.ItemName = GetItemDisplayLabel(selected);
         NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
         CurrentSubdItem = selected;
@@ -388,7 +435,7 @@ SelectedSubdistributorId);
         CurrentSubdItem = null;
         CurrentUom = null;
         CurrentUnitPrice = null;
-        SelectedPrincipal = string.Empty;
+        // Do not clear SelectedPrincipal/SelectedCategory here; selection should persist.
         ShowValidationErrors = false;
         ValidationErrors.Clear();
         SaveErrorMessage = null;
@@ -485,7 +532,8 @@ SelectedSubdistributorId);
             return false;
         }
 
-        SelectedPrincipal = selected.CompanyItem?.Principal ?? string.Empty;
+        SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
+        SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
         CurrentSubdItem = selected;
         NewItem.SubdItemId = selected.SubdItemId;
         NewItem.ItemCode = selected.SubdItemCode;

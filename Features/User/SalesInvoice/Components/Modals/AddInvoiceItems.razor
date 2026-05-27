@@ -32,6 +32,17 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Category</label>
+                    <select @onchange="OnCategoryChanged" value="@SelectedCategory">
+                        <option value="">-- All Categories --</option>
+                        @foreach (var cat in AvailableCategories)
+                        {
+                            <option value="@cat">@cat</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>@SalesInvoiceValidation.AddItem.Sku.Label<span class="required-asterisk"> *</span></label>
                     <input @ref="SkuCodeInput" @bind="NewSku" @bind:event="oninput" @onkeydown="HandleSkuKeyDown"
                            @onblur="HandleSkuBlur" />
