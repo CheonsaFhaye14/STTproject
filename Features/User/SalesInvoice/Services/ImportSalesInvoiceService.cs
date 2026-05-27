@@ -293,6 +293,17 @@ public sealed class ImportSalesInvoiceService
 					})
 					.ToList();
 
+				// If the invoice OrderType is Credit, ensure amounts are negative
+				if (string.Equals(preparedInvoice.Invoice?.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))
+				{
+					for (int i = 0; i < aggregatedItems.Count; i++)
+					{
+						var it = aggregatedItems[i];
+						it.Amount = -Math.Abs(it.Amount);
+						aggregatedItems[i] = it;
+					}
+				}
+
 				preparedInvoice.Items.AddRange(aggregatedItems);
 
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(

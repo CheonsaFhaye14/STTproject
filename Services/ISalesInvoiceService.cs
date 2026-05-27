@@ -164,7 +164,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        var invalidItem = items.FirstOrDefault(i => i.SubdItemId <= 0 || i.ItemsUomId <= 0 || i.Quantity <= 0 || i.Amount < 0);
+        // Allow negative amounts when the invoice OrderType is Credit (returns).
+        var invalidItem = items.FirstOrDefault(i => i.SubdItemId <= 0 || i.ItemsUomId <= 0 || i.Quantity <= 0 ||
+            (!string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase) && i.Amount < 0));
         if (invalidItem is not null)
         {
             return new SaveInvoiceResult
@@ -368,6 +370,12 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             }
 
             item.Amount = unitPrice * item.Quantity;
+
+            // If invoice is a Credit, store the amount as negative.
+            if (string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Amount = -Math.Abs(item.Amount);
+            }
         }
     }
 

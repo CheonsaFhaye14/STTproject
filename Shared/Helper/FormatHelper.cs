@@ -36,6 +36,11 @@ namespace STTproject.Shared.Helper
 
         public static string FormatPrice(decimal price)
         {
+            if (price < 0)
+            {
+                return $"({Math.Abs(price).ToString("N2")})";
+            }
+
             return price.ToString("N2");
         }
     }
