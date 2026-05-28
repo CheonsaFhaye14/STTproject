@@ -11,6 +11,8 @@ namespace STTproject.Features.User.MapItem.Components.Modals;
 
 public partial class AddUom
 {
+    private const string BaseUomName = "PC";
+
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
     [Parameter] public string? DraftStorageKey { get; set; }
@@ -21,7 +23,7 @@ public partial class AddUom
 
     [Inject] private AddUomService AddUomService { get; set; } = default!;
 
-    private readonly string[] defaultOptions = { "Piece", "Case", "Box", "Pack" };
+    private readonly string[] defaultOptions = { BaseUomName, "Case", "Box", "Pack" };
     private Dictionary<string, UomEntry> workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> validationErrors = new();
     private string selectedUomOption = string.Empty;
@@ -197,7 +199,7 @@ public partial class AddUom
 
     private async Task RemoveUomEntry(string uomName)
     {
-        if (uomName != "Piece")
+        if (!IsBaseUom(uomName))
         {
             workingUomEntries.Remove(uomName);
             await PersistDraftAsync();
@@ -206,13 +208,13 @@ public partial class AddUom
 
     private async Task AddAsync()
     {
-        if (!workingUomEntries.TryGetValue("Piece", out var pieceEntry))
+        if (!workingUomEntries.TryGetValue(BaseUomName, out var baseEntry))
         {
-            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
-            pieceEntry = workingUomEntries["Piece"];
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+            baseEntry = workingUomEntries[BaseUomName];
         }
 
-        pieceEntry.Conversion = 1;
+        baseEntry.Conversion = 1;
 
         validationErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries);
 
@@ -222,13 +224,13 @@ public partial class AddUom
             return;
         }
 
-        if (!pieceEntry.Price.HasValue)
+        if (!baseEntry.Price.HasValue)
         {
-            var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry => entry != pieceEntry && entry.Price.HasValue);
+            var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry => entry != baseEntry && entry.Price.HasValue);
             if (sourceEntry != null)
             {
-                pieceEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion) * 1;
-                pieceEntry.IsAutoCalculated = true;
+                baseEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion) * 1;
+                baseEntry.IsAutoCalculated = true;
             }
         }
 
@@ -328,7 +330,7 @@ public partial class AddUom
         workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in ExistingUomEntries)
         {
-            workingUomEntries[entry.Key] = new UomEntry
+            workingUomEntries[NormalizeBaseUomName(entry.Key)] = new UomEntry
             {
                 Conversion = entry.Value.Conversion,
                 Price = entry.Value.Price,
@@ -336,21 +338,23 @@ public partial class AddUom
             };
         }
 
-        if (!workingUomEntries.ContainsKey("Piece"))
+        if (!workingUomEntries.ContainsKey(BaseUomName))
         {
-            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
         }
     }
 
     private void ApplyDraftState(AddUomModalDraftState draft)
     {
-        workingUomEntries = draft.WorkingUomEntries.Count > 0
-            ? new Dictionary<string, UomEntry>(draft.WorkingUomEntries, StringComparer.OrdinalIgnoreCase)
-            : new(StringComparer.OrdinalIgnoreCase);
-
-        if (!workingUomEntries.ContainsKey("Piece"))
+        workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in draft.WorkingUomEntries)
         {
-            workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+            workingUomEntries[NormalizeBaseUomName(entry.Key)] = entry.Value;
+        }
+
+        if (!workingUomEntries.ContainsKey(BaseUomName))
+        {
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
         }
 
         selectedUomOption = draft.SelectedUomOption;
@@ -414,7 +418,7 @@ public partial class AddUom
         }
 
         workingUomEntries.Clear();
-        workingUomEntries["Piece"] = new UomEntry { Conversion = 1, Price = null };
+        workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
         selectedUomOption = string.Empty;
         customUom = string.Empty;
         conversionInput = string.Empty;
@@ -440,5 +444,16 @@ public partial class AddUom
         }
 
         await ConfirmClearDraftAsync();
+    }
+
+    private static bool IsBaseUom(string? uomName)
+    {
+        var normalized = (uomName ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized is "piece" or "pcs" or "pc";
+    }
+
+    private static string NormalizeBaseUomName(string? uomName)
+    {
+        return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();
     }
 }

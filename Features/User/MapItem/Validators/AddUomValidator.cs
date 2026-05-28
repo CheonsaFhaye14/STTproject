@@ -45,6 +45,11 @@ public static class AddUomValidator
     public static Dictionary<string, string> ValidateFinalUomEntries(Dictionary<string, UomEntry> entries)
     {
         var errors = new Dictionary<string, string>();
+        var baseUnitEntry = entries.TryGetValue("PC", out var pcEntry)
+            ? pcEntry
+            : entries.TryGetValue("Piece", out var legacyPieceEntry)
+                ? legacyPieceEntry
+                : null;
 
         if (!entries.Any(x => x.Value.Price.HasValue))
         {
@@ -56,8 +61,8 @@ public static class AddUomValidator
             errors["prices"] = "All prices must be greater than zero.";
         }
 
-        if (entries.TryGetValue("Piece", out var pieceEntry) &&
-            (!pieceEntry.Price.HasValue || pieceEntry.Price <= 0))
+        if (baseUnitEntry is not null &&
+            (!baseUnitEntry.Price.HasValue || baseUnitEntry.Price <= 0))
         {
             errors["prices"] = "Base unit price must be provided or derivable from another priced unit.";
         }

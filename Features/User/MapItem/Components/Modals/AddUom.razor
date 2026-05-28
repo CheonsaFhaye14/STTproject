@@ -26,7 +26,7 @@
             </div>
 
             <div class="modal-body">
-                <!-- (Piece will be shown in the All Units table below) -->
+                <!-- (PC will be shown in the All Units table below) -->
 
                 <!-- Add new UOM section -->
 
@@ -63,7 +63,7 @@
                 }
 
                 <div class="form-group">
-                    <label>Conversion (How many pieces per @(GetSelectedUomName() ?? "unit")?):</label>
+                    <label>Conversion (How many PC per @(GetSelectedUomName() ?? "unit")?):</label>
                     <input @ref="conversionInputRef" type="number" min="1" step="1" @bind="ConversionInput"
                            @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
                            @onkeydown="HandleConversionKeyDown" />
@@ -98,7 +98,7 @@
                             <thead>
                                 <tr>
                                     <th>Unit of Measure</th>
-                                    <th>Conversion (Pieces)</th>
+                                    <th>Conversion (PC)</th>
                                     <th>Price</th>
                                     <th></th>
                                 </tr>
@@ -107,9 +107,9 @@
                                 @foreach (var row in workingUomEntries.OrderBy(x => x.Value.Conversion))
                                 {
                                     <tr>
-                                        <td>@row.Key@(row.Key == "Piece" ? " (Base Unit)" : string.Empty)</td>
+                                        <td>@row.Key@(IsBaseUom(row.Key) ? " (Base Unit)" : string.Empty)</td>
                                         <td>
-                                            @if (row.Key == "Piece")
+                                            @if (IsBaseUom(row.Key))
                                             {
                                                 <div class="form-group">
                                                     <input type="number" min="1" step="1" @bind="row.Value.Conversion"
@@ -133,7 +133,7 @@
                                             </div>
                                         </td>
                                         <td>
-                                            @if (!string.Equals(row.Key, "Piece", StringComparison.OrdinalIgnoreCase))
+                                            @if (!IsBaseUom(row.Key))
                                             {
                                                 <button type="button" class="btn remove-btn"
                                                         @onclick="() => RemoveUomEntry(row.Key)">Remove</button>

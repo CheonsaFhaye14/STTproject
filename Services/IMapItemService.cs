@@ -426,10 +426,6 @@ public class MapItemService : IMapItemService
                 await context.SaveChangesAsync(cancellationToken);
             }
 
-            // Clear the navigation on the tracked SubdItem to avoid "association severed" errors
-            existing.ItemsUom = null;
-            context.Entry(existing).Reference(e => e.ItemsUom).CurrentValue = null;
-
             // Now remove the subd item
             context.SubdItems.Remove(existing);
             await context.SaveChangesAsync(cancellationToken);

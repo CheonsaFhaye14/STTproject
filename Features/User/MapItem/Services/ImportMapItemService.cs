@@ -10,6 +10,8 @@ namespace STTproject.Features.User.MapItem.Services;
 
 public sealed class ImportMapItemService
 {
+	private const string BaseUomName = "PC";
+
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 	private readonly IMapItemService _mapItemService;
 	private readonly ILogger<ImportMapItemService> _logger;
@@ -709,12 +711,12 @@ public sealed class ImportMapItemService
 
 			if (IsPieceUom(row.UOM) && row.Conversion != 1)
 			{
-				AddError(row.RowNumber, "UOM 'Piece/PC' must have conversion 1.");
+				AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
 			}
 
 			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
 			{
-				AddError(row.RowNumber, "Only UOM 'Piece/PC' can have conversion 1.");
+				AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
 			}
 		}
 
@@ -758,12 +760,12 @@ public sealed class ImportMapItemService
 
 	private static string NormalizeUomKey(string? uom)
 	{
-		return IsPieceUom(uom) ? "piece" : Normalize(uom ?? string.Empty);
+		return IsPieceUom(uom) ? BaseUomName : Normalize(uom ?? string.Empty);
 	}
 
 	private static string CanonicalizeUomName(string? uom)
 	{
-		return IsPieceUom(uom) ? "Piece" : (uom ?? string.Empty).Trim();
+		return IsPieceUom(uom) ? BaseUomName : (uom ?? string.Empty).Trim();
 	}
 
 	private static void MergeRowErrors(
@@ -842,31 +844,37 @@ public sealed class ImportMapItemService
 			return;
 		}
 
-		if (uomEntries.TryGetValue("Piece", out var pieceEntry))
+		var existingBaseKey = uomEntries.Keys.FirstOrDefault(IsPieceUom);
+		if (!string.IsNullOrWhiteSpace(existingBaseKey) && uomEntries.TryGetValue(existingBaseKey, out var baseEntry))
 		{
-			pieceEntry.Conversion = 1;
-			if (!pieceEntry.Price.HasValue || pieceEntry.Price <= 0)
+			baseEntry.Conversion = 1;
+			if (!baseEntry.Price.HasValue || baseEntry.Price <= 0)
 			{
 				var pricedSource = uomEntries
-					.Where(entry => !string.Equals(entry.Key, "Piece", StringComparison.OrdinalIgnoreCase))
+					.Where(entry => !IsPieceUom(entry.Key))
 					.Where(entry => entry.Value.Price.HasValue && entry.Value.Price > 0 && entry.Value.Conversion > 0)
 					.OrderBy(entry => entry.Value.Conversion)
 					.FirstOrDefault();
 
 				if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
 				{
-					pieceEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion, 2, MidpointRounding.AwayFromZero);
-					pieceEntry.IsAutoCalculated = true;
+					baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion, 2, MidpointRounding.AwayFromZero);
+					baseEntry.IsAutoCalculated = true;
 				}
 			}
 
-			uomEntries["Piece"] = pieceEntry;
+			if (!string.Equals(existingBaseKey, BaseUomName, StringComparison.OrdinalIgnoreCase))
+			{
+				uomEntries.Remove(existingBaseKey);
+			}
+
+			uomEntries[BaseUomName] = baseEntry;
 			return;
 		}
 
 		var sourceEntry = uomEntries
 			.Where(entry => entry.Value.Price.HasValue && entry.Value.Price > 0 && entry.Value.Conversion > 0)
-			.OrderBy(entry => entry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase))
+			.OrderBy(entry => entry.Key.Equals(BaseUomName, StringComparison.OrdinalIgnoreCase))
 			.ThenBy(entry => entry.Value.Conversion)
 			.FirstOrDefault();
 
@@ -875,7 +883,7 @@ public sealed class ImportMapItemService
 			return;
 		}
 
-		uomEntries["Piece"] = new UomEntry
+		uomEntries[BaseUomName] = new UomEntry
 		{
 			Conversion = 1,
 			Price = Math.Round(sourceEntry.Value.Price.Value / sourceEntry.Value.Conversion, 2, MidpointRounding.AwayFromZero),

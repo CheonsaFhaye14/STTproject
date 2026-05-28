@@ -14,6 +14,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 {
     public partial class MapItem
     {
+        private const string BaseUomName = "PC";
+
         private bool showAddUomModal = false;
         private string? modalCompanyItemCode;
         private string? modalCompanyItemName;
@@ -982,12 +984,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
                     if (string.IsNullOrWhiteSpace(addDraftJson))
                     {
-                        // No modal draft present. For a new item, show only Piece as base unit by default.
+                        // No modal draft present. For a new item, show only PC as base unit by default.
                         if (!editingSubdItemId.HasValue)
                         {
                             uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase)
                             {
-                                ["Piece"] = new UomEntry { Conversion = 1, Price = null }
+                                [BaseUomName] = new UomEntry { Conversion = 1, Price = null }
                             };
                         }
                         else
@@ -1048,14 +1050,14 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
         private ItemsUom? BuildSelectedItemsUom()
         {
-            // Prefer Piece if it has a price
-            if (uomEntries.TryGetValue("Piece", out var pieceEntry) && pieceEntry.Price.HasValue)
+            // Prefer the base unit if it has a price
+            if (uomEntries.TryGetValue(BaseUomName, out var baseEntry) && baseEntry.Price.HasValue)
             {
                 return new ItemsUom
                 {
-                    UomName = "Piece",
+                    UomName = BaseUomName,
                     ConversionToBase = 1,
-                    Price = pieceEntry.Price.Value,
+                    Price = baseEntry.Price.Value,
                     IsBaseUnit = true,
                     CreatedDate = DateTime.UtcNow,
                     UpdatedDate = DateTime.UtcNow,
@@ -1076,7 +1078,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     UomName = manualEntry.Key,
                     ConversionToBase = manualEntry.Value.Conversion,
                     Price = manualEntry.Value.Price.Value,
-                    IsBaseUnit = manualEntry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase),
+                    IsBaseUnit = IsBaseUom(manualEntry.Key),
                     CreatedDate = DateTime.UtcNow,
                     UpdatedDate = DateTime.UtcNow,
                     CreatedBy = userContext.UserId,
@@ -1084,10 +1086,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 };
             }
 
-            // Fallback: pick the first priced entry (non-Piece preferred)
+            // Fallback: pick the first priced entry (non-base preferred)
             var selectedEntry = uomEntries
                 .Where(entry => entry.Value.Price.HasValue)
-                .OrderBy(entry => !entry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(entry => IsBaseUom(entry.Key))
                 .FirstOrDefault();
 
             if (selectedEntry.Value == null || !selectedEntry.Value.Price.HasValue)
@@ -1100,7 +1102,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 UomName = selectedEntry.Key,
                 ConversionToBase = selectedEntry.Value.Conversion,
                 Price = selectedEntry.Value.Price.Value,
-                IsBaseUnit = selectedEntry.Key.Equals("Piece", StringComparison.OrdinalIgnoreCase),
+                IsBaseUnit = IsBaseUom(selectedEntry.Key),
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow,
                 CreatedBy = userContext.UserId,
@@ -1251,14 +1253,13 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
             if (existingUoms is not null && existingUoms.Any())
             {
-                availableUoms = new List<string>(existingUoms.Select(u =>
-    u.UomName).Append("Piece").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(u => u));
+                availableUoms = new List<string>(existingUoms.Select(u => NormalizeBaseUomName(u.UomName)).Append(BaseUomName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(u => u));
 
                 uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
                 foreach (var u in availableUoms)
                 {
-                    var matched = existingUoms.FirstOrDefault(e => string.Equals(e.UomName, u, StringComparison.OrdinalIgnoreCase));
-                    if (string.Equals(u, "Piece", StringComparison.OrdinalIgnoreCase))
+                    var matched = existingUoms.FirstOrDefault(e => string.Equals(NormalizeBaseUomName(e.UomName), u, StringComparison.OrdinalIgnoreCase));
+                    if (IsBaseUom(u))
                     {
                         var price = matched != null && matched.ConversionToBase != 0 ? matched.Price / matched.ConversionToBase :
     matched?.Price;
@@ -1455,8 +1456,11 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             editingSubdItemId = draft.EditingSubdItemId;
             selectedCompanyItemsFilterString = draft.SelectedCompanyItemsFilterString ?? "All";
             selectedCompanyItemsCategoryString = draft.SelectedCompanyItemsCategoryString ?? "All";
-            uomEntries = draft.UomEntries
-                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
+            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in draft.UomEntries)
+            {
+                uomEntries[NormalizeBaseUomName(entry.Key)] = entry.Value;
+            }
             availableUoms = uomEntries.Keys.OrderBy(x => x).ToList();
 
             if (!Enum.TryParse(selectedCompanyItemsFilterString, out CompanyItemFilterMode restoredFilter))
@@ -1555,6 +1559,17 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             showErrorModal = false;
             itemActionErrorMessage = null;
+        }
+
+        private static bool IsBaseUom(string? uomName)
+        {
+            var normalized = (uomName ?? string.Empty).Trim().ToLowerInvariant();
+            return normalized is "piece" or "pcs" or "pc";
+        }
+
+        private static string NormalizeBaseUomName(string? uomName)
+        {
+            return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();
         }
 
     }
