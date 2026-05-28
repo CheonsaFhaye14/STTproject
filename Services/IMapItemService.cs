@@ -184,22 +184,9 @@ public class MapItemService : IMapItemService
 
         try
         {
-            // First, materialize the list of already-connected company item IDs
-            var connectedIds = await context.SubdItems
-                .AsNoTracking()
-                .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
-                .Select(si => si.CompanyItemId)
-                .ToListAsync(cancellationToken);
-
-            // Ensure the first query is fully complete before starting the second
-            if (cancellationToken.IsCancellationRequested)
-                return new();
-
-            // Then query company items not in that list (this is now LINQ to Objects, not DbContext)
             var result = await context.CompanyItems
                 .AsNoTracking()
                 .Where(ci => ci.IsActive)
-                .Where(ci => !connectedIds.Contains(ci.CompanyItemId))
                 .OrderBy(ci => ci.ItemName)
                 .Select(ci => new CompanyItemDropdownItem
                 {

@@ -76,7 +76,8 @@
                        SubdItems="@filteredSubDistributorItems" SelectedCompanyItemIdForFilter="@selectedCompanyItemIdForFilter"
                        SelectedCompanyItemIdForFilterChanged="@(value => selectedCompanyItemIdForFilter = value)"
                        OnEditItem="BeginEditItem" OnDeleteItem="DeleteItemAsync"
-                       OnClearCompanyItemFilter="ClearCompanyItemFilterAsync" />
+                           OnClearCompanyItemFilter="ClearCompanyItemFilterAsync"
+                           OnMapCompanyItemRequested="HandleMapCompanyItemRequestedAsync" />
     </div>
 
     @if (showConfirmModal)

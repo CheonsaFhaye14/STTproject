@@ -14,6 +14,7 @@ public partial class SubdItemTable
     [Parameter] public EventCallback<MapSubDistributorItemRow> OnEditItem { get; set; }
     [Parameter] public EventCallback<MapSubDistributorItemRow> OnDeleteItem { get; set; }
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
+    [Parameter] public EventCallback<int> OnMapCompanyItemRequested { get; set; }
 
     private async Task HandleEditClicked(MapSubDistributorItemRow item)
     {
@@ -42,6 +43,16 @@ public partial class SubdItemTable
         {
             await OnClearCompanyItemFilter.InvokeAsync();
         }
+    }
+
+    private async Task MapSelectedCompanyItemAsync()
+    {
+        if (!SelectedCompanyItemIdForFilter.HasValue || !OnMapCompanyItemRequested.HasDelegate)
+        {
+            return;
+        }
+
+        await OnMapCompanyItemRequested.InvokeAsync(SelectedCompanyItemIdForFilter.Value);
     }
 
     private int GetEmptyStateColumnSpan()

@@ -793,6 +793,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 {
                     CompanyItemId = group.Key.CompanyItemId,
                     CompanyItemCode = group.Key.CompanyItemCode,
+                    Principal = group.Select(x => x.Principal).FirstOrDefault() ?? string.Empty,
                     ItemName = group.Key.Description,
                     Category = group.Key.Category,
                     EffectivityDate = group.Where(x => x.EffectivityDate.HasValue)
@@ -831,10 +832,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             if (selectedCompanyItemIdForFilter == item.CompanyItemId)
             {
                 selectedCompanyItemIdForFilter = null;
+                selectedPrincipal = null;
             }
             else
             {
                 selectedCompanyItemIdForFilter = item.CompanyItemId;
+                selectedPrincipal = string.IsNullOrWhiteSpace(item.Principal) ? null : item.Principal;
             }
             UpdateFilteredSubDistributorItems();
         }
@@ -944,6 +947,15 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             if (mapItemInputHeader is not null)
             {
                 await mapItemInputHeader.FocusAddUomButtonAsync();
+            }
+        }
+
+        private async Task HandleMapCompanyItemRequestedAsync(int companyItemId)
+        {
+            await SelectCompanyItem(companyItemId);
+            if (mapItemInputHeader is not null)
+            {
+                await mapItemInputHeader.FocusCompanyItemAsync();
             }
         }
 

@@ -9,6 +9,9 @@
 				<span class="subd-items-selected-summary">
 					(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
 				</span>
+				<button class="btn-primary" type="button" @onclick="MapSelectedCompanyItemAsync">
+									MAP
+								</button>
 				@if (selectedItem.EffectivityDate.HasValue && selectedItem.EffectivityDate.Value > DateTime.Now)
 				{
 					<span class="price-scheduled-badge">
@@ -64,7 +67,14 @@
 			{
 				<tr>
 					<td colspan="@GetEmptyStateColumnSpan()">
-						No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
+						<div class="empty-state-inline">
+							<div>
+								No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
+							</div>
+						
+							
+							
+						</div>
 					</td>
 				</tr>
 			}

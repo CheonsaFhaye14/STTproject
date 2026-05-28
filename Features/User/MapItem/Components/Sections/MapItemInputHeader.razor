@@ -45,8 +45,7 @@
         @if (IsSubDistributorSelected && CompanyItemsForDropdown.Count == 0)
         {
             <span class="info-text" style="color: #ff9800; margin-top: 5px; display: block;">
-                <i class="fa fa-info-circle"></i> No company items available for mapping. All items are already mapped for
-                this selection.
+                <i class="fa fa-info-circle"></i> No company items available for mapping.
             </span>
         }
         @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.CompanyItem.Key)))

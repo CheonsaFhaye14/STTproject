@@ -176,10 +176,6 @@ public sealed class ImportMapItemService
 			existingBySubdAndCode[key] = si;
 		}
 
-		var existingBySubdAndCompany = existingSubdItems
-			.Where(si => si.CompanyItemId > 0)
-			.ToDictionary(si => (si.SubDistributorId, si.CompanyItemId));
-
 		// Group rows by the item identity shown in the UI.
 		foreach (var rowGroup in parsedRows.GroupBy(row => new
 		{
@@ -256,13 +252,11 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			// Check if any rows already exist in the database
+			// Check if any rows conflict with an existing SubdItem code in the database
 			var subdDistributorKey = (Normalize(firstRow.SubDistributorCode), Normalize(firstRow.SubdItemCode));
-			var companyItemKey = (subdDistributor.SubDistributorId, companyItem.CompanyItemId);
 			var alreadyExistsByCode = existingBySubdAndCode.TryGetValue(subdDistributorKey, out var existingCode) && existingCode != null;
-			var alreadyExistsByCompany = existingBySubdAndCompany.TryGetValue(companyItemKey, out var existingCompany) && existingCompany != null;
 
-			if (alreadyExistsByCode || alreadyExistsByCompany)
+			if (alreadyExistsByCode)
 			{
 				foreach (var row in groupRows)
 				{
@@ -271,14 +265,7 @@ public sealed class ImportMapItemService
 						issues = new List<string>();
 						rowErrors[row.RowNumber] = issues;
 					}
-					if (alreadyExistsByCode)
-					{
-						issues.Add($"SubdItem code '{firstRow.SubdItemCode}' already exists in the database for this SubDistributor.");
-					}
-					if (alreadyExistsByCompany)
-					{
-						issues.Add("This Company Item is already mapped for this SubDistributor.");
-					}
+					issues.Add($"SubdItem code '{firstRow.SubdItemCode}' is already mapped in the database for SubDistributor '{firstRow.SubDistributorCode}'.");
 				}
 			}
 
@@ -448,30 +435,14 @@ public sealed class ImportMapItemService
 				throw new InvalidOperationException($"Company item '{firstRow.CompanyItemCode}' was not found during commit.");
 			}
 
-			var existingByCompanyItem = await context.SubdItems
-				.FirstOrDefaultAsync(
-					si => si.SubDistributorId == subdDistributor.SubDistributorId && si.CompanyItemId == companyItem.CompanyItemId,
-					cancellationToken);
-
 			var existingByCode = await context.SubdItems
 				.FirstOrDefaultAsync(
 					si => si.SubDistributorId == subdDistributor.SubDistributorId && si.SubdItemCode == subdItemCode,
 					cancellationToken);
 
-			if (existingByCompanyItem != null && existingByCode != null && existingByCompanyItem.SubdItemId != existingByCode.SubdItemId)
+			if (existingByCode != null)
 			{
-				throw new InvalidOperationException(
-					$"Commit conflict for SubDistributor '{firstRow.SubDistributorCode}' and SubdItemCode '{subdItemCode}'. Existing mappings conflict with company item '{firstRow.CompanyItemCode}'.");
-			}
-
-			if (existingByCompanyItem != null || existingByCode != null)
-			{
-				var conflictInfo = "";
-				if (existingByCode != null)
-					conflictInfo += $"SubdItem code '{subdItemCode}' already exists. ";
-				if (existingByCompanyItem != null)
-					conflictInfo += $"This SubDistributor/CompanyItem mapping already exists. ";
-				throw new InvalidOperationException($"Cannot commit: {conflictInfo.Trim()} Please review the import and try again.");
+				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' already exists for SubDistributor '{firstRow.SubDistributorCode}'. Please review the import and try again.");
 			}
 
 			var subdItem = new SubdItem
@@ -919,25 +890,10 @@ public sealed class ImportMapItemService
 			.Select(group => group.OrderBy(row => row.RowNumber).ToList())
 			.ToList();
 
-		foreach (var itemGroup in itemGroups)
-		{
-			var firstRow = itemGroup[0];
-			var canonicalCode = Normalize(firstRow.SubdItemCode);
-			var canonicalName = Normalize(firstRow.SubdItemName);
-
-			foreach (var row in itemGroup.Skip(1))
-			{
-				if (!string.Equals(Normalize(row.SubdItemCode), canonicalCode, StringComparison.OrdinalIgnoreCase))
-				{
-					AddError(row.RowNumber, "SubdItem code must stay the same for the same SubDistributor and Company Item.");
-				}
-
-				if (!string.Equals(Normalize(row.SubdItemName), canonicalName, StringComparison.OrdinalIgnoreCase))
-				{
-					AddError(row.RowNumber, "SubdItem name must stay the same for the same SubDistributor and Company Item.");
-				}
-			}
-		}
+		// Allow the same CompanyItem to be mapped multiple times for the same SubDistributor
+		// as long as the SubdItemCode differs. Older validations enforced that SubdItemCode
+		// and SubdItemName must remain the same for a CompanyItem within the file; remove
+		// those restrictions to permit multiple mappings with different SubdItem codes.
 
 		var subdItemCodeGroups = rows
 			.Where(row => !string.IsNullOrWhiteSpace(row.SubdItemCode))
@@ -953,6 +909,7 @@ public sealed class ImportMapItemService
 		foreach (var codeGroup in subdItemCodeGroups)
 		{
 			var firstRow = codeGroup[0];
+			var rowNumbers = string.Join(", ", codeGroup.Select(row => row.RowNumber));
 			var canonicalItemKey = string.Join("|",
 				Normalize(firstRow.Principal),
 				Normalize(firstRow.CompanyItemCode),
@@ -971,7 +928,7 @@ public sealed class ImportMapItemService
 				{
 					AddError(
 						row.RowNumber,
-						$"SubdItem code '{row.SubdItemCode}' is already used for another item under SubDistributor '{row.SubDistributorCode}'.");
+						$"SubdItem code '{row.SubdItemCode}' Item is duplicated within the uploaded Excel for SubDistributor '{row.SubDistributorCode}'.");
 				}
 			}
 		}
