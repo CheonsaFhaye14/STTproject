@@ -101,9 +101,13 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            var fileName = file.Name ?? string.Empty;
+            if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
             {
-                itemActionErrorMessage = "Please select a valid .xlsx file.";
+                itemActionErrorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
                 showErrorModal = true;
                 StateHasChanged();
                 return;
@@ -114,7 +118,17 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await browserStream.CopyToAsync(ms);
             ms.Position = 0;
 
-            lastImportResult = await importMapItemService.ImportFromExcelAsync(ms, userContext.UserId ?? 0);
+            try
+            {
+                lastImportResult = await importMapItemService.ImportFromExcelAsync(ms, userContext.UserId ?? 0);
+            }
+            catch (Exception ex)
+            {
+                itemActionErrorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
+                showErrorModal = true;
+                StateHasChanged();
+                return;
+            }
             selectedImportItemGroupKeys = BuildDefaultSelectedImportGroupKeys(lastImportResult);
 
             showImportDetailsModal = true;

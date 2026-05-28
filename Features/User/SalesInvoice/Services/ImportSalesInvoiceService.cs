@@ -122,7 +122,7 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		// NetAmount is optional; OrderType may be provided per-row or inferred from quantities/net where available.
+		// NetAmount/Gross are optional; OrderType may be provided per-row or inferred from signed amounts where available.
 
 		await using var context = _contextFactory.CreateDbContext();
 		var customers = await context.Customers
@@ -142,12 +142,16 @@ public sealed class ImportSalesInvoiceService
 			.ToListAsync(cancellationToken);
 
 		var customerByCode = customers.ToDictionary(customer => Normalize(customer.CustomerCode));
+		var customerByName = customers
+			.Where(customer => !string.IsNullOrWhiteSpace(customer.CustomerName))
+			.GroupBy(customer => Normalize(customer.CustomerName))
+			.ToDictionary(group => group.Key, group => group.First());
 		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
 		var uomLookup = uoms
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, subdItemByCode);
+		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, customerByName, subdItemByCode);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -187,9 +191,9 @@ public sealed class ImportSalesInvoiceService
 
 				var firstRow = invoiceRows[0];
 
-				if (!customerByCode.TryGetValue(Normalize(firstRow.CustomerCode), out var customer))
+				if (!TryResolveCustomer(firstRow.CustomerCode, customerByCode, customerByName, out var customer))
 				{
-					var msg = $"Customer code '{firstRow.CustomerCode}' was not found.";
+					var msg = $"Customer code or name '{firstRow.CustomerCode}' was not found.";
 					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode");
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode"));
 					result.PreparedInvoices.Add(preparedInvoice);
@@ -406,6 +410,7 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, int> headers,
 		ImportSalesInvoiceResult result,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
+		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
 		IReadOnlyDictionary<string, SubdItem> subdItemByCode)
 	{
 		var rows = new List<ImportedInvoiceRow>();
@@ -439,8 +444,8 @@ public sealed class ImportSalesInvoiceService
 				(!hasQuantityColumn || row.Cell(quantityColumn).IsEmpty()) &&
 				(!hasCaseQuantityColumn || row.Cell(caseQuantityColumn).IsEmpty()) &&
 				(!hasDozenQuantityColumn || row.Cell(dozenQuantityColumn).IsEmpty()) &&
-				(!hasPieceQuantityColumn || row.Cell(pieceQuantityColumn).IsEmpty()) &&
-				(netAmountCell is null || netAmountCell.IsEmpty()))
+					(!hasPieceQuantityColumn || row.Cell(pieceQuantityColumn).IsEmpty()) &&
+					(netAmountCell is null || netAmountCell.IsEmpty()))
 			{
 				continue;
 			}
@@ -472,11 +477,11 @@ public sealed class ImportSalesInvoiceService
 
 			if (string.IsNullOrWhiteSpace(customerCode))
 			{
-				AddRowError("Customer code is required.", "CustomerCode");
+				AddRowError("Customer name or code is required.", "CustomerCode");
 			}
-			else if (!customerByCode.TryGetValue(Normalize(customerCode), out var customer))
+			else if (!TryResolveCustomer(customerCode, customerByCode, customerByName, out var customer))
 			{
-				AddRowError($"Customer code '{customerCode}' was not found.", "CustomerCode");
+				AddRowError($"Customer code or name '{customerCode}' was not found.", "CustomerCode");
 			}
 			else
 			{
@@ -493,21 +498,17 @@ public sealed class ImportSalesInvoiceService
 					{
 						AddRowError("Net amount is required when OrderType is empty.", "NetAmount");
 					}
-					else if (!TryGetDecimal(netAmountCell, out var netAmount))
+					else if (!TryGetDecimal(netAmountCell, out var amountValue))
 					{
 						AddRowError("Net amount must be a valid number.", "NetAmount");
 					}
-					else if (netAmount > 0)
-					{
-						normalizedOrderType = "Invoice";
-					}
-					else if (netAmount < 0)
+					else if (amountValue < 0)
 					{
 						normalizedOrderType = "Credit";
 					}
 					else
 					{
-						AddRowError("Net amount cannot be 0 when mapping to OrderType.", "NetAmount");
+						normalizedOrderType = "Invoice";
 					}
 				}
 				else
@@ -674,7 +675,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "num" or "invoicecode" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "po number" or "invoice#" or "invoice #" or "invoice no." or "invoice")
+			if (header is "num" or "invoicecode" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "po number" or "invoice#" or "invoice #" or "invoice no." or "invoice" or "inv")
 			{
 				headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
 				continue;
@@ -686,7 +687,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "customercode" or "cust./supp." or "customer code" or "lst_cust1" or "so" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
+			if (header is "customercode" or "acc name" or "cust./supp." or "customer code" or "lst_cust1" or "so" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
 			{
 				headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
 				continue;
@@ -700,13 +701,13 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "lst_net2" or "net")
+			if (header is "lst_net2" or "net" or "gross")
 			{
 				headers.TryAdd("NetAmount", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "skucode" or "subditemcode" or "lst_head1" or "item_code" or "item code" or "item no." or "skuid" or "item number" or "stock_no" or "padsa item code" or "code" or "item_number")
+			if (header is "skucode" or "item id" or "subditemcode" or "lst_head1" or "item_code" or "item code" or "item no." or "skuid" or "item number" or "stock_no" or "padsa item code" or "code" or "item_number")
 			{
 				headers.TryAdd("SkuCode", cell.Address.ColumnNumber);
 				continue;
@@ -760,7 +761,7 @@ public sealed class ImportSalesInvoiceService
 				headers.TryAdd("Quantity", cell.Address.ColumnNumber);
 			}
 
-			if (header is "salesman" or "salesmanname" or "salesman name" or "sales man" or "lst_agent2" or "salesrep" or "agent" or "sales person" or "pic name" or "sales rep" or "sales_man" or "salesman_name" or "sales rep (employee): branch")
+			if (header is "salesman" or "ads" or "salesmanname" or "salesman name" or "sales man" or "lst_agent2" or "salesrep" or "agent" or "sales person" or "pic name" or "sales rep" or "sales_man" or "salesman_name" or "sales rep (employee): branch")
 			{
 				headers.TryAdd("SalesManName", cell.Address.ColumnNumber);
 			}
@@ -1033,6 +1034,27 @@ public sealed class ImportSalesInvoiceService
 	private static string Normalize(string value)
 	{
 		return value.Trim().ToLowerInvariant();
+	}
+
+	private static bool TryResolveCustomer(
+		string value,
+		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
+		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
+		out STTproject.Data.Customer customer)
+	{
+		var normalized = Normalize(value);
+		if (customerByCode.TryGetValue(normalized, out customer!))
+		{
+			return true;
+		}
+
+		if (customerByName.TryGetValue(normalized, out customer!))
+		{
+			return true;
+		}
+
+		customer = null!;
+		return false;
 	}
 
 	private sealed record ImportedInvoiceRow(

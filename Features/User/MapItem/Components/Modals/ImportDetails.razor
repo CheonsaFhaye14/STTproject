@@ -198,7 +198,33 @@
 
                                             if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
                                             {
-                                                visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
+                                                if (selectedErrorFilter == "SubdItem Duplicated In Excel")
+                                                {
+                                                    var matching = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter).ToList();
+
+                                                    // include other rows in the import that have the same SubdItemCode
+                                                    var dupCodes = groupRows.Select(r => r.SubdItemCode).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                                                    var extras = new List<ImportMapItemIssue>();
+                                                    var allRows = ImportResult?.Rows ?? new List<ImportMapItemRowResult>();
+                                                    foreach (var code in dupCodes)
+                                                    {
+                                                        var others = allRows.Where(rr => rr.RowNumber > 0 && !string.IsNullOrWhiteSpace(rr.SubdItemCode) && string.Equals(rr.SubdItemCode, code, StringComparison.OrdinalIgnoreCase)).ToList();
+                                                        foreach (var other in others)
+                                                        {
+                                                            if (!groupRows.Any(r => r.RowNumber == other.RowNumber))
+                                                            {
+                                                                var msg = $"SubdItem code '{other.SubdItemCode}' is duplicated within the uploaded Excel for SubDistributor '{other.SubDistributorCode}'.";
+                                                                extras.Add(new ImportMapItemIssue(other.RowNumber, other.SubdItemCode, msg));
+                                                            }
+                                                        }
+                                                    }
+
+                                                    visibleIssues = matching.Concat(extras);
+                                                }
+                                                else
+                                                {
+                                                    visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
+                                                }
                                             }
 
                                             var grouped = visibleIssues

@@ -115,7 +115,7 @@ public class DownloadTemplateService
             conversionValidation.ShowErrorMessage = true;
             conversionValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
             conversionValidation.ErrorTitle = "Invalid Conversion Value";
-            conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0.";
+            conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0. Note: if UOM is PC/PCS/PIECE, Conversion must be 1.";
 
             // Price validation: Decimal > 0
             var priceRange = worksheet.Range($"I2:I{lastDataRow}");
@@ -145,6 +145,8 @@ public class DownloadTemplateService
 
             // Auto-fit column widths
             worksheet.Columns().AdjustToContents();
+
+            // Note: some ClosedXML versions don't support cell comments; instructions are in the header/error message.
 
             // Download
             using (var stream = new MemoryStream())

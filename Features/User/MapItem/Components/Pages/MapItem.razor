@@ -36,7 +36,7 @@
     <div class="top-buttons">
         <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
         <button class="btn-primary" @onclick="ShowImportConfirmModal">Import Excel</button>
-        <InputFile id="mapitem-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
+        <InputFile id="mapitem-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
     </div>
 
     <MapItemInputHeader @ref="mapItemInputHeader" IsSubDistributorSelected="@IsSubDistributorSelected"

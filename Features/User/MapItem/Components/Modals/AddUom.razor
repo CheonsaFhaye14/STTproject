@@ -57,7 +57,7 @@
                 {
                     <div class="form-group">
                         <label>Custom Unit of Measure</label>
-                        <input @bind="customUom" @bind:event="oninput" @bind:after="PersistDraftAsync"
+                        <input @bind="CustomUom" @bind:event="oninput" @bind:after="PersistDraftAsync"
                                placeholder="Enter unit name" />
                     </div>
                 }
@@ -66,10 +66,14 @@
                     <label>Conversion (How many PC per @(GetSelectedUomName() ?? "unit")?):</label>
                     <input @ref="conversionInputRef" type="number" min="1" step="1" @bind="ConversionInput"
                            @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
-                           @onkeydown="HandleConversionKeyDown" />
+                           @onkeydown="HandleConversionKeyDown" disabled="@IsBaseUom(GetSelectedUomName())" />
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
                     {
                         <span class="error-text">@GetFieldError("conversion")</span>
+                    }
+                    @if (IsBaseUom(GetSelectedUomName()))
+                    {
+                        <div class="hint-text" style="font-size:0.9em;color:#666;margin-top:6px;">Piece-like units require conversion = 1.</div>
                     }
                 </div>
 

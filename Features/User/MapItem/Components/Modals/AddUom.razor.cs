@@ -38,13 +38,36 @@ public partial class AddUom
                 validationErrors.Remove("uom");
                 if (selectedUomOption != "__custom")
                 {
-                    customUom = string.Empty;
+                    CustomUom = string.Empty;
+                }
+
+                // If selected UOM is piece-like, auto-set conversion to 1
+                if (IsBaseUom(GetSelectedUomName()))
+                {
+                    conversionInput = "1";
                 }
             }
         }
     }
 
     private string customUom = string.Empty;
+    private string CustomUom
+    {
+        get => customUom;
+        set
+        {
+            if (customUom != value)
+            {
+                customUom = value;
+                validationErrors.Remove("uom");
+                // if custom UOM is piece-like, auto-set conversion to 1
+                if (IsBaseUom(GetSelectedUomName()))
+                {
+                    conversionInput = "1";
+                }
+            }
+        }
+    }
     private string conversionInput = string.Empty;
     private string ConversionInput
     {
@@ -121,17 +144,17 @@ public partial class AddUom
         await base.OnAfterRenderAsync(firstRender);
     }
 
-    private string? GetSelectedUomName()
+    private string GetSelectedUomName()
     {
         if (selectedUomOption == "__custom")
-            return customUom.Trim();
+            return (CustomUom ?? string.Empty).Trim();
         return selectedUomOption;
     }
 
     private async Task AddUomEntryAsync(bool autoCalc = false)
     {
         var uomName = selectedUomOption == "__custom"
-            ? customUom.Trim()
+            ? (CustomUom ?? string.Empty).Trim()
             : selectedUomOption.Trim();
 
         validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, priceInput, workingUomEntries);
@@ -260,25 +283,38 @@ public partial class AddUom
                 return;
             }
 
-            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(customUom))
+            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(CustomUom))
             {
                 validationErrors["uom"] = "Custom unit of measure is required.";
                 return;
             }
-
-            await conversionInputRef.FocusAsync();
+            // If piece-like UOM, skip conversion input (it's fixed to 1)
+            if (IsBaseUom(GetSelectedUomName()))
+            {
+                await priceInputRef.FocusAsync();
+            }
+            else
+            {
+                await conversionInputRef.FocusAsync();
+            }
             return;
         }
 
         if (e.Key == "Tab" && !e.ShiftKey)
         {
-            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(customUom))
+            if (selectedUomOption == "__custom" && string.IsNullOrWhiteSpace(CustomUom))
             {
                 validationErrors["uom"] = "Custom unit of measure is required.";
                 return;
             }
-
-            await conversionInputRef.FocusAsync();
+            if (IsBaseUom(GetSelectedUomName()))
+            {
+                await priceInputRef.FocusAsync();
+            }
+            else
+            {
+                await conversionInputRef.FocusAsync();
+            }
         }
     }
 
@@ -286,6 +322,14 @@ public partial class AddUom
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
         {
+            // If piece-like UOM, conversion is fixed to 1 so skip validation and move to price
+            if (IsBaseUom(GetSelectedUomName()))
+            {
+                conversionInput = "1";
+                await priceInputRef.FocusAsync();
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(conversionInput))
             {
                 validationErrors["conversion"] = "Conversion must be entered.";

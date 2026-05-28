@@ -40,7 +40,7 @@
         Template</button>
         <button class="btn-primary" type="button" @onclick="OpenImportFilePicker"
                 disabled="@(invoice.SubdistributorId <= 0)">Import</button>
-        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xlsx" OnChange="HandleImportFileSelected" />
+        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
     </div>
 
     <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"

@@ -117,9 +117,12 @@ public partial class SalesInvoice
         }
 
         var fileName = file.Name ?? string.Empty;
-        if (!fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
         {
-            errorMessage = "Please select a valid .xlsx file.";
+            errorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
             showErrorModal = true;
             StateHasChanged();
             return;
@@ -130,12 +133,22 @@ public partial class SalesInvoice
         await browserStream.CopyToAsync(ms);
         ms.Position = 0;
 
-        var importResult = await importSalesInvoiceService.PrepareFromExcelAsync(
-            ms,
-            invoice.SubdistributorId,
-            userContext.UserId ?? 0);
+        try
+        {
+            var importResult = await importSalesInvoiceService.PrepareFromExcelAsync(
+                ms,
+                invoice.SubdistributorId,
+                userContext.UserId ?? 0);
 
-        lastImportResult = importResult;
+            lastImportResult = importResult;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
+            showErrorModal = true;
+            StateHasChanged();
+            return;
+        }
         showImportResultsModal = true;
         StateHasChanged();
     }

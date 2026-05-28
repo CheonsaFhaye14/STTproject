@@ -26,6 +26,12 @@ public static class AddUomValidator
             errors["conversion"] = "Conversion value must be unique.";
         }
 
+        // If the UOM is a piece-type, conversion must be 1
+        if (int.TryParse(conversionInput, out var conv) && IsPieceUom(uomName) && conv != 1)
+        {
+            errors["conversion"] = "Unit 'PC/PCS/PIECE' must have conversion 1.";
+        }
+
         if (!string.IsNullOrWhiteSpace(priceInput))
         {
             if (!decimal.TryParse(priceInput, out var price) || price <= 0)
@@ -67,6 +73,22 @@ public static class AddUomValidator
             errors["prices"] = "Base unit price must be provided or derivable from another priced unit.";
         }
 
+        // Ensure any piece-like UOM has conversion == 1
+        foreach (var kv in entries)
+        {
+            if (IsPieceUom(kv.Key) && kv.Value.Conversion != 1)
+            {
+                errors["conversion_piece"] = $"Unit '{kv.Key}' must have conversion 1.";
+                break;
+            }
+        }
+
         return errors;
+    }
+
+    private static bool IsPieceUom(string? uom)
+    {
+        var normalized = (uom ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized is "piece" or "pcs" or "pc";
     }
 }
