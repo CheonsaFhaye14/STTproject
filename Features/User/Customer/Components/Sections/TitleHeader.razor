@@ -1,19 +1,34 @@
-<h4>CUSTOMERS</h4>
-@* select that shows assigned subdistributors of user and allows selection to show the customers of that subdistributor *@
-<div class="form-group">
-    <select @onchange="HandleChange" value="@(SelectedSubDistributorId)">
-        <option value="">--- Select Subdistributor ---</option>
-        @if (Model?.SubDistributors != null)
-        {
-            @foreach (var sd in Model.SubDistributors)
+<div class="title-header">
+
+    <h4>CUSTOMERS</h4>
+
+    @* Select that shows assigned subdistributors *@
+    <div class="form-group">
+
+        <select @onchange="HandleChange" value="@(SelectedSubDistributorId)">
+
+            <option value="">
+                --- Select Subdistributor ---
+            </option>
+
+            @if (Model?.SubDistributors != null)
             {
-                <option value="@sd.SubDistributorId">@sd.SubdName</option>
+                @foreach (var sd in Model.SubDistributors)
+                {
+                    <option value="@sd.SubDistributorId">
+                        @sd.SubdName
+                    </option>
+                }
             }
-        }
-    </select>
+
+        </select>
+
+    </div>
+
 </div>
 
 @code {
+
     [Parameter]
     public CustomerListResponseDto? Model { get; set; }
 
@@ -33,4 +48,3 @@
         return OnSubDistributorChanged.InvokeAsync((int?)null);
     }
 }
-

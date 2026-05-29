@@ -1,18 +1,23 @@
 @using STTproject.Features.User.Customer.Components.Modals
 
 <div class="card">
-    <h7>Customers Count: @(Model?.Customers?.Count ?? 0)</h7>
-    
-    <div class="filters">
-          
-        @* search filter for the table *@
-            <div class="filter-group">
-                <input type="text" placeholder="Search" @bind="searchTerm" @bind:event="oninput" />
-            </div>
 
-        @* status filter for the table *@
+    <h7>Customers Count: @(Model?.Customers?.Count ?? 0)</h7>
+
+    <div class="filters">
+
+        @* Search filter *@
+        <div class="filter-group">
+            <input type="text"
+                   placeholder="Search"
+                   @bind="searchTerm"
+                   @bind:event="oninput" />
+        </div>
+
+        @* Status filter *@
         <div class="filter-group">
             <label>Status:</label>
+
             <select @bind="statusFilter">
                 <option value="All">All</option>
                 <option value="Active">Active</option>
@@ -20,11 +25,13 @@
             </select>
         </div>
 
-        @* customer type filter for the table *@
+        @* Customer type filter *@
         <div class="filter-group">
             <label>Customer Type:</label>
+
             <select @bind="typeFilter">
                 <option value="">All types</option>
+
                 @foreach (var t in Types)
                 {
                     <option value="@t">@t</option>
@@ -32,41 +39,88 @@
             </select>
         </div>
 
+    </div>
+
+    <!-- SCROLLABLE TABLE AREA -->
+    <div class="table-container">
+
+        <table class="customer-table">
+
+            <thead>
+                <tr>
+                    <th @onclick='() => SortBy("CustomerCode")' style="cursor:pointer">
+                        Customer Code
+                        @(sortColumn == "CustomerCode" ? (sortAscending ? " ▲" : " ▼") : String.Empty)
+                    </th>
+
+                    <th @onclick='() => SortBy("CustomerName")' style="cursor:pointer">
+                        Customer Name
+                        @(sortColumn == "CustomerName" ? (sortAscending ? " ▲" : " ▼") : String.Empty)
+                    </th>
+
+                    <th @onclick='() => SortBy("CustomerType")' style="cursor:pointer">
+                        Type
+                        @(sortColumn == "CustomerType" ? (sortAscending ? " ▲" : " ▼") : String.Empty)
+                    </th>
+
+                    <th @onclick='() => SortBy("Status")' style="cursor:pointer">
+                        Status
+                        @(sortColumn == "Status" ? (sortAscending ? " ▲" : " ▼") : String.Empty)
+                    </th>
+
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                @foreach (var customer in FilteredCustomers)
+                {
+                    <tr>
+
+                        <td>@customer.CustomerCode</td>
+
+                        <td>@customer.CustomerName</td>
+
+                        <td>@customer.CustomerType</td>
+
+                        <td>
+                            <span class="status-badge @(customer.IsActive ? "active" : "inactive")">
+
+                                <span class="status-dot"></span>
+
+                                @(customer.IsActive ? "Active" : "Inactive")
+
+                            </span>
+                        </td>
+
+                        <td>
+                            <button type="button"
+                                    class="btn-primary"
+                                    @onclick="() => OpenCustomerDetails(customer)">
+                                View
+                            </button>
+                        </td>
+
+                    </tr>
+                }
+
+            </tbody>
+
+        </table>
 
     </div>
 
-    <table class="customer-table">
-        <thead>
-            <tr>
-                <th @onclick='() => SortBy("CustomerCode")' style="cursor:pointer">Customer Code@(sortColumn=="CustomerCode" ? (sortAscending ? " ▲" : " ▼") : String.Empty)</th>
-                <th @onclick='() => SortBy("CustomerName")' style="cursor:pointer">Customer Name@(sortColumn=="CustomerName" ? (sortAscending ? " ▲" : " ▼") : String.Empty)</th>
-                <th @onclick='() => SortBy("CustomerType")' style="cursor:pointer">Type@(sortColumn=="CustomerType" ? (sortAscending ? " ▲" : " ▼") : String.Empty)</th>
-                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status@(sortColumn=="Status" ? (sortAscending ? " ▲" : " ▼") : String.Empty)</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var customer in FilteredCustomers)
-            {
-                <tr>
-                    <td>@customer.CustomerCode</td>
-                    <td>@customer.CustomerName</td>
-                    <td>@customer.CustomerType</td>
-                    <td>@(customer.IsActive ? "Active" : "Inactive")</td>
-                    <td><button type="button" class="btn-primary" @onclick="() => OpenCustomerDetails(customer)">View</button></td>
-                </tr>
-             }
-        </tbody>
-    </table>
-
     @if (showCustomerDetails && selectedCustomer != null)
     {
-        <CustomerDetails Customer="selectedCustomer" OnClose="CloseCustomerDetails" />
+        <CustomerDetails Customer="selectedCustomer"
+                         OnClose="CloseCustomerDetails" />
     }
 
 </div>
 
 @code {
+
     [Parameter]
     public CustomerListResponseDto? Model { get; set; }
 
@@ -83,7 +137,13 @@
     private string sortColumn = "CustomerCode";
     private bool sortAscending = true;
 
-    private IEnumerable<string> Types => Model?.Customers?.Select(c => c.CustomerType).Where(t => !string.IsNullOrEmpty(t)).Distinct().OrderBy(t => t) ?? Enumerable.Empty<string>();
+    private IEnumerable<string> Types =>
+        Model?.Customers?
+        .Select(c => c.CustomerType)
+        .Where(t => !string.IsNullOrEmpty(t))
+        .Distinct()
+        .OrderBy(t => t)
+        ?? Enumerable.Empty<string>();
 
     private IEnumerable<CustomerInfoDto> FilteredCustomers
     {
@@ -94,14 +154,21 @@
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var s = searchTerm.Trim();
+
                 items = items.Where(c =>
-                    (c.CustomerCode ?? string.Empty).IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    (c.CustomerName ?? string.Empty).IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    (c.CustomerType ?? string.Empty).IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0);
+                    (c.CustomerCode ?? string.Empty)
+                        .IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
+
+                    (c.CustomerName ?? string.Empty)
+                        .IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
+
+                    (c.CustomerType ?? string.Empty)
+                        .IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
             if (statusFilter == "Active")
                 items = items.Where(c => c.IsActive);
+
             else if (statusFilter == "Inactive")
                 items = items.Where(c => !c.IsActive);
 
@@ -110,11 +177,30 @@
 
             items = sortColumn switch
             {
-                "CustomerCode" => sortAscending ? items.OrderBy(c => c.CustomerCode) : items.OrderByDescending(c => c.CustomerCode),
-                "CustomerName" => sortAscending ? items.OrderBy(c => c.CustomerName) : items.OrderByDescending(c => c.CustomerName),
-                "CustomerType" => sortAscending ? items.OrderBy(c => c.CustomerType) : items.OrderByDescending(c => c.CustomerType),
-                "Status" => sortAscending ? items.OrderBy(c => c.IsActive) : items.OrderByDescending(c => c.IsActive),
-                _ => sortAscending ? items.OrderBy(c => c.CustomerName) : items.OrderByDescending(c => c.CustomerName),
+                "CustomerCode" =>
+                    sortAscending
+                    ? items.OrderBy(c => c.CustomerCode)
+                    : items.OrderByDescending(c => c.CustomerCode),
+
+                "CustomerName" =>
+                    sortAscending
+                    ? items.OrderBy(c => c.CustomerName)
+                    : items.OrderByDescending(c => c.CustomerName),
+
+                "CustomerType" =>
+                    sortAscending
+                    ? items.OrderBy(c => c.CustomerType)
+                    : items.OrderByDescending(c => c.CustomerType),
+
+                "Status" =>
+                    sortAscending
+                    ? items.OrderBy(c => c.IsActive)
+                    : items.OrderByDescending(c => c.IsActive),
+
+                _ =>
+                    sortAscending
+                    ? items.OrderBy(c => c.CustomerName)
+                    : items.OrderByDescending(c => c.CustomerName),
             };
 
             return items;
@@ -144,6 +230,7 @@
     {
         showCustomerDetails = false;
         selectedCustomer = null;
+
         return Task.CompletedTask;
     }
 }

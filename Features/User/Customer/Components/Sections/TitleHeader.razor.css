@@ -1,0 +1,31 @@
+﻿.title-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+    .title-header h4 {
+        margin: 0;
+        font-size: 40px;
+        font-weight: 700;
+        color: #1f1f1f;
+    }
+
+.form-group {
+    margin: 0;
+}
+
+    .form-group select {
+        min-width: 320px;
+        padding: 5px 16px;
+        border: 1px solid #C9B8E8;
+        border-radius: 14px;
+        background: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        color: #2d2d7a;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        outline: none;
+        cursor: pointer;
+    }

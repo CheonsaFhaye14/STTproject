@@ -1,0 +1,273 @@
+﻿/* CustomerListTable.razor.css */
+
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #C9B8E8;
+    border-radius: 14px;
+    box-shadow: 2px 2px 10px rgba(154, 133, 204, 0.12);
+    margin-bottom: 12px;
+    height: 436px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+h7 {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #9B85CC;
+    padding: 0.75rem 1.25rem 0;
+}
+
+
+/* Filters */
+
+.filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid rgba(201, 184, 232, 0.3);
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+    .filter-group input[type="text"] {
+        background: rgba(232, 223, 245, 0.2);
+        border: 1px solid #C9B8E8;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #3a2870;
+        outline: none;
+        min-width: 200px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+        .filter-group input[type="text"]:focus {
+            border-color: #5c3fa8;
+            box-shadow: 0 0 0 3px rgba(154, 133, 204, 0.15);
+        }
+
+        .filter-group input[type="text"]::placeholder {
+            color: #C9B8E8;
+        }
+
+    .filter-group label {
+        font-size: 12px;
+        color: #9B85CC;
+        white-space: nowrap;
+    }
+
+    .filter-group select {
+        border: 1px solid #C9B8E8;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 13px;
+        color: #3a2870;
+        background: rgba(232, 223, 245, 0.2);
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+        .filter-group select:focus {
+            border-color: #5c3fa8;
+            box-shadow: 0 0 0 3px rgba(154, 133, 204, 0.15);
+        }
+
+
+/* Scrollable Table Area */
+.table-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+    /* Scrollbar */
+    .table-container::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-container::-webkit-scrollbar-thumb {
+        background: #C9B8E8;
+        border-radius: 10px;
+    }
+
+    .table-container::-webkit-scrollbar-track {
+        background: rgba(232, 223, 245, 0.15);
+    }
+
+
+/* Table */
+
+
+.customer-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+    .customer-table thead tr {
+        background: linear-gradient( 135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100% );
+    }
+
+    .customer-table th {
+        
+        top: 0;
+        z-index: 2;
+        padding: 10px 1.25rem;
+        font-size: 13px;
+        font-weight: 600;
+        color: #26215C;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        text-align: left;
+        border-bottom: 1px solid rgba(201, 184, 232, 0.4);
+        user-select: none;
+        white-space: nowrap;
+    }
+
+        .customer-table th:hover {
+            color: #5c3fa8;
+            opacity: 0.85;
+        }
+
+    .customer-table td {
+        padding: 10px 1.25rem;
+        font-size: 13px;
+        color: #3a2870;
+        border-bottom: 1px solid rgba(201, 184, 232, 0.2);
+        vertical-align: middle;
+    }
+
+    .customer-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .customer-table tbody tr:hover td {
+        background: rgba(232, 223, 245, 0.2);
+    }
+
+    .customer-table td:first-child {
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: bold;
+        color: #9B85CC;
+    }
+
+/* ───────────────────────── */
+/* Status Badge */
+/* ───────────────────────── */
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* Active */
+
+.status-badge.active {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #16a34a;
+}
+
+    .status-badge.active .status-dot {
+        background: #22c55e;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+    }
+
+/* Inactive */
+
+.status-badge.inactive {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+}
+
+    .status-badge.inactive .status-dot {
+        background: #ef4444;
+    }
+
+/* ───────────────────────── */
+/* Button */
+/* ───────────────────────── */
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #9B85CC, #5c3fa8);
+    border: none;
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(92, 63, 168, 0.25);
+}
+
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 14px rgba(92, 63, 168, 0.35);
+        opacity: 0.95;
+    }
+
+    .btn-primary:active {
+        transform: scale(0.97);
+    }
+
+/* ───────────────────────── */
+/* Responsive */
+/* ───────────────────────── */
+
+@media (max-width: 700px) {
+
+    .filters {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+        .filters .filter-group input[type="text"] {
+            min-width: 100%;
+        }
+
+    .customer-table td,
+    .customer-table th {
+        padding: 8px 0.75rem;
+        font-size: 12px;
+    }
+
+    .status-badge {
+        font-size: 11px;
+        padding: 4px 10px;
+    }
+
+    .btn-primary {
+        padding: 6px 14px;
+        font-size: 11px;
+    }
+}

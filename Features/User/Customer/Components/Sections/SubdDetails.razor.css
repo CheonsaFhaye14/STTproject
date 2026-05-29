@@ -1,0 +1,54 @@
+﻿/* SubdDetails.razor.css */
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #C9B8E8;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 2px 2px 10px rgba(154, 133, 204, 0.12);
+    margin-bottom: 12px;
+}
+
+.card-title {
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid rgba(201, 184, 232, 0.4);
+}
+
+    .card-title h5 {
+        font-size: 15px;
+        font-weight: 700;
+        color: #26215C;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 0;
+    }
+
+.card-body {
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+    .card-body p {
+        padding: 0.85rem 1.25rem;
+        font-size: 13px;
+        color: #3a2870;
+        border-right: 1px solid rgba(201, 184, 232, 0.35);
+        margin: 0;
+        line-height: 1.5;
+        font-weight:bold;
+    }
+
+        .card-body p:last-child {
+            border-right: none;
+        }
+
+@media (max-width: 700px) {
+    .card-body {
+        grid-template-columns: 1fr 1fr;
+    }
+
+        .card-body p {
+            border-bottom: 1px solid rgba(201, 184, 232, 0.3);
+        }
+}
