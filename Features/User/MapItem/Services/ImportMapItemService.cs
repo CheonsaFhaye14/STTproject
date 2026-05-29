@@ -703,32 +703,27 @@ public sealed class ImportMapItemService
 			}
 		}
 
-		var duplicateUomGroups = rows
+		// Duplicate UOM and conversion checks should be scoped per SubdItemCode.
+		// Allow the same UOM or conversion to appear in the group when they belong to different SubdItem codes.
+		// Only treat rows as duplicates when both UOM and Conversion match for the same SubdItemCode.
+		var duplicateUomConvGroups = rows
 			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
-			.GroupBy(row => NormalizeUomKey(row.UOM))
+			.GroupBy(row => new
+			{
+				Company = Normalize(row.CompanyItemCode),
+				Subd = Normalize(row.SubdItemCode),
+				Uom = NormalizeUomKey(row.UOM),
+				Conv = row.Conversion
+			})
 			.Where(group => group.Count() > 1)
 			.ToList();
 
-		foreach (var group in duplicateUomGroups)
+		foreach (var group in duplicateUomConvGroups)
 		{
 			var duplicateRows = group.OrderBy(row => row.RowNumber).Skip(1).ToList();
 			foreach (var row in duplicateRows)
 			{
-				AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}'.");
-			}
-		}
-
-		var duplicateConversionGroups = rows
-			.GroupBy(row => row.Conversion)
-			.Where(group => group.Count() > 1)
-			.ToList();
-
-		foreach (var group in duplicateConversionGroups)
-		{
-			var duplicateRows = group.OrderBy(row => row.RowNumber).Skip(1).ToList();
-			foreach (var row in duplicateRows)
-			{
-				AddError(row.RowNumber, $"Duplicate conversion '{row.Conversion}'.");
+				AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}' with conversion '{row.Conversion}' for Company Item '{row.CompanyItemCode}' and SubdItem '{row.SubdItemCode}'.");
 			}
 		}
 
