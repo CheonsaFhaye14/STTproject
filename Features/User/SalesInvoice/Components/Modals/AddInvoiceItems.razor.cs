@@ -13,6 +13,8 @@ public partial class AddInvoiceItems
 {
     private ElementReference PrincipalSelect;
 
+    private ElementReference CategorySelect;
+
     private ElementReference SkuCodeInput;
 
     private GenericAutocomplete<SubdItem>? itemNameAutocomplete;
@@ -49,7 +51,8 @@ public partial class AddInvoiceItems
     private string SelectedPrincipal { get; set; } = string.Empty;
     private string SelectedCategory { get; set; } = string.Empty;
 
-    private DateTime lastPrincipalEnterTime = DateTime.MinValue;
+    private bool principalEnterPrimed;
+    private bool categoryEnterPrimed;
 
     private List<SubdItem> FilteredAvailableItems => AvailableItems
         .Where(i => i.SubDistributorId == SelectedSubdistributorId)
@@ -127,19 +130,46 @@ public partial class AddInvoiceItems
     {
         if (e.Key == "Enter")
         {
-            var timeSinceLastEnter = (DateTime.Now - lastPrincipalEnterTime).TotalMilliseconds;
+            if (!principalEnterPrimed)
+            {
+                await OpenSelectDropdownAsync(PrincipalSelect);
+                principalEnterPrimed = true;
+                return;
+            }
 
-            if (timeSinceLastEnter < 500)
-            {
-                await Task.Delay(10);
-                await SkuCodeInput.FocusAsync();
-                lastPrincipalEnterTime = DateTime.MinValue;
-            }
-            else
-            {
-                lastPrincipalEnterTime = DateTime.Now;
-            }
+            principalEnterPrimed = false;
+            await Task.Delay(10);
+            await CategorySelect.FocusAsync();
         }
+    }
+
+    private async Task HandleCategoryKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (!categoryEnterPrimed)
+            {
+                await OpenSelectDropdownAsync(CategorySelect);
+                categoryEnterPrimed = true;
+                return;
+            }
+
+            categoryEnterPrimed = false;
+            await Task.Delay(10);
+            await SkuCodeInput.FocusAsync();
+        }
+    }
+
+    private Task HandlePrincipalBlur(FocusEventArgs _)
+    {
+        principalEnterPrimed = false;
+        return Task.CompletedTask;
+    }
+
+    private Task HandleCategoryBlur(FocusEventArgs _)
+    {
+        categoryEnterPrimed = false;
+        return Task.CompletedTask;
     }
 
     private string NewSku
@@ -576,7 +606,7 @@ SelectedSubdistributorId);
             ValidateDraft();
             await AddItemToQueue();
             await Task.Delay(10);
-            await SkuCodeInput.FocusAsync();
+            await PrincipalSelect.FocusAsync();
         }
     }
 

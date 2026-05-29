@@ -22,8 +22,8 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Principal</label>
-                    <select @ref="PrincipalSelect" value="@SelectedPrincipal" @onchange="OnPrincipalChanged"
-                            @onkeydown="HandlePrincipalKeyDown">
+                        <select @ref="PrincipalSelect" value="@SelectedPrincipal" @onchange="OnPrincipalChanged"
+                            @onkeydown="HandlePrincipalKeyDown" @onblur="HandlePrincipalBlur">
                         <option value="">-- All Principals --</option>
                         @foreach (var principal in AvailablePrincipals)
                         {
@@ -34,7 +34,8 @@
 
                 <div class="form-group">
                     <label>Category</label>
-                    <select @onchange="OnCategoryChanged" value="@SelectedCategory">
+                        <select @ref="CategorySelect" @onchange="OnCategoryChanged" value="@SelectedCategory"
+                            @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
                         <option value="">-- All Categories --</option>
                         @foreach (var cat in AvailableCategories)
                         {
