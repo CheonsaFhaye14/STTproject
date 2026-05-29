@@ -702,19 +702,19 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "num" or "invoicecode" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "po number" or "invoice#" or "invoice #" or "invoice no." or "invoice" or "inv")
+			if (header is "num" or "dr #" or "so" or  "invoicecode" or "reference" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "ref. #" or "doc no." or "os_no" or "po number" or "sales invoice number" or "document number" or "invoice#" or "invoice #" or "invoice no." or "invoice" or "inv" or "ref.no." or "sales no.")
 			{
 				headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "invoicedate" or "salesinvoicedate" or "invoice date" or "inv date" or "invoicedt" or "lst_date" or "si_date" or "date" or "p.o date" or "inv date" or "date-no." or "d_date")
+			if (header is "invoicedate" or "transdate" or "transaction date" or  "transaction" or "salesinvoicedate" or "invoice date" or "inv date" or "invoicedt" or "lst_date" or "si_date" or "date" or "p.o date" or "inv date" or "date-no." or "d_date")
 			{
 				headers.TryAdd("InvoiceDate", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "customercode" or "acc name" or "cust./supp." or "customer code" or "lst_cust1" or "so" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
+			if (header is "customercode" or "account code" or "custcode" or "acc name" or "cust./supp." or "customer code" or "lst_cust1" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
 			{
 				headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
 				continue;
@@ -722,25 +722,25 @@ public sealed class ImportSalesInvoiceService
 
 
 
-			if (header is "ordertype" or "order type" or "type" or "trx type" or "trxtype")
+			if (header is "ordertype" or "order type" or "type" or "trx type" or "trxtype" or "returntype")
 			{
 				headers.TryAdd("OrderType", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "lst_net2" or "net" or "gross")
+			if (header is "lst_net2" or "net" or "gross" or "gross amount" or "amount" or "amt" or "subtotal" or "amount vat inc" or "netsales" or "sales amount w/tax")
 			{
 				headers.TryAdd("NetAmount", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "skucode" or "item id" or "subditemcode" or "lst_head1" or "item_code" or "item code" or "item no." or "skuid" or "item number" or "stock_no" or "padsa item code" or "code" or "item_number")
+			if (header is "skucode" or "item id" or "item" or "subditemcode" or "product code" or "lst_head1" or "item_code" or "item code" or "item no." or "skuid" or "item number" or "stock_no" or "padsa item code" or "code" or "item_number")
 			{
 				headers.TryAdd("SkuCode", cell.Address.ColumnNumber);
 				continue;
 			}
 
-			if (header is "uom" or "unitofmeasure" or "unit" or "um" or "u/m" or "pckg" or "stock unit: units")
+			if (header is "uom" or "unitofmeasure" or "unit" or "um" or "u/m" or "pckg" or "stock unit: units" or "units" or "unit of measure")
 			{
 				if (header is "unit")
 				{
@@ -783,12 +783,12 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "quantity" or "lst_qnty" or "item_qty_piece" or "qty" or "um_qty" or "qty. sold" or "qty_received")
+			if (header is "quantity" or "lst_qnty" or "item_qty_piece" or "qty" or "um_qty" or "qty. sold" or "qty_received" or "invoiced quantity" or "number of order")
 			{
 				headers.TryAdd("Quantity", cell.Address.ColumnNumber);
 			}
 
-			if (header is "salesman" or "ads" or "salesmanname" or "salesman name" or "sales man" or "lst_agent2" or "salesrep" or "agent" or "sales person" or "pic name" or "sales rep" or "sales_man" or "salesman_name" or "sales rep (employee): branch")
+			if (header is "salesman" or "ads" or "salesmanname" or "agent name" or "smanname" or "salesman name" or "sales man" or "lst_agent2" or "salesrep" or "agent" or "sales person" or "pic name" or "sales rep" or "sales_man" or "salesman_name" or "sales rep (employee): branch")
 			{
 				headers.TryAdd("SalesManName", cell.Address.ColumnNumber);
 			}
