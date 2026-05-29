@@ -1,0 +1,75 @@
+<div class="modal-overlay" tabindex="0" @ref="overlayRef" @onclick="CloseModal" @onkeydown="HandleKeyDown">
+    <div class="modal-box" @onclick:stopPropagation="true">
+        <div class="modal-header">
+            <h4>Customer Details: @Customer?.CustomerName</h4>
+        </div>
+        <div class="modal-body">
+            <p>Customer ID: @Customer?.CustomerId</p>
+            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerCode))
+            {
+                <p>Customer Code: @Customer.CustomerCode</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerName))
+            {
+                <p>Customer Name: @Customer.CustomerName</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerType))
+            {
+                <p>Type: @Customer.CustomerType</p>
+            }
+            <p>Status: @(Customer != null ? (Customer.IsActive ? "Active" : "Inactive") : string.Empty)</p>
+            @if (!string.IsNullOrWhiteSpace(Customer?.AddressLine))
+            {
+                <p>AddressLine: @Customer.AddressLine</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Customer?.City))
+            {
+                <p>City: @Customer.City</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Customer?.Province))
+            {
+                <p>Province: @Customer.Province</p>
+            }
+            @if (Customer?.ZipCode != null)
+            {
+                <p>Zip Code: @Customer.ZipCode</p>
+            }
+        </div>
+        <div class="modal-actions">
+            <button class="btn-secondary" @onclick="CloseModal">Close (Esc)</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ElementReference overlayRef;
+
+    [Parameter]
+    public CustomerInfoDto? Customer { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await overlayRef.FocusAsync();
+        }
+    }
+
+    private Task CloseModal()
+    {
+        return OnClose.InvokeAsync(null);
+    }
+
+    private Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            return CloseModal();
+        }
+
+        return Task.CompletedTask;
+    }
+}

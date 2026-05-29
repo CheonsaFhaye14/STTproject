@@ -27,5 +27,6 @@ public class CustomerInfoDto
 public class CustomerListResponseDto
 {
     public SubDistributorInfoDto SubDistributor { get; set; } = null!;
+    public List<SubDistributorInfoDto> SubDistributors { get; set; } = new();
     public List<CustomerInfoDto> Customers { get; set; } = new();
 }

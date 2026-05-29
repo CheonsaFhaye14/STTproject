@@ -33,8 +33,8 @@ public partial class SubdItemTable
 
     private string SearchText { get; set; } = string.Empty;
     private SubItemSortOrder SortOrder { get; set; } = SubItemSortOrder.CreatedDateDesc;
-    private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.CreatedDate;
-    private bool SortAscending { get; set; }
+    private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.SubItemCode;
+    private bool SortAscending { get; set; } = true;
 
     private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch));
 

@@ -1,0 +1,36 @@
+<h4>CUSTOMERS</h4>
+@* select that shows assigned subdistributors of user and allows selection to show the customers of that subdistributor *@
+<div class="form-group">
+    <select @onchange="HandleChange" value="@(SelectedSubDistributorId)">
+        <option value="">--- Select Subdistributor ---</option>
+        @if (Model?.SubDistributors != null)
+        {
+            @foreach (var sd in Model.SubDistributors)
+            {
+                <option value="@sd.SubDistributorId">@sd.SubdName</option>
+            }
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter]
+    public CustomerListResponseDto? Model { get; set; }
+
+    [Parameter]
+    public int? SelectedSubDistributorId { get; set; }
+
+    [Parameter]
+    public EventCallback<int?> OnSubDistributorChanged { get; set; }
+
+    private Task HandleChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e?.Value?.ToString(), out var id))
+        {
+            return OnSubDistributorChanged.InvokeAsync(id);
+        }
+
+        return OnSubDistributorChanged.InvokeAsync((int?)null);
+    }
+}
+

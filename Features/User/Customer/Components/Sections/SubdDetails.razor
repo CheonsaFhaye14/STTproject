@@ -1,0 +1,17 @@
+@* shows details of selected subdistributor *@
+<div class="card">
+    <div class="card-title">
+        <h5>Subdistributor Details</h5>
+    </div>
+    <div class="card-body">
+        <p>Code: @Model?.SubDistributor.SubdCode</p>
+        <p>Name: @Model?.SubDistributor.SubdName</p>
+        <p>City/Municipality: @Model?.SubDistributor.CityMunicipality</p>
+        <p>Province: @Model?.SubDistributor.Province</p>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public CustomerListResponseDto? Model { get; set; }
+}

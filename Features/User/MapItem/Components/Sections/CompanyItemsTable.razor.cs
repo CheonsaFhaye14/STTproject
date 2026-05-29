@@ -28,7 +28,7 @@ public partial class CompanyItemsTable
 
     private string SearchText { get; set; } = string.Empty;
     private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
-    private bool SortAscending { get; set; }
+    private bool SortAscending { get; set; } = true;
 
     private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => ApplySort(CompanyItems.Where(MatchesSearch));
 
