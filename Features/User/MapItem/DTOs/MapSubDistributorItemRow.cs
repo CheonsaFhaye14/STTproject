@@ -12,4 +12,5 @@ public sealed class MapSubDistributorItemRow
     public string CompanyItemName { get; set; } = string.Empty;
     public string SubdName { get; set; } = string.Empty;
     public string UomName { get; set; } = string.Empty;
+    public DateTime? CreatedDate { get; set; }
 }

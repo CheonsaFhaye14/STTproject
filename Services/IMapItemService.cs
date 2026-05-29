@@ -134,7 +134,8 @@ public class MapItemService : IMapItemService
                 Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
                 Principal = si.CompanyItem.Principal,
                 UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty,
-                si.SubDistributor.SubdName
+                si.SubDistributor.SubdName,
+                si.CreatedDate
             });
 
         if (subDistributorId > 0)
@@ -166,6 +167,7 @@ public class MapItemService : IMapItemService
                 CompanyItemId = group.First().CompanyItemId,
                 CompanyItemName = group.First().CompanyItemName,
                 SubdName = group.First().SubdName,
+                CreatedDate = group.First().CreatedDate,
                 // Format: "Box of 12 - 120.00, Piece - 10.00"
                 UomName = string.Join(", ", group
                     .Where(x => !string.IsNullOrWhiteSpace(x.UomName))

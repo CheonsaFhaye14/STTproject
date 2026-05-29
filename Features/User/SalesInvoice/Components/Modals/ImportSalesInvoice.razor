@@ -53,7 +53,7 @@
                         {
                             <div class="d-flex gap-2 mb-3">
                                 <div class="d-flex align-items-center me-2">
-                                    @if (selectableCount > 0)
+                                    @if (cardFilter == InvoiceCardFilter.SuccessOnly && selectableCount > 0)
                                     {
                                         <div class="form-check d-flex align-items-center me-2">
                                             <input class="form-check-input me-2" type="checkbox"
@@ -63,7 +63,7 @@
                                         </div>
                                     }
 
-                                    @if (cardFilter == InvoiceCardFilter.ErrorOnly && hasErrorCards)
+                                     @if (cardFilter == InvoiceCardFilter.ErrorOnly && hasErrorCards)
                                     {
                                         <div class="d-flex align-items-center">
                                             <label class="me-2">Errors: @GetTotalErrorCount()</label>
@@ -106,100 +106,126 @@
                             </div>
 
                             <div class="import-results">
-                                @foreach (var card in filteredCards)
+                                @if (IsCustomerErrorFilterActive())
                                 {
-                                    <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
-                                        <div
-                                            class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
-                                            <div>
-                                                <h6 class="mb-0">Invoice: <strong>@card.InvoiceNumber</strong></h6>
+                                    var customerCards = GetCustomerErrorCards(invoiceCards);
+
+                                    foreach (var customerCard in customerCards)
+                                    {
+                                        <div class="card mb-3 border-warning">
+                                            <div class="card-header d-flex justify-content-between align-items-center bg-warning text-dark">
+                                                <div>
+                                                    <h6 class="mb-0">Customer code/name: <strong>@customerCard.CustomerValue</strong></h6>
+                                                </div>
                                             </div>
-                                            <div>
-                                                @if (card.Prepared?.IsSaved == true)
-                                                {
-                                                    <span class="badge bg-light text-success">Saved</span>
-                                                }
-                                                else if (card.HasErrors)
-                                                {
-                                                    <span class="badge bg-light text-danger">@GetErrorBadgeText(card)</span>
-                                                }
-                                                else if (card.Prepared != null)
-                                                {
-                                                    <input type="checkbox" @bind="card.Prepared.Selected" />
-                                                }
+                                            <div class="card-body">
+                                                <div class="mb-2">
+                                                    <small class="text-muted">Missing data:</small> @customerCard.MissingData
+                                                </div>
+                                                <div>
+                                                    <small class="text-muted">Rows:</small> @customerCard.RowNumbers
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="card-body">
-                                            @if (card.Prepared?.Invoice != null)
-                                            {
-                                                <div class="mb-2">
-                                                    <small class="text-muted">Date:</small> @card.Prepared.Invoice.InvoiceDate.ToString("d")
-                                                    &nbsp; | &nbsp;
-                                                    <small class="text-muted">Customer:</small> @card.Prepared.Invoice.CustomerCode -
-                                                    @card.Prepared.Invoice.CustomerName &nbsp; | &nbsp;
-                                                    <small class="text-muted">Order Type:</small> @card.Prepared.Invoice.OrderType &nbsp; |
-                                                    &nbsp;
-                                                    <small class="text-muted">Total Amount:</small> @card.Prepared.Items.Sum(item =>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        item.Amount).ToString("N2")
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var card in filteredCards)
+                                    {
+                                        <div class="card mb-3 @(card.HasErrors ? "border-danger" : "border-success")">
+                                            <div
+                                                class="card-header d-flex justify-content-between align-items-center @(card.HasErrors ? "bg-danger text-white" : "bg-success text-white")">
+                                                <div>
+                                                    <h6 class="mb-0">Invoice: <strong>@card.InvoiceNumber</strong></h6>
                                                 </div>
-                                            }
-
-                                            @if (card.Prepared?.Items != null && card.Prepared.Items.Count > 0)
-                                            {
-                                                <table class="table table-sm">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>SKU</th>
-                                                            <th>UOM</th>
-                                                            <th class="text-end">Quantity</th>
-                                                            <th class="text-end">Amount</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach (var it in card.Prepared.Items)
-                                                        {
-                                                            <tr>
-                                                                <td>@it.ItemCode</td>
-                                                                <td>@it.UomName</td>
-                                                                <td class="text-end">@it.Quantity</td>
-                                                                <td class="text-end">@it.Amount.ToString("N2")</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            }
-
-                                            @if (card.HasErrors)
-                                            {
-                                                var visibleIssues = (card.Issues ?? new List<ImportSalesInvoiceIssue>())
-                                                    .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>());
-
-                                                if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                                                <div>
+                                                    @if (card.Prepared?.IsSaved == true)
+                                                    {
+                                                        <span class="badge bg-light text-success">Saved</span>
+                                                    }
+                                                    else if (card.HasErrors)
+                                                    {
+                                                        <span class="badge bg-light text-danger">@GetErrorBadgeText(card)</span>
+                                                    }
+                                                    else if (card.Prepared != null)
+                                                    {
+                                                        <input type="checkbox" @bind="card.Prepared.Selected" />
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                @if (card.Prepared?.Invoice != null)
                                                 {
-                                                    visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
-                                                }
-
-                                                var grouped = visibleIssues.GroupBy(i => i.RowNumber).OrderBy(g => g.Key).ToList();
-
-                                                if (grouped.Any())
-                                                {
-                                                    <div class="mt-2">
-                                                        <ul class="list-unstyled text-danger mb-0">
-                                                            @foreach (var rowGroup in grouped)
-                                                            {
-                                                                var rowNum = rowGroup.Key;
-                                                                var combined = string.Join("\n", rowGroup.Select(i => i.Message));
-                                                                <li>
-                                                                    <small class="text-muted">Row @rowNum</small>
-                                                                    <span style="white-space: pre-line;">: @combined</span>
-                                                                </li>
-                                                            }
-                                                        </ul>
+                                                    <div class="mb-2">
+                                                        <small class="text-muted">Date:</small> @card.Prepared.Invoice.InvoiceDate.ToString("d")
+                                                        &nbsp; | &nbsp;
+                                                        <small class="text-muted">Customer:</small> @card.Prepared.Invoice.CustomerCode -
+                                                        @card.Prepared.Invoice.CustomerName &nbsp; | &nbsp;
+                                                        <small class="text-muted">Order Type:</small> @card.Prepared.Invoice.OrderType &nbsp; |
+                                                        &nbsp;
+                                                        <small class="text-muted">Total Amount:</small> @card.Prepared.Items.Sum(item =>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            item.Amount).ToString("N2")
                                                     </div>
                                                 }
-                                            }
+
+                                                @if (card.Prepared?.Items != null && card.Prepared.Items.Count > 0)
+                                                {
+                                                    <table class="table table-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>SKU</th>
+                                                                <th>UOM</th>
+                                                                <th class="text-end">Quantity</th>
+                                                                <th class="text-end">Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var it in card.Prepared.Items)
+                                                            {
+                                                                <tr>
+                                                                    <td>@it.ItemCode</td>
+                                                                    <td>@it.UomName</td>
+                                                                    <td class="text-end">@it.Quantity</td>
+                                                                    <td class="text-end">@it.Amount.ToString("N2")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+
+                                                @if (card.HasErrors)
+                                                {
+                                                    var visibleIssues = (card.Issues ?? new List<ImportSalesInvoiceIssue>())
+                                                        .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>());
+
+                                                    if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                                                    {
+                                                        visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
+                                                    }
+
+                                                    var grouped = visibleIssues.GroupBy(i => i.RowNumber).OrderBy(g => g.Key).ToList();
+
+                                                    if (grouped.Any())
+                                                    {
+                                                        <div class="mt-2">
+                                                            <ul class="list-unstyled text-danger mb-0">
+                                                                @foreach (var rowGroup in grouped)
+                                                                {
+                                                                    var rowNum = rowGroup.Key;
+                                                                    var combined = string.Join("\n", rowGroup.Select(i => i.Message));
+                                                                    <li>
+                                                                        <small class="text-muted">Row @rowNum</small>
+                                                                        <span style="white-space: pre-line;">: @combined</span>
+                                                                    </li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
                                         </div>
-                                    </div>
+                                    }
                                 }
                             </div>
                         }
@@ -421,6 +447,35 @@ null || prepared.Issues.Count == 0));
         selectedErrorFilter = null;
     }
 
+    private bool IsCustomerErrorFilterActive()
+    {
+        return cardFilter == InvoiceCardFilter.ErrorOnly &&
+            string.Equals(selectedErrorFilter, "Customer Error", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private List<CustomerErrorCardViewModel> GetCustomerErrorCards(List<InvoiceCardViewModel> cards)
+    {
+        var visibleIssues = cards
+            .SelectMany(card => (card.Issues ?? new List<ImportSalesInvoiceIssue>())
+                .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()))
+            .Where(issue => NormalizeSalesIssueType(issue) == selectedErrorFilter)
+            .ToList();
+
+        return visibleIssues
+            .GroupBy(issue => NormalizeCustomerValue(issue.CustomerValue))
+            .Select(group => new CustomerErrorCardViewModel(
+                CustomerValue: string.IsNullOrWhiteSpace(group.Key) ? "[Blank Customer]" : group.Key,
+                MissingData: string.Join("; ", group.Select(issue => issue.Message).Distinct()),
+                RowNumbers: string.Join(", ", group.Select(issue => issue.RowNumber).Distinct().OrderBy(row => row))))
+            .OrderBy(card => card.CustomerValue)
+            .ToList();
+    }
+
+    private static string NormalizeCustomerValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    }
+
     private bool CardContainsError(InvoiceCardViewModel card, string? message)
     {
         if (string.IsNullOrWhiteSpace(message)) return false;
@@ -528,6 +583,11 @@ null || prepared.Issues.Count == 0));
     {
         public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
     }
+
+    private sealed record CustomerErrorCardViewModel(
+        string CustomerValue,
+        string MissingData,
+        string RowNumbers);
 
     private enum InvoiceCardFilter
     {

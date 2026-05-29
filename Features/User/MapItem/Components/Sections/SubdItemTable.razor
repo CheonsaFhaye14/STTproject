@@ -27,24 +27,36 @@
 			}
 		}
 	</h3>
-
+	<div class="filters">
+	   <div class="filter-group">
+			<input type="text" placeholder="Search sub items"
+					@bind="SearchText" @bind:event="oninput" />
+	   </div>
+	   <div class="filter-group">
+		<select @bind="SortOrder" @bind:after="HandleSortOrderChanged">
+			<option value="CreatedDateDesc" disabled>Order By:</option>
+			<option value="CreatedDateDesc">Newest</option>
+			<option value="CreatedDateAsc">Oldest</option>
+		</select>
+	   </div>
+	</div>
 	<table class="mapping-table">
 		<thead>
 			<tr>
 				@if (!IsSubDistributorSelected)
 				{
-					<th>SUB DISTRIBUTOR NAME</th>
+					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">SUB DISTRIBUTOR NAME @GetSortIndicator(SubItemSortColumn.SubdName)</th>
 				}
-				<th>SUB ITEM CODE</th>
-				<th>ITEM NAME</th>
-				<th>UNIT OF MEASURES</th>
+				<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">SUB ITEM CODE @GetSortIndicator(SubItemSortColumn.SubItemCode)</th>
+				<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">ITEM NAME @GetSortIndicator(SubItemSortColumn.Description)</th>
+				<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.UomName)">UNIT OF MEASURES @GetSortIndicator(SubItemSortColumn.UomName)</th>
 				<th>ACTIONS</th>
 			</tr>
 		</thead>
 		<tbody>
-			@if (SubdItems.Any())
+			@if (FilteredSubdItems.Any())
 			{
-				@foreach (var item in SubdItems)
+				@foreach (var item in FilteredSubdItems)
 				{
 					<tr>
 						@if (!IsSubDistributorSelected)

@@ -1,5 +1,5 @@
 ﻿<div class="card-section">
-    <div class="filters">
+    <div>
         <h3 class="company-items-title">
             COMPANY ITEMS
             @if (SelectedCompanyItemIdForFilter.HasValue)
@@ -10,6 +10,13 @@
                 </button>
             }
         </h3>
+
+    </div>
+    <div class="filters">         
+        <div class="filter-group">
+                <input type="text" placeholder="Search"
+                         @bind="SearchText" @bind:event="oninput" />
+         </div>
         <div class="filter-group">
             <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged">
                 <option value="All">All categories</option>
@@ -26,8 +33,7 @@
                 <option value="Unmapped">Items for Mapping </option>
                 <option value="Mapped">Already Mapped</option>
             </select>
-        </div>
-    </div>
+        </div></div>
     <table class="mapping-table">
         <thead>
             <tr>
@@ -37,9 +43,9 @@
             </tr>
         </thead>
         <tbody>
-            @if (CompanyItems.Any())
+                @if (FilteredCompanyItems.Any())
             {
-                @foreach (var item in CompanyItems)
+                    @foreach (var item in FilteredCompanyItems)
                 {
                     var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
                     var isPriceIncreaseScheduled = item.EffectivityDate.HasValue && item.EffectivityDate.Value > DateTime.Now;
@@ -69,7 +75,7 @@
             else
             {
                 <tr>
-                    <td colspan="3">No company items found.</td>
+                    <td colspan="3">No company items match the current filters.</td>
                 </tr>
             }
         </tbody>

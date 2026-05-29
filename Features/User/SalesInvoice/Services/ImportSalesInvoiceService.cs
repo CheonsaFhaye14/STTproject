@@ -141,10 +141,10 @@ public sealed class ImportSalesInvoiceService
 			.Where(uom => subdItemIds.Contains(uom.SubdItemId))
 			.ToListAsync(cancellationToken);
 
-		var customerByCode = customers.ToDictionary(customer => Normalize(customer.CustomerCode));
+		var customerByCode = customers.ToDictionary(customer => NormalizeCustomerLookup(customer.CustomerCode));
 		var customerByName = customers
 			.Where(customer => !string.IsNullOrWhiteSpace(customer.CustomerName))
-			.GroupBy(customer => Normalize(customer.CustomerName))
+			.GroupBy(customer => NormalizeCustomerLookup(customer.CustomerName))
 			.ToDictionary(group => group.Key, group => group.First());
 		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
 		var uomLookup = uoms
@@ -184,7 +184,7 @@ public sealed class ImportSalesInvoiceService
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
 					result.AddError(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError);
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError, null, invoiceRows[0].CustomerCode));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -195,7 +195,7 @@ public sealed class ImportSalesInvoiceService
 				{
 					var msg = $"Customer code or name '{firstRow.CustomerCode}' was not found.";
 					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode"));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode", firstRow.CustomerCode));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -204,7 +204,7 @@ public sealed class ImportSalesInvoiceService
 				{
 					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
 					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "OrderType");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "OrderType"));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "OrderType", firstRow.CustomerCode));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -239,7 +239,7 @@ public sealed class ImportSalesInvoiceService
 					if (!subdItemByCode.TryGetValue(Normalize(row.SkuCode), out var subdItem))
 					{
 						var msg = $"SKU code '{row.SkuCode}' was not found.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode"));
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode", row.CustomerCode));
 						result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
 						items.Clear();
 						break;
@@ -248,7 +248,7 @@ public sealed class ImportSalesInvoiceService
 					if (!TryResolveUom(subdItem.SubdItemId, row.UOM, uomLookup, out var uom))
 					{
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM"));
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM", row.CustomerCode));
 						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
 						items.Clear();
 						break;
@@ -256,14 +256,14 @@ public sealed class ImportSalesInvoiceService
 
 					if (row.Quantity <= 0)
 					{
-						var msg = "Quantity must be greater than 0.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "Quantity"));
-						result.AddError(row.RowNumber, invoiceNumber, msg, "Quantity");
-						items.Clear();
-						break;
+						if (row.Quantity == 0)
+						{
+							continue;
+						}
 					}
 
 					var unitPrice = await GetUnitPriceAsync(uom.ItemsUomId, firstRow.InvoiceDate);
+					var absoluteQuantity = Math.Abs(row.Quantity);
 
 					items.Add(new InputItemModel
 					{
@@ -272,8 +272,8 @@ public sealed class ImportSalesInvoiceService
 						SubdItemId = subdItem.SubdItemId,
 						ItemsUomId = uom.ItemsUomId,
 						UomName = uom.UomName,
-						Quantity = row.Quantity,
-						Amount = unitPrice * row.Quantity
+						Quantity = absoluteQuantity,
+						Amount = unitPrice * absoluteQuantity
 					});
 				}
 
@@ -458,6 +458,10 @@ public sealed class ImportSalesInvoiceService
 			void AddRowError(string message, string? columnName = null)
 			{
 				result.AddError(rowNumber, invoiceCode, message, columnName);
+				if (columnName == "CustomerCode")
+				{
+					result.Issues[^1] = result.Issues[^1] with { CustomerValue = customerCode };
+				}
 				rowHasErrors = true;
 			}
 
@@ -489,7 +493,25 @@ public sealed class ImportSalesInvoiceService
 				{
 					if (!TryParseOrderType(orderType, out normalizedOrderType))
 					{
-						AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+						if (hasNetAmountColumn)
+						{
+							if (netAmountCell is null || netAmountCell.IsEmpty())
+							{
+								AddRowError($"Order type '{orderType}' is invalid and Net/Gross amount is missing.", "OrderType");
+							}
+							else if (!TryGetDecimal(netAmountCell, out var amountValue))
+							{
+								AddRowError($"Order type '{orderType}' is invalid and Net/Gross amount must be a valid number.", "OrderType");
+							}
+							else
+							{
+								normalizedOrderType = amountValue < 0 ? "Credit" : "Invoice";
+							}
+						}
+						else
+						{
+							AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+						}
 					}
 				}
 				else if (hasNetAmountColumn)
@@ -514,7 +536,7 @@ public sealed class ImportSalesInvoiceService
 				else
 				{
 					// No explicit OrderType and no NetAmount column to infer from — warn but default to Invoice.
-					result.Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceCode, "Order type missing and NetAmount column not present; defaulting to Invoice.", "OrderType"));
+					result.Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceCode, "Order type missing and NetAmount column not present; defaulting to Invoice.", "OrderType", customerCode));
 					normalizedOrderType = "Invoice";
 				}
 			}
@@ -539,12 +561,17 @@ public sealed class ImportSalesInvoiceService
 				{
 					AddRowError("Quantity is required.", "Quantity");
 				}
-				else if (!TryGetInt(row.Cell(quantityColumn), out var quantity) || quantity == 0)
+				else if (!TryGetInt(row.Cell(quantityColumn), out var quantity))
 				{
-					AddRowError("Quantity must be a whole number and not zero.", "Quantity");
+					AddRowError("Quantity must be a whole number.", "Quantity");
 				}
 				else
 				{
+					if (quantity == 0)
+					{
+						continue;
+					}
+
 					if (string.IsNullOrWhiteSpace(normalizedOrderType) && quantity < 0)
 					{
 						normalizedOrderType = "Credit";
@@ -1036,13 +1063,21 @@ public sealed class ImportSalesInvoiceService
 		return value.Trim().ToLowerInvariant();
 	}
 
+	private static string NormalizeCustomerLookup(string value)
+	{
+		return Normalize(value)
+			.Replace("'", string.Empty)
+			.Replace("`", string.Empty)
+			.Replace("’", string.Empty);
+	}
+
 	private static bool TryResolveCustomer(
 		string value,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
 		out STTproject.Data.Customer customer)
 	{
-		var normalized = Normalize(value);
+		var normalized = NormalizeCustomerLookup(value);
 		if (customerByCode.TryGetValue(normalized, out customer!))
 		{
 			return true;
@@ -1095,4 +1130,4 @@ public sealed class ImportSalesInvoiceResult
 	}
 }
 
-public sealed record ImportSalesInvoiceIssue(int RowNumber, string InvoiceNumber, string Message, string? ColumnName = null);
+public sealed record ImportSalesInvoiceIssue(int RowNumber, string InvoiceNumber, string Message, string? ColumnName = null, string? CustomerValue = null);

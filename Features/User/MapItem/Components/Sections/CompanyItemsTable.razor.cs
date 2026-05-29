@@ -19,6 +19,10 @@ public partial class CompanyItemsTable
     [Parameter] public EventCallback<MapCompanyItemViewRow> OnCompanyItemRowClicked { get; set; }
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
 
+    private string SearchText { get; set; } = string.Empty;
+
+    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => CompanyItems.Where(MatchesSearch);
+
     private async Task HandleCategoryChanged()
     {
         if (SelectedCompanyItemsCategoryStringChanged.HasDelegate)
@@ -64,5 +68,23 @@ public partial class CompanyItemsTable
         {
             await OnClearCompanyItemFilter.InvokeAsync();
         }
+    }
+
+    private bool MatchesSearch(MapCompanyItemViewRow item)
+    {
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            return true;
+        }
+
+        var search = SearchText.Trim();
+        return ContainsIgnoreCase(item.CompanyItemCode, search)
+            || ContainsIgnoreCase(item.Category, search)
+            || ContainsIgnoreCase(item.ItemName, search);
+    }
+
+    private static bool ContainsIgnoreCase(string value, string search)
+    {
+        return value.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 }
