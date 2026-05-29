@@ -168,12 +168,18 @@ public sealed class ImportMapItemService
 				.ToListAsync(cancellationToken);
 		}
 
-		var existingBySubdAndCode = new Dictionary<(string, string), SubdItem>();
+		var existingBySubdCodeCompanyAndItem = new HashSet<(string, string, string)>();
+		var companyItemCodesById = companyItems.Values.ToDictionary(ci => ci.CompanyItemId, ci => Normalize(ci.ItemCode));
 		foreach (var si in existingSubdItems)
 		{
 			var subdCode = subdDistributors.FirstOrDefault(k => k.Value.SubDistributorId == si.SubDistributorId).Key ?? string.Empty;
-			var key = (Normalize(subdCode), Normalize(si.SubdItemCode));
-			existingBySubdAndCode[key] = si;
+			if (!companyItemCodesById.TryGetValue(si.CompanyItemId, out var companyItemCode))
+			{
+				continue;
+			}
+
+			var key = (Normalize(subdCode), Normalize(si.SubdItemCode), companyItemCode);
+			existingBySubdCodeCompanyAndItem.Add(key);
 		}
 
 		// Group rows by the item identity shown in the UI.
@@ -252,9 +258,12 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			// Check if any rows conflict with an existing SubdItem code in the database
-			var subdDistributorKey = (Normalize(firstRow.SubDistributorCode), Normalize(firstRow.SubdItemCode));
-			var alreadyExistsByCode = existingBySubdAndCode.TryGetValue(subdDistributorKey, out var existingCode) && existingCode != null;
+			// Check if any rows conflict with an existing exact SubdItem mapping in the database
+			var subdDistributorKey = (
+				Normalize(firstRow.SubDistributorCode),
+				Normalize(firstRow.SubdItemCode),
+				Normalize(firstRow.CompanyItemCode));
+			var alreadyExistsByCode = existingBySubdCodeCompanyAndItem.Contains(subdDistributorKey);
 
 			if (alreadyExistsByCode)
 			{
@@ -265,7 +274,7 @@ public sealed class ImportMapItemService
 						issues = new List<string>();
 						rowErrors[row.RowNumber] = issues;
 					}
-					issues.Add($"SubdItem code '{firstRow.SubdItemCode}' is already mapped in the database for SubDistributor '{firstRow.SubDistributorCode}'.");
+					issues.Add($"SubdItem code '{firstRow.SubdItemCode}' is already mapped in the database for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'.");
 				}
 			}
 
@@ -406,12 +415,13 @@ public sealed class ImportMapItemService
 			.Where(ci => ci.IsActive)
 			.ToDictionaryAsync(ci => Normalize(ci.ItemCode), cancellationToken);
 
-		// Group by SubDistributor + SubdItemCode to create SubdItems with their UOMs
+		// Group by SubDistributor + SubdItemCode + CompanyItemCode to create SubdItems with their UOMs
 		var groupedBySubdItem = rows
 			.GroupBy(r => new
 			{
 				SubDistributorCode = Normalize(r.SubDistributorCode),
-				SubdItemCode = Normalize(r.SubdItemCode)
+				SubdItemCode = Normalize(r.SubdItemCode),
+				CompanyItemCode = Normalize(r.CompanyItemCode)
 			})
 			.ToList();
 
@@ -437,12 +447,14 @@ public sealed class ImportMapItemService
 
 			var existingByCode = await context.SubdItems
 				.FirstOrDefaultAsync(
-					si => si.SubDistributorId == subdDistributor.SubDistributorId && si.SubdItemCode == subdItemCode,
+					si => si.SubDistributorId == subdDistributor.SubDistributorId
+						&& si.SubdItemCode == subdItemCode
+						&& si.CompanyItemId == companyItem.CompanyItemId,
 					cancellationToken);
 
 			if (existingByCode != null)
 			{
-				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' already exists for SubDistributor '{firstRow.SubDistributorCode}'. Please review the import and try again.");
+				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'. Please review the import and try again.");
 			}
 
 			var subdItem = new SubdItem
@@ -864,76 +876,7 @@ public sealed class ImportMapItemService
 
 	private static IReadOnlyDictionary<int, List<string>> BuildSubdItemIdentityConflictsByRow(List<ImportedMapItemRow> rows)
 	{
-		var errorsByRow = new Dictionary<int, List<string>>();
-
-		void AddError(int rowNumber, string message)
-		{
-			if (!errorsByRow.TryGetValue(rowNumber, out var list))
-			{
-				list = new List<string>();
-				errorsByRow[rowNumber] = list;
-			}
-
-			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
-			{
-				list.Add(message);
-			}
-		}
-
-		var itemGroups = rows
-			.GroupBy(row => new
-			{
-				SubDistributorCode = Normalize(row.SubDistributorCode),
-				CompanyItemCode = Normalize(row.CompanyItemCode),
-				Principal = Normalize(row.Principal)
-			})
-			.Select(group => group.OrderBy(row => row.RowNumber).ToList())
-			.ToList();
-
-		// Allow the same CompanyItem to be mapped multiple times for the same SubDistributor
-		// as long as the SubdItemCode differs. Older validations enforced that SubdItemCode
-		// and SubdItemName must remain the same for a CompanyItem within the file; remove
-		// those restrictions to permit multiple mappings with different SubdItem codes.
-
-		var subdItemCodeGroups = rows
-			.Where(row => !string.IsNullOrWhiteSpace(row.SubdItemCode))
-			.GroupBy(row => new
-			{
-				SubDistributorCode = Normalize(row.SubDistributorCode),
-				SubdItemCode = Normalize(row.SubdItemCode)
-			})
-			.Select(group => group.OrderBy(row => row.RowNumber).ToList())
-			.Where(group => group.Count > 1)
-			.ToList();
-
-		foreach (var codeGroup in subdItemCodeGroups)
-		{
-			var firstRow = codeGroup[0];
-			var rowNumbers = string.Join(", ", codeGroup.Select(row => row.RowNumber));
-			var canonicalItemKey = string.Join("|",
-				Normalize(firstRow.Principal),
-				Normalize(firstRow.CompanyItemCode),
-				Normalize(firstRow.CompanyItemName),
-				Normalize(firstRow.SubdItemName));
-
-			foreach (var row in codeGroup.Skip(1))
-			{
-				var rowItemKey = string.Join("|",
-					Normalize(row.Principal),
-					Normalize(row.CompanyItemCode),
-					Normalize(row.CompanyItemName),
-					Normalize(row.SubdItemName));
-
-				if (!string.Equals(rowItemKey, canonicalItemKey, StringComparison.OrdinalIgnoreCase))
-				{
-					AddError(
-						row.RowNumber,
-						$"SubdItem code '{row.SubdItemCode}' Item is duplicated within the uploaded Excel for SubDistributor '{row.SubDistributorCode}'.");
-				}
-			}
-		}
-
-		return errorsByRow;
+		return new Dictionary<int, List<string>>();
 	}
 
 	private static string GetString(IXLRow row, int columnNumber)
