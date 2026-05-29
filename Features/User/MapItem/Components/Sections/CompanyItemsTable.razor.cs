@@ -5,6 +5,13 @@ namespace STTproject.Features.User.MapItem.Components.Sections;
 
 public partial class CompanyItemsTable
 {
+    private enum CompanyItemSortColumn
+    {
+        CompanyItemCode,
+        Category,
+        ItemName
+    }
+
     [Parameter] public bool IsSubDistributorSelected { get; set; }
     [Parameter] public IReadOnlyList<string> CompanyItemCategories { get; set; } = Array.Empty<string>();
     [Parameter] public IReadOnlyList<MapCompanyItemViewRow> CompanyItems { get; set; } = Array.Empty<MapCompanyItemViewRow>();
@@ -20,8 +27,35 @@ public partial class CompanyItemsTable
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
 
     private string SearchText { get; set; } = string.Empty;
+    private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
+    private bool SortAscending { get; set; }
 
-    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => CompanyItems.Where(MatchesSearch);
+    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => ApplySort(CompanyItems.Where(MatchesSearch));
+
+    private Task SetSortByColumnAsync(CompanyItemSortColumn column)
+    {
+        if (SortColumn == column)
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private string GetSortIndicator(CompanyItemSortColumn column)
+    {
+        if (SortColumn != column)
+        {
+            return string.Empty;
+        }
+
+        return SortAscending ? " ▲" : " ▼";
+    }
 
     private async Task HandleCategoryChanged()
     {
@@ -86,5 +120,25 @@ public partial class CompanyItemsTable
     private static bool ContainsIgnoreCase(string value, string search)
     {
         return value.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private IEnumerable<MapCompanyItemViewRow> ApplySort(IEnumerable<MapCompanyItemViewRow> items)
+    {
+        return SortColumn switch
+        {
+            CompanyItemSortColumn.Category => SortAscending
+                ? items.OrderBy(item => string.IsNullOrWhiteSpace(item.Category) ? 1 : 0)
+                    .ThenBy(item => item.Category)
+                    .ThenBy(item => item.CompanyItemCode)
+                : items.OrderBy(item => string.IsNullOrWhiteSpace(item.Category) ? 1 : 0)
+                    .ThenByDescending(item => item.Category)
+                    .ThenBy(item => item.CompanyItemCode),
+            CompanyItemSortColumn.ItemName => SortAscending
+                ? items.OrderBy(item => item.ItemName).ThenBy(item => item.CompanyItemCode)
+                : items.OrderByDescending(item => item.ItemName).ThenBy(item => item.CompanyItemCode),
+            _ => SortAscending
+                ? items.OrderBy(item => item.CompanyItemCode).ThenBy(item => item.ItemName)
+                : items.OrderByDescending(item => item.CompanyItemCode).ThenBy(item => item.ItemName)
+        };
     }
 }

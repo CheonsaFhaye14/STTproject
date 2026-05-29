@@ -37,9 +37,9 @@
     <table class="mapping-table">
         <thead>
             <tr>
-                <th>COMPANY ITEM CODE</th>
-                <th>CATEGORY</th>
-                <th>ITEM NAME</th>
+                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
+                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
+                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
             </tr>
         </thead>
         <tbody>
@@ -53,7 +53,7 @@
                     <tr @onclick="() => HandleRowClicked(item)"
                         class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
                         <td>@item.CompanyItemCode</td>
-                        <td>@item.Category</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
                         <td>
                             <div style="display: flex; flex-direction: column; gap: 4px;">
                                 <span>@item.ItemName</span>
