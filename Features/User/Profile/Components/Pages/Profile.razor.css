@@ -15,8 +15,8 @@
 
     .profile-header h1 {
         font-size: 1.5rem;
-        font-weight: 800;
-        color: #1a1a2e;
+        font-weight: 500;
+        color: #3a2870;
         margin: 0;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -27,34 +27,34 @@
     align-items: center;
     gap: 6px;
     padding: 10px 18px;
-    background: #1a1a2e;
+    background: linear-gradient(135deg, #9B85CC, #5c3fa8);
     color: #fff;
     border: none;
     border-radius: 10px;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: opacity 0.2s;
 }
 
     .btn-edit-profile:hover {
-        background: #2d2d4e;
+        opacity: 0.88;
     }
 
 /* ── Card ── */
 .profile-card {
-    background: #fff;
-    border-radius: 20px;
-    border: 1px solid #EEEDFE;
-    box-shadow: 0 4px 24px rgba(124, 58, 237, 0.08);
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 16px;
+    border: 1px solid #C9B8E8;
+    box-shadow: 2px 2px 10px rgba(154, 133, 204, 0.2);
     overflow: hidden;
 }
 
 /* ── Avatar banner ── */
 .card-banner {
-    background: linear-gradient(135deg, #7F77DD 0%, #AFA9EC 100%);
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     padding: 1.5rem;
     display: flex;
     align-items: center;
@@ -65,26 +65,26 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.25);
-    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    font-weight: 700;
-    color: #fff;
+    font-weight: 500;
+    color: #3a2870;
     flex-shrink: 0;
 }
 
 .banner-name {
-    color: #fff;
+    color: #3a2870;
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 500;
     margin: 0 0 4px;
 }
 
 .banner-sub {
-    color: rgba(255, 255, 255, 0.8);
+    color: #6b5499;
     font-size: 13px;
     margin: 0;
     display: flex;
@@ -97,15 +97,16 @@
     align-items: center;
     gap: 5px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 500;
     padding: 3px 10px;
     border-radius: 20px;
     letter-spacing: 0.04em;
 }
 
 .pill-active {
-    background: #E1F5EE;
-    color: #0F6E56;
+    background: rgba(255, 255, 255, 0.6);
+    color: #3a2870;
+    border: 1px solid #C9B8E8;
 }
 
 .pill-inactive {
@@ -130,7 +131,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 14px 0;
-    border-bottom: 1px solid #f0f0f8;
+    border-bottom: 1px solid rgba(201, 184, 232, 0.4);
     gap: 1rem;
 }
 
@@ -143,8 +144,8 @@
     align-items: center;
     gap: 8px;
     font-size: 11px;
-    font-weight: 700;
-    color: #AFA9EC;
+    font-weight: 500;
+    color: #9B85CC;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     white-space: nowrap;
@@ -156,21 +157,21 @@
 
 .field-value {
     font-size: 14px;
-    font-weight: 600;
-    color: #1a1a2e;
+    font-weight: 500;
+    color: #3a2870;
     text-align: right;
 }
 
     .field-value.muted {
         font-weight: 400;
-        color: #888;
+        color: #9B85CC;
         font-size: 13px;
     }
 
 /* ── Card footer ── */
 .card-footer {
     padding: 1rem 1.5rem;
-    border-top: 1px solid #f0f0f8;
+    border-top: 1px solid rgba(201, 184, 232, 0.4);
     display: flex;
     justify-content: flex-end;
 }
@@ -194,9 +195,9 @@
 }
 
 .alert-success {
-    background: #dcfce7;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+    background: rgba(232, 223, 245, 0.5);
+    color: #3a2870;
+    border: 1px solid #C9B8E8;
 }
 
 .alert-warning {
@@ -205,18 +206,24 @@
     border: 1px solid #fcd34d;
 }
 
+.alert-info {
+    background: rgba(232, 223, 245, 0.5);
+    color: #5c3fa8;
+    border: 1px solid #C9B8E8;
+}
+
 /* ── Loading ── */
 .loading-state {
     text-align: center;
     padding: 60px 20px;
-    color: #7F77DD;
+    color: #9B85CC;
 }
 
 /* ── Edit modal ── */
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(30, 27, 60, 0.45);
+    background: rgba(58, 40, 112, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -236,13 +243,13 @@
 }
 
 .modal-content {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     width: 90%;
     max-width: 420px;
     overflow: hidden;
-    border: 1px solid rgba(127, 119, 221, 0.18);
-    box-shadow: 0 8px 32px rgba(30, 27, 60, 0.16);
+    border: 1px solid #C9B8E8;
+    box-shadow: 2px 2px 20px rgba(154, 133, 204, 0.25);
     animation: slideUp 0.2s ease;
 }
 
@@ -259,7 +266,7 @@
 }
 
 .modal-header {
-    background: linear-gradient(135deg, #7F77DD 0%, #AFA9EC 100%);
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     padding: 1.25rem 1.5rem;
     display: flex;
     align-items: center;
@@ -268,14 +275,14 @@
 
     .modal-header h4 {
         margin: 0;
-        color: #fff;
+        color: #3a2870;
         font-size: 16px;
-        font-weight: 600;
+        font-weight: 500;
     }
 
 .btn-close {
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(201, 184, 232, 0.5);
     border-radius: 50%;
     width: 28px;
     height: 28px;
@@ -283,15 +290,25 @@
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    color: #fff;
+    color: #3a2870;
     cursor: pointer;
     line-height: 1;
 }
 
     .btn-close:hover {
-        background: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.55);
     }
 
 .modal-body {
     padding: 1.25rem 1.5rem 1.5rem;
+}
+
+/* ── Tag (reused from help page) ── */
+.tag {
+    font-size: 11px;
+    background: rgba(232, 223, 245, 0.6);
+    color: #9B85CC;
+    border-radius: 8px;
+    padding: 3px 10px;
+    border: 1px solid #C9B8E8;
 }

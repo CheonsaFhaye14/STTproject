@@ -129,9 +129,9 @@
 </div>
 
 @code {
-    private bool IsShortcutCollapsed { get; set; } = true;
-    private bool IsManualCollapsed { get; set; } = true;
-    private bool IsSupportCollapsed { get; set; } = true;
+    private bool IsShortcutCollapsed { get; set; } = false;
+    private bool IsManualCollapsed { get; set; } = false;
+    private bool IsSupportCollapsed { get; set; } = false;
 
     private string GetCardBodyClass(bool isCollapsed) => isCollapsed ? "card-body" : "card-body open";
 

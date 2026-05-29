@@ -5,7 +5,7 @@
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.95);
     border: 1px solid #C9B8E8;
     border-radius: 14px;
     margin-bottom: 12px;
@@ -36,19 +36,19 @@
 
     .card-header-left i {
         font-size: 18px;
-        color: #3a2870;
+        color: #26215C;
     }
 
 .card-header h5 {
     font-size: 15px;
-    font-weight: 500;
-    color: #3a2870;
+    font-weight: 600;
+    color: #26215C;
     margin: 0;
 }
 
 .chevron {
     font-size: 16px;
-    color: #5c3fa8;
+    color: #26215C;
     transition: transform 0.2s;
 }
 
@@ -75,8 +75,8 @@
 
 .section-title {
     font-size: 12px;
-    font-weight: 500;
-    color: #9B85CC;
+    font-weight: 700;
+    color: #5c3fa8;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 10px;
@@ -103,13 +103,13 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid #C9B8E8;
+    background: #fff;
+    border: 1px solid #9B85CC;
     border-radius: 8px;
     padding: 3px 9px;
     font-size: 12px;
-    font-weight: 500;
-    color: #3a2870;
+    font-weight: 700;
+    color: #26215C;
     white-space: nowrap;
     flex-shrink: 0;
     box-shadow: 2px 2px 6px rgba(154, 133, 204, 0.25);
@@ -117,14 +117,14 @@
 
 .shortcut-desc {
     font-size: 13px;
-    color: #6b5499;
+    color: #3a2870;
     line-height: 1.5;
 }
 
 .wip-badge {
     font-size: 11px;
     background: #E8DFF5;
-    color: #9B85CC;
+    color: #5c3fa8;
     border-radius: 6px;
     padding: 2px 7px;
     border: 1px solid #C9B8E8;
@@ -133,7 +133,7 @@
 
 .intro-text {
     font-size: 14px;
-    color: #6b5499;
+    color: #3a2870;
     line-height: 1.6;
     padding-top: 1rem;
     padding-bottom: 0.75rem;
@@ -164,19 +164,19 @@
 
     .step-icon i {
         font-size: 16px;
-        color: #5c3fa8;
+        color: #26215C;
     }
 
 .step-title {
     font-size: 14px;
-    font-weight: 500;
-    color: #3a2870;
+    font-weight: 700;
+    color: #26215C;
     margin: 0;
 }
 
 .step-content p {
     font-size: 13px;
-    color: #6b5499;
+    color: #3a2870;
     line-height: 1.6;
     margin-top: 3px;
     margin-bottom: 0;
@@ -196,19 +196,20 @@
 
     .contact-row i {
         font-size: 16px;
-        color: #9B85CC;
+        color: #5c3fa8;
     }
 
 .contact-label {
     font-size: 13px;
-    color: #9B85CC;
+    font-weight: 600;
+    color: #3a2870;
     width: 60px;
 }
 
 .tag {
     font-size: 11px;
     background: rgba(232, 223, 245, 0.6);
-    color: #9B85CC;
+    color: #3a2870;
     border-radius: 8px;
     padding: 3px 10px;
     border: 1px solid #C9B8E8;

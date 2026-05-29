@@ -4,8 +4,8 @@
     gap: 6px;
     padding: 9px 16px;
     background: transparent;
-    color: #7F77DD;
-    border: 1.5px solid #c4c0ee;
+    color: #5c3fa8;
+    border: 1.5px solid #C9B8E8;
     border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
@@ -14,7 +14,7 @@
 }
 
     .btn-change-pass:hover {
-        background: #f5f5fc;
+        background: rgba(232, 223, 245, 0.5);
     }
 
     .btn-change-pass:disabled {
@@ -25,7 +25,7 @@
 .cp-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(30, 27, 60, 0.45);
+    background: rgba(58, 40, 112, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -45,13 +45,13 @@
 }
 
 .cp-modal {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     width: 90%;
     max-width: 420px;
     overflow: hidden;
-    border: 1px solid rgba(127, 119, 221, 0.18);
-    box-shadow: 0 8px 32px rgba(30, 27, 60, 0.16);
+    border: 1px solid #C9B8E8;
+    box-shadow: 2px 2px 20px rgba(154, 133, 204, 0.25);
     animation: cpSlideUp 0.2s ease;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .cp-header {
-    background: linear-gradient(135deg, #7F77DD 0%, #AFA9EC 100%);
+    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     padding: 1.25rem 1.5rem;
     display: flex;
     align-items: center;
@@ -77,7 +77,7 @@
 
     .cp-header h4 {
         margin: 0;
-        color: #fff;
+        color: #26215C;
         font-size: 16px;
         font-weight: 600;
         display: flex;
@@ -86,8 +86,8 @@
     }
 
 .cp-close {
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(201, 184, 232, 0.5);
     border-radius: 50%;
     width: 28px;
     height: 28px;
@@ -95,13 +95,13 @@
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    color: #fff;
+    color: #26215C;
     cursor: pointer;
     line-height: 1;
 }
 
     .cp-close:hover {
-        background: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.55);
     }
 
 .cp-body {
@@ -124,7 +124,7 @@
 .cp-label {
     font-size: 11px;
     font-weight: 700;
-    color: #8b8fa8;
+    color: #9B85CC;
     letter-spacing: 0.07em;
     text-transform: uppercase;
     margin-bottom: 6px;
@@ -145,7 +145,7 @@
         top: 50%;
         transform: translateY(-50%);
         font-size: 13px;
-        color: #b0b3c8;
+        color: #9B85CC;
         pointer-events: none;
     }
 
@@ -153,32 +153,32 @@
     padding: 9px 12px 9px 32px;
     font-size: 14px;
     border-radius: 10px;
-    border: 1px solid #e2e4ef;
-    background: #fafafe;
-    color: #2d2d3a;
+    border: 1px solid #C9B8E8;
+    background: rgba(232, 223, 245, 0.15);
+    color: #3a2870;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
     .cp-input:hover {
-        border-color: #c4c0ee;
+        border-color: #9B85CC;
     }
 
     .cp-input:focus {
-        border-color: #7F77DD;
-        box-shadow: 0 0 0 3px rgba(127, 119, 221, 0.14);
+        border-color: #5c3fa8;
+        box-shadow: 0 0 0 3px rgba(154, 133, 204, 0.18);
         background: #fff;
         outline: none;
     }
 
     .cp-input::placeholder {
-        color: #c2c4d4;
+        color: #C9B8E8;
     }
 
 .cp-confirm-text {
     font-size: 14px;
-    color: #4a4a6a;
+    color: #3a2870;
     margin-bottom: 1.25rem;
     line-height: 1.6;
 }
@@ -215,23 +215,23 @@
     }
 
 .cp-btn-save {
-    background: linear-gradient(135deg, #7F77DD, #9b94e8);
+    background: linear-gradient(135deg, #9B85CC, #5c3fa8);
     color: #fff;
     border: none;
     font-weight: 600;
-    box-shadow: 0 2px 8px rgba(127, 119, 221, 0.3);
+    box-shadow: 2px 2px 8px rgba(154, 133, 204, 0.3);
 }
 
     .cp-btn-save:hover:not(:disabled) {
-        opacity: 0.9;
+        opacity: 0.88;
     }
 
 .cp-btn-cancel {
     background: transparent;
-    color: #7F77DD;
-    border: 1.5px solid #c4c0ee;
+    color: #5c3fa8;
+    border: 1.5px solid #C9B8E8;
 }
 
     .cp-btn-cancel:hover:not(:disabled) {
-        background: #f5f5fc;
+        background: rgba(232, 223, 245, 0.5);
     }
