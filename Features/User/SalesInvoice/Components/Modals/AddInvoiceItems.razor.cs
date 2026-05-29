@@ -109,8 +109,8 @@ public partial class AddInvoiceItems
         // Clear category when principal changes so user can pick appropriate category.
         SelectedCategory = string.Empty;
 
-        // Clear current draft fields when principal changes to avoid stale item/UOM selection.
-        ResetNewItem();
+        // Clear current item/UOM fields but keep the active principal/category filters.
+        ResetItemDraftFields();
         return OnDraftChanged.InvokeAsync();
     }
 
@@ -118,8 +118,8 @@ public partial class AddInvoiceItems
     {
         SelectedCategory = e.Value?.ToString()?.Trim() ?? string.Empty;
 
-        // Clear current draft fields when category changes to avoid stale item/UOM selection.
-        ResetNewItem();
+        // Clear current item/UOM fields but keep the active principal/category filters.
+        ResetItemDraftFields();
         return OnDraftChanged.InvokeAsync();
     }
 
@@ -417,16 +417,23 @@ SelectedSubdistributorId);
 
     private void ResetNewItem()
     {
+        SelectedPrincipal = string.Empty;
+        SelectedCategory = string.Empty;
+        ResetItemDraftFields();
+        ShowValidationErrors = false;
+        ValidationErrors.Clear();
+        SaveErrorMessage = null;
+    }
+
+    private void ResetItemDraftFields()
+    {
         NewItem = CreateNewItem();
         NewItem.Quantity = 1;
         CurrentSubdItem = null;
         CurrentUom = null;
         CurrentUnitPrice = null;
-        SelectedPrincipal = string.Empty;
-        SelectedCategory = string.Empty;
         ShowValidationErrors = false;
         ValidationErrors.Clear();
-        SaveErrorMessage = null;
     }
 
     private static InputItemModel CreateNewItem()
