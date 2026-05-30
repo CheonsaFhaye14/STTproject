@@ -7,64 +7,75 @@
 
 @inject NavigationManager Navigation
 
-<div>
-    <AdminTopBar />
-
-    <div class="layout-container">
-        <nav class="sidebar sidebar-open">
-            <div class="sidebar-header">
-                <h5 class="sidebar-label">Admin</h5>
-            </div>
-
-            <ul class="sidebar-menu">
-                <li>
-                    <NavLink class="sidebar-link" href="/admin" Match="NavLinkMatch.All">
-                        <span class="bi bi-speedometer2 me-2" aria-hidden="true"></span> Dashboard
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/mapitem">
-                        <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Map Items
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/companyitem">
-                        <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Company Items
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/customer">
-                        <span class="bi bi-file-earmark-text me-2" aria-hidden="true"></span> Customers
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/report">
-                        <span class="bi bi-archive me-2" aria-hidden="true"></span> Report
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/salesinvoice">
-                        <span class="bi bi-person-badge me-2" aria-hidden="true"></span> Sales Invoices
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/subditem">
-                        <span class="bi bi-people me-2" aria-hidden="true"></span> SubDistributors Items
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink class="sidebar-link" href="/admin/users">
-                        <span class="bi bi-bar-chart me-2" aria-hidden="true"></span> Users
-                    </NavLink>
-                </li>
-            </ul>
-        </nav>
-
-        <div class="right-column">
-            <main class="main-content">
-                @Body
-            </main>
+<div class="layout-container">
+    <nav class="@sidebarClass">
+        <div class="sidebar-header">
+            <h5 class="sidebar-label">Admin</h5>
         </div>
+
+        <ul class="sidebar-menu">
+            <li>
+                <NavLink class="sidebar-link" href="/admin" Match="NavLinkMatch.All">
+                    <span class="bi bi-speedometer2 me-2" aria-hidden="true"></span> Dashboard
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/mapitem">
+                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Map Items
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/companyitem">
+                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Company Items
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/customer">
+                    <span class="bi bi-file-earmark-text me-2" aria-hidden="true"></span> Customers
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/report">
+                    <span class="bi bi-archive me-2" aria-hidden="true"></span> Report
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/salesinvoice">
+                    <span class="bi bi-person-badge me-2" aria-hidden="true"></span> Sales Invoices
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/subditem">
+                    <span class="bi bi-people me-2" aria-hidden="true"></span> SubDistributors Items
+                </NavLink>
+            </li>
+            <li>
+                <NavLink class="sidebar-link" href="/admin/users">
+                    <span class="bi bi-bar-chart me-2" aria-hidden="true"></span> Users
+                </NavLink>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="right-column">
+        <AdminTopBar OnHamburgerClick="ToggleSidebar" />
+
+        <main class="main-content">
+            @Body
+        </main>
     </div>
 </div>
+
+@code {
+    private bool sidebarOpen = true;
+
+    private string sidebarClass => sidebarOpen ? "sidebar sidebar-open" : "sidebar sidebar-closed";
+
+    private Task ToggleSidebar()
+    {
+        sidebarOpen = !sidebarOpen;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+}
 
