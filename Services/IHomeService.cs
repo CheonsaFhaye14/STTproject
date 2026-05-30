@@ -6,6 +6,7 @@ namespace STTproject.Services;
 public interface IHomeService
 {
     Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default);
+    Task<List<SubDistributor>> GetAllSubDistributorsAsync(CancellationToken cancellationToken = default);
     Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default);
     Task<List<HomeSalesInvoiceBatchRow>> GetSalesInvoiceBatchRowsAsync(int userId, CancellationToken cancellationToken = default);
     Task<List<HomeSalesInvoiceFlatRow>> GetSalesInvoiceFlatRowsAsync(int userId, CancellationToken cancellationToken = default);
@@ -19,7 +20,7 @@ public interface IHomeService
     Task<List<HomeSalesInvoiceDetailRow>> GetBatchInvoiceDetailsAsync(
         int userId,
         int subDistributorId,
-        DateOnly batchCreatedDate, 
+        DateOnly batchCreatedDate,
         int firstSalesInvoiceId,
         int lastSalesInvoiceId,
         CancellationToken cancellationToken = default);
@@ -412,6 +413,16 @@ public class HomeService : IHomeService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<SubDistributor>> GetAllSubDistributorsAsync(CancellationToken cancellationToken = default)
+    {
+        using var tempContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await tempContext.SubDistributors
+            .AsNoTracking()
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.SubdCode)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<User?> GetUserAsync(int userId, CancellationToken cancellationToken = default)
     {
         using var tempContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -442,7 +453,7 @@ public sealed class HomeSalesInvoiceBatchInvoiceRow
     public DateOnly SalesInvoiceDate { get; set; }
     public string SubdName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
-        public DateTime CreatedDate { get; set; }
+    public DateTime CreatedDate { get; set; }
 }
 
 public sealed class HomeSalesInvoiceDetailRow

@@ -10,7 +10,7 @@ public interface IMapItemService
 {
     Task<List<string>> GetMapItemPrincipalsAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<MapCompanyItemRow>> GetMapCompanyItemsAsync(int userId, int subDistributorId, string? principal, CompanyItemFilterMode filterMode = CompanyItemFilterMode.All, CancellationToken cancellationToken = default);
-    Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(int userId, int subDistributorId, string? principal, CancellationToken cancellationToken = default);
+    Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(int userId, int subDistributorId, string? principal, bool includeAllSubDistributors = false, CancellationToken cancellationToken = default);
     Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<string>> GetCompanyItemUomsAsync(int companyItemId, CancellationToken cancellationToken = default);
     Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default);
@@ -113,30 +113,36 @@ public class MapItemService : IMapItemService
         int userId,
         int subDistributorId,
         string? principal,
+        bool includeAllSubDistributors = false,
         CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
 
         // Get all sub-distributor items with each UOM as a separate row so grouping can show all UOMs
-        var query = context.SubdItems
+        var subdItemsQuery = context.SubdItems
             .AsNoTracking()
             .Where(si => si.IsActive)
-            .Where(si => si.SubDistributor.EncoderId == userId)
-            .Where(si => si.SubDistributor.IsActive)
-            .Select(si => new
-            {
-                si.SubdItemId,
-                si.SubDistributorId,
-                si.SubdItemCode,
-                si.ItemName,
-                si.CompanyItemId,
-                CompanyItemName = si.CompanyItem.ItemName,
-                Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
-                Principal = si.CompanyItem.Principal,
-                UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty,
-                si.SubDistributor.SubdName,
-                si.CreatedDate
-            });
+            .Where(si => si.SubDistributor.IsActive);
+
+        if (!includeAllSubDistributors)
+        {
+            subdItemsQuery = subdItemsQuery.Where(si => si.SubDistributor.EncoderId == userId);
+        }
+
+        var query = subdItemsQuery.Select(si => new
+        {
+            si.SubdItemId,
+            si.SubDistributorId,
+            si.SubdItemCode,
+            si.ItemName,
+            si.CompanyItemId,
+            CompanyItemName = si.CompanyItem.ItemName,
+            Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
+            Principal = si.CompanyItem.Principal,
+            UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty,
+            si.SubDistributor.SubdName,
+            si.CreatedDate
+        });
 
         if (subDistributorId > 0)
         {

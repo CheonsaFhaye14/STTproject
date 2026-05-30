@@ -38,10 +38,6 @@
                     <span class="key-badge">Ctrl + S</span>
                     <span class="shortcut-desc">Commit invoice or save items</span>
                 </div>
-                <div class="shortcut-item">
-                    <span class="key-badge">Ctrl + D</span>
-                    <span class="shortcut-desc">Delete draft <span class="wip-badge">coming soon</span></span>
-                </div>
             </div>
         </div>
     </div>
@@ -56,77 +52,83 @@
         </div>
         <div class="divider"></div>
         <div class="@GetCardBodyClass(IsManualCollapsed)">
-            <p class="intro-text">Welcome to ENTRIÉL! Whether you're an admin or encoder, use the steps below to get started.</p>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-layout-sidebar" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Navigation</p>
-                    <p>Use the sidebar to move between sections. If collapsed, click the toggle button on the left side of the topbar to expand it.</p>
-                </div>
-            </div>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-file-plus" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Creating Invoices</p>
-                    <p>From the home page, click the input invoice button for the desired sub-distributor. Fill in the required fields and click <strong>Save</strong> to save the invoice header.</p>
-                </div>
-            </div>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-circle-plus" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Adding & Editing Items</p>
-                    <p>Click <strong>Add Item</strong> or press <strong>F3</strong> to add. Click <strong>Edit</strong> or press <strong>F4</strong> to edit a selected item. Press <strong>Ctrl+S</strong> to save.</p>
-                </div>
-            </div>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-trash" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Deleting a Draft</p>
-                    <p>Click the <strong>Delete</strong> button and confirm, or press <strong>Ctrl+D</strong> to remove the current invoice draft.</p>
-                </div>
-            </div>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Downloading the Template</p>
-                    <p>On the invoice page, click <strong>Download Template</strong> to get the Excel template.</p>
-                </div>
-            </div>
-            <div class="manual-step">
-                <div class="step-icon"><i class="ti ti-upload" aria-hidden="true"></i></div>
-                <div class="step-content">
-                    <p class="step-title">Importing from Excel</p>
-                    <p>Fill out the template, go to the sub-distributor invoice page, click <strong>Import</strong>, review the data, and click <strong>Save</strong>.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+            <p class="intro-text">Welcome to ENTRIÉL! Whether you're an admin or encoder, use the steps below to get
+                started.</p>
+                <div class="manual-step">
+                    <div class="step-icon"><i class="ti ti-layout-sidebar" aria-hidden="true"></i></div>
+                    <div class="step-content">
+                        <p class="step-title">Navigation</p>
+                        <p>Use the sidebar to move between sections. If collapsed, click the toggle button on the left side
+                            of the topbar to expand it.</p>
+                        </div>
+                    </div>
+                    <div class="manual-step">
+                        <div class="step-icon"><i class="ti ti-file-plus" aria-hidden="true"></i></div>
+                        <div class="step-content">
+                            <p class="step-title">Creating Invoices</p>
+                            <p>From the home page, click the input invoice button for the desired sub-distributor. Fill in the
+                                required fields and click <strong>Save</strong> to save the invoice header.</p>
+                            </div>
+                        </div>
+                        <div class="manual-step">
+                            <div class="step-icon"><i class="ti ti-circle-plus" aria-hidden="true"></i></div>
+                            <div class="step-content">
+                                <p class="step-title">Adding & Editing Items</p>
+                                <p>Click <strong>Add Item</strong> or press <strong>F3</strong> to add. Click <strong>Edit</strong>
+                                    or press <strong>F4</strong> to edit a selected item. Press <strong>Ctrl+S</strong> to save.</p>
+                                </div>
+                            </div>
+                            <div class="manual-step">
+                                <div class="step-icon"><i class="ti ti-trash" aria-hidden="true"></i></div>
+                                <div class="step-content">
+                                    <p class="step-title">Deleting a Draft</p>
+                                    <p>Click the <strong>Clear Draft</strong> button and confirm to remove the current invoice draft.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="manual-step">
+                                <div class="step-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
+                                <div class="step-content">
+                                    <p class="step-title">Downloading the Template</p>
+                                    <p>On the invoice page, click <strong>Download Template</strong> to get the Excel template.</p>
+                                </div>
+                            </div>
+                            <div class="manual-step">
+                                <div class="step-icon"><i class="ti ti-upload" aria-hidden="true"></i></div>
+                                <div class="step-content">
+                                    <p class="step-title">Importing from Excel</p>
+                                    <p>Fill out the template, go to the sub-distributor invoice page, click <strong>Import</strong>,
+                                        review the data, and click <strong>Save</strong>.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-    <div class="card">
-        <div class="card-header" @onclick="ToggleSupportCollapse">
-            <div class="card-header-left">
-                <i class="ti ti-headset" aria-hidden="true"></i>
-                <h5>Contact Support</h5>
-            </div>
-            <i class="ti ti-chevron-down chevron @(IsSupportCollapsed ? "" : "open")"></i>
-        </div>
-        <div class="divider"></div>
-        <div class="@GetCardBodyClass(IsSupportCollapsed)">
-            <p class="intro-text">Need help? Reach out to our support team.</p>
-            <div class="contact-row">
-                <i class="ti ti-mail" aria-hidden="true"></i>
-                <span class="contact-label">Email</span>
-                <span class="tag">To be added</span>
-            </div>
-            <div class="contact-row">
-                <i class="ti ti-phone" aria-hidden="true"></i>
-                <span class="contact-label">Phone</span>
-                <span class="tag">To be added</span>
-            </div>
-        </div>
-    </div>
+                        <div class="card">
+                            <div class="card-header" @onclick="ToggleSupportCollapse">
+                                <div class="card-header-left">
+                                    <i class="ti ti-headset" aria-hidden="true"></i>
+                                    <h5>Contact Support</h5>
+                                </div>
+                                <i class="ti ti-chevron-down chevron @(IsSupportCollapsed ? "" : "open")"></i>
+                            </div>
+                            <div class="divider"></div>
+                            <div class="@GetCardBodyClass(IsSupportCollapsed)">
+                                <p class="intro-text">Need help? Reach out to our support team.</p>
+                                <div class="contact-row">
+                                    <i class="ti ti-mail" aria-hidden="true"></i>
+                                    <span class="contact-label">Email</span>
+                                    <span class="tag">To be added</span>
+                                </div>
+                                <div class="contact-row">
+                                    <i class="ti ti-phone" aria-hidden="true"></i>
+                                    <span class="contact-label">Phone</span>
+                                    <span class="tag">To be added</span>
+                                </div>
+                            </div>
+                        </div>
 
-</div>
+                    </div>
 
 @code {
     private bool IsShortcutCollapsed { get; set; } = false;

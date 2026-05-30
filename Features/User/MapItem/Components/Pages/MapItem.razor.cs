@@ -47,6 +47,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private HashSet<string> selectedImportItemGroupKeys = new(StringComparer.OrdinalIgnoreCase);
         private bool shouldHydrateClientStateAfterRender = false;
         private bool hasHydratedClientState = false;
+        [Parameter] public bool IsAdminMode { get; set; }
         [Parameter] public EventCallback OnDraftChanged { get; set; }
 
         private async Task HandleDownloadTemplateSubmit((int SubdistributorId, string? Principal) filters)
@@ -530,12 +531,14 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            subdList = await homeService.GetSubDistributorsAsync(userContext.UserId.Value);
+            subdList = IsAdminMode
+                ? await homeService.GetAllSubDistributorsAsync()
+                : await homeService.GetSubDistributorsAsync(userContext.UserId.Value);
             shouldHydrateClientStateAfterRender = true;
 
             if (selectedSubdId == 0)
             {
-                if (hasHydratedClientState)
+                if (!IsAdminMode && hasHydratedClientState)
                 {
                     await RestoreLastSelectedSubdAsync();
                 }
@@ -619,7 +622,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
             if (selectedSubdId == 0)
             {
-                await RestoreLastSelectedSubdAsync();
+                if (!IsAdminMode)
+                {
+                    await RestoreLastSelectedSubdAsync();
+                }
             }
 
             if (selectedSubdId != 0)
@@ -794,11 +800,13 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 selectedPrincipal,
                 IsSubDistributorSelected ? selectedCompanyItemsFilter : CompanyItemFilterMode.All);
 
-            subDistributorItems = selectedSubdId != 0
+            var shouldLoadSubDistributorItems = selectedSubdId != 0 || IsAdminMode;
+            subDistributorItems = shouldLoadSubDistributorItems
                 ? await mapItemService.GetMapSubDistributorItemsAsync(
                     userContext.UserId.Value,
                     selectedSubdId,
-                    selectedPrincipal)
+                    selectedPrincipal,
+                    includeAllSubDistributors: IsAdminMode)
                 : new List<MapSubDistributorItemRow>();
 
             companyItemsAll = companyRows
