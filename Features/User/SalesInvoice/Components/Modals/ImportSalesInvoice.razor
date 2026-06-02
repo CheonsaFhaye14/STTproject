@@ -119,12 +119,27 @@
                                                 </div>
                                             </div>
                                             <div class="card-body">
-                                                <div class="mb-2">
-                                                    <small class="text-muted">Missing data:</small> @customerCard.MissingData
-                                                </div>
                                                 <div>
                                                     <small class="text-muted">Rows:</small> @customerCard.RowNumbers
                                                 </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else if (IsSkuErrorFilterActive())
+                                {
+                                    var skuCards = GetSkuErrorCards(invoiceCards);
+
+                                    foreach (var skuCard in skuCards)
+                                    {
+                                        <div class="card mb-3 border-warning">
+                                            <div class="card-header d-flex justify-content-between align-items-center bg-warning text-dark">
+                                                <div>
+                                                    <h6 class="mb-0">SKU code: <strong>@skuCard.SkuValue</strong></h6>
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <div><code>Rows: @skuCard.RowNumbers</code></div>
                                             </div>
                                         </div>
                                     }
@@ -453,6 +468,29 @@ null || prepared.Issues.Count == 0));
             string.Equals(selectedErrorFilter, "Customer Error", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool IsSkuErrorFilterActive()
+    {
+        return cardFilter == InvoiceCardFilter.ErrorOnly &&
+            string.Equals(selectedErrorFilter, "SKU Not Found", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private List<SkuErrorCardViewModel> GetSkuErrorCards(List<InvoiceCardViewModel> cards)
+    {
+        var visibleIssues = cards
+            .SelectMany(card => (card.Issues ?? new List<ImportSalesInvoiceIssue>())
+                .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()))
+            .Where(issue => NormalizeSalesIssueType(issue) == selectedErrorFilter)
+            .ToList();
+
+        return visibleIssues
+            .GroupBy(issue => NormalizeSkuValue(issue.SkuValue))
+            .Select(group => new SkuErrorCardViewModel(
+                SkuValue: string.IsNullOrWhiteSpace(group.Key) ? "[Blank SKU]" : group.Key,
+                RowNumbers: string.Join(", ", group.Select(issue => issue.RowNumber).Distinct().OrderBy(row => row))))
+            .OrderBy(card => card.SkuValue)
+            .ToList();
+    }
+
     private List<CustomerErrorCardViewModel> GetCustomerErrorCards(List<InvoiceCardViewModel> cards)
     {
         var visibleIssues = cards
@@ -462,16 +500,54 @@ null || prepared.Issues.Count == 0));
             .ToList();
 
         return visibleIssues
-            .GroupBy(issue => NormalizeCustomerValue(issue.CustomerValue))
+			.GroupBy(issue => NormalizeCustomerValue(issue))
             .Select(group => new CustomerErrorCardViewModel(
-                CustomerValue: string.IsNullOrWhiteSpace(group.Key) ? "[Blank Customer]" : group.Key,
+				CustomerValue: string.IsNullOrWhiteSpace(group.Key) ? "[Blank Customer]" : group.Key,
                 MissingData: string.Join("; ", group.Select(issue => issue.Message).Distinct()),
                 RowNumbers: string.Join(", ", group.Select(issue => issue.RowNumber).Distinct().OrderBy(row => row))))
             .OrderBy(card => card.CustomerValue)
             .ToList();
     }
 
-    private static string NormalizeCustomerValue(string? value)
+    private static string NormalizeCustomerValue(ImportSalesInvoiceIssue issue)
+    {
+        if (issue is null)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(issue.CustomerValue))
+        {
+            return issue.CustomerValue.Trim();
+        }
+
+        var extracted = ExtractQuotedValue(issue.Message);
+        return string.IsNullOrWhiteSpace(extracted) ? string.Empty : extracted;
+    }
+
+    private static string ExtractQuotedValue(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return string.Empty;
+        }
+
+        var firstQuote = message.IndexOf('\'');
+        if (firstQuote < 0)
+        {
+            return string.Empty;
+        }
+
+        var secondQuote = message.IndexOf('\'', firstQuote + 1);
+        if (secondQuote <= firstQuote + 1)
+        {
+            return string.Empty;
+        }
+
+        return message.Substring(firstQuote + 1, secondQuote - firstQuote - 1).Trim();
+    }
+
+    private static string NormalizeSkuValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
     }
@@ -587,6 +663,10 @@ null || prepared.Issues.Count == 0));
     private sealed record CustomerErrorCardViewModel(
         string CustomerValue,
         string MissingData,
+        string RowNumbers);
+
+    private sealed record SkuErrorCardViewModel(
+        string SkuValue,
         string RowNumbers);
 
     private enum InvoiceCardFilter

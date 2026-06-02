@@ -10,6 +10,8 @@ namespace STTproject.Features.User.SalesInvoice.Services;
 
 public sealed class ImportSalesInvoiceService
 {
+	private const int MaxHeaderScanRows = 25;
+
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 	private readonly ISalesInvoiceService _salesInvoiceService;
 	private readonly ILogger<ImportSalesInvoiceService> _logger;
@@ -84,11 +86,19 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		using var workbook = new XLWorkbook(excelStream);
-		var worksheet = workbook.Worksheets
-			.FirstOrDefault(IsSalesInvoiceWorksheet)
-			?? workbook.Worksheets.First();
+		var worksheetWithHeader = workbook.Worksheets
+			.Select(worksheet => new { Worksheet = worksheet, HeaderRowNumber = DetectHeaderRow(worksheet) })
+			.FirstOrDefault(candidate => candidate.HeaderRowNumber > 0);
 
-		var headers = BuildHeaderMap(worksheet);
+		if (worksheetWithHeader is null)
+		{
+			result.AddError(0, string.Empty, $"Could not find a sales invoice header row within the first {MaxHeaderScanRows} rows of any worksheet.");
+			return result;
+		}
+
+		var worksheet = worksheetWithHeader.Worksheet;
+		var headerRowNumber = worksheetWithHeader.HeaderRowNumber;
+		var headers = BuildHeaderMap(worksheet, headerRowNumber);
 		var hasSplitQuantityHeaders = headers.ContainsKey("CaseQuantity") || headers.ContainsKey("DozenQuantity") || headers.ContainsKey("PieceQuantity");
 		var requiredHeaders = new[]
 		{
@@ -141,17 +151,14 @@ public sealed class ImportSalesInvoiceService
 			.Where(uom => subdItemIds.Contains(uom.SubdItemId))
 			.ToListAsync(cancellationToken);
 
-		var customerByCode = customers.ToDictionary(customer => NormalizeCustomerLookup(customer.CustomerCode));
-		var customerByName = customers
-			.Where(customer => !string.IsNullOrWhiteSpace(customer.CustomerName))
-			.GroupBy(customer => NormalizeCustomerLookup(customer.CustomerName))
-			.ToDictionary(group => group.Key, group => group.First());
-		var subdItemByCode = subdItems.ToDictionary(item => Normalize(item.SubdItemCode));
+		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
+		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
+		var subdItemByCode = BuildLookupDictionary(subdItems, item => item.SubdItemCode, Normalize);
 		var uomLookup = uoms
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, customerByName, subdItemByCode);
+		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, customerByName, subdItemByCode, headerRowNumber);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -184,18 +191,22 @@ public sealed class ImportSalesInvoiceService
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
 					result.AddError(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError);
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError, null, invoiceRows[0].CustomerCode));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError, null, BuildCustomerDisplayValue(invoiceRows[0].CustomerCode, invoiceRows[0].CustomerName)));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
 
 				var firstRow = invoiceRows[0];
+				var firstRowCustomerValue = BuildCustomerDisplayValue(firstRow.CustomerCode, firstRow.CustomerName);
 
-				if (!TryResolveCustomer(firstRow.CustomerCode, customerByCode, customerByName, out var customer))
+				if (!TryResolveCustomer(firstRow.CustomerCode, customerByCode, customerByName, out var customer) &&
+					!(TryResolveCustomer(firstRow.CustomerName, customerByCode, customerByName, out customer) && !string.IsNullOrWhiteSpace(firstRow.CustomerName)))
 				{
-					var msg = $"Customer code or name '{firstRow.CustomerCode}' was not found.";
+					var msg = string.IsNullOrWhiteSpace(firstRow.CustomerName)
+						? $"Customer code or name '{firstRow.CustomerCode}' was not found."
+						: $"Customer code/name '{firstRowCustomerValue}' was not found.";
 					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode", firstRow.CustomerCode));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode", firstRowCustomerValue));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -204,7 +215,7 @@ public sealed class ImportSalesInvoiceService
 				{
 					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
 					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "OrderType");
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "OrderType", firstRow.CustomerCode));
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(firstRow.RowNumber, invoiceNumber, msg, "OrderType", firstRowCustomerValue));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -224,6 +235,7 @@ public sealed class ImportSalesInvoiceService
 
 				var items = new List<InputItemModel>();
 				var unitPriceCache = new Dictionary<int, decimal>();
+				var reportedMissingSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				async Task<decimal> GetUnitPriceAsync(int itemsUomId, DateOnly invoiceDate)
 				{
 					if (!unitPriceCache.TryGetValue(itemsUomId, out var cachedPrice))
@@ -236,11 +248,15 @@ public sealed class ImportSalesInvoiceService
 				}
 				foreach (var row in invoiceRows)
 				{
-					if (!subdItemByCode.TryGetValue(Normalize(row.SkuCode), out var subdItem))
+					var normalizedSkuCode = Normalize(row.SkuCode);
+					if (!subdItemByCode.TryGetValue(normalizedSkuCode, out var subdItem))
 					{
-						var msg = $"SKU code '{row.SkuCode}' was not found.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode", row.CustomerCode));
-						result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
+						if (reportedMissingSkus.Add(normalizedSkuCode))
+						{
+							var msg = $"SKU code '{row.SkuCode}' was not found.";
+							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), row.SkuCode));
+							result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
+						}
 						items.Clear();
 						break;
 					}
@@ -248,7 +264,7 @@ public sealed class ImportSalesInvoiceService
 					if (!TryResolveUom(subdItem.SubdItemId, row.UOM, uomLookup, out var uom))
 					{
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM", row.CustomerCode));
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName)));
 						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
 						items.Clear();
 						break;
@@ -400,21 +416,18 @@ public sealed class ImportSalesInvoiceService
 		return result;
 	}
 
-	private static bool IsSalesInvoiceWorksheet(IXLWorksheet worksheet)
-	{
-		return BuildHeaderMap(worksheet).ContainsKey("InvoiceCode");
-	}
-
 	private static List<ImportedInvoiceRow> ReadRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
 		ImportSalesInvoiceResult result,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
-		IReadOnlyDictionary<string, SubdItem> subdItemByCode)
+		IReadOnlyDictionary<string, SubdItem> subdItemByCode,
+		int headerRowNumber)
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var hasCustomerNameColumn = headers.TryGetValue("CustomerName", out var customerNameColumn);
 		var hasUomColumn = headers.TryGetValue("UOM", out var uomColumn);
 		var hasQuantityColumn = headers.TryGetValue("Quantity", out var quantityColumn);
 		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
@@ -422,11 +435,12 @@ public sealed class ImportSalesInvoiceService
 		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
 		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn;
 
-		for (int rowNumber = 2; rowNumber <= lastRow; rowNumber++)
+		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
 			var invoiceCode = GetString(row, headers["InvoiceCode"]);
 			var customerCode = GetString(row, headers["CustomerCode"]);
+			var customerName = hasCustomerNameColumn ? GetString(row, customerNameColumn) : string.Empty;
 			var hasOrderTypeColumn = headers.TryGetValue("OrderType", out var orderTypeColumn);
 			var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
 			var orderType = hasOrderTypeColumn ? GetString(row, orderTypeColumn) : string.Empty;
@@ -460,7 +474,18 @@ public sealed class ImportSalesInvoiceService
 				result.AddError(rowNumber, invoiceCode, message, columnName);
 				if (columnName == "CustomerCode")
 				{
-					result.Issues[^1] = result.Issues[^1] with { CustomerValue = customerCode };
+					var customerValue = string.IsNullOrWhiteSpace(customerCode) ? customerName : customerCode;
+					var combinedCustomerValue = BuildCustomerDisplayValue(customerCode, customerName);
+					result.Issues[^1] = result.Issues[^1] with { CustomerValue = combinedCustomerValue };
+				}
+				else if (columnName == "CustomerName")
+				{
+					var combinedCustomerValue = BuildCustomerDisplayValue(customerCode, customerName);
+					result.Issues[^1] = result.Issues[^1] with { CustomerValue = combinedCustomerValue };
+				}
+				else if (columnName == "SkuCode")
+				{
+					result.Issues[^1] = result.Issues[^1] with { SkuValue = skuCode };
 				}
 				rowHasErrors = true;
 			}
@@ -481,11 +506,29 @@ public sealed class ImportSalesInvoiceService
 
 			if (string.IsNullOrWhiteSpace(customerCode))
 			{
-				AddRowError("Customer name or code is required.", "CustomerCode");
+				if (hasCustomerNameColumn && !string.IsNullOrWhiteSpace(customerName) && TryResolveCustomer(customerName, customerByCode, customerByName, out var customer))
+				{
+					// Resolved using the alternate customer-name column.
+				}
+				else
+				{
+					AddRowError("Customer name or code is required.", string.IsNullOrWhiteSpace(customerName) ? "CustomerCode" : "CustomerName");
+				}
 			}
 			else if (!TryResolveCustomer(customerCode, customerByCode, customerByName, out var customer))
 			{
-				AddRowError($"Customer code or name '{customerCode}' was not found.", "CustomerCode");
+				if (hasCustomerNameColumn && !string.IsNullOrWhiteSpace(customerName) && TryResolveCustomer(customerName, customerByCode, customerByName, out customer))
+				{
+					// Resolved using the alternate customer-name column.
+				}
+				else
+				{
+					var customerLabel = BuildCustomerDisplayValue(customerCode, customerName);
+					var message = string.IsNullOrWhiteSpace(customerName)
+						? $"Customer code or name '{customerCode}' was not found."
+						: $"Customer code/name '{customerLabel}' was not found.";
+					AddRowError(message, string.IsNullOrWhiteSpace(customerName) ? "CustomerCode" : "CustomerName");
+				}
 			}
 			else
 			{
@@ -584,6 +627,7 @@ public sealed class ImportSalesInvoiceService
 							invoiceCode,
 							invoiceDate,
 							customerCode,
+							customerName,
 							normalizedOrderType,
 							salesManName,
 							skuCode,
@@ -611,6 +655,7 @@ public sealed class ImportSalesInvoiceService
 							invoiceCode,
 							invoiceDate,
 							customerCode,
+							customerName,
 							normalizedOrderType,
 							salesManName,
 							skuCode,
@@ -636,6 +681,7 @@ public sealed class ImportSalesInvoiceService
 							invoiceCode,
 							invoiceDate,
 							customerCode,
+							customerName,
 							normalizedOrderType,
 							salesManName,
 							skuCode,
@@ -661,6 +707,7 @@ public sealed class ImportSalesInvoiceService
 							invoiceCode,
 							invoiceDate,
 							customerCode,
+							customerName,
 							normalizedOrderType,
 							salesManName,
 							skuCode,
@@ -686,9 +733,31 @@ public sealed class ImportSalesInvoiceService
 		return rows;
 	}
 
-	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet)
+	private static int DetectHeaderRow(IXLWorksheet worksheet)
 	{
-		var headerRow = worksheet.Row(1);
+		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var scanLimit = Math.Min(lastRow, MaxHeaderScanRows);
+
+		for (var rowNumber = 1; rowNumber <= scanLimit; rowNumber++)
+		{
+			var headers = BuildHeaderMap(worksheet, rowNumber);
+			if (LooksLikeSalesInvoiceHeader(headers))
+			{
+				return rowNumber;
+			}
+		}
+
+		return 0;
+	}
+
+	private static bool LooksLikeSalesInvoiceHeader(IReadOnlyDictionary<string, int> headers)
+	{
+		return headers.Count > 0;
+	}
+
+	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber)
+	{
+		var headerRow = worksheet.Row(headerRowNumber);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 		int? unitHeaderColumn = null;
 		int? caseQuantityHeaderColumn = null;
@@ -702,7 +771,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "num" or "dr #" or "so" or  "invoicecode" or "reference" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "ref. #" or "doc no." or "os_no" or "po number" or "sales invoice number" or "document number" or "invoice#" or "invoice #" or "invoice no." or "invoice" or "inv" or "ref.no." or "sales no.")
+			if (header is "so_number" or "num" or "dr #" or "so" or  "invoicecode" or "reference" or "lst_si" or "invoice number" or "salesinvoicecode" or "invoice no" or "inv nbr" or "ref. #" or "doc no." or "os_no" or "po number" or "sales invoice number" or "document number" or "invoice#" or "invoice #" or "invoice no." or "invoice" or "inv" or "ref.no." or "sales no.")
 			{
 				headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
 				continue;
@@ -714,9 +783,15 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			if (header is "customercode" or "account code" or "custcode" or "acc name" or "cust./supp." or "customer code" or "lst_cust1" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id")
+			if (header is "customercode" or "account code" or "custcode" or "acc name" or "cust./supp." or "customer code" or "lst_cust1" or "so number" or "custid" or "customer_code" or "cust. #" or "customer/project: id" or "customer")
 			{
 				headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "customername" or "customer_name" or "lst_cust2")
+			{
+				headers.TryAdd("CustomerName", cell.Address.ColumnNumber);
 				continue;
 			}
 
@@ -1071,6 +1146,42 @@ public sealed class ImportSalesInvoiceService
 			.Replace("’", string.Empty);
 	}
 
+	private static string BuildCustomerDisplayValue(string? customerCode, string? customerName)
+	{
+		var code = string.IsNullOrWhiteSpace(customerCode) ? string.Empty : customerCode.Trim();
+		var name = string.IsNullOrWhiteSpace(customerName) ? string.Empty : customerName.Trim();
+
+		if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(name))
+		{
+			return $"{code} - {name}";
+		}
+
+		return !string.IsNullOrWhiteSpace(code) ? code : name;
+	}
+
+	private static Dictionary<string, T> BuildLookupDictionary<T>(
+		IEnumerable<T> source,
+		Func<T, string> keySelector,
+		Func<string, string> normalizeKey)
+	{
+		var lookup = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var item in source)
+		{
+			var rawKey = keySelector(item);
+			var key = normalizeKey(rawKey);
+
+			if (string.IsNullOrWhiteSpace(key) || key == "#n/a")
+			{
+				continue;
+			}
+
+			lookup.TryAdd(key, item);
+		}
+
+		return lookup;
+	}
+
 	private static bool TryResolveCustomer(
 		string value,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
@@ -1097,6 +1208,7 @@ public sealed class ImportSalesInvoiceService
 		string InvoiceCode,
 		DateOnly InvoiceDate,
 		string CustomerCode,
+		string CustomerName,
 		string OrderType,
 		string SalesManName,
 		string SkuCode,
@@ -1130,4 +1242,4 @@ public sealed class ImportSalesInvoiceResult
 	}
 }
 
-public sealed record ImportSalesInvoiceIssue(int RowNumber, string InvoiceNumber, string Message, string? ColumnName = null, string? CustomerValue = null);
+public sealed record ImportSalesInvoiceIssue(int RowNumber, string InvoiceNumber, string Message, string? ColumnName = null, string? CustomerValue = null, string? SkuValue = null);
