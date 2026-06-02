@@ -1,8 +1,46 @@
 ﻿@page "/admin/customer"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.Customers.Components.Modals
+@using STTproject.Features.Admin.Customers.Components.Sections
+@using STTproject.Shared.Components
 
-<h3>Customers</h3>
+<div class="row">
+    <h4>Customers</h4>
+    <button class="btn-primary" @onclick="OpenAddCustomerModal">ADD</button>
+</div>
+
+<CustomerListTable />
+
+@* show when create customer button is clicked on addcustomer modal *@
+<ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
+              Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" />
+
+@if (showAddModal)
+{
+    <AddCustomer OnCustomerCreated="OnCustomerCreated" />
+}
+
 
 @code {
+    private ConfirmModal? confirmAddModal;
+    private bool showConfirmAddModal;
+    private bool showAddModal;
 
+    private void OpenAddCustomerModal()
+    {
+        showAddModal = true;
+    }
+
+    private Task ConfirmAddCustomer()
+    {
+        // TODO: perform create action after confirmation
+        return Task.CompletedTask;
+    }
+
+    private Task OnCustomerCreated()
+    {
+        showAddModal = false;
+        showConfirmAddModal = true;
+        return Task.CompletedTask;
+    }
 }

@@ -1,0 +1,213 @@
+@inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
+@inject STTproject.Features.Shared.Services.ILocationService LocationService
+
+<div class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Add New Customer</h3>
+        </div>
+
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Subdistributor</label>
+                @* Generic autocomplete for subdistributor name -> sets SubDistributorId *@
+                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                                     Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
+                                     ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
+                                     Placeholder="Search subdistributor..." />
+            </div>
+            <div class="form-group">
+                <label>Customer Code</label>
+                <input @bind="CustomerCode" />
+            </div>
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input @bind="CustomerName" />
+            </div>
+            @* Customer Type: autocomplete with existing types + freeform input *@
+            <div class="form-group">
+                <label>Customer Type</label>
+                <GenericAutocomplete TItem="string" Items="ExistingCustomerTypes" @bind-Value="CustomerType"
+                                     ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
+                                     Placeholder="Select or type customer type..." />
+            </div>
+
+            @* set status if active or not checkbox *@
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" @bind="IsActive" />
+                    Is Active
+                </label>
+            </div>
+
+            @* address fields add line*@
+            <h4>Customer Address</h4>
+            <div class="form-group">
+                <label>Province</label>
+                @* Generic autocomplete for provinces; selecting a province loads cities *@
+                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.ProvinceDto" Items="ProvincesDto"
+                                     @bind-Value="Province" ItemLabel="@(p => p?.Name ?? string.Empty)"
+                                     OnSelected="OnProvinceDtoSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
+            </div>
+            <div class="form-group">
+                <label>City / Municipality</label>
+                @* Use GenericAutocomplete for cities (populated when Province changes) *@
+                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.CityDto" Items="CitiesDto"
+                                     @bind-Value="City" ItemLabel="@(c => c?.Name ?? string.Empty)" OnSelected="OnCityDtoSelected"
+                                     ShowAllOnOpen="true" Placeholder="Select or type city..." />
+            </div>
+            <div class="form-group">
+                <label>Address Line</label>
+                <input @bind="AddressLine" />
+            </div>
+            <div class="form-group">
+                <label>Zip Code</label>
+                <input @bind="ZipCode" />
+            </div>
+
+            <div class="action-buttons">
+                <button @onclick="CreateCustomer">Create Customer</button>
+                <button @onclick="Cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback OnCustomerCreated { get; set; }
+
+    private int SubDistributorId { get; set; }
+    private string? SelectedSubDistributorName { get; set; }
+    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new
+List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
+    private string? CustomerCode { get; set; }
+    private string? CustomerName { get; set; }
+    private string? CustomerType { get; set; }
+    private bool IsActive { get; set; } = true;
+    private string? AddressLine { get; set; }
+    private string? City { get; set; }
+    private string? Province { get; set; }
+    private STTproject.Features.Admin.Customers.DTOs.ProvinceDto? SelectedProvince { get; set; }
+    private STTproject.Features.Admin.Customers.DTOs.CityDto? SelectedCity { get; set; }
+    private int? ZipCode { get; set; }
+    private List<string> CustomerTypes { get; set; } = new() { "Retail", "Wholesale", "Distributor", "Other" };
+    private List<string> Cities { get; set; } = new();
+    private List<string> Provinces { get; set; } = new();
+    private List<STTproject.Features.Admin.Customers.DTOs.ProvinceDto> ProvincesDto { get; set; } = new
+List<STTproject.Features.Admin.Customers.DTOs.ProvinceDto>();
+    private List<STTproject.Features.Admin.Customers.DTOs.CityDto> CitiesDto { get; set; } = new
+List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
+    private List<string> ExistingCustomerTypes { get; set; } = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProvincesDto = (await AdminCustomerService.GetProvincesAsync()).ToList();
+        SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
+        ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
+        Cities = (await LocationService.GetCitiesAsync()).ToList();
+        CitiesDto = Cities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
+        try
+        {
+            Console.WriteLine($"[AddCustomer] OnInitialized: Provinces={Provinces?.Count()} ProvincesDto={ProvincesDto?.Count()} SubDistributors={SubDistributors?.Count()} ExistingTypes={ExistingCustomerTypes?.Count()}");
+        }
+        catch { }
+    }
+
+    private async Task ProvinceChanged()
+    {
+        var provinceCode = SelectedProvince?.Code;
+        if (string.IsNullOrWhiteSpace(provinceCode))
+        {
+            Cities = (await LocationService.GetCitiesAsync()).ToList();
+            CitiesDto = Cities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
+            return;
+        }
+
+        try
+        {
+            Cities = (await LocationService.GetCitiesForProvinceByCodeAsync(provinceCode)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AddCustomer] LocationService.GetCitiesForProvinceByCodeAsync error: {ex.Message}");
+            Cities = new List<string>();
+        }
+
+        try
+        {
+            CitiesDto = (await AdminCustomerService.GetCitiesForProvinceAsync(provinceCode)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AddCustomer] AdminCustomerService.GetCitiesForProvinceAsync error: {ex.Message}");
+            CitiesDto = new List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
+        }
+        City = Cities.FirstOrDefault();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnCitySelected(string? selected)
+    {
+        City = selected;
+        return Task.CompletedTask;
+    }
+
+    private Task OnProvinceDtoSelected(STTproject.Features.Admin.Customers.DTOs.ProvinceDto? pd)
+    {
+        SelectedProvince = pd;
+        Province = pd?.Name;
+        return ProvinceChanged();
+    }
+
+    private Task OnCityDtoSelected(STTproject.Features.Admin.Customers.DTOs.CityDto? cd)
+    {
+        SelectedCity = cd;
+        City = cd?.Name;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnProvinceSelected(string? selected)
+    {
+        Province = selected;
+        await ProvinceChanged();
+    }
+
+    private async Task CreateCustomer()
+    {
+        var dto = new STTproject.Features.Admin.Customers.DTOs.CustomerCreateDto
+        {
+            CustomerCode = CustomerCode,
+            CustomerName = CustomerName,
+            CustomerType = CustomerType,
+            SubDistributorId = SubDistributorId,
+            IsActive = IsActive,
+            AddressLine = AddressLine,
+            City = City,
+            Province = Province,
+            ZipCode = ZipCode
+        };
+        await AdminCustomerService.CreateCustomerAsync(dto);
+        if (OnCustomerCreated.HasDelegate)
+        {
+            await OnCustomerCreated.InvokeAsync();
+        }
+    }
+
+    private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
+    {
+        if (sd != null)
+        {
+            SubDistributorId = sd.SubDistributorId;
+            SelectedSubDistributorName = sd.SubDistributorName;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task Cancel()
+    {
+        // parent should control modal visibility; nothing to do here
+        return Task.CompletedTask;
+    }
+}
