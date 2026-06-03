@@ -31,6 +31,9 @@ public partial class SalesInvoice
     private bool isInitialDataReady;
     private bool hasAttemptedDraftRestore;
 
+    private bool isLoading = false;
+    private string loadingMessage = "";
+
     async Task OnItemsChanged(List<InputItemModel> updatedItems)
     {
         items = updatedItems;
@@ -116,41 +119,49 @@ public partial class SalesInvoice
             return;
         }
 
-        var fileName = file.Name ?? string.Empty;
-        if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
-        {
-            errorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
-            showErrorModal = true;
-            StateHasChanged();
-            return;
-        }
-
-        using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
-        using var ms = new System.IO.MemoryStream();
-        await browserStream.CopyToAsync(ms);
-        ms.Position = 0;
-
         try
         {
+            loadingMessage = "Importing Excel file...";            
+            isLoading = true;
+                await InvokeAsync(StateHasChanged);
+                await Task.Yield();
+
+            var fileName = file.Name ?? string.Empty;
+            if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
+            {
+                errorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
+                showErrorModal = true;
+                return;
+            }
+
+            using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            using var ms = new System.IO.MemoryStream();
+            await browserStream.CopyToAsync(ms);
+            ms.Position = 0;
+
             var importResult = await importSalesInvoiceService.PrepareFromExcelAsync(
                 ms,
                 invoice.SubdistributorId,
                 userContext.UserId ?? 0);
 
             lastImportResult = importResult;
+            showImportResultsModal = true;
         }
+
         catch (Exception ex)
         {
             errorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
             showErrorModal = true;
-            StateHasChanged();
-            return;
         }
-        showImportResultsModal = true;
-        StateHasChanged();
+        finally
+            {
+                isLoading = false;
+                loadingMessage = "";
+                 await InvokeAsync(StateHasChanged);
+            }
     }
 
     private void CloseImportResultsModal()
@@ -162,11 +173,17 @@ public partial class SalesInvoice
 
     private async Task CommitSelectedImportedInvoices()
     {
-        if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
+        try
+        {
+            loadingMessage = "Committing imported invoices...";
+            isLoading = true;
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+
+       if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
         {
             errorMessage = "No prepared invoices to commit.";
             showErrorModal = true;
-            StateHasChanged();
             return;
         }
 
@@ -177,7 +194,6 @@ public partial class SalesInvoice
         {
             errorMessage = "No valid invoices selected for commit.";
             showErrorModal = true;
-            StateHasChanged();
             return;
         }
 
@@ -186,7 +202,6 @@ public partial class SalesInvoice
         // merge commit errors and saved flags back into lastImportResult
         foreach (var prepared in toCommit)
         {
-            var savedFlag = prepared.IsSaved;
             var existing = lastImportResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
             if (existing != null)
             {
@@ -204,10 +219,20 @@ public partial class SalesInvoice
                 lastImportResult.Issues.Add(issue);
             }
         }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to commit imported invoices: {ex.Message}";
+            showErrorModal = true;
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = "";
+            showImportResultsModal = true;
 
-        // show updated modal with results
-        showImportResultsModal = true;
-        StateHasChanged();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     async Task CloseAddItemsModal()
@@ -932,6 +957,12 @@ public partial class SalesInvoice
     {
         try
         {
+            loadingMessage = "Generating template...";
+            isLoading = true;
+
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+
             var templateData = await mapItemService.GetTemplateDataAsync(invoice.SubdistributorId, null);
             await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
 
@@ -947,6 +978,13 @@ public partial class SalesInvoice
             var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
             errorMessage = $"Failed to generate template: {baseMsg}";
             showErrorModal = true;
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = "";
+
+             await InvokeAsync(StateHasChanged);
         }
     }
 

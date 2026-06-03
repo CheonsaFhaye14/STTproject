@@ -15,7 +15,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
     public partial class MapItem
     {
         private const string BaseUomName = "PC";
-
+        private bool isLoading = false;
+        private string loadingMessage = "";
         private bool showAddUomModal = false;
         private string? modalCompanyItemCode;
         private string? modalCompanyItemName;
@@ -55,14 +56,26 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             showDownloadTemplateModal = false;
             try
             {
+                isLoading = true;
+                loadingMessage = "Generating template...";
+                    await InvokeAsync(StateHasChanged);
+                    await Task.Yield();
                 var templateData = await mapItemService.GetTemplateDataAsync(filters.SubdistributorId, filters.Principal);
                 await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
             }
             catch (Exception ex)
             {
-                itemActionErrorMessage = $"Failed to generate template: {ex.Message}";
+                var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+
+                itemActionErrorMessage = $"Failed to generate template: {baseMsg}";
                 showErrorModal = true;
             }
+            finally
+             {
+                isLoading = false;
+                loadingMessage = "";
+                await InvokeAsync(StateHasChanged);
+             }
         }
 
         private Task HandleDownloadTemplateCancel()
@@ -96,12 +109,19 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
         private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
         {
-            var file = e.File;
+
+            try
+            {
+                isLoading = true;
+                loadingMessage = "Processing file...";
+                 await InvokeAsync(StateHasChanged);
+                await Task.Yield();
+
+                  var file = e.File;
             if (file is null)
             {
                 return;
             }
-
             var fileName = file.Name ?? string.Empty;
             if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
                 || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
@@ -110,31 +130,32 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             {
                 itemActionErrorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
                 showErrorModal = true;
-                StateHasChanged();
                 return;
             }
-
-            using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             using var ms = new MemoryStream();
             await browserStream.CopyToAsync(ms);
             ms.Position = 0;
-
-            try
-            {
                 lastImportResult = await importMapItemService.ImportFromExcelAsync(ms, userContext.UserId ?? 0);
+            selectedImportItemGroupKeys = BuildDefaultSelectedImportGroupKeys(lastImportResult);
+
+            showImportDetailsModal = true;
             }
             catch (Exception ex)
             {
                 itemActionErrorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
                 showErrorModal = true;
-                StateHasChanged();
-                return;
+
             }
-            selectedImportItemGroupKeys = BuildDefaultSelectedImportGroupKeys(lastImportResult);
+            finally
+             {
+                isLoading = false;
+                loadingMessage = "";
+                await InvokeAsync(StateHasChanged);
+             }
 
-            showImportDetailsModal = true;
 
-            StateHasChanged();
+   
         }
 
         private async Task HandleCommitImportAsync()
@@ -159,12 +180,16 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
             try
             {
+                isLoading = true;
+                loadingMessage = "Committing imported items...";
+                    await InvokeAsync(StateHasChanged);
+                    await Task.Yield();
+
                 var committedGroups = await importMapItemService.CommitPreparedRowsAsync(selectedRows, userContext.UserId.Value);
                 if (committedGroups <= 0)
                 {
                     itemActionErrorMessage = "Commit did not save any item groups. Please re-check your selected rows.";
                     showErrorModal = true;
-                    StateHasChanged();
                     return;
                 }
 
@@ -194,11 +219,16 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             }
             catch (Exception ex)
             {
-                itemActionErrorMessage = $"Commit failed: {ex.Message}";
+                var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+                itemActionErrorMessage = $"Commit failed: {baseMsg}";
                 showErrorModal = true;
             }
-
-            StateHasChanged();
+            finally
+             {
+                isLoading = false;
+                loadingMessage = "";
+                await InvokeAsync(StateHasChanged);
+             }
         }
 
         private void CloseImportDetailsModal()

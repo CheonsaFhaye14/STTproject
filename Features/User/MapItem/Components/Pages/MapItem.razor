@@ -15,6 +15,14 @@
 @inject STTproject.Features.User.MapItem.Services.ImportMapItemService importMapItemService
 @inject STTproject.Features.User.MapItem.Services.MapItemDraftService draftService
 
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="spinner-border"></div>
+        <p>@loadingMessage</p>
+    </div>
+}
+
 <div>
 
     <div class="header-with-search">

@@ -85,6 +85,20 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
+		await using var context = _contextFactory.CreateDbContext();
+		var subDistributor = await context.SubDistributors
+			.AsNoTracking()
+			.FirstOrDefaultAsync(item => item.SubDistributorId == subDistributorId && item.IsActive, cancellationToken);
+
+		if (subDistributor is null)
+		{
+			result.AddError(0, string.Empty, "A valid subdistributor is required before importing sales invoices.");
+			return result;
+		}
+
+		var useStarwideHeaderMapping = IsStarwideDistribution(subDistributor);
+		var useVarleyHeaderMapping = IsVarleyCorp(subDistributor);
+
 		using var workbook = new XLWorkbook(excelStream);
 		var worksheetWithHeader = workbook.Worksheets
 			.Select(worksheet => new { Worksheet = worksheet, HeaderRowNumber = DetectHeaderRow(worksheet) })
@@ -98,7 +112,7 @@ public sealed class ImportSalesInvoiceService
 
 		var worksheet = worksheetWithHeader.Worksheet;
 		var headerRowNumber = worksheetWithHeader.HeaderRowNumber;
-		var headers = BuildHeaderMap(worksheet, headerRowNumber);
+		var headers = BuildHeaderMap(worksheet, headerRowNumber, useStarwideHeaderMapping, useVarleyHeaderMapping);
 		var hasSplitQuantityHeaders = headers.ContainsKey("CaseQuantity") || headers.ContainsKey("DozenQuantity") || headers.ContainsKey("PieceQuantity");
 		var requiredHeaders = new[]
 		{
@@ -133,8 +147,6 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		// NetAmount/Gross are optional; OrderType may be provided per-row or inferred from signed amounts where available.
-
-		await using var context = _contextFactory.CreateDbContext();
 		var customers = await context.Customers
 			.AsNoTracking()
 			.Where(customer => customer.SubDistributorId == subDistributorId && customer.IsActive)
@@ -158,7 +170,16 @@ public sealed class ImportSalesInvoiceService
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
 
-		var parsedRows = ReadRows(worksheet, headers, result, (IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode, customerByName, subdItemByCode, headerRowNumber);
+		var parsedRows = ReadRows(
+			worksheet,
+			headers,
+			result,
+			(IReadOnlyDictionary<string, STTproject.Data.Customer>)customerByCode,
+			customerByName,
+			subdItemByCode,
+			headerRowNumber,
+			useStarwideHeaderMapping,
+			useVarleyHeaderMapping);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -423,7 +444,9 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
 		IReadOnlyDictionary<string, SubdItem> subdItemByCode,
-		int headerRowNumber)
+		int headerRowNumber,
+		bool useStarwideHeaderMapping = false,
+		bool useVarleyHeaderMapping = false)
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -448,6 +471,47 @@ public sealed class ImportSalesInvoiceService
 			var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
 			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
+			var rowHasErrors = false;
+			string normalizedOrderType = string.Empty;
+			if ((useStarwideHeaderMapping || useVarleyHeaderMapping) && hasNetAmountColumn)
+			{
+				if (netAmountCell is null || netAmountCell.IsEmpty())
+				{
+					if (!useVarleyHeaderMapping)
+					{
+						result.AddError(rowNumber, invoiceCode, "Net amount is required when OrderType is empty.", "NetAmount");
+						rowHasErrors = true;
+					}
+				}
+				else if (TryGetDecimal(netAmountCell, out var amountValue))
+				{
+					normalizedOrderType = amountValue < 0 ? "Credit" : "Invoice";
+				}
+				else
+				{
+					if (!useVarleyHeaderMapping)
+					{
+						result.AddError(rowNumber, invoiceCode, "Net amount must be a valid number.", "NetAmount");
+						rowHasErrors = true;
+					}
+				}
+			}
+
+			if (useVarleyHeaderMapping && string.IsNullOrWhiteSpace(normalizedOrderType))
+			{
+				if (!string.IsNullOrWhiteSpace(orderType) && TryParseOrderType(orderType, out var inferredOrderType))
+				{
+					normalizedOrderType = inferredOrderType;
+				}
+				else if (TryInferOrderTypeFromSplitQuantities(row, hasCaseQuantityColumn, caseQuantityColumn, hasDozenQuantityColumn, dozenQuantityColumn, hasPieceQuantityColumn, pieceQuantityColumn, out var splitOrderType))
+				{
+					normalizedOrderType = splitOrderType;
+				}
+				else if (hasQuantityColumn && !row.Cell(quantityColumn).IsEmpty() && TryGetInt(row.Cell(quantityColumn), out var quantityValue))
+				{
+					normalizedOrderType = quantityValue < 0 ? "Credit" : "Invoice";
+				}
+			}
 
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
 				string.IsNullOrWhiteSpace(customerCode) &&
@@ -464,9 +528,7 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			var rowHasErrors = false;
 			DateOnly invoiceDate = default;
-			string normalizedOrderType = string.Empty;
 			var emittedRows = new List<ImportedInvoiceRow>();
 
 			void AddRowError(string message, string? columnName = null)
@@ -559,28 +621,48 @@ public sealed class ImportSalesInvoiceService
 				}
 				else if (hasNetAmountColumn)
 				{
-					if (netAmountCell is null || netAmountCell.IsEmpty())
+					if (!useStarwideHeaderMapping && !useVarleyHeaderMapping)
 					{
-						AddRowError("Net amount is required when OrderType is empty.", "NetAmount");
-					}
-					else if (!TryGetDecimal(netAmountCell, out var amountValue))
-					{
-						AddRowError("Net amount must be a valid number.", "NetAmount");
-					}
-					else if (amountValue < 0)
-					{
-						normalizedOrderType = "Credit";
+						if (netAmountCell is null || netAmountCell.IsEmpty())
+						{
+							AddRowError("Net amount is required when OrderType is empty.", "NetAmount");
+						}
+						else if (!TryGetDecimal(netAmountCell, out var amountValue))
+						{
+							AddRowError("Net amount must be a valid number.", "NetAmount");
+						}
+						else if (amountValue < 0)
+						{
+							normalizedOrderType = "Credit";
+						}
+						else
+						{
+							normalizedOrderType = "Invoice";
+						}
 					}
 					else
 					{
-						normalizedOrderType = "Invoice";
+						if (string.IsNullOrWhiteSpace(normalizedOrderType))
+						{
+							normalizedOrderType = useVarleyHeaderMapping && netAmountCell is null ? normalizedOrderType : "Invoice";
+						}
 					}
 				}
 				else
 				{
-					// No explicit OrderType and no NetAmount column to infer from — warn but default to Invoice.
-					result.Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceCode, "Order type missing and NetAmount column not present; defaulting to Invoice.", "OrderType", customerCode));
-					normalizedOrderType = "Invoice";
+					if (useVarleyHeaderMapping)
+					{
+						if (string.IsNullOrWhiteSpace(normalizedOrderType))
+						{
+							normalizedOrderType = "Invoice";
+						}
+					}
+					else
+					{
+						// No explicit OrderType and no NetAmount column to infer from — warn but default to Invoice.
+						result.Issues.Add(new ImportSalesInvoiceIssue(rowNumber, invoiceCode, "Order type missing and NetAmount column not present; defaulting to Invoice.", "OrderType", customerCode));
+						normalizedOrderType = "Invoice";
+					}
 				}
 			}
 
@@ -755,13 +837,86 @@ public sealed class ImportSalesInvoiceService
 		return headers.Count > 0;
 	}
 
-	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber)
+	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, bool useStarwideHeaderMapping = false, bool useVarleyHeaderMapping = false)
 	{
 		var headerRow = worksheet.Row(headerRowNumber);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 		int? unitHeaderColumn = null;
 		int? caseQuantityHeaderColumn = null;
+		int? dozenQuantityHeaderColumn = null;
 		int? pieceQuantityHeaderColumn = null;
+
+		if (useStarwideHeaderMapping || useVarleyHeaderMapping)
+		{
+			foreach (var cell in headerRow.CellsUsed())
+			{
+				var header = Normalize(cell.GetString());
+				if (string.IsNullOrWhiteSpace(header))
+				{
+					continue;
+				}
+
+				switch (header)
+				{
+					case "so_number":
+					case "lst_si":
+						headers.TryAdd("InvoiceCode", cell.Address.ColumnNumber);
+						break;
+					case "so_date":
+					case "lst_date":
+						headers.TryAdd("InvoiceDate", cell.Address.ColumnNumber);
+						break;
+					case "customer_code":
+					case "lst_cust1":
+						headers.TryAdd("CustomerCode", cell.Address.ColumnNumber);
+						break;
+					case "customer_name":
+					case "lst_cust2":
+						headers.TryAdd("CustomerName", cell.Address.ColumnNumber);
+						break;
+					case "net_amount":
+					case "lst_net2":
+						headers.TryAdd("NetAmount", cell.Address.ColumnNumber);
+						break;
+					case "item_number":
+					case "lst_head1":
+						headers.TryAdd("SkuCode", cell.Address.ColumnNumber);
+						break;
+					case "salesman_name":
+					case "lst_agent2":
+						headers.TryAdd("SalesManName", cell.Address.ColumnNumber);
+						break;
+						case "case_total":
+					case "lst_qnty1":
+						caseQuantityHeaderColumn ??= cell.Address.ColumnNumber;
+						break;
+						case "dozen_total":
+							dozenQuantityHeaderColumn ??= cell.Address.ColumnNumber;
+							break;
+						case "lst_qnty2":
+						case "pieces_total":
+							pieceQuantityHeaderColumn ??= cell.Address.ColumnNumber;
+						break;
+				}
+			}
+
+			if (caseQuantityHeaderColumn.HasValue)
+			{
+				headers.TryAdd("CaseQuantity", caseQuantityHeaderColumn.Value);
+			}
+
+			if (dozenQuantityHeaderColumn.HasValue)
+			{
+				headers.TryAdd("DozenQuantity", dozenQuantityHeaderColumn.Value);
+			}
+
+			if (pieceQuantityHeaderColumn.HasValue)
+			{
+				headers.TryAdd("PieceQuantity", pieceQuantityHeaderColumn.Value);
+			}
+
+			return headers;
+		}
 
 		foreach (var cell in headerRow.CellsUsed())
 		{
@@ -892,6 +1047,59 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		return headers;
+	}
+
+	private static bool IsStarwideDistribution(SubDistributor subDistributor)
+	{
+		return string.Equals(subDistributor.SubdName?.Trim(), "STARWIDE DISTRIBUTION", StringComparison.OrdinalIgnoreCase)
+			&& string.Equals(subDistributor.SubdCode?.Trim(), "01GMA06", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsVarleyCorp(SubDistributor subDistributor)
+	{
+		return string.Equals(subDistributor.SubdCode?.Trim(), "01GMA08", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(subDistributor.SubdName?.Trim(), "VARLEY CORP", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool TryInferOrderTypeFromSplitQuantities(
+		IXLRow row,
+		bool hasCaseQuantityColumn,
+		int caseQuantityColumn,
+		bool hasDozenQuantityColumn,
+		int dozenQuantityColumn,
+		bool hasPieceQuantityColumn,
+		int pieceQuantityColumn,
+		out string orderType)
+	{
+		var quantityColumns = new (bool HasColumn, int ColumnNumber)[]
+		{
+			(hasCaseQuantityColumn, caseQuantityColumn),
+			(hasDozenQuantityColumn, dozenQuantityColumn),
+			(hasPieceQuantityColumn, pieceQuantityColumn)
+		};
+
+		foreach (var (hasColumn, columnNumber) in quantityColumns)
+		{
+			if (!hasColumn)
+			{
+				continue;
+			}
+
+			var cell = row.Cell(columnNumber);
+			if (cell.IsEmpty())
+			{
+				continue;
+			}
+
+			if (TryGetInt(cell, out var quantity))
+			{
+				orderType = quantity < 0 ? "Credit" : "Invoice";
+				return true;
+			}
+		}
+
+		orderType = string.Empty;
+		return false;
 	}
 
 	private static string ValidateGroupConsistency(List<ImportedInvoiceRow> rows)

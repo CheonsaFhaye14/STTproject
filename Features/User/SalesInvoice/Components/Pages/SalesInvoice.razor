@@ -27,6 +27,14 @@
 <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
              OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
 
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="spinner-border"></div>
+        <p>@loadingMessage</p>
+    </div>
+}
+
 @if (showDownloadSuccess)
 {
     <div class="alert alert-success" role="alert">
