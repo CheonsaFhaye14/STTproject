@@ -7,7 +7,6 @@ using STTproject.Features.Login.Services;
 using STTproject.Features.User.Profile.Services;
 using STTproject.Features.User.Customer.Services;
 using STTproject.Features.Admin.Customers.Services;
-using STTproject.Features.Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +38,7 @@ builder.Services.AddScoped<STTproject.Features.User.SalesInvoice.Services.Import
 builder.Services.AddHostedService<PriceIncreaseWorker>();
 // Admin services
 builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
-builder.Services.AddScoped<ILocationService, JsonLocationService>();
+builder.Services.AddScoped<IGeographicDataService, GeographicDataService>();
 
 var app = builder.Build();
 

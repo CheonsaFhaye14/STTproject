@@ -18,18 +18,18 @@ public static class CustomerValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddCustomerAsync(
-        Customer customer,
-        Func<Task<bool>> customerCodeExistsAsync)
+        Customer customer
+    )
     {
         var errors = new Dictionary<string, string>();
+        if (customer.SubDistributorId <= 0)
+        {
+            errors[AddCustomer.subdistributor.Key] = AddCustomer.subdistributor.ErrorMessage;
+        }
 
         if (string.IsNullOrWhiteSpace(customer.CustomerCode))
         {
             errors[AddCustomer.customercode.Key] = AddCustomer.customercode.ErrorMessage;
-        }
-        else if (await customerCodeExistsAsync())
-        {
-            errors[AddCustomer.customercode.Key] = "Customer code already exists on the same subdistributor.";
         }
 
         if (string.IsNullOrWhiteSpace(customer.CustomerName))

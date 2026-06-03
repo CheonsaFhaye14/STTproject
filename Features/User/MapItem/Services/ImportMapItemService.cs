@@ -228,6 +228,9 @@ public sealed class ImportMapItemService
 			MergeRowErrors(rowErrors, groupRows, crossGroupIdentityErrors);
 
 			// Validate company item exists
+			// TODO: show only one on error dropdown Company Item Code not found onclick card is per Company Item code
+			// header Company Item Code/Name: 
+			// rows: 
 			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem))
 			{
 				var createdRows = new List<ImportMapItemRowResult>();

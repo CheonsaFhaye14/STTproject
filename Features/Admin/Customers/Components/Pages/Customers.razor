@@ -17,7 +17,7 @@
 
 @if (showAddModal)
 {
-    <AddCustomer OnCustomerCreated="OnCustomerCreated" />
+    <AddCustomer OnCustomerCreated="OnCustomerCreated" onCancel="CancelAddCustomer"/>
 }
 
 
@@ -39,8 +39,15 @@
 
     private Task OnCustomerCreated()
     {
+        
         showAddModal = false;
         showConfirmAddModal = true;
+        return Task.CompletedTask;
+    }
+
+    private Task CancelAddCustomer()
+    {
+        showAddModal = false;
         return Task.CompletedTask;
     }
 }

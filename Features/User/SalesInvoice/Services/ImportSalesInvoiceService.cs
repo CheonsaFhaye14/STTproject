@@ -98,6 +98,7 @@ public sealed class ImportSalesInvoiceService
 
 		var useStarwideHeaderMapping = IsStarwideDistribution(subDistributor);
 		var useVarleyHeaderMapping = IsVarleyCorp(subDistributor);
+		var useFDRHeaderMapping = IsFDRPremier(subDistributor);
 
 		using var workbook = new XLWorkbook(excelStream);
 		var worksheetWithHeader = workbook.Worksheets
@@ -112,7 +113,7 @@ public sealed class ImportSalesInvoiceService
 
 		var worksheet = worksheetWithHeader.Worksheet;
 		var headerRowNumber = worksheetWithHeader.HeaderRowNumber;
-		var headers = BuildHeaderMap(worksheet, headerRowNumber, useStarwideHeaderMapping, useVarleyHeaderMapping);
+		var headers = BuildHeaderMap(worksheet, headerRowNumber, useStarwideHeaderMapping, useVarleyHeaderMapping, useFDRHeaderMapping);
 		var hasSplitQuantityHeaders = headers.ContainsKey("CaseQuantity") || headers.ContainsKey("DozenQuantity") || headers.ContainsKey("PieceQuantity");
 		var requiredHeaders = new[]
 		{
@@ -179,7 +180,8 @@ public sealed class ImportSalesInvoiceService
 			subdItemByCode,
 			headerRowNumber,
 			useStarwideHeaderMapping,
-			useVarleyHeaderMapping);
+			useVarleyHeaderMapping,
+			useFDRHeaderMapping);
 		if (parsedRows.Count == 0)
 		{
 			result.AddError(0, string.Empty, "No invoice rows were found in the template.");
@@ -446,7 +448,8 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, SubdItem> subdItemByCode,
 		int headerRowNumber,
 		bool useStarwideHeaderMapping = false,
-		bool useVarleyHeaderMapping = false)
+		bool useVarleyHeaderMapping = false,
+		bool useFDRHeaderMapping = false)
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -473,7 +476,7 @@ public sealed class ImportSalesInvoiceService
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
 			var rowHasErrors = false;
 			string normalizedOrderType = string.Empty;
-			if ((useStarwideHeaderMapping || useVarleyHeaderMapping) && hasNetAmountColumn)
+			if ((useStarwideHeaderMapping || useVarleyHeaderMapping || useFDRHeaderMapping) && hasNetAmountColumn)
 			{
 				if (netAmountCell is null || netAmountCell.IsEmpty())
 				{
@@ -621,7 +624,7 @@ public sealed class ImportSalesInvoiceService
 				}
 				else if (hasNetAmountColumn)
 				{
-					if (!useStarwideHeaderMapping && !useVarleyHeaderMapping)
+					if (!useStarwideHeaderMapping && !useVarleyHeaderMapping && !useFDRHeaderMapping)
 					{
 						if (netAmountCell is null || netAmountCell.IsEmpty())
 						{
@@ -837,7 +840,7 @@ public sealed class ImportSalesInvoiceService
 		return headers.Count > 0;
 	}
 
-	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, bool useStarwideHeaderMapping = false, bool useVarleyHeaderMapping = false)
+	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, bool useStarwideHeaderMapping = false, bool useVarleyHeaderMapping = false, bool useFDRHeaderMapping = false)
 	{
 		var headerRow = worksheet.Row(headerRowNumber);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -846,7 +849,55 @@ public sealed class ImportSalesInvoiceService
 		int? dozenQuantityHeaderColumn = null;
 		int? pieceQuantityHeaderColumn = null;
 
-		if (useStarwideHeaderMapping || useVarleyHeaderMapping)
+		// TODO: seperate each subd header mapping into its own method to avoid the large switch statement and make it easier to maintain and extend in the future.
+
+		if (useStarwideHeaderMapping)
+		{
+			headers.TryAdd("InvoiceCode", "lst_si");
+			headers.TryAdd("InvoiceDate", "lst_date");
+			headers.TryAdd("CustomerCode", "lst_cust1");
+			headers.TryAdd("CustomerName", "lst_cust2");
+			headers.TryAdd("NetAmount", "lst_net2");
+			headers.TryAdd("SkuCode", "lst_head1");
+			headers.TryAdd("SalesManName", "lst_agent2");
+			headers.TryAdd("CaseQuantity", "lst_qnty1");
+			headers.TryAdd("PieceQuantity", "lst_qnty2");
+			headers.TryAdd("AddressLine", "addr 1");
+			headers.TryAdd("CityMunicipality", "addrr2");
+			headers.TryAdd("Province", "1st_town");
+			headers.TryAdd("CustomerType", "lst_trade");
+			return headers;
+		} 
+		else if (useVarleyHeaderMapping)
+		{
+			headers.TryAdd("InvoiceCode", "so_number");
+			headers.TryAdd("InvoiceDate", "so_date");
+			headers.TryAdd("CustomerCode", "customer_code");
+			headers.TryAdd("CustomerName", "customer_name");
+			headers.TryAdd("NetAmount", "net_amount");
+			headers.TryAdd("SkuCode", "item_number");
+			headers.TryAdd("SalesManName", "salesman_name");
+				headers.TryAdd("CaseQuantity", "case_total");
+				headers.TryAdd("DozenQuantity", "dozen_total");
+				headers.TryAdd("PieceQuantity", "pieces_total");
+			return headers;
+		}
+		 else if (useFDRHeaderMapping)
+		{
+			headers.TryAdd("InvoiceCode", "reference");
+			headers.TryAdd("InvoiceDate", "date");
+			// headers.TryAdd("CustomerCode", "customer_code");
+			// headers.TryAdd("CustomerName", "customer_name");
+			headers.TryAdd("NetAmount", "netsales");
+			headers.TryAdd("SkuCode", "code");
+			headers.TryAdd("SalesManName", "salesrep");
+				headers.TryAdd("CaseQuantity", "case_total");
+				headers.TryAdd("DozenQuantity", "dozen_total");
+				headers.TryAdd("PieceQuantity", "pieces_total");
+			return headers;
+		}
+
+		if (useStarwideHeaderMapping || useVarleyHeaderMapping || useFDRHeaderMapping)
 		{
 			foreach (var cell in headerRow.CellsUsed())
 			{
@@ -1059,6 +1110,11 @@ public sealed class ImportSalesInvoiceService
 	{
 		return string.Equals(subDistributor.SubdCode?.Trim(), "01GMA08", StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(subDistributor.SubdName?.Trim(), "VARLEY CORP", StringComparison.OrdinalIgnoreCase);
+	}
+	private static bool IsFDRPremier(SubDistributor subDistributor)
+	{
+		return string.Equals(subDistributor.SubdCode?.Trim(), "04VIS06", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(subDistributor.SubdName?.Trim(), "FDR PREMIER TRADING", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static bool TryInferOrderTypeFromSplitQuantities(
