@@ -2,9 +2,12 @@
     background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
     margin-top: 17px;
     border-radius: 15px;
-    height: 235px;
-    padding: 0 20px;
+    height: 350px;
+    padding: 0 20px 12px;
     box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .table-title {
@@ -13,12 +16,80 @@
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: 26px;
     color: #3a2870;
+    flex-shrink: 0;
+    margin: 8px 0 6px;
+}
+
+/* Scrollable wrapper */
+.table-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: 10px;
+}
+
+    .table-scroll::-webkit-scrollbar {
+        width: 5px;
+    }
+
+    .table-scroll::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 99px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+        background: #9B85CC;
+        border-radius: 99px;
+    }
+
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 5px;
+    table-layout: fixed;
+}
+
+/* Column widths — Item gets most space, others balanced */
+.card th:nth-child(1), .card td:nth-child(1) {
+    width: 10%;
+    text-align: center;
+}
+/* Line Item Id */
+.card th:nth-child(2), .card td:nth-child(2) {
+    width: 13%;
+}
+/* SKU Code */
+.card th:nth-child(3), .card td:nth-child(3) {
+    width: 37%;
+}
+/* Item */
+.card th:nth-child(4), .card td:nth-child(4) {
+    width: 15%;
+    text-align: center;
+}
+/* Unit of Measure */
+.card th:nth-child(5), .card td:nth-child(5) {
+    width: 10%;
+    text-align: center;
+}
+/* Quantity */
+.card th:nth-child(6), .card td:nth-child(6) {
+    width: 15%;
+    text-align: right;
+}
+/* Line Amount */
+
+/* Sticky header */
+.card thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 
 .card th {
-    background: rgba(255, 255, 255, 0.6);
-    box-shadow: 2px 2px 6px rgba(154, 133, 204, 0.3);
-    padding: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(154, 133, 204, 0.4);
+    padding: 8px 10px;
     color: #3a2870;
     font-weight: 600;
 }
@@ -32,3 +103,45 @@
         border-top-right-radius: 10px;
         border-bottom-right-radius: 10px;
     }
+
+.card td {
+    padding: 9px 10px;
+    color: #3a2870;
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 2px 6px rgba(154, 133, 204, 0.15);
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    border-top: 1px solid rgba(255, 255, 255, 0.7);
+    border-bottom: 1px solid rgba(201, 184, 232, 0.25);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+    /* Rounded left & right edges per row */
+    .card td:first-child {
+        border-left: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 10px 0 0 10px;
+    }
+
+    .card td:last-child {
+        border-right: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 0 10px 10px 0;
+    }
+
+/* Hover — lifts the card row */
+.card tbody tr:hover td {
+    background: #C9B8E8;
+    box-shadow: 0 4px 14px rgba(154, 133, 204, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Total row pinned at bottom */
+.total-row {
+    text-align: right;
+    font-weight: bold;
+    font-size: 18px;
+    color: #3a2870;
+    padding-top: 6px;
+    flex-shrink: 0;
+}

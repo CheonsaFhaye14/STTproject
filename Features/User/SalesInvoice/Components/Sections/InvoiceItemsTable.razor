@@ -1,40 +1,40 @@
 @using STTproject.Shared.Helper
 
-
 <div class="card">
     <h4 class="table-title">INVOICE ITEMS</h4>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Line Item Id</th>
-                <th>SKU Code</th>
-                <th>Item</th>
-                <th>Unit of Measure</th>
-                <th>Quantity</th>
-                <th>Line Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Items)
-            {
+    <div class="table-scroll">
+        <table>
+            <thead>
                 <tr>
-                    <td>@item.LineItemId</td>
-                    <td>@item.ItemCode</td>
-                    <td>@item.ItemName</td>
-                    <td>@GetUomName(item)</td>
-                    <td>@item.Quantity</td>
-                    <td>@FormatHelper.FormatPrice(@item.Amount)</td>
+                    <th>Line Item Id</th>
+                    <th>SKU Code</th>
+                    <th>Item</th>
+                    <th>Unit of Measure</th>
+                    <th>Quantity</th>
+                    <th>Line Amount</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var item in Items)
+                {
+                    <tr>
+                        <td>@item.LineItemId</td>
+                        <td>@item.ItemCode</td>
+                        <td>@item.ItemName</td>
+                        <td>@GetUomName(item)</td>
+                        <td>@item.Quantity</td>
+                        <td>@FormatHelper.FormatPrice(@item.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
     @if (Items.Any())
     {
-        <div style="text-align: right; margin-top: 10px; font-weight: bold;">
+        <div class="total-row">
             Total Amount: @FormatHelper.FormatPrice(CalculateTotalLineAmount())
         </div>
     }
 </div>
-
