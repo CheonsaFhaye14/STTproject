@@ -1,5 +1,6 @@
+@using STTproject.Features.Admin.Customers.Validators
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
-@inject STTproject.Features.Shared.Services.ILocationService LocationService
+@inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
 
 <div class="modal-overlay">
     <div class="modal-box">
@@ -9,25 +10,25 @@
 
         <div class="modal-body">
             <div class="form-group">
-                <label>Subdistributor</label>
+                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span class="required-asterisk"> *</span></label>
                 @* Generic autocomplete for subdistributor name -> sets SubDistributorId *@
-                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto" @ref="subdAutocomplete"
                                      Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
                                      ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
                                      Placeholder="Search subdistributor..." />
             </div>
             <div class="form-group">
-                <label>Customer Code</label>
-                <input @bind="CustomerCode" />
+                <label>@CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk"> *</span></label>
+                <input @bind="CustomerCode" @ref="customerCodeInput" />
             </div>
             <div class="form-group">
-                <label>Customer Name</label>
-                <input @bind="CustomerName" />
+                <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk"> *</span></label>
+                <input @bind="CustomerName" @ref="customerNameInput" />
             </div>
             @* Customer Type: autocomplete with existing types + freeform input *@
             <div class="form-group">
-                <label>Customer Type</label>
-                <GenericAutocomplete TItem="string" Items="ExistingCustomerTypes" @bind-Value="CustomerType"
+                <label>@CustomerValidations.AddCustomer.customertype.Label<span class="required-asterisk"> *</span></label>
+                <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes" @bind-Value="CustomerType"
                                      ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
                                      Placeholder="Select or type customer type..." />
             </div>
@@ -39,34 +40,34 @@
                     Is Active
                 </label>
             </div>
-
+@* TODO fix address fields *@
             @* address fields add line*@
             <h4>Customer Address</h4>
             <div class="form-group">
                 <label>Province</label>
                 @* Generic autocomplete for provinces; selecting a province loads cities *@
-                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.ProvinceDto" Items="ProvincesDto"
+                <GenericAutocomplete TItem="string" @ref="provinceAutocomplete" Items="Provinces"
                                      @bind-Value="Province" ItemLabel="@(p => p?.Name ?? string.Empty)"
                                      OnSelected="OnProvinceDtoSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
             </div>
             <div class="form-group">
                 <label>City / Municipality</label>
                 @* Use GenericAutocomplete for cities (populated when Province changes) *@
-                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.CityDto" Items="CitiesDto"
+                <GenericAutocomplete TItem="string" @ref="cityAutocomplete" Items="CitiesMunicipalities"
                                      @bind-Value="City" ItemLabel="@(c => c?.Name ?? string.Empty)" OnSelected="OnCityDtoSelected"
                                      ShowAllOnOpen="true" Placeholder="Select or type city..." />
             </div>
             <div class="form-group">
                 <label>Address Line</label>
-                <input @bind="AddressLine" />
+                <input @bind="AddressLine" @ref="addressLineInput" />
             </div>
             <div class="form-group">
                 <label>Zip Code</label>
-                <input @bind="ZipCode" />
+                <input @bind="ZipCode" @ref="zipCodeInput" />
             </div>
 
             <div class="action-buttons">
-                <button @onclick="CreateCustomer">Create Customer</button>
+                <button @onclick="CreateCustomer" @ref="createCustomerButton">Create Customer</button>
                 <button @onclick="Cancel">Cancel</button>
             </div>
         </div>
@@ -76,6 +77,19 @@
 @code {
     [Parameter]
     public EventCallback OnCustomerCreated { get; set; }
+
+    [Parameter]
+    public EventCallback onCancel { get; set; }
+    private bool isEditing = false;
+    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
+    private GenericAutocomplete<string>? customerTypeAutocomplete;
+    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.ProvinceDto>? provinceAutocomplete;
+    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.CityDto>? cityAutocomplete;
+    private ElementReference customerCodeInput;
+    private ElementReference customerNameInput;
+    private ElementReference addressLineInput;
+    private ElementReference zipCodeInput;
+    private ElementReference createCustomerButton;
 
     private int SubDistributorId { get; set; }
     private string? SelectedSubDistributorName { get; set; }
@@ -94,24 +108,15 @@ List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
     private List<string> CustomerTypes { get; set; } = new() { "Retail", "Wholesale", "Distributor", "Other" };
     private List<string> Cities { get; set; } = new();
     private List<string> Provinces { get; set; } = new();
-    private List<STTproject.Features.Admin.Customers.DTOs.ProvinceDto> ProvincesDto { get; set; } = new
-List<STTproject.Features.Admin.Customers.DTOs.ProvinceDto>();
-    private List<STTproject.Features.Admin.Customers.DTOs.CityDto> CitiesDto { get; set; } = new
-List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
+
     private List<string> ExistingCustomerTypes { get; set; } = new List<string>();
 
     protected override async Task OnInitializedAsync()
     {
-        ProvincesDto = (await AdminCustomerService.GetProvincesAsync()).ToList();
+        Provinces = (await GeographicDataService.GetProvincesAsync()).ToList();
         SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
         ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
-        Cities = (await LocationService.GetCitiesAsync()).ToList();
-        CitiesDto = Cities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
-        try
-        {
-            Console.WriteLine($"[AddCustomer] OnInitialized: Provinces={Provinces?.Count()} ProvincesDto={ProvincesDto?.Count()} SubDistributors={SubDistributors?.Count()} ExistingTypes={ExistingCustomerTypes?.Count()}");
-        }
-        catch { }
+        CitiesMunicipalities = (await GeographicDataService.GetCitiesMunicipalities()).ToList();
     }
 
     private async Task ProvinceChanged()
@@ -119,14 +124,14 @@ List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
         var provinceCode = SelectedProvince?.Code;
         if (string.IsNullOrWhiteSpace(provinceCode))
         {
-            Cities = (await LocationService.GetCitiesAsync()).ToList();
-            CitiesDto = Cities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
+            CitiesMunicipalities = (await GeographicDataService.GetCitiesAsync()).ToList();
+            CitiesDto = CitiesMunicipalities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
             return;
         }
 
         try
         {
-            Cities = (await LocationService.GetCitiesForProvinceByCodeAsync(provinceCode)).ToList();
+            CitiesMunicipalities = (await GeographicDataService.GetCitiesForProvinceByCodeAsync(provinceCode)).ToList();
         }
         catch (Exception ex)
         {
@@ -207,7 +212,10 @@ List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
 
     private Task Cancel()
     {
-        // parent should control modal visibility; nothing to do here
+        if (onCancel.HasDelegate)
+        {
+            return onCancel.InvokeAsync();
+        }
         return Task.CompletedTask;
     }
 }

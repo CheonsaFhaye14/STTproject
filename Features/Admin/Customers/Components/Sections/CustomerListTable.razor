@@ -1,12 +1,22 @@
 @using STTproject.Features.Admin.Customers.DTOs
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>@loadingMessage</p>
+    </div>
+}
+
 <div class="card">
     <div class="filters">
         @* search filter for table include customer code, name, type and address *@
         <div class="filter-group">
             <label>Search:</label>
-            <input type="text" @bind="SearchTerm" placeholder="Search customers..." />
+            <input type="text" @bind:event="oninput" @bind="SearchTerm" placeholder="Search customers..." />
         </div>
         <div class="filter-group">
             <label>Subdistributor:</label>
@@ -22,7 +32,7 @@
             <label>Customer Type:</label>
             <select id="customerTypeFilter" @bind="SelectedCustomerType">
                 <option value="">All Types</option>
-                @foreach (var type in CustomerTypes)
+                @foreach (var type in FilteredCustomers.Select(c => c.CustomerType).Distinct())
                 {
                     <option value="@type">@type</option>
                 }
@@ -80,12 +90,14 @@
 
 @code {
     private List<CustomerListDto> Customers { get; set; } = new();
+    private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
     private string? SearchTerm { get; set; }
     private int? SelectedSubDistributorId { get; set; }
     private string? SelectedCustomerType { get; set; }
     private string? SelectedStatus { get; set; }
-    private List<(int Id, string Name)> SubDistributors { get; set; } = new();
-    private List<string> CustomerTypes { get; set; } = new() { "Retail", "Wholesale", "Distributor", "Other" };
+    
+    private bool isLoading = true;
+    private string loadingMessage = "";
 
     private IEnumerable<CustomerListDto> FilteredCustomers => Customers.Where(c =>
         (string.IsNullOrWhiteSpace(SearchTerm) || (c.CustomerName?.Contains(SearchTerm,
@@ -98,8 +110,31 @@ System.StringComparison.OrdinalIgnoreCase) == true))
 
     protected override async Task OnInitializedAsync()
     {
-        var list = await AdminCustomerService.GetAllAsync();
-        Customers = list.ToList();
+        try{
+            isLoading = true;
+            loadingMessage = "Loading Data...";
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+
+            var list = await AdminCustomerService.GetAllAsync();
+            Customers = list.ToList();
+
+            var subDistributors = await AdminCustomerService.GetSubDistributorsAsync();
+            SubDistributors = list.ToList().Select(c => (c.SubDistributorId, c.SubDistributorName)).Distinct().ToList();
+    
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error Loading Data: {ex.Message}");
+            loadingMessage = "Failed to load data.";
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = "";
+             await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void EditCustomer(int id)

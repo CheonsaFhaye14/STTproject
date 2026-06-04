@@ -1,5 +1,6 @@
 @using STTproject.Features.User.MapItem.DTOs
 
+@* Import Details Modal *@
 <div class="modal @(Show ? "show" : "")"
      style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
     <div class="modal-dialog modal-lg">
@@ -41,6 +42,7 @@
                     var selectedCount = groups.Count(g => g.Selected && !g.IsSaved && (g.Issues?.Count ?? 0) == 0 &&
                 g.Rows.All(r => r.Issues.Count == 0));
 
+                    @* Global Issues Error *@
                     if (globalIssues.Any())
                     {
                         <div class="alert alert-danger">
@@ -69,11 +71,12 @@
                                 </div>
                             }
 
+                            
                             @if (groupFilter == GroupFilter.ErrorOnly && hasErrorGroups)
                             {
                                 <div class="d-flex align-items-center">
                                     <label class="me-2">Errors: @GetTotalErrorCount()</label>
-<div class="form-group">
+                                        <div class="form-group">
                                     <select
                                             @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
                                         <option value="">All errors</option>
@@ -83,7 +86,7 @@
                                             <option value="@entry.Message">@display (@entry.Count)</option>
                                         }
                                     </select>
-</div>
+                                        </div>
                                     @if (!string.IsNullOrEmpty(selectedErrorFilter))
                                     {
                                         <button type="button" class="btn btn-link btn-sm ms-2 p-0" @onclick="ClearErrorFilter">Clear</button>

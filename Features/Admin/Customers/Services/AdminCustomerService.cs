@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.Customers.DTOs;
@@ -10,12 +7,12 @@ namespace STTproject.Features.Admin.Customers.Services
     public class AdminCustomerService : IAdminCustomerService
     {
         private readonly IDbContextFactory<SttprojectContext> _dbFactory;
-        private readonly STTproject.Features.Shared.Services.ILocationService _locationService;
+        private readonly STTproject.Features.Admin.Customers.Services.IGeographicDataService _geographicDataService;
 
-        public AdminCustomerService(IDbContextFactory<SttprojectContext> dbFactory, STTproject.Features.Shared.Services.ILocationService locationService)
+        public AdminCustomerService(IDbContextFactory<SttprojectContext> dbFactory, STTproject.Features.Admin.Customers.Services.IGeographicDataService geographicDataService)
         {
             _dbFactory = dbFactory;
-            _locationService = locationService;
+            _geographicDataService = geographicDataService;
         }
 
         public async Task<CustomerDetailDto?> CreateCustomerAsync(CustomerCreateDto dto)
@@ -95,13 +92,6 @@ namespace STTproject.Features.Admin.Customers.Services
             await db.SaveChangesAsync();
         }
 
-        public async Task<bool> CustomerCodeExistsAsync(string code, int subDistributorId, int? excludeCustomerId = null)
-        {
-            await using var db = _dbFactory.CreateDbContext();
-            var q = db.Customers.AsQueryable().Where(c => c.CustomerCode == code && c.SubDistributorId == subDistributorId);
-            if (excludeCustomerId.HasValue) q = q.Where(c => c.CustomerId != excludeCustomerId.Value);
-            return await q.AnyAsync();
-        }
 
         public async Task<IEnumerable<CustomerListDto>> GetAllAsync()
         {
@@ -132,7 +122,7 @@ namespace STTproject.Features.Admin.Customers.Services
             }
 
             return await q.OrderBy(s => s.SubdName)
-                .Select(s => new SubDistributorDto { SubDistributorId = s.SubDistributorId, SubDistributorName = s.SubdName })
+                .Select(s => new SubDistributorDto { SubDistributorId = s.SubDistributorId, SubDistributorName = s.SubdName ?? string.Empty })
                 .Take(200)
                 .ToListAsync();
         }

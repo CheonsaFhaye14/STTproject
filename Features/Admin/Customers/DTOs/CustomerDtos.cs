@@ -55,15 +55,10 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? SubDistributorName { get; set; }
     }
 
-    public class ProvinceDto
+    public class GeographicDataDto
     {
-        public string? Name { get; set; }
-        public string? Code { get; set; }
-    }
-
-    public class CityDto
-    {
-        public string? Name { get; set; }
-
+        public string? Province { get; set; }
+        public string? CityMunicipality { get; set; }
+        public int ZipCode { get; set; }
     }
 }
