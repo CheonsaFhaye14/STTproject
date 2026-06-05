@@ -2,6 +2,9 @@ using STTproject.Data;
 
 namespace STTproject.Features.User.SalesInvoice.Services
 {
+	//TODO: Error for wrong header names is showing
+	// Error: Failed to open/import Excel file: References from other files are not yet implemented.. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.
+	// should show error for missing required headers instead of this error
     public class SubdTemplateHeaders
     {
         public static IReadOnlyDictionary<string, string[]> GetTemplateAliases(SubDistributor subDistributor)
@@ -17,7 +20,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["InvoiceDate"] = new[] { "lst_date" };
 				map["CustomerCode"] = new[] { "lst_cust1" };
 				map["CustomerName"] = new[] { "lst_cust2" };
-				map["NetAmount"] = new[] { "lst_net2" };
+				map["NetAmount"] = new[] { "lst_net2" }; 
 				map["SkuCode"] = new[] { "lst_head1" };
 				map["SalesManName"] = new[] { "lst_agent2" };
 				map["CaseQuantity"] = new[] { "lst_qnty1" };

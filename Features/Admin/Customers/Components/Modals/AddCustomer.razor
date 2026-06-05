@@ -46,15 +46,15 @@
             <div class="form-group">
                 <label>Province</label>
                 @* Generic autocomplete for provinces; selecting a province loads cities *@
-                <GenericAutocomplete TItem="string" @ref="provinceAutocomplete" Items="Provinces"
-                                     @bind-Value="Province" ItemLabel="@(p => p?.Name ?? string.Empty)"
-                                     OnSelected="OnProvinceDtoSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
+                <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string"
+                                     @bind-Value="Province" ItemLabel="@(p => p ?? string.Empty)" 
+                                     OnSelected="OnProvinceSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
             </div>
             <div class="form-group">
                 <label>City / Municipality</label>
                 @* Use GenericAutocomplete for cities (populated when Province changes) *@
-                <GenericAutocomplete TItem="string" @ref="cityAutocomplete" Items="CitiesMunicipalities"
-                                     @bind-Value="City" ItemLabel="@(c => c?.Name ?? string.Empty)" OnSelected="OnCityDtoSelected"
+                <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
+                                     @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
                                      ShowAllOnOpen="true" Placeholder="Select or type city..." />
             </div>
             <div class="form-group">
@@ -80,11 +80,8 @@
 
     [Parameter]
     public EventCallback onCancel { get; set; }
-    private bool isEditing = false;
     private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
     private GenericAutocomplete<string>? customerTypeAutocomplete;
-    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.ProvinceDto>? provinceAutocomplete;
-    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.CityDto>? cityAutocomplete;
     private ElementReference customerCodeInput;
     private ElementReference customerNameInput;
     private ElementReference addressLineInput;
@@ -102,74 +99,72 @@ List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
     private string? AddressLine { get; set; }
     private string? City { get; set; }
     private string? Province { get; set; }
-    private STTproject.Features.Admin.Customers.DTOs.ProvinceDto? SelectedProvince { get; set; }
-    private STTproject.Features.Admin.Customers.DTOs.CityDto? SelectedCity { get; set; }
+    private STTproject.Features.Admin.Customers.DTOs.GeographicDataDto? Address { get; set; }
     private int? ZipCode { get; set; }
-    private List<string> CustomerTypes { get; set; } = new() { "Retail", "Wholesale", "Distributor", "Other" };
-    private List<string> Cities { get; set; } = new();
-    private List<string> Provinces { get; set; } = new();
+    private List<string?> CitiesMunicipalities { get; set; } = new();
+    private List<string?> Provinces { get; set; } = new();
 
     private List<string> ExistingCustomerTypes { get; set; } = new List<string>();
+    
+    private GenericAutocomplete<string>? ProvinceAutocomplete;
+    private GenericAutocomplete<string>? CityAutocomplete;
 
     protected override async Task OnInitializedAsync()
     {
-        Provinces = (await GeographicDataService.GetProvincesAsync()).ToList();
         SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
         ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
-        CitiesMunicipalities = (await GeographicDataService.GetCitiesMunicipalities()).ToList();
+        
+        Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
+        CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
     }
 
     private async Task ProvinceChanged()
     {
-        var provinceCode = SelectedProvince?.Code;
-        if (string.IsNullOrWhiteSpace(provinceCode))
+        if (string.IsNullOrWhiteSpace(Province))
         {
-            CitiesMunicipalities = (await GeographicDataService.GetCitiesAsync()).ToList();
-            CitiesDto = CitiesMunicipalities.Select(city => new STTproject.Features.Admin.Customers.DTOs.CityDto { Name = city }).ToList();
+            CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
             return;
         }
 
         try
         {
-            CitiesMunicipalities = (await GeographicDataService.GetCitiesForProvinceByCodeAsync(provinceCode)).ToList();
+            CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[AddCustomer] LocationService.GetCitiesForProvinceByCodeAsync error: {ex.Message}");
-            Cities = new List<string>();
+            CitiesMunicipalities = new List<string?>();
         }
 
-        try
-        {
-            CitiesDto = (await AdminCustomerService.GetCitiesForProvinceAsync(provinceCode)).ToList();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[AddCustomer] AdminCustomerService.GetCitiesForProvinceAsync error: {ex.Message}");
-            CitiesDto = new List<STTproject.Features.Admin.Customers.DTOs.CityDto>();
-        }
-        City = Cities.FirstOrDefault();
+        City = CitiesMunicipalities.FirstOrDefault();
         await InvokeAsync(StateHasChanged);
     }
 
-    private Task OnCitySelected(string? selected)
+    private async Task OnCitySelected(string? selected)
     {
         City = selected;
-        return Task.CompletedTask;
+        await UpdateZipCode();
     }
 
-    private Task OnProvinceDtoSelected(STTproject.Features.Admin.Customers.DTOs.ProvinceDto? pd)
+    private async Task UpdateZipCode()
     {
-        SelectedProvince = pd;
-        Province = pd?.Name;
-        return ProvinceChanged();
-    }
-
-    private Task OnCityDtoSelected(STTproject.Features.Admin.Customers.DTOs.CityDto? cd)
-    {
-        SelectedCity = cd;
-        City = cd?.Name;
-        return Task.CompletedTask;
+        if (!string.IsNullOrWhiteSpace(Province) && !string.IsNullOrWhiteSpace(City))
+        {
+            try
+            {
+                ZipCode = await GeographicDataService.GetZipCodeAsync(Province, City);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AddCustomer] GeographicDataService.GetZipCodeAsync error: {ex.Message}");
+                ZipCode = null;
+            }
+        }
+        else
+        {
+            ZipCode = null;
+        }
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task OnProvinceSelected(string? selected)

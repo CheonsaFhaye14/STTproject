@@ -126,19 +126,6 @@ namespace STTproject.Features.Admin.Customers.Services
                 .Take(200)
                 .ToListAsync();
         }
-
-        public async Task<IEnumerable<ProvinceDto>> GetProvincesAsync()
-        {
-            var provs = await _locationService.GetProvinceInfosAsync();
-            return provs.Select(p => new ProvinceDto { Name = p.Name, Code = p.Code }).ToList();
-        }
-
-        public async Task<IEnumerable<CityDto>> GetCitiesForProvinceAsync(string provinceCode)
-        {
-            var cities = await _locationService.GetCitiesForProvinceByCodeAsync(provinceCode);
-            return cities.Select(c => new CityDto { Name = c }).ToList();
-        }
-
         public async Task<IEnumerable<string>> GetCustomerTypesAsync()
         {
             await using var db = _dbFactory.CreateDbContext();

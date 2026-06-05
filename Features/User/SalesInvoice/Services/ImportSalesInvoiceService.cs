@@ -470,10 +470,25 @@ public sealed class ImportSalesInvoiceService
 			var rowHasErrors = false;
 			string normalizedOrderType = string.Empty;
 
+		
 		// Infer OrderType from amount or explicit field
 		if (!string.IsNullOrWhiteSpace(orderType) && TryParseOrderType(orderType, out var parsedOrderType))
 		{
 			normalizedOrderType = parsedOrderType;
+		}
+		else if (hasNetAmountColumn && netAmountCell != null && TryGetDecimal(netAmountCell, out var netAmountValue))
+		{
+			var inferredOrderType = netAmountValue < 0 ? "Credit" : "Invoice";
+			if (!string.IsNullOrWhiteSpace(normalizedOrderType) && !string.Equals(normalizedOrderType, inferredOrderType, StringComparison.OrdinalIgnoreCase))
+			{
+				var msg = $"Inconsistent order type: '{normalizedOrderType}' does not match the sign of the Net Amount.";
+				result.AddError(rowNumber, invoiceCode, msg, "OrderType");
+				rowHasErrors = true;
+			}
+			else
+			{
+				normalizedOrderType = inferredOrderType;
+			}
 		}
 
 		// Skip completely empty rows
