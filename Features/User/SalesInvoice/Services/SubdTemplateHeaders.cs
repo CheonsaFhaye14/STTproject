@@ -2,9 +2,6 @@ using STTproject.Data;
 
 namespace STTproject.Features.User.SalesInvoice.Services
 {
-	//TODO: Error for wrong header names is showing
-	// Error: Failed to open/import Excel file: References from other files are not yet implemented.. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.
-	// should show error for missing required headers instead of this error
     public class SubdTemplateHeaders
     {
         public static IReadOnlyDictionary<string, string[]> GetTemplateAliases(SubDistributor subDistributor)
@@ -27,7 +24,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["PieceQuantity"] = new[] { "lst_qnty2" };
 				map["AddressLine"] = new[] { "lst_addr" };
 				map["Province"] = new[] { "1st_town" };
-				map["CustomerType"] = new[] { "lst_trade" };
+				map["CustomerType"] = new[] { "lst_trade" };   
 				return map;
 			}
 
@@ -48,18 +45,20 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["PieceQuantity"] = new[] { "pieces_total" };
 				return map;
             }
-			if (IsRiteBeacon(subDistributor))
+			if (IsRiteBeacon(subDistributor)) //TODO: Fix Loading only file have 2 sheets 1st is not invoices, 2nd is good but not on 1st row
 			{
-				map["InvoiceCode"] = new[] { "so_number" };
-				map["InvoiceDate"] = new[] { "so_date" };
-				map["CustomerName"] = new[] { "customer_name" };
-				map["SkuCode"] = new[] { "item_number" };
-				map["SalesManName"] = new[] { "salesman_name" };
-				map["Quantity"] = new[] { "qty_received" };
-				map["CaseQuantity"] = new[] { "case_total" };
-				map["DozenQuantity"] = new[] { "dozen_total" };
-				map["PieceQuantity"] = new[] { "pieces_total" };
-				return map;
+				map["InvoiceCode"] = new[] { "ref.no." };
+				map["InvoiceDate"] = new[] { "date" };
+				map["CustomerCode"] = new[] { "cust./supp." };
+				map["CustomerName"] = new[] { "name" };
+                map["Province"] = new[] { "address 3" };
+                map["CityMunicipality"] = new[] { "address 2" };
+                map["AddressLine"] = new[] { "address 1" };
+                map["SkuCode"] = new[] { "item no." };
+				map["SalesManName"] = new[] { "agent name" };
+				map["Quantity"] = new[] { "qty" }; //always piece
+                map["NetAmount"] = new[] { "net" };
+                return map;
 			}
 			if (IsMegaPanay(subDistributor))
 			{
