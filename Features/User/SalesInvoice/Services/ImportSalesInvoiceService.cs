@@ -164,6 +164,9 @@ public sealed class ImportSalesInvoiceService
 			customerByCode,
 			customerByName,
 			subdItemByCode,
+			uomLookup,
+			customers,
+			subdItems,
 			headerRowNumber);
 		if (parsedRows.Count == 0)
 		{
@@ -447,13 +450,16 @@ public sealed class ImportSalesInvoiceService
 	}
 
 	private static List<ImportedInvoiceRow> ReadRows(
-			IXLWorksheet worksheet,
-			IReadOnlyDictionary<string, int> headers,
-			ImportSalesInvoiceResult result,
-			IReadOnlyDictionary<string, STTproject.Data.Customer> customerByCode,
-			IReadOnlyDictionary<string, STTproject.Data.Customer> customerByName,
-			IReadOnlyDictionary<string, SubdItem> subdItemByCode,
-			int headerRowNumber)
+		IXLWorksheet worksheet,
+		IReadOnlyDictionary<string, int> headers,
+		ImportSalesInvoiceResult result,
+		IReadOnlyDictionary<string, Data.Customer> customerByCode,
+		IReadOnlyDictionary<string, Data.Customer> customerByName,
+		IReadOnlyDictionary<string, SubdItem> subdItemByCode,
+		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		IEnumerable<Data.Customer> allCustomers,
+		IEnumerable<SubdItem> allSubdItems,
+		int headerRowNumber)
 	{
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -485,7 +491,7 @@ public sealed class ImportSalesInvoiceService
 
 
 			// Infer OrderType from amount or explicit field
-			if (!string.IsNullOrWhiteSpace(orderType) && TryParseOrderType(orderType, out var parsedOrderType))
+			if (!string.IsNullOrWhiteSpace(orderType) && InvoiceDataValidator.TryParseOrderType(orderType, out var parsedOrderType))
 			{
 				normalizedOrderType = parsedOrderType;
 			}
