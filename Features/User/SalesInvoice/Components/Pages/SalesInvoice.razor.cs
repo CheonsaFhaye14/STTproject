@@ -23,7 +23,7 @@ public partial class SalesInvoice
     private string editItemsConfirmMessage = "";
     private bool showImportConfirmModal = false;
     private bool showImportResultsModal = false;
-    private ImportSalesInvoiceResult? lastImportResult;
+    private DTOs.ImportSalesInvoiceResult? lastImportResult;
     private AddInvoiceItems? addItemsModalRef;
     private EditInvoiceItems? editItemsModalRef;
     private IJSObjectReference? jsModule;
@@ -121,10 +121,10 @@ public partial class SalesInvoice
 
         try
         {
-            loadingMessage = "Importing Excel file...";            
+            loadingMessage = "Importing Excel file...";
             isLoading = true;
-                await InvokeAsync(StateHasChanged);
-                await Task.Yield();
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
 
             var fileName = file.Name ?? string.Empty;
             if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
@@ -157,11 +157,11 @@ public partial class SalesInvoice
             showErrorModal = true;
         }
         finally
-            {
-                isLoading = false;
-                loadingMessage = "";
-                 await InvokeAsync(StateHasChanged);
-            }
+        {
+            isLoading = false;
+            loadingMessage = "";
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void CloseImportResultsModal()
@@ -180,45 +180,45 @@ public partial class SalesInvoice
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
-       if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
-        {
-            errorMessage = "No prepared invoices to commit.";
-            showErrorModal = true;
-            return;
-        }
-
-        var toCommit = lastImportResult.PreparedInvoices
-            .Where(p => p.Selected && (p.Issues == null || p.Issues.Count == 0))
-            .ToList();
-        if (toCommit.Count == 0)
-        {
-            errorMessage = "No valid invoices selected for commit.";
-            showErrorModal = true;
-            return;
-        }
-
-        var commitResult = await importSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, userContext.UserId ?? 0);
-
-        // merge commit errors and saved flags back into lastImportResult
-        foreach (var prepared in toCommit)
-        {
-            var existing = lastImportResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
-            if (existing != null)
+            if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
             {
-                existing.IsSaved = prepared.IsSaved;
-                existing.SaveErrorMessage = prepared.SaveErrorMessage;
-                existing.Selected = !existing.IsSaved; // unselect saved
+                errorMessage = "No prepared invoices to commit.";
+                showErrorModal = true;
+                return;
             }
-        }
 
-        // surface commit issues
-        if (commitResult.HasIssues)
-        {
-            foreach (var issue in commitResult.Issues)
+            var toCommit = lastImportResult.PreparedInvoices
+                .Where(p => p.Selected && (p.Issues == null || p.Issues.Count == 0))
+                .ToList();
+            if (toCommit.Count == 0)
             {
-                lastImportResult.Issues.Add(issue);
+                errorMessage = "No valid invoices selected for commit.";
+                showErrorModal = true;
+                return;
             }
-        }
+
+            var commitResult = await importSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, userContext.UserId ?? 0);
+
+            // merge commit errors and saved flags back into lastImportResult
+            foreach (var prepared in toCommit)
+            {
+                var existing = lastImportResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
+                if (existing != null)
+                {
+                    existing.IsSaved = prepared.IsSaved;
+                    existing.SaveErrorMessage = prepared.SaveErrorMessage;
+                    existing.Selected = !existing.IsSaved; // unselect saved
+                }
+            }
+
+            // surface commit issues
+            if (commitResult.HasIssues)
+            {
+                foreach (var issue in commitResult.Issues)
+                {
+                    lastImportResult.Issues.Add(issue);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -984,7 +984,7 @@ public partial class SalesInvoice
             isLoading = false;
             loadingMessage = "";
 
-             await InvokeAsync(StateHasChanged);
+            await InvokeAsync(StateHasChanged);
         }
     }
 
