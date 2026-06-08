@@ -58,6 +58,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["SalesManName"] = new[] { "agent name" };
 				map["Quantity"] = new[] { "qty" };
 				map["NetAmount"] = new[] { "net" };
+				map["UnitOfMeasure"] = new[] { "uom" };
 				return map;
 			}
 			if (IsMegaPanay(subDistributor))
@@ -75,7 +76,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
 			{
 				map["InvoiceCode"] = new[] { "reference" };
 				map["InvoiceDate"] = new[] { "date" };
-				map["Address"] = new[] { "address" };
 				map["CustomerName"] = new[] { "customer" };
 				map["NetAmount"] = new[] { "netsales" };
 				map["SkuCode"] = new[] { "code" };
@@ -296,6 +296,38 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				["SkuCode"] = new[]
 				{
 					"skucode","sku code","itemcode","item code","item_number","code"
+				},
+				["UnitOfMeasure"] = new[]
+				{
+					"uom","unitofmeasure","unit of measure","um","u/m","unit"
+				},
+				["Quantity"] = new[]
+				{
+					"quantity","qty","qnty","qty pcs","qty piece","um_qty"
+				},
+				["CaseQuantity"] = new[]
+				{
+					"casequantity","case quantity","case_total","case"
+				},
+				["InBoxQuantity"] = new[]
+				{
+					"inboxquantity","inbox quantity","qtyib"
+				},
+				["DozenQuantity"] = new[]
+				{
+					"dozenquantity","dozen quantity","dozen_total","dozen"
+				},
+				["PieceQuantity"] = new[]
+				{
+					"piecequantity","piece quantity","pieces_total","pieces","pcs","piece"
+				},
+				["OrderType"] = new[]
+				{
+					"ordertype","order type","trxtype","trx type","type"
+				},
+				["SkuName"] = new[]
+				{
+					"skuname", "sku name", "itemname", "item name", "product", "item description", "item name (spec)"
 				}
 			};
 

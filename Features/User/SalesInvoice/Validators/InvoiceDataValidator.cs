@@ -38,7 +38,7 @@ public sealed class InvoiceDataValidator
             headers.ContainsKey("InBoxQuantity");
 
         var hasSimpleQuantity = headers.ContainsKey("Quantity");
-        var hasUom = headers.ContainsKey("UOM");
+        var hasUom = headers.ContainsKey("UnitOfMeasure");
 
         if (!hasSplitQuantities && !hasSimpleQuantity)
         {
@@ -241,6 +241,11 @@ public sealed class InvoiceDataValidator
             string.Equals(orderType, "Order", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "CS", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "INV", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "2I", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "2R", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "ML2I", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "VS2", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "VS1", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "Sales", StringComparison.OrdinalIgnoreCase))
         {
             normalizedOrderType = "Invoice";
@@ -250,6 +255,7 @@ public sealed class InvoiceDataValidator
         // Credit aliases: Credit, Returns, CN
         if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "Returns", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "BRG", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "CN", StringComparison.OrdinalIgnoreCase))
         {
             normalizedOrderType = "Credit";
@@ -259,8 +265,6 @@ public sealed class InvoiceDataValidator
         normalizedOrderType = string.Empty;
         return false;
     }
-
-    // Net-amount inference is handled directly in ResolveOrderType; no separate helper required.
 
     public static bool TryResolveItem(
     string? skuCode,
@@ -310,7 +314,7 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
-    private static bool IsMissingUomValue(string? value)
+    public static bool IsMissingUomValue(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return true;
@@ -318,8 +322,6 @@ public sealed class InvoiceDataValidator
         var trimmed = value.Trim();
         return trimmed == "-" || trimmed == "–" || trimmed.Equals("n/a", StringComparison.OrdinalIgnoreCase);
     }
-
-    // Single ResolveUom implementation handles both explicit UOM and inference from split quantities.
 
     public static bool ResolveUom(
         string? unitOfMeasure,
@@ -491,7 +493,7 @@ public sealed class InvoiceDataValidator
 
         return string.Empty;
     }
-
+    
     public static IEnumerable<string> GetUomSynonyms(string value)
     {
         var normalized = Normalize(value);
