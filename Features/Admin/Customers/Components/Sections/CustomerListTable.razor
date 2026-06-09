@@ -1,23 +1,13 @@
 @using STTproject.Features.Admin.Customers.DTOs
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>@loadingMessage</p>
-    </div>
-}
-
 <div class="clt-page">
 
     <!-- Page header -->
     <div class="clt-page-header">
         <div>
             <h1 class="clt-page-title">Customers</h1>
-            <p class="clt-page-sub">@FilteredCustomers.Count() of @Customers.Count total customers</p>
+            <p class="clt-page-sub">@totalCount total customers</p>
         </div>
         <button class="clt-add-btn">
             <span class="clt-add-icon">+</span> Add customer
@@ -32,15 +22,15 @@
             <div class="clt-sidebar-stats">
                 <div class="clt-stat">
                     <span class="clt-stat-label">Total</span>
-                    <span class="clt-stat-value">@Customers.Count</span>
+                    <span class="clt-stat-value">@totalCount</span>
                 </div>
                 <div class="clt-stat">
                     <span class="clt-stat-label">Active</span>
-                    <span class="clt-stat-value clt-stat-active">@Customers.Count(c => c.IsActive)</span>
+                    <span class="clt-stat-value clt-stat-active">@activeCount</span>
                 </div>
                 <div class="clt-stat">
                     <span class="clt-stat-label">Inactive</span>
-                    <span class="clt-stat-value clt-stat-inactive">@Customers.Count(c => !c.IsActive)</span>
+                    <span class="clt-stat-value clt-stat-inactive">@inactiveCount</span>
                 </div>
             </div>
 
@@ -63,19 +53,16 @@
                 <label class="clt-filter-label">Status</label>
                 <div class="clt-radio-group">
                     <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
-                        <input type="radio" name="status" value="" @onchange='() => SelectedStatus = ""' checked="@(SelectedStatus == "")" />
+                        <input type="radio" name="status" value="" @onchange="() => OnFilterChanged(status: string.Empty)" checked="@(SelectedStatus == "")" />
                         <span>All</span>
-                        <span class="clt-radio-count">@Customers.Count</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
-                        <input type="radio" name="status" value="active" @onchange='() => SelectedStatus = "active"' checked="@(SelectedStatus == "active")" />
+                        <input type="radio" name="status" value="active" @onchange='() => OnFilterChanged(status: "active")' checked="@(SelectedStatus == "active")" />
                         <span>Active</span>
-                        <span class="clt-radio-count">@Customers.Count(c => c.IsActive)</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
-                        <input type="radio" name="status" value="inactive" @onchange='() => SelectedStatus = "inactive"' checked="@(SelectedStatus == "inactive")" />
+                        <input type="radio" name="status" value="inactive" @onchange='() => OnFilterChanged(status: "inactive")' checked="@(SelectedStatus == "inactive")" />
                         <span>Inactive</span>
-                        <span class="clt-radio-count">@Customers.Count(c => !c.IsActive)</span>
                     </label>
                 </div>
             </div>
@@ -83,11 +70,11 @@
             <!-- Customer type filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="typeFilter">Customer type</label>
-                <select id="typeFilter" class="clt-select" @bind="SelectedCustomerType">
+                <select id="typeFilter" class="clt-select" @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
                     <option value="">All types</option>
                     @foreach (var type in AllCustomerTypes)
                     {
-                        <option value="@type">@type</option>
+                        <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
                     }
                 </select>
             </div>
@@ -95,11 +82,11 @@
             <!-- Subdistributor filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
-                <select id="subdistFilter" class="clt-select" @bind="SelectedSubDistributorIdStr">
+                <select id="subdistFilter" class="clt-select" @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
                     <option value="">All subdistributors</option>
                     @foreach (var sd in SubDistributors)
                     {
-                        <option value="@sd.Id">@(sd.Name ?? "—")</option>
+                        <option value="@sd.Id" selected="@(SelectedSubDistributorId?.ToString() == sd.Id.ToString())">@(sd.Name ?? "—")</option>
                     }
                 </select>
             </div>
@@ -128,15 +115,21 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @if (!FilteredCustomers.Any())
+                            @if (isLoading)
                             {
                                 <tr>
                                     <td colspan="7" class="clt-empty">
                                         <div class="clt-empty-inner">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                                <circle cx="11" cy="11" r="8" />
-                                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                                            </svg>
+                                            <p>Loading…</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!PagedCustomers.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
                                             <p>No customers match your filters</p>
                                             <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
                                         </div>
@@ -145,7 +138,7 @@
                             }
                             else
                             {
-                                @foreach (var customer in FilteredCustomers)
+                                @foreach (var customer in PagedCustomers)
                                 {
                                     <tr class="@(!customer.IsActive ? "clt-row-inactive" : "")">
                                         <td><span class="clt-code">@customer.CustomerCode</span></td>
@@ -165,20 +158,14 @@
                                         </td>
                                         <td>
                                             <div class="clt-actions">
-                                                <button class="clt-btn-edit" @onclick="() => EditCustomer(customer.CustomerId)">
-                                                    Edit
-                                                </button>
+                                                <button class="clt-btn-edit" @onclick="() => EditCustomer(customer.CustomerId)">Edit</button>
                                                 @if (customer.IsActive)
                                                 {
-                                                    <button class="clt-btn-toggle clt-btn-deactivate" @onclick="() => SetActive(customer.CustomerId, false)">
-                                                        Deactivate
-                                                    </button>
+                                                    <button class="clt-btn-toggle clt-btn-deactivate" @onclick="() => SetActive(customer.CustomerId, false)">Deactivate</button>
                                                 }
                                                 else
                                                 {
-                                                    <button class="clt-btn-toggle clt-btn-activate" @onclick="() => SetActive(customer.CustomerId, true)">
-                                                        Activate
-                                                    </button>
+                                                    <button class="clt-btn-toggle clt-btn-activate" @onclick="() => SetActive(customer.CustomerId, true)">Activate</button>
                                                 }
                                             </div>
                                         </td>
@@ -192,8 +179,16 @@
 
             <div class="clt-footer">
                 <span class="clt-footer-count">
-                    Showing @FilteredCustomers.Count() result@(FilteredCustomers.Count() == 1 ? "" : "s")
+                    Showing @PagedCustomers.Count of @totalCount customers
                 </span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(currentPage == 1)" @onclick="() => GoToPage(currentPage - 1)">←</button>
+                        <span>Page @currentPage of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)" @onclick="() => GoToPage(currentPage + 1)">→</button>
+                    </div>
+                }
             </div>
         </main>
 
@@ -201,91 +196,139 @@
 </div>
 
 @code {
-    private List<CustomerListDto> Customers { get; set; } = new();
+    [Parameter] public EventCallback OnLoaded { get; set; }
+
+    private List<CustomerListDto> PagedCustomers { get; set; } = new();
     private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
-    private string SearchTerm { get; set; } = "";
+    private List<string> AllCustomerTypes { get; set; } = new();
+
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(async _ =>
+            {
+                currentPage = 1;
+                await InvokeAsync(LoadPageAsync);  // ← add InvokeAsync here
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+
     private string SelectedCustomerType { get; set; } = "";
     private string SelectedStatus { get; set; } = "";
-
-    // String-backed property for <select> two-way binding on nullable int
-    private string SelectedSubDistributorIdStr
-    {
-        get => SelectedSubDistributorId?.ToString() ?? "";
-        set => SelectedSubDistributorId = int.TryParse(value, out var id) ? id : null;
-    }
     private int? SelectedSubDistributorId { get; set; }
 
-    private bool isLoading = true;
-    private string loadingMessage = "";
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount = 0;
+    private int activeCount = 0;
+    private int inactiveCount = 0;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
 
-    private IEnumerable<string> AllCustomerTypes =>
-        Customers.Select(c => c.CustomerType ?? "").Where(t => t != "").Distinct().OrderBy(t => t);
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
 
     private bool HasActiveFilters =>
-        !string.IsNullOrWhiteSpace(SearchTerm) ||
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
         SelectedSubDistributorId.HasValue ||
         !string.IsNullOrWhiteSpace(SelectedCustomerType) ||
         !string.IsNullOrWhiteSpace(SelectedStatus);
-
-    private IEnumerable<CustomerListDto> FilteredCustomers => Customers.Where(c =>
-        (string.IsNullOrWhiteSpace(SearchTerm) ||
-            (c.CustomerName?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
-            (c.CustomerCode?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) == true))
-        && (!SelectedSubDistributorId.HasValue || c.SubDistributorId == SelectedSubDistributorId.Value)
-        && (string.IsNullOrWhiteSpace(SelectedCustomerType) || c.CustomerType == SelectedCustomerType)
-        && (string.IsNullOrWhiteSpace(SelectedStatus) ||
-            (SelectedStatus == "active" ? c.IsActive : !c.IsActive))
-    );
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            isLoading = true;
-            loadingMessage = "Loading customers…";
-            await InvokeAsync(StateHasChanged);
-            await Task.Yield();
-
-            var list = await AdminCustomerService.GetAllAsync();
-            Customers = list.ToList();
-
-            await AdminCustomerService.GetSubDistributorsAsync();
-            SubDistributors = Customers
-                .Select(c => (c.SubDistributorId, c.SubDistributorName))
-                .Distinct()
-                .OrderBy(sd => sd.SubDistributorName)
+            SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync())
+                .Select(sd => (sd.SubDistributorId, (string?)sd.SubDistributorName))
                 .ToList();
+
+            AllCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
+
+            await LoadPageAsync();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading customers: {ex.Message}");
-            loadingMessage = "Failed to load data.";
-        }
-        finally
-        {
             isLoading = false;
-            loadingMessage = "";
             await InvokeAsync(StateHasChanged);
         }
     }
 
-    private void ClearFilters()
+    private async Task LoadPageAsync()
     {
-        SearchTerm = "";
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var (items, total) = await AdminCustomerService.GetPagedAsync(
+                currentPage, pageSize, _searchTerm, SelectedStatus,
+                SelectedCustomerType, SelectedSubDistributorId);
+
+            PagedCustomers = items.ToList();
+            totalCount = total;
+
+            // Get active/inactive counts (only on first load or filter change)
+            var (_, activeTotal) = await AdminCustomerService.GetPagedAsync(
+                1, 1, _searchTerm, "active", SelectedCustomerType, SelectedSubDistributorId);
+            var (_, inactiveTotal) = await AdminCustomerService.GetPagedAsync(
+                1, 1, _searchTerm, "inactive", SelectedCustomerType, SelectedSubDistributorId);
+            activeCount = activeTotal;
+            inactiveCount = inactiveTotal;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading page: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnLoaded.HasDelegate)
+                await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnFilterChanged(string? status = null, string? customerType = null, string? subdId = null)
+    {
+        if (status != null) SelectedStatus = status;
+        if (customerType != null) SelectedCustomerType = customerType;
+        if (subdId != null)
+            SelectedSubDistributorId = int.TryParse(subdId, out var id) && id > 0 ? id : null;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = "";
         SelectedSubDistributorId = null;
         SelectedCustomerType = "";
         SelectedStatus = "";
+        currentPage = 1;
+        await LoadPageAsync();
     }
 
     private void EditCustomer(int id)
     {
-        // TODO: open edit modal and populate fields
+        // TODO: open edit modal
     }
 
     private async Task SetActive(int id, bool isActive)
     {
         await AdminCustomerService.ToggleCustomerStatusAsync(id, isActive);
-        var customer = Customers.FirstOrDefault(x => x.CustomerId == id);
+        var customer = PagedCustomers.FirstOrDefault(x => x.CustomerId == id);
         if (customer != null) customer.IsActive = isActive;
         StateHasChanged();
     }

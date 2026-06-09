@@ -4,41 +4,46 @@
 @using STTproject.Features.Admin.Customers.Components.Sections
 @using STTproject.Shared.Components
 
-<div class="row">
-    <h4>Customers</h4>
-    <button class="btn-primary" @onclick="OpenAddCustomerModal">ADD</button>
-</div>
-
-<CustomerListTable />
-
-<ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
-              Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" />
-
-@if (showAddModal)
+@if (isLoading)
 {
-    <AddCustomer OnCustomerCreated="OnCustomerCreated" onCancel="CancelAddCustomer"/>
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading customers…</p>
+    </div>
 }
 
+<div style="@(isLoading ? "display:none;" : "")">
+
+    <CustomerListTable OnLoaded="OnTableLoaded" />
+
+    <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
+                  Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" />
+
+    @if (showAddModal)
+    {
+        <AddCustomer OnCustomerCreated="OnCustomerCreated" onCancel="CancelAddCustomer"/>
+    }
+</div>
 
 @code {
     private ConfirmModal? confirmAddModal;
     private bool showConfirmAddModal;
     private bool showAddModal;
+    private bool isLoading = true;
 
-    private void OpenAddCustomerModal()
+    private async Task OnTableLoaded()
     {
-        showAddModal = true;
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private Task ConfirmAddCustomer()
-    {
-        // TODO: perform create action after confirmation
-        return Task.CompletedTask;
-    }
+    private void OpenAddCustomerModal() => showAddModal = true;
+    private Task ConfirmAddCustomer() => Task.CompletedTask;
 
     private Task OnCustomerCreated()
     {
-        
         showAddModal = false;
         showConfirmAddModal = true;
         return Task.CompletedTask;

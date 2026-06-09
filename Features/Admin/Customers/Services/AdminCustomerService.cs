@@ -111,6 +111,49 @@ namespace STTproject.Features.Admin.Customers.Services
                 }).ToListAsync();
         }
 
+        public async Task<(IEnumerable<CustomerListDto> Items, int TotalCount)> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search,
+            string? status,
+            string? customerType,
+            int? subDistributorId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+
+            var query = db.Customers
+                .AsNoTracking()
+                .Include(c => c.SubDistributor)
+                .Where(c => subDistributorId == null || c.SubDistributorId == subDistributorId)
+                .Where(c => string.IsNullOrEmpty(customerType) || c.CustomerType == customerType)
+                .Where(c => string.IsNullOrEmpty(status) ||
+                    (status == "active" ? c.IsActive : !c.IsActive))
+                .Where(c => string.IsNullOrEmpty(search) ||
+                    c.CustomerName.Contains(search) ||
+                    c.CustomerCode.Contains(search));
+
+            var total = await query.CountAsync();
+
+            var items = await query
+                .OrderBy(c => c.CustomerName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(c => new CustomerListDto
+                {
+                    CustomerId = c.CustomerId,
+                    CustomerCode = c.CustomerCode,
+                    CustomerName = c.CustomerName,
+                    CustomerType = c.CustomerType,
+                    SubDistributorId = c.SubDistributorId,
+                    SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
+                    IsActive = c.IsActive,
+                    CreatedDate = c.CreatedDate
+                })
+                .ToListAsync();
+
+            return (items, total);
+        }
+
         public async Task<IEnumerable<SubDistributorDto>> GetSubDistributorsAsync(string? query = null)
         {
             await using var db = _dbFactory.CreateDbContext();
