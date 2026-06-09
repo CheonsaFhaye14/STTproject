@@ -518,8 +518,6 @@ public sealed class InvoiceDataValidator
                 yield return "pcs";
                 yield break;
             case "pckg":
-            case "pck":
-            case "pack":
             case "package":
                 yield return "package";
                 yield return "pckg";

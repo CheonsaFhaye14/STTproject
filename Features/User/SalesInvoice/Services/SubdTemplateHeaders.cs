@@ -57,8 +57,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["SkuCode"] = new[] { "item no." };
 				map["SalesManName"] = new[] { "agent name" };
 				map["Quantity"] = new[] { "qty" };
-				map["NetAmount"] = new[] { "net" };
 				map["UnitOfMeasure"] = new[] { "uom" };
+				map["OrderType"] = new[] { "type" };
 				return map;
 			}
 			if (IsMegaPanay(subDistributor))

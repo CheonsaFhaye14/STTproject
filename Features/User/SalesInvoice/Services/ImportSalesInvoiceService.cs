@@ -13,6 +13,7 @@ namespace STTproject.Features.User.SalesInvoice.Services;
 public sealed class ImportSalesInvoiceService
 {
 	private const int MaxHeaderScanRows = 10;
+	private const int MinTemplateMatchThreshold = 6;
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 	private readonly ISalesInvoiceService _salesInvoiceService;
 	private readonly ILogger<ImportSalesInvoiceService> _logger;
@@ -251,7 +252,14 @@ public sealed class ImportSalesInvoiceService
 					CustomerName = customer.CustomerName,
 					CustomerType = customer.CustomerType,
 					SubdistributorId = subDistributorId,
-					SalesManName = firstRow.SalesManName
+					SalesManName = firstRow.SalesManName,
+					CustomerAddress = string.Join(", ", new[]
+					{
+						customer.AddressLine,
+						customer.City,
+						customer.Province,
+						customer.ZipCode?.ToString()
+					}.Where(s => !string.IsNullOrWhiteSpace(s)))
 				};
 
 				var items = new List<InputItemModel>();
@@ -486,7 +494,7 @@ public sealed class ImportSalesInvoiceService
 		var useSplitQuantities       = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
 
 		// UOM column (required when using simple Quantity)
-		var hasUomColumn             = headers.TryGetValue("UOM",              out var uomColumn);
+		var hasUomColumn             = headers.TryGetValue("UnitOfMeasure",              out var uomColumn);
 
 		// Order columns
 		var hasOrderTypeColumn       = headers.TryGetValue("OrderType",        out var orderTypeColumn);
@@ -519,13 +527,13 @@ public sealed class ImportSalesInvoiceService
 			string.IsNullOrWhiteSpace(skuCode) &&
 			string.IsNullOrWhiteSpace(itemName) &&
 			string.IsNullOrWhiteSpace(uom) &&
-			row.Cell(headers["InvoiceDate"]).IsEmpty() &&
-			(!hasQuantityColumn       || row.Cell(quantityColumn).IsEmpty()) &&
-			(!hasCaseQuantityColumn   || row.Cell(caseQuantityColumn).IsEmpty()) &&
-			(!hasDozenQuantityColumn  || row.Cell(dozenQuantityColumn).IsEmpty()) &&
-			(!hasPieceQuantityColumn  || row.Cell(pieceQuantityColumn).IsEmpty()) &&
-			(!hasInBoxQuantityColumn  || row.Cell(inBoxQuantityColumn).IsEmpty()) &&
-			(netAmountCell is null    || netAmountCell.IsEmpty()))
+			IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])) &&
+			(!hasQuantityColumn      || IsCellEffectivelyEmpty(row.Cell(quantityColumn))) &&
+			(!hasCaseQuantityColumn  || IsCellEffectivelyEmpty(row.Cell(caseQuantityColumn))) &&
+			(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
+			(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
+			(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
+			(netAmountCell is null   || IsCellEffectivelyEmpty(netAmountCell)))
 		{
 			continue;
 		}
@@ -546,7 +554,7 @@ public sealed class ImportSalesInvoiceService
 			if (string.IsNullOrWhiteSpace(invoiceCode))
 				AddRowError("Invoice code is required.", "InvoiceCode");
 			// Invoice date is required and must be a valid date
-			if (row.Cell(headers["InvoiceDate"]).IsEmpty())
+			if (IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])))
 				AddRowError("Invoice date is required.", "InvoiceDate");
 			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate))
 				AddRowError("Invoice date is invalid.", "InvoiceDate");
@@ -654,7 +662,7 @@ public sealed class ImportSalesInvoiceService
 			{
 				// Simple path — use TryResolveQuantity to normalize quantity + UOM together
 				int? rawQuantity = null;
-				if (!row.Cell(quantityColumn).IsEmpty() && TryGetInt(row.Cell(quantityColumn), out var parsedQty))
+				if (!IsCellEffectivelyEmpty(row.Cell(quantityColumn)) && TryGetInt(row.Cell(quantityColumn), out var parsedQty))
 					rawQuantity = parsedQty;
 			
 				if (!InvoiceDataValidator.TryResolveQuantity(
@@ -668,7 +676,7 @@ public sealed class ImportSalesInvoiceService
 						out var resolvedUom,
 						out _))
 				{
-					if (row.Cell(quantityColumn).IsEmpty())
+					if (IsCellEffectivelyEmpty(row.Cell(quantityColumn)))
 						AddRowError("Quantity is required.", "Quantity");
 					else if (rawQuantity is null)
 						AddRowError("Quantity must be a whole number.", "Quantity");
@@ -722,7 +730,7 @@ public sealed class ImportSalesInvoiceService
 				// per UOM type rather than collapsing them into one.
 				void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
 				{
-					if (!hasColumn || row.Cell(columnIndex).IsEmpty())
+					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
 						return;
 			
 					// Use the same missing-value rule as the validator (handles "-", "–", "n/a")
@@ -803,10 +811,22 @@ public sealed class ImportSalesInvoiceService
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
 		var scanLimit = Math.Min(lastRow, MaxHeaderScanRows);
 
+		// Pre-build a flat reverse lookup: normalized alias → canonical key
+		// This makes cell matching O(1) instead of O(keys × aliases)
 		var templateAliases = SubdTemplateHeaders.GetTemplateAliases(subDistributor);
 		var globalAliases = SubdTemplateHeaders.GetGlobalAliases();
 
-		// Define groups of fields where at least one member must be present to consider the header valid.
+		var templateLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		var globalLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var kvp in templateAliases)
+			foreach (var alias in kvp.Value)
+				templateLookup.TryAdd(NormalizeHeader(alias), kvp.Key);
+
+		foreach (var kvp in globalAliases)
+			foreach (var alias in kvp.Value)
+				globalLookup.TryAdd(NormalizeHeader(alias), kvp.Key);
+
 		var alwaysRequiredGroups = new[]
 		{
 			new[] { "InvoiceCode" },
@@ -816,80 +836,48 @@ public sealed class ImportSalesInvoiceService
 			new[] { "SkuCode", "SkuName" }
 		};
 
-		var candidates = new List<(int RowNumber, int Score, int TemplateMatches, int RequiredFieldsCount)>();
+		// Read the entire scan range in ONE call — avoids per-row ClosedXML overhead
+		var usedRange = worksheet.Range(1, 1, scanLimit, worksheet.LastColumnUsed()?.ColumnNumber() ?? 50);
 
-		for (var rowNumber = 1; rowNumber <= scanLimit; rowNumber++)
+		// Group cells by row number
+		var cellsByRow = usedRange.Cells()
+			.Where(c => !c.IsEmpty())
+			.GroupBy(c => c.Address.RowNumber)
+			.OrderBy(g => g.Key);
+
+		foreach (var rowGroup in cellsByRow)
 		{
-			var row = worksheet.Row(rowNumber);
-
-			if (IsRowLikelyEmpty(row) || IsRowLikelyTitle(row))
-				continue;
-
-			var foundCanonicalKeys = new HashSet<string>();
+			var rowNumber = rowGroup.Key;
+			var foundCanonicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			var templateMatches = 0;
-			var globalMatches = 0;
 
-			foreach (var cell in row.CellsUsed())
+			foreach (var cell in rowGroup)
 			{
 				var normalized = NormalizeHeader(cell.GetString());
-				if (string.IsNullOrWhiteSpace(normalized))
-					continue;
+				if (string.IsNullOrWhiteSpace(normalized)) continue;
 
-				var matchedByTemplate = false;
-
-				// First check template-specific aliases for the sub-distributor, which have the highest priority
-				foreach (var kvp in templateAliases)
+				if (templateLookup.TryGetValue(normalized, out var templateKey))
 				{
-					foreach (var alias in kvp.Value)
-					{
-						if (NormalizeHeader(alias) == normalized)
-						{
-							foundCanonicalKeys.Add(kvp.Key);
-							templateMatches++;
-							matchedByTemplate = true;
-							break;
-						}
-					}
-					if (matchedByTemplate) break;
+					if (foundCanonicalKeys.Add(templateKey))
+						templateMatches++;
 				}
-
-				// Check global aliases only if not already matched by template
-				if (!matchedByTemplate)
+				else if (globalLookup.TryGetValue(normalized, out var globalKey))
 				{
-					foreach (var kvp in globalAliases)
-					{
-						foreach (var alias in kvp.Value)
-						{
-							if (NormalizeHeader(alias) == normalized)
-							{
-								foundCanonicalKeys.Add(kvp.Key);
-								globalMatches++;
-								break;
-							}
-						}
-					}
+					foundCanonicalKeys.Add(globalKey);
 				}
 			}
 
-			// Check always-required groups
-			var satisfiesAllGroups = true;
-			var requiredFieldsFound = 0;
+			// Early exit for high-confidence template match
+			if (templateMatches >= MinTemplateMatchThreshold)
+				return rowNumber;
 
-			foreach (var group in alwaysRequiredGroups)
-			{
-				var hasGroupMember = group.Any(key => foundCanonicalKeys.Contains(key));
-				if (!hasGroupMember)
-				{
-					satisfiesAllGroups = false;
-					break;
-				}
-				requiredFieldsFound++;
-			}
+			// Check required groups
+			var satisfiesAllGroups = alwaysRequiredGroups
+				.All(group => group.Any(key => foundCanonicalKeys.Contains(key)));
 
-			if (!satisfiesAllGroups)
-				continue;
+			if (!satisfiesAllGroups) continue;
 
-			// Conditional quantity group: split-qty OR (UOM + Quantity)
+			// Quantity group check
 			bool hasSplitQuantity =
 				foundCanonicalKeys.Contains("CaseQuantity") ||
 				foundCanonicalKeys.Contains("PieceQuantity") ||
@@ -900,35 +888,16 @@ public sealed class ImportSalesInvoiceService
 			{
 				bool hasUom = foundCanonicalKeys.Contains("UnitOfMeasure");
 				bool hasQty = foundCanonicalKeys.Contains("Quantity");
-
-				if (!hasUom && !hasQty)
-					continue;
-
-				if (hasUom) requiredFieldsFound++;
-				if (hasQty) requiredFieldsFound++;
-			}
-			else
-			{
-				requiredFieldsFound++;
+				if (!hasUom && !hasQty) continue;
 			}
 
-			var score = (templateMatches * 100) + (globalMatches * 10) - 1;
-			candidates.Add((rowNumber, score, templateMatches, requiredFieldsFound));
+			// First row that satisfies all required groups wins (no more scoring needed)
+			return rowNumber;
 		}
 
-		if (candidates.Count == 0)
-			return 0;
-
-		var best = candidates
-			.OrderByDescending(c => c.Score)
-			.ThenByDescending(c => c.TemplateMatches)
-			.ThenByDescending(c => c.RequiredFieldsCount)
-			.ThenBy(c => c.RowNumber)
-			.First();
-
-		return best.RowNumber;
-	}
-	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, SubDistributor subDistributor)
+		return 0;
+	}	
+private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, SubDistributor subDistributor)
 	{
 		var headerRow = worksheet.Row(headerRowNumber);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -991,11 +960,29 @@ public sealed class ImportSalesInvoiceService
 
 	private static string GetString(IXLRow row, int columnNumber)
 	{
-		return row.Cell(columnNumber).GetString().Trim();
+		var cell = row.Cell(columnNumber);
+		if (cell.HasFormula)
+			return cell.CachedValue.ToString()?.Trim() ?? string.Empty;
+		return cell.GetString().Trim();
 	}
 
 	private static bool TryGetInt(IXLCell cell, out int value)
 	{
+		// Resolve formula cached value first
+		if (cell.HasFormula)
+		{
+			var cached = cell.CachedValue.ToString().Trim();
+			if (int.TryParse(cached, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+				return true;
+			if (double.TryParse(cached, NumberStyles.Number, CultureInfo.InvariantCulture, out var d))
+			{
+				value = (int)d;
+				return true;
+			}
+			value = 0;
+			return false;
+		}
+
 		if (cell.DataType == XLDataType.Number)
 		{
 			value = (int)cell.GetDouble();
@@ -1003,15 +990,23 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		if (int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
-		{
 			return true;
-		}
 
 		return int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
 	}
 
+
 	private static bool TryGetDecimal(IXLCell cell, out decimal value)
 	{
+		if (cell.HasFormula)
+		{
+			var cached = cell.CachedValue.ToString().Trim();
+			if (decimal.TryParse(cached, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.InvariantCulture, out value))
+				return true;
+			value = 0;
+			return false;
+		}
+
 		if (cell.DataType == XLDataType.Number)
 		{
 			value = Convert.ToDecimal(cell.GetDouble(), CultureInfo.InvariantCulture);
@@ -1020,15 +1015,32 @@ public sealed class ImportSalesInvoiceService
 
 		var text = cell.GetString().Trim();
 		if (decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.InvariantCulture, out value))
-		{
 			return true;
-		}
 
 		return decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.CurrentCulture, out value);
 	}
 
 	private static bool TryGetDateOnly(IXLCell cell, out DateOnly date)
 	{
+		if (cell.HasFormula)
+		{
+			var cached = cell.CachedValue.ToString().Trim();
+			// Cached date serials come back as numbers (e.g. "46163")
+			if (double.TryParse(cached, NumberStyles.Number, CultureInfo.InvariantCulture, out var serial))
+			{
+				date = DateOnly.FromDateTime(DateTime.FromOADate(serial));
+				return true;
+			}
+			// Or as a date string
+			if (DateTime.TryParse(cached, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var dt))
+			{
+				date = DateOnly.FromDateTime(dt);
+				return true;
+			}
+			date = default;
+			return false;
+		}
+
 		if (cell.DataType == XLDataType.DateTime)
 		{
 			date = DateOnly.FromDateTime(cell.GetDateTime());
@@ -1177,6 +1189,13 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		return lookup;
+	}
+
+	private static bool IsCellEffectivelyEmpty(IXLCell cell)
+	{
+		if (cell.HasFormula)
+			return string.IsNullOrWhiteSpace(cell.CachedValue.ToString());
+		return cell.IsEmpty();
 	}
 
 
