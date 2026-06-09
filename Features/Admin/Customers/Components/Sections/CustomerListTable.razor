@@ -11,143 +11,282 @@
     </div>
 }
 
-<div class="card">
-    <div class="filters">
-        @* search filter for table include customer code, name, type and address *@
-        <div class="filter-group">
-            <label>Search:</label>
-            <input type="text" @bind:event="oninput" @bind="SearchTerm" placeholder="Search customers..." />
+<div class="clt-page">
+
+    <!-- Page header -->
+    <div class="clt-page-header">
+        <div>
+            <h1 class="clt-page-title">Customers</h1>
+            <p class="clt-page-sub">@FilteredCustomers.Count() of @Customers.Count total customers</p>
         </div>
-        <div class="filter-group">
-            <label>Subdistributor:</label>
-            <select id="subdistributorFilter" @bind="SelectedSubDistributorId">
-                <option value="">All Subdistributors</option>
-                @foreach (var subdistributor in SubDistributors)
-                {
-                    <option value="@subdistributor.Id">@subdistributor.Name</option>
-                }
-            </select>
-        </div>
-        <div class="filter-group">
-            <label>Customer Type:</label>
-            <select id="customerTypeFilter" @bind="SelectedCustomerType">
-                <option value="">All Types</option>
-                @foreach (var type in FilteredCustomers.Select(c => c.CustomerType).Distinct())
-                {
-                    <option value="@type">@type</option>
-                }
-            </select>
-        </div>
-        <div class="filter-group">
-            <label>Status:</label>
-            <select id="statusFilter" @bind="SelectedStatus">
-                <option value="">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-            </select>
-        </div>
+        <button class="clt-add-btn">
+            <span class="clt-add-icon">+</span> Add customer
+        </button>
     </div>
 
-    <table class="customer-table">
-        <thead>
-            <tr>
-                <th>Customer Code</th>
-                <th>Customer Name</th>
-                <th>Customer Type</th>
-                <th>Subdistributor</th>
-                <th>Created Date</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var customer in FilteredCustomers)
-            {
-                <tr>
-                    <td>@customer.CustomerCode</td>
-                    <td>@customer.CustomerName</td>
-                    <td>@customer.CustomerType</td>
-                    <td>@customer.SubDistributorName</td>
-                    <td>@customer.CreatedDate.ToString("yyyy-MM-dd")</td>
-                    <td>
-                        <button class="btn btn-primary" @onclick="() => EditCustomer(customer.CustomerId)">Edit</button>
-                        @if (customer.IsActive)
-                        {
-                            <button class="btn btn-secondary" @onclick="() => SetActive(customer.CustomerId, false)">Set
-                                Inactive</button>
-                            }
-                    else
-                            {
-                                <button class="btn btn-success" @onclick="() => SetActive(customer.CustomerId, true)">Set
-                                    Active</button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+    <div class="clt-layout">
 
-        </div>
+        <!-- Sidebar -->
+        <aside class="clt-sidebar">
+
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@Customers.Count</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Active</span>
+                    <span class="clt-stat-value clt-stat-active">@Customers.Count(c => c.IsActive)</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Inactive</span>
+                    <span class="clt-stat-value clt-stat-inactive">@Customers.Count(c => !c.IsActive)</span>
+                </div>
+            </div>
+
+            <div class="clt-divider"></div>
+
+            <!-- Search -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Search</label>
+                <div class="clt-search-wrap">
+                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm" placeholder="Name or code…" />
+                </div>
+            </div>
+
+            <!-- Status filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Status</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                        <input type="radio" name="status" value="" @onchange='() => SelectedStatus = ""' checked="@(SelectedStatus == "")" />
+                        <span>All</span>
+                        <span class="clt-radio-count">@Customers.Count</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
+                        <input type="radio" name="status" value="active" @onchange='() => SelectedStatus = "active"' checked="@(SelectedStatus == "active")" />
+                        <span>Active</span>
+                        <span class="clt-radio-count">@Customers.Count(c => c.IsActive)</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
+                        <input type="radio" name="status" value="inactive" @onchange='() => SelectedStatus = "inactive"' checked="@(SelectedStatus == "inactive")" />
+                        <span>Inactive</span>
+                        <span class="clt-radio-count">@Customers.Count(c => !c.IsActive)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Customer type filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="typeFilter">Customer type</label>
+                <select id="typeFilter" class="clt-select" @bind="SelectedCustomerType">
+                    <option value="">All types</option>
+                    @foreach (var type in AllCustomerTypes)
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Subdistributor filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
+                <select id="subdistFilter" class="clt-select" @bind="SelectedSubDistributorIdStr">
+                    <option value="">All subdistributors</option>
+                    @foreach (var sd in SubDistributors)
+                    {
+                        <option value="@sd.Id">@(sd.Name ?? "—")</option>
+                    }
+                </select>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+
+        </aside>
+
+        <!-- Main content -->
+        <main class="clt-main">
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Customer name</th>
+                                <th>Type</th>
+                                <th>Subdistributor</th>
+                                <th>Created</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!FilteredCustomers.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="11" cy="11" r="8" />
+                                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                            </svg>
+                                            <p>No customers match your filters</p>
+                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var customer in FilteredCustomers)
+                                {
+                                    <tr class="@(!customer.IsActive ? "clt-row-inactive" : "")">
+                                        <td><span class="clt-code">@customer.CustomerCode</span></td>
+                                        <td class="clt-name">@customer.CustomerName</td>
+                                        <td><span class="clt-type-badge">@customer.CustomerType</span></td>
+                                        <td class="clt-muted">@customer.SubDistributorName</td>
+                                        <td class="clt-muted">@customer.CreatedDate.ToString("MMM d, yyyy")</td>
+                                        <td>
+                                            @if (customer.IsActive)
+                                            {
+                                                <span class="clt-status clt-status-active">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clt-status clt-status-inactive">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit" @onclick="() => EditCustomer(customer.CustomerId)">
+                                                    Edit
+                                                </button>
+                                                @if (customer.IsActive)
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-deactivate" @onclick="() => SetActive(customer.CustomerId, false)">
+                                                        Deactivate
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-activate" @onclick="() => SetActive(customer.CustomerId, true)">
+                                                        Activate
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">
+                    Showing @FilteredCustomers.Count() result@(FilteredCustomers.Count() == 1 ? "" : "s")
+                </span>
+            </div>
+        </main>
+
+    </div>
+</div>
 
 @code {
     private List<CustomerListDto> Customers { get; set; } = new();
     private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
-    private string? SearchTerm { get; set; }
+    private string SearchTerm { get; set; } = "";
+    private string SelectedCustomerType { get; set; } = "";
+    private string SelectedStatus { get; set; } = "";
+
+    // String-backed property for <select> two-way binding on nullable int
+    private string SelectedSubDistributorIdStr
+    {
+        get => SelectedSubDistributorId?.ToString() ?? "";
+        set => SelectedSubDistributorId = int.TryParse(value, out var id) ? id : null;
+    }
     private int? SelectedSubDistributorId { get; set; }
-    private string? SelectedCustomerType { get; set; }
-    private string? SelectedStatus { get; set; }
-    
+
     private bool isLoading = true;
     private string loadingMessage = "";
 
+    private IEnumerable<string> AllCustomerTypes =>
+        Customers.Select(c => c.CustomerType ?? "").Where(t => t != "").Distinct().OrderBy(t => t);
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(SearchTerm) ||
+        SelectedSubDistributorId.HasValue ||
+        !string.IsNullOrWhiteSpace(SelectedCustomerType) ||
+        !string.IsNullOrWhiteSpace(SelectedStatus);
+
     private IEnumerable<CustomerListDto> FilteredCustomers => Customers.Where(c =>
-        (string.IsNullOrWhiteSpace(SearchTerm) || (c.CustomerName?.Contains(SearchTerm,
-System.StringComparison.OrdinalIgnoreCase) == true) || (c.CustomerCode?.Contains(SearchTerm,
-System.StringComparison.OrdinalIgnoreCase) == true))
+        (string.IsNullOrWhiteSpace(SearchTerm) ||
+            (c.CustomerName?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+            (c.CustomerCode?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) == true))
         && (!SelectedSubDistributorId.HasValue || c.SubDistributorId == SelectedSubDistributorId.Value)
         && (string.IsNullOrWhiteSpace(SelectedCustomerType) || c.CustomerType == SelectedCustomerType)
-        && (string.IsNullOrWhiteSpace(SelectedStatus) || (SelectedStatus == "active" ? c.IsActive : !c.IsActive))
+        && (string.IsNullOrWhiteSpace(SelectedStatus) ||
+            (SelectedStatus == "active" ? c.IsActive : !c.IsActive))
     );
 
     protected override async Task OnInitializedAsync()
     {
-        try{
+        try
+        {
             isLoading = true;
-            loadingMessage = "Loading Data...";
+            loadingMessage = "Loading customers…";
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
             var list = await AdminCustomerService.GetAllAsync();
             Customers = list.ToList();
 
-            var subDistributors = await AdminCustomerService.GetSubDistributorsAsync();
-            SubDistributors = list.ToList().Select(c => (c.SubDistributorId, c.SubDistributorName)).Distinct().ToList();
-    
-
+            await AdminCustomerService.GetSubDistributorsAsync();
+            SubDistributors = Customers
+                .Select(c => (c.SubDistributorId, c.SubDistributorName))
+                .Distinct()
+                .OrderBy(sd => sd.SubDistributorName)
+                .ToList();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error Loading Data: {ex.Message}");
+            Console.WriteLine($"Error loading customers: {ex.Message}");
             loadingMessage = "Failed to load data.";
         }
         finally
         {
             isLoading = false;
             loadingMessage = "";
-             await InvokeAsync(StateHasChanged);
+            await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private void ClearFilters()
+    {
+        SearchTerm = "";
+        SelectedSubDistributorId = null;
+        SelectedCustomerType = "";
+        SelectedStatus = "";
     }
 
     private void EditCustomer(int id)
     {
-        // TODO: open modal and populate for edit
+        // TODO: open edit modal and populate fields
     }
 
     private async Task SetActive(int id, bool isActive)
     {
         await AdminCustomerService.ToggleCustomerStatusAsync(id, isActive);
-        var c = Customers.FirstOrDefault(x => x.CustomerId == id);
-        if (c != null) c.IsActive = isActive;
+        var customer = Customers.FirstOrDefault(x => x.CustomerId == id);
+        if (customer != null) customer.IsActive = isActive;
         StateHasChanged();
     }
 }
-
