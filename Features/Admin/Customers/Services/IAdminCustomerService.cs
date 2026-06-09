@@ -14,5 +14,7 @@ namespace STTproject.Features.Admin.Customers.Services
         string? customerType, int? subDistributorId);
         Task<IEnumerable<SubDistributorDto>> GetSubDistributorsAsync(string? query = null);
         Task<IEnumerable<string>> GetCustomerTypesAsync();
+        Task<CustomerDetailDto?> GetCustomerByIdAsync(int id);
+        Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto);
     }
 }

@@ -179,5 +179,34 @@ namespace STTproject.Features.Admin.Customers.Services
                 .OrderBy(t => t)
                 .ToListAsync();
         }
+        public async Task<CustomerDetailDto?> GetCustomerByIdAsync(int id)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var entity = await db.Customers
+                .AsNoTracking()
+                .Include(c => c.SubDistributor)
+                .FirstOrDefaultAsync(c => c.CustomerId == id);
+
+            if (entity == null) return null;
+
+            return new CustomerDetailDto
+            {
+                CustomerId = entity.CustomerId,
+                CustomerCode = entity.CustomerCode,
+                CustomerName = entity.CustomerName,
+                CustomerType = entity.CustomerType,
+                SubDistributorId = entity.SubDistributorId,
+                IsActive = entity.IsActive,
+                AddressLine = entity.AddressLine,
+                City = entity.City,
+                Province = entity.Province,
+                ZipCode = entity.ZipCode,
+                CreatedDate = entity.CreatedDate,
+                UpdatedDate = entity.UpdatedDate
+            };
+        }
+
+        public async Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto)
+            => await UpdateCustomerAsync(dto.CustomerId, dto);
     }
 }

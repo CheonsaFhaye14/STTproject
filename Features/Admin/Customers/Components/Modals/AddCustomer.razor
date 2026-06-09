@@ -5,83 +5,128 @@
 <div class="modal-overlay">
     <div class="modal-box">
         <div class="modal-header">
-            <h3>Add New Customer</h3>
+            <h3>@(isEdit ? (isViewMode ? "View Customer" : "Edit Customer") : "Add New Customer")</h3>
         </div>
 
         <div class="modal-body">
             <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span class="required-asterisk"> *</span></label>
-                <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto" @ref="subdAutocomplete"
-                                     Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
-                                     ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
-                                     Placeholder="Search subdistributor..." />
-            </div>
-            <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk"> *</span></label>
-                <input @bind="CustomerCode" @ref="customerCodeInput" />
-            </div>
-            <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk"> *</span></label>
-                <input @bind="CustomerName" @ref="customerNameInput" />
-            </div>
-            <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.customertype.Label<span class="required-asterisk"> *</span></label>
-                <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes" @bind-Value="CustomerType"
-                                     ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
-                                     Placeholder="Select or type customer type..." />
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" @bind="IsActive" />
-                    Is Active
-                </label>
-            </div>
-            <h4>Customer Address</h4>
-            <div class="form-group">
-                <label>Province</label>
-                <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string"
-                                     @bind-Value="Province" ItemLabel="@(p => p ?? string.Empty)" 
-                                     OnSelected="OnProvinceSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
-            </div>
-            <div class="form-group">
-                <label>City / Municipality</label>
-                <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
-                                     @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
-                                     ShowAllOnOpen="true" Placeholder="Select or type city..." />
-            </div>
-            <div class="form-group">
-                <label>Address Line</label>
-                <input @bind="AddressLine" @ref="addressLineInput" />
-            </div>
-            <div class="form-group">
-                <label>Zip Code</label>
-                <input @bind="ZipCode" @ref="zipCodeInput" />
-            </div>
-            <div class="action-buttons">
-                <button @onclick="CreateCustomer" @ref="createCustomerButton">Create Customer</button>
-                <button @onclick="Cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-</div>
+                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span class="required-asterisk">
+                    *</span></label>
+                    <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                                         @ref="subdAutocomplete" Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
+                                         ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
+                                         Placeholder="Search subdistributor..." />
+                    @if (ShowValidationErrors &&
+                    !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>@CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk">
+                        *</span></label>
+                        <input @bind="CustomerCode" @ref="customerCodeInput" />
+                        @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customercode.Key)))
+                        {
+                            <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customercode.Key)</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk">
+                            *</span></label>
+                            <input @bind="CustomerName" @ref="customerNameInput" />
+                            @if (ShowValidationErrors &&
+                            !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customername.Key)))
+                            {
+                                <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customername.Key)</span>
+                            }
+                        </div>
+
+                        <div class="form-group">
+                            <label>@CustomerValidations.AddCustomer.customertype.Label<span class="required-asterisk">
+                                *</span></label>
+                                <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes"
+                                                     @bind-Value="CustomerType" ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
+                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected" />
+                                @if (ShowValidationErrors &&
+                                !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
+                                {
+                                    <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customertype.Key)</span>
+                                }
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" @bind="IsActive" />
+                                    Is Active
+                                </label>
+                            </div>
+
+                            <h4>Customer Address</h4>
+
+                            <div class="form-group">
+                                <label>Province</label>
+                                <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string" @bind-Value="Province"
+                                                     ItemLabel="@(p => p ?? string.Empty)" OnSelected="OnProvinceSelected" ShowAllOnOpen="true"
+                                                     Placeholder="Select or type province..." />
+                            </div>
+
+                            <div class="form-group">
+                                <label>City / Municipality</label>
+                                <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
+                                                     @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
+                                                     ShowAllOnOpen="true" Placeholder="Select or type city..." />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Address Line</label>
+                                <input @bind="AddressLine" @ref="addressLineInput" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Zip Code</label>
+                                <input @bind="ZipCode" @ref="zipCodeInput" />
+                            </div>
+                            @* TODO: form is disable at first change button to Edit so use can edit the data *@
+                            <div class="action-buttons">
+                                @if (isEdit && isViewMode)
+                                {
+                                    <button @onclick="EnableEdit">Edit</button>
+                                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
+                                }
+                                else
+                                {
+                                    <button @onclick="CreateCustomer" disabled="@isSubmitting">
+                                        @(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Customer"))
+                                    </button>
+                                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
+                                }
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
 
 @code {
-    [Parameter]
-    public EventCallback OnCustomerCreated { get; set; }
-
-    [Parameter]
-    public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback OnRequestConfirm { get; set; }
+    public CustomerCreateDto? PendingDto { get; private set; }
+    private bool isViewMode = false;    
     private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
     private GenericAutocomplete<string>? customerTypeAutocomplete;
+    private GenericAutocomplete<string>? ProvinceAutocomplete;
+    private GenericAutocomplete<string>? CityAutocomplete;
     private ElementReference customerCodeInput;
     private ElementReference customerNameInput;
     private ElementReference addressLineInput;
     private ElementReference zipCodeInput;
-    private ElementReference createCustomerButton;
 
     private int SubDistributorId { get; set; }
     private string? SelectedSubDistributorName { get; set; }
-    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
+    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new();
     private string? CustomerCode { get; set; }
     private string? CustomerName { get; set; }
     private string? CustomerType { get; set; }
@@ -89,41 +134,161 @@
     private string? AddressLine { get; set; }
     private string? City { get; set; }
     private string? Province { get; set; }
-    private STTproject.Features.Admin.Customers.DTOs.GeographicDataDto? Address { get; set; }
     private int? ZipCode { get; set; }
     private List<string?> CitiesMunicipalities { get; set; } = new();
     private List<string?> Provinces { get; set; } = new();
+    private List<string> ExistingCustomerTypes { get; set; } = new();
 
-    private List<string> ExistingCustomerTypes { get; set; } = new List<string>();
-    
-    private GenericAutocomplete<string>? ProvinceAutocomplete;
-    private GenericAutocomplete<string>? CityAutocomplete;
+    private Dictionary<string, string> Errors { get; set; } = new();
+    private bool ShowValidationErrors { get; set; } = false;
+    private bool isSubmitting = false;
+    [Parameter] public int? CustomerId { get; set; }
+    private bool isEdit => CustomerId.HasValue;
+
+    private string GetFieldError(string key) =>
+        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
         ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
-        
         Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
         CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
+
+        if (isEdit)
+        {
+            isViewMode = true;
+            var customer = await AdminCustomerService.GetCustomerByIdAsync(CustomerId!.Value);
+            if (customer != null)
+            {
+                SubDistributorId = customer.SubDistributorId;
+                SelectedSubDistributorName = SubDistributors
+                    .FirstOrDefault(s => s.SubDistributorId == customer.SubDistributorId)?.SubDistributorName;
+                CustomerCode = customer.CustomerCode;
+                CustomerName = customer.CustomerName;
+                CustomerType = customer.CustomerType;
+                IsActive = customer.IsActive;
+                AddressLine = customer.AddressLine;
+                City = customer.City;
+                Province = customer.Province;
+                ZipCode = customer.ZipCode;
+
+                if (!string.IsNullOrWhiteSpace(Province))
+                    CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+            }
+        }
+    }
+
+    private void EnableEdit()
+    {
+        isViewMode = false;
+    }
+
+    private async Task CreateCustomer()
+    {
+        var customerToValidate = new STTproject.Data.Customer
+        {
+            SubDistributorId = SubDistributorId,
+            CustomerCode = CustomerCode ?? string.Empty,
+            CustomerName = CustomerName ?? string.Empty,
+            CustomerType = CustomerType ?? string.Empty,
+        };
+
+        Errors = await CustomerValidations.ValidateAddCustomerAsync(customerToValidate);
+        ShowValidationErrors = true;
+
+        if (Errors.Any()) return;
+
+        if (isEdit)
+        {
+            PendingUpdateDto = new CustomerUpdateDto
+            {
+                CustomerId = CustomerId!.Value,
+                CustomerCode = CustomerCode,
+                CustomerName = CustomerName,
+                CustomerType = CustomerType,
+                SubDistributorId = SubDistributorId,
+                IsActive = IsActive,
+                AddressLine = AddressLine,
+                City = City,
+                Province = Province,
+                ZipCode = ZipCode
+            };
+        }
+        else
+        {
+            PendingDto = new CustomerCreateDto
+            {
+                CustomerCode = CustomerCode,
+                CustomerName = CustomerName,
+                CustomerType = CustomerType,
+                SubDistributorId = SubDistributorId,
+                IsActive = IsActive,
+                AddressLine = AddressLine,
+                City = City,
+                Province = Province,
+                ZipCode = ZipCode
+            };
+        }
+
+        await OnRequestConfirm.InvokeAsync();
+    }
+    public CustomerUpdateDto? PendingUpdateDto { get; private set; }
+
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        if (PendingDto == null) return (false, "No pending data.");
+        isSubmitting = true;
+        try
+        {
+            await AdminCustomerService.CreateCustomerAsync(PendingDto);
+            return (true, null);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
+        {
+            Errors[CustomerValidations.AddCustomer.customercode.Key] =
+                "This Customer Code already exists for the selected subdistributor.";
+            ShowValidationErrors = true;
+            await InvokeAsync(StateHasChanged);
+            return (false, "Duplicate customer code.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+    private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
+    {
+        if (sd != null)
+        {
+            SubDistributorId = sd.SubDistributorId;
+            SelectedSubDistributorName = sd.SubDistributorName;
+        }
+        return Task.CompletedTask;
+    }
+    private Task OnCustomerTypeSelected(string? selected)
+    {
+        CustomerType = selected;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnProvinceSelected(string? selected)
+    {
+        Province = selected;
+        await ProvinceChanged();
     }
 
     private async Task ProvinceChanged()
     {
-        if (string.IsNullOrWhiteSpace(Province))
-        {
-            CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
-            return;
-        }
-
         try
         {
             CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AddCustomer] LocationService.GetCitiesForProvinceByCodeAsync error: {ex.Message}");
-            CitiesMunicipalities = new List<string?>();
+            Console.WriteLine($"[AddCustomer] ProvinceChanged error: {ex.Message}");
+            CitiesMunicipalities = new();
         }
 
         City = CitiesMunicipalities.FirstOrDefault();
@@ -146,7 +311,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[AddCustomer] GeographicDataService.GetZipCodeAsync error: {ex.Message}");
+                Console.WriteLine($"[AddCustomer] UpdateZipCode error: {ex.Message}");
                 ZipCode = null;
             }
         }
@@ -157,50 +322,10 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnProvinceSelected(string? selected)
-    {
-        Province = selected;
-        await ProvinceChanged();
-    }
-
-    private async Task CreateCustomer()
-    {
-        var dto = new STTproject.Features.Admin.Customers.DTOs.CustomerCreateDto
-        {
-            CustomerCode = CustomerCode,
-            CustomerName = CustomerName,
-            CustomerType = CustomerType,
-            SubDistributorId = SubDistributorId,
-            IsActive = IsActive,
-            AddressLine = AddressLine,
-            City = City,
-            Province = Province,
-            ZipCode = ZipCode
-        };
-        await AdminCustomerService.CreateCustomerAsync(dto);
-        if (OnCustomerCreated.HasDelegate)
-        {
-            await OnCustomerCreated.InvokeAsync();
-        }
-    }
-
-    private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
-    {
-        if (sd != null)
-        {
-            SubDistributorId = sd.SubDistributorId;
-            SelectedSubDistributorName = sd.SubDistributorName;
-        }
-
-        return Task.CompletedTask;
-    }
-
     private Task Cancel()
     {
         if (onCancel.HasDelegate)
-        {
             return onCancel.InvokeAsync();
-        }
         return Task.CompletedTask;
     }
 }

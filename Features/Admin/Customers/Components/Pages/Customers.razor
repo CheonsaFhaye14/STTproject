@@ -15,16 +15,32 @@
 }
 
 <div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        @* ------------- Header ----------------- *@
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Customers</h1>
+                <p class="clt-page-sub">@totalCount total customers</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddCustomerModal">
+                <span class="clt-add-icon">+</span> Add customer
+            </button>
+        </div>
 
-    <CustomerListTable OnLoaded="OnTableLoaded" />
+        @* ------------- Customer List Table ----------------- *@
+        <CustomerListTable @ref="customerTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                           OnViewCustomer="OpenEditModal" />
 
-    <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
-                  Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" />
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
+                      Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" OnNo="CancelConfirm" />
 
-    @if (showAddModal)
-    {
-        <AddCustomer OnCustomerCreated="OnCustomerCreated" onCancel="CancelAddCustomer"/>
-    }
+        @if (showAddModal)
+        {
+            <AddCustomer @ref="addCustomerModal" CustomerId="editCustomerId" onCancel="CancelAddCustomer"
+                         OnRequestConfirm="OpenConfirmModal" />
+        }
+
+    </div>
 </div>
 
 @code {
@@ -32,26 +48,52 @@
     private bool showConfirmAddModal;
     private bool showAddModal;
     private bool isLoading = true;
+    private int totalCount = 0;
+    private CustomerListTable? customerTable;
+    private AddCustomer? addCustomerModal;
 
     private async Task OnTableLoaded()
     {
         isLoading = false;
         await InvokeAsync(StateHasChanged);
     }
+    private int? editCustomerId;
 
-    private void OpenAddCustomerModal() => showAddModal = true;
-    private Task ConfirmAddCustomer() => Task.CompletedTask;
-
-    private Task OnCustomerCreated()
+    private void OpenAddCustomerModal()
     {
-        showAddModal = false;
-        showConfirmAddModal = true;
-        return Task.CompletedTask;
+        editCustomerId = null; // new customer
+        showAddModal = true;
     }
 
-    private Task CancelAddCustomer()
+    // called from CustomerListTable OnViewCustomer
+    private void OpenEditModal(int id)
     {
-        showAddModal = false;
-        return Task.CompletedTask;
+        editCustomerId = id;
+        showAddModal = true;
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void OpenConfirmModal() => showConfirmAddModal = true;
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddCustomer() => showAddModal = false;
+
+    private async Task ConfirmAddCustomer()
+    {
+        showConfirmAddModal = false;
+
+        if (addCustomerModal == null) return;
+
+        var (success, _) = await addCustomerModal.SubmitAsync();
+
+        if (success)
+        {
+            showAddModal = false;
+            if (customerTable != null)
+                await customerTable.LoadPageAsync();
+        }
+        // if not success, confirm closes but form stays open showing the error
     }
 }
