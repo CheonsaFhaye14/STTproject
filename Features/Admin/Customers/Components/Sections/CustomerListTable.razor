@@ -3,17 +3,6 @@
 
 <div class="clt-page">
 
-    <!-- Page header -->
-    <div class="clt-page-header">
-        <div>
-            <h1 class="clt-page-title">Customers</h1>
-            <p class="clt-page-sub">@totalCount total customers</p>
-        </div>
-        <button class="clt-add-btn">
-            <span class="clt-add-icon">+</span> Add customer
-        </button>
-    </div>
-
     <div class="clt-layout">
 
         <!-- Sidebar -->
@@ -197,7 +186,7 @@
 
 @code {
     [Parameter] public EventCallback OnLoaded { get; set; }
-
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
     private List<CustomerListDto> PagedCustomers { get; set; } = new();
     private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
     private List<string> AllCustomerTypes { get; set; } = new();
@@ -288,6 +277,8 @@
         {
             isLoading = false;
             await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate)
+                await OnCountChanged.InvokeAsync(totalCount);
             if (OnLoaded.HasDelegate)
                 await OnLoaded.InvokeAsync();
         }
