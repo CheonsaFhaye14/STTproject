@@ -11,7 +11,6 @@
         <div class="modal-body">
             <div class="form-group">
                 <label>@CustomerValidations.AddCustomer.subdistributor.Label<span class="required-asterisk"> *</span></label>
-                @* Generic autocomplete for subdistributor name -> sets SubDistributorId *@
                 <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto" @ref="subdAutocomplete"
                                      Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
                                      ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
@@ -25,34 +24,27 @@
                 <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk"> *</span></label>
                 <input @bind="CustomerName" @ref="customerNameInput" />
             </div>
-            @* Customer Type: autocomplete with existing types + freeform input *@
             <div class="form-group">
                 <label>@CustomerValidations.AddCustomer.customertype.Label<span class="required-asterisk"> *</span></label>
                 <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes" @bind-Value="CustomerType"
                                      ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
                                      Placeholder="Select or type customer type..." />
             </div>
-
-            @* set status if active or not checkbox *@
             <div class="form-group">
                 <label>
                     <input type="checkbox" @bind="IsActive" />
                     Is Active
                 </label>
             </div>
-@* TODO fix address fields *@
-            @* address fields add line*@
             <h4>Customer Address</h4>
             <div class="form-group">
                 <label>Province</label>
-                @* Generic autocomplete for provinces; selecting a province loads cities *@
                 <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string"
                                      @bind-Value="Province" ItemLabel="@(p => p ?? string.Empty)" 
                                      OnSelected="OnProvinceSelected" ShowAllOnOpen="true" Placeholder="Select or type province..." />
             </div>
             <div class="form-group">
                 <label>City / Municipality</label>
-                @* Use GenericAutocomplete for cities (populated when Province changes) *@
                 <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
                                      @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
                                      ShowAllOnOpen="true" Placeholder="Select or type city..." />
@@ -65,7 +57,6 @@
                 <label>Zip Code</label>
                 <input @bind="ZipCode" @ref="zipCodeInput" />
             </div>
-
             <div class="action-buttons">
                 <button @onclick="CreateCustomer" @ref="createCustomerButton">Create Customer</button>
                 <button @onclick="Cancel">Cancel</button>
@@ -90,8 +81,7 @@
 
     private int SubDistributorId { get; set; }
     private string? SelectedSubDistributorName { get; set; }
-    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new
-List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
+    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>();
     private string? CustomerCode { get; set; }
     private string? CustomerName { get; set; }
     private string? CustomerType { get; set; }

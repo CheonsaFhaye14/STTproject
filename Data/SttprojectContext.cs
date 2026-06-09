@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿
 using Microsoft.EntityFrameworkCore;
 
 namespace STTproject.Data;
@@ -38,7 +37,6 @@ public partial class SttprojectContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasDefaultSchema("ojt");
 
         modelBuilder.Entity<CompanyItem>(entity =>
         {

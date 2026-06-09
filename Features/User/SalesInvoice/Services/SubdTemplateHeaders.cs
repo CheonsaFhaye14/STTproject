@@ -2,17 +2,14 @@ using STTproject.Data;
 
 namespace STTproject.Features.User.SalesInvoice.Services
 {
-	//TODO: Error for wrong header names is showing
-	// Error: Failed to open/import Excel file: References from other files are not yet implemented.. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.
-	// should show error for missing required headers instead of this error
-    public class SubdTemplateHeaders
-    {
-        public static IReadOnlyDictionary<string, string[]> GetTemplateAliases(SubDistributor subDistributor)
-        {
-            var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+	public class SubdTemplateHeaders
+	{
+		public static IReadOnlyDictionary<string, string[]> GetTemplateAliases(SubDistributor subDistributor)
+		{
+			var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 
-            if (subDistributor == null)
-                return map;
+			if (subDistributor == null)
+				return map;
 
 			if (IsStarwideDistribution(subDistributor))
 			{
@@ -20,7 +17,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["InvoiceDate"] = new[] { "lst_date" };
 				map["CustomerCode"] = new[] { "lst_cust1" };
 				map["CustomerName"] = new[] { "lst_cust2" };
-				map["NetAmount"] = new[] { "lst_net2" }; 
+				map["NetAmount"] = new[] { "lst_net2" };
 				map["SkuCode"] = new[] { "lst_head1" };
 				map["SalesManName"] = new[] { "lst_agent2" };
 				map["CaseQuantity"] = new[] { "lst_qnty1" };
@@ -31,8 +28,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				return map;
 			}
 
-            if (IsVarleyCorp(subDistributor))
-            {
+			if (IsVarleyCorp(subDistributor))
+			{
 				map["InvoiceCode"] = new[] { "so_number" };
 				map["InvoiceDate"] = new[] { "so_date" };
 				map["CustomerCode"] = new[] { "customer_code" };
@@ -47,18 +44,21 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["DozenQuantity"] = new[] { "dozen_total" };
 				map["PieceQuantity"] = new[] { "pieces_total" };
 				return map;
-            }
+			}
 			if (IsRiteBeacon(subDistributor))
 			{
-				map["InvoiceCode"] = new[] { "so_number" };
-				map["InvoiceDate"] = new[] { "so_date" };
-				map["CustomerName"] = new[] { "customer_name" };
-				map["SkuCode"] = new[] { "item_number" };
-				map["SalesManName"] = new[] { "salesman_name" };
-				map["Quantity"] = new[] { "qty_received" };
-				map["CaseQuantity"] = new[] { "case_total" };
-				map["DozenQuantity"] = new[] { "dozen_total" };
-				map["PieceQuantity"] = new[] { "pieces_total" };
+				map["InvoiceCode"] = new[] { "ref.no." };
+				map["InvoiceDate"] = new[] { "date" };
+				map["CustomerCode"] = new[] { "cust./supp." };
+				map["CustomerName"] = new[] { "name" };
+				map["Province"] = new[] { "address 3" };
+				map["CityMunicipality"] = new[] { "address 2" };
+				map["AddressLine"] = new[] { "address 1" };
+				map["SkuCode"] = new[] { "item no." };
+				map["SalesManName"] = new[] { "agent name" };
+				map["Quantity"] = new[] { "qty" };
+				map["UnitOfMeasure"] = new[] { "uom" };
+				map["OrderType"] = new[] { "type" };
 				return map;
 			}
 			if (IsMegaPanay(subDistributor))
@@ -76,7 +76,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
 			{
 				map["InvoiceCode"] = new[] { "reference" };
 				map["InvoiceDate"] = new[] { "date" };
-				map["Address"] = new[] { "address" };
 				map["CustomerName"] = new[] { "customer" };
 				map["NetAmount"] = new[] { "netsales" };
 				map["SkuCode"] = new[] { "code" };
@@ -84,21 +83,21 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CaseQuantity"] = new[] { "qtycs" };
 				map["InBoxQuantity"] = new[] { "qtyib" };
 				map["PieceQuantity"] = new[] { "qtypc" };
-			return map;
+				return map;
 			}
 			if (isGranvilleBaguio(subDistributor))
 			{
 				map["InvoiceCode"] = new[] { "so" };
 				map["InvoiceDate"] = new[] { "invoicedate" };
 				map["CustomerName"] = new[] { "customername" };
-				map["OrderType"] = new[] { "trxtype" }; //SALES || RETURNS
+				map["OrderType"] = new[] { "trxtype" };
 				map["SkuCode"] = new[] { "item_code" };
 				map["SalesManName"] = new[] { "salesrep" };
 				map["Province"] = new[] { "province" };
 				map["CityMunicipality"] = new[] { "town_or_city" };
 				map["AddressLine"] = new[] { "address1" };
 				map["PieceQuantity"] = new[] { "item_qty_piece" };
-			return map;
+				return map;
 			}
 			if (isGranvilleIlocos(subDistributor))
 			{
@@ -111,7 +110,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["SalesManName"] = new[] { "salesrep" };
 				map["Province"] = new[] { "province" };
 				map["CityMunicipality"] = new[] { "town_or_city" };
-			return map;
+				return map;
 			}
 			if (isValleyWide(subDistributor))
 			{
@@ -173,8 +172,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerName"] = new[] { "name" };
 				map["SalesManName"] = new[] { "agent" };
 				map["SkuCode"] = new[] { "item no." };
-				map["Quantity"] = new[] { "qty" }; //always piece
-				map["OrderType"] = new[] { "type" }; //CN =	Credit || CS and INV = Invoice
+				map["Quantity"] = new[] { "qty" };
+				map["OrderType"] = new[] { "type" };
 				map["Province"] = new[] { "area" };
 				return map;
 			}
@@ -184,7 +183,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["InvoiceDate"] = new[] { "date" };
 				map["CustomerName"] = new[] { "report name" };
 				map["SalesManName"] = new[] { "salesman" };
-				map["Item Name"] = new[] { "product" }; //they use item name instead of code.
+				map["Item Name"] = new[] { "product" };
 				map["PieceQuantity"] = new[] { "qty pc" };
 				map["NetAmount"] = new[] { "amount" };
 				map["Province"] = new[] { "province" };
@@ -209,9 +208,9 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerCode"] = new[] { "cust. #" };
 				map["CustomerName"] = new[] { "customer" };
 				map["SalesManName"] = new[] { "sales rep" };
-				map["OrderType"] = new[] { "type" }; //invoice or credit
+				map["OrderType"] = new[] { "type" };
 				map["SkuCode"] = new[] { "code" };
-				map["PieceQuantity"] = new[] { "pcs" };// uses - instead of 0 for not pcs
+				map["PieceQuantity"] = new[] { "pcs" };
 				map["CaseQuantity"] = new[] { "case" };
 				map["NetAmount"] = new[] { "amount" };
 				return map;
@@ -248,19 +247,18 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["SalesManName"] = new[] { "pic name" };
 				map["SkuCode"] = new[] { "item code" };
 				map["Quantity"] = new[] { "qty" };
-				map["UnitofMeasure"] = new[] { "item name (spec)" }; //ex. MDCI PRINGLES SNACK CHEESE 102G/12 [MCK-CS] use CS as uom
-				map["CityMunicipality"] = new[] { "address 3" };
+				map["UnitofMeasure"] = new[] { "item name (spec)" };
 				return map;
 			}
-            return map;
-        }
+			return map;
+		}
 
-        public static IReadOnlyDictionary<string, string[]> GetGlobalAliases()
-        {
-            var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["InvoiceCode"] = new[]
-                {
+		public static IReadOnlyDictionary<string, string[]> GetGlobalAliases()
+		{
+			var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+			{
+				["InvoiceCode"] = new[]
+				{
 					"invoicecode", "invoice code", "invcode", "inv code", "so number", "so no", "sales order number", "sales order no", "dr number", "dr no", "reference", "ref no", "ref. #", "num", "os_no"
 				},
 				["InvoiceDate"] = new[]
@@ -298,17 +296,49 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				["SkuCode"] = new[]
 				{
 					"skucode","sku code","itemcode","item code","item_number","code"
-                }
-            };
+				},
+				["UnitOfMeasure"] = new[]
+				{
+					"uom","unitofmeasure","unit of measure","um","u/m","unit"
+				},
+				["Quantity"] = new[]
+				{
+					"quantity","qty","qnty","qty pcs","qty piece","um_qty"
+				},
+				["CaseQuantity"] = new[]
+				{
+					"casequantity","case quantity","case_total","case"
+				},
+				["InBoxQuantity"] = new[]
+				{
+					"inboxquantity","inbox quantity","qtyib"
+				},
+				["DozenQuantity"] = new[]
+				{
+					"dozenquantity","dozen quantity","dozen_total","dozen"
+				},
+				["PieceQuantity"] = new[]
+				{
+					"piecequantity","piece quantity","pieces_total","pieces","pcs","piece"
+				},
+				["OrderType"] = new[]
+				{
+					"ordertype","order type","trxtype","trx type","type"
+				},
+				["SkuName"] = new[]
+				{
+					"skuname", "sku name", "itemname", "item name", "product", "item description", "item name (spec)"
+				}
+			};
 
-            return map;
-        }
+			return map;
+		}
 
-        private static bool IsStarwideDistribution(SubDistributor subDistributor)
-        {
+		private static bool IsStarwideDistribution(SubDistributor subDistributor)
+		{
 			return string.Equals(subDistributor.SubdName?.Trim(), "STARWIDE DISTRIBUTION", StringComparison.OrdinalIgnoreCase)
 				|| string.Equals(subDistributor.SubdCode?.Trim(), "01GMA06", StringComparison.OrdinalIgnoreCase);
-        }
+		}
 
 		private static bool IsVarleyCorp(SubDistributor subDistributor)
 		{
@@ -399,6 +429,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
 		{
 			return string.Equals(subDistributor.SubdCode?.Trim(), "05MIN07", StringComparison.OrdinalIgnoreCase)
 				|| string.Equals(subDistributor.SubdName?.Trim(), "KRN MARKETING", StringComparison.OrdinalIgnoreCase);
-		}	
-    }
+		}
+	}
 }

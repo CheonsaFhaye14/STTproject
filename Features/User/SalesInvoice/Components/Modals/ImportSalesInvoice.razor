@@ -41,7 +41,7 @@
                     <div class="stat-bar">
                         <div class="sc">
                             <div class="sc-label">Total rows</div>
-                            <div class="sc-val">@ImportResult.ImportedRowCount</div>
+                            <div class="sc-val">@(ImportResult.PreparedInvoices?.Sum(p => p.Items?.Count ?? 0) ?? 0)</div>
                         </div>
                         <div class="sc">
                             <div class="sc-label">Invoices</div>
@@ -97,7 +97,7 @@
                     @* ── Tabs ── *@
                     @if (invoiceCards.Any())
                     {
-                        <div class="tabs">
+                        <div class="tabs">  
                             <button type="button"
                                     class="tab @GetTabClass(InvoiceCardFilter.All)"
                                     @onclick='() => SetTab(InvoiceCardFilter.All)'>
@@ -182,8 +182,7 @@
                                                         <span class="sep">·</span>
                                                         <span>@card.Prepared.Invoice.CustomerName</span>
                                                         <span class="sep">·</span>
-                                                        <span>₱@card.Prepared.Items.Sum(i => i.Amount).ToString("N2")</span>
-                                                    </div>
+                                                        <span>₱@((card.Prepared.Items ?? Enumerable.Empty<InputItemModel>()).Sum(i => i.Amount).ToString("N2"))</span>                                                    </div>
                                                 }
                                             </div>
                                         </div>
@@ -280,8 +279,13 @@
                                     .Select(g => new
                                     {
                                         Message = g.Key,
-                                        Rows = g.Select(i => i.RowNumber).Distinct().OrderBy(r => r).ToList()
+                                        Rows = g.Select(i => i.RowNumber)
+                                                .Where(r => r > 0)
+                                                .Distinct()
+                                                .OrderBy(r => r)
+                                                .ToList()
                                     })
+                                    .Where(g => !string.IsNullOrWhiteSpace(g.Message))
                                     .OrderBy(g => g.Message)
                                     .ToList();
 
@@ -309,7 +313,7 @@
                                         </span>
                                     </div>
 
-                                    @if (grouped.Any())
+                                   @if (grouped.Any())
                                     {
                                         <div class="icb-err-rows">
                                             @foreach (var grp in grouped)
@@ -319,10 +323,13 @@
                                                         <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
                                                         <div>
                                                             <div class="err-msg-text">@grp.Message</div>
-                                                            <div class="err-rows-pill">
-                                                                <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                Row@(grp.Rows.Count > 1 ? "s" : ""): @string.Join(", ", grp.Rows)
-                                                            </div>
+                                                            @if (grp.Rows.Count > 0)
+                                                            {
+                                                                <div class="err-rows-pill">
+                                                                    <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                    Row@(grp.Rows.Count > 1 ? "s" : ""): @string.Join(", ", grp.Rows)
+                                                                </div>
+                                                            }
                                                         </div>
                                                     </div>
                                                 </div>
@@ -412,6 +419,22 @@
             cards.Add(new InvoiceCardViewModel(prepared.InvoiceNumber, prepared, matchingIssues));
         }
 
+        // Merge cards with the same invoice number into one
+        var mergedCards = cards
+            .GroupBy(c => c.InvoiceNumber?.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                var allIssues = g.SelectMany(c => c.Issues)
+                    .GroupBy(i => new { i.RowNumber, i.ColumnName, i.Message })
+                    .Select(ig => ig.First())
+                    .OrderBy(i => i.RowNumber)
+                    .ThenBy(i => i.Message)
+                    .ToList();
+                return new InvoiceCardViewModel(g.Key ?? string.Empty, first.Prepared, allIssues);
+            })
+            .ToList();
+
         var orphanIssues = (ImportResult.Issues ?? new List<ImportSalesInvoiceIssue>())
             .Where(issue => issue.RowNumber > 0)
             .GroupBy(issue => issue.RowNumber)
@@ -427,20 +450,19 @@
                 .ThenBy(issue => issue.Message)
                 .ToList();
 
-            var firstIssue = group.First();
-            var displayInvoiceNumber = string.IsNullOrWhiteSpace(firstIssue.InvoiceNumber)
-                ? "[Blank invoice code]"
-                : firstIssue.InvoiceNumber;
+        var firstIssue = group.First();
+        var displayInvoiceNumber = string.IsNullOrWhiteSpace(firstIssue.InvoiceNumber)
+            ? "[Blank invoice code]"
+            : firstIssue.InvoiceNumber;
 
-            cards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
-        }
-
-        return cards
-            .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
-            .ThenBy(card => card.InvoiceNumber)
-            .ToList();
+        mergedCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
     }
 
+    return mergedCards
+        .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
+        .ThenBy(card => card.InvoiceNumber)
+        .ToList();
+}
     private List<ImportSalesInvoiceIssue> GetGlobalIssues()
     {
         if (ImportResult == null)
@@ -557,6 +579,11 @@
             {
                 if (msg.Contains("not found") || msg.Contains("missing")) return "SKU Not Found";
                 return "SKU Error";
+            }
+            if (col.Contains("quantity") && (msg.Contains("uom") || msg.Contains("unit")))
+            {
+                if (msg.Contains("not found") || msg.Contains("missing")) return "UOM Not Found";
+                return "UOM Error";
             }
             if (col.Contains("quantity")) return "Quantity Error";
             if (col.Contains("amount") || col.Contains("netamount")) return "Amount Error";
