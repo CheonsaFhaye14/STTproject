@@ -71,9 +71,9 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("Customer", tb => tb.HasTrigger("trg_Customer_CascadeDeactivate"));
 
-            entity.HasIndex(e => new { e.CustomerCode, e.SubDistributorId }, "UQ_ojt_Customer_Code").IsUnique();
+            entity.HasIndex(e => new { e.CustomerCode, e.SubDistributorId }, "UQ_Customer_Code").IsUnique();
 
-            entity.HasIndex(e => new { e.CustomerName, e.SubDistributorId }, "UQ_ojt_Customer_Name").IsUnique();
+            entity.HasIndex(e => new { e.CustomerName, e.SubDistributorId }, "UQ_Customer_Name").IsUnique();
 
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.City).HasMaxLength(100);

@@ -15,7 +15,7 @@
                     <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
                                          @ref="subdAutocomplete" Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
                                          ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
-                                         Placeholder="Search subdistributor..." />
+                                         Placeholder="Search subdistributor..." IsDisabled=@isViewMode/>
                     @if (ShowValidationErrors &&
                     !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
                     {
@@ -26,7 +26,7 @@
                 <div class="form-group">
                     <label>@CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk">
                         *</span></label>
-                        <input @bind="CustomerCode" @ref="customerCodeInput" />
+                        <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode/>
                         @if (ShowValidationErrors &&
                         !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customercode.Key)))
                         {
@@ -37,7 +37,7 @@
                     <div class="form-group">
                         <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk">
                             *</span></label>
-                            <input @bind="CustomerName" @ref="customerNameInput" />
+                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode/>
                             @if (ShowValidationErrors &&
                             !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customername.Key)))
                             {
@@ -50,7 +50,7 @@
                                 *</span></label>
                                 <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes"
                                                      @bind-Value="CustomerType" ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected" />
+                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected" IsDisabled=@isViewMode />
                                 @if (ShowValidationErrors &&
                                 !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
                                 {
@@ -60,7 +60,7 @@
 
                             <div class="form-group">
                                 <label>
-                                    <input type="checkbox" @bind="IsActive" />
+                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode/>
                                     Is Active
                                 </label>
                             </div>
@@ -71,26 +71,26 @@
                                 <label>Province</label>
                                 <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string" @bind-Value="Province"
                                                      ItemLabel="@(p => p ?? string.Empty)" OnSelected="OnProvinceSelected" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type province..." />
+                                                     Placeholder="Select or type province..." IsDisabled=@isViewMode />
                             </div>
 
                             <div class="form-group">
                                 <label>City / Municipality</label>
                                 <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
                                                      @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
-                                                     ShowAllOnOpen="true" Placeholder="Select or type city..." />
+                                                     ShowAllOnOpen="true" Placeholder="Select or type city..." IsDisabled=@isViewMode />
                             </div>
 
                             <div class="form-group">
                                 <label>Address Line</label>
-                                <input @bind="AddressLine" @ref="addressLineInput" />
+                                <input @bind="AddressLine" @ref="addressLineInput" disabled=@isViewMode />
                             </div>
 
                             <div class="form-group">
                                 <label>Zip Code</label>
-                                <input @bind="ZipCode" @ref="zipCodeInput" />
+                                <input @bind="ZipCode" @ref="zipCodeInput" disabled=@isViewMode />
                             </div>
-                            @* TODO: form is disable at first change button to Edit so use can edit the data *@
+                            @* TODO form is disable at first change button to Edit so use can edit the data *@
                             <div class="action-buttons">
                                 @if (isEdit && isViewMode)
                                 {

@@ -1,6 +1,8 @@
 
 using STTproject.Features.User.SalesInvoice.DTOs;
+using System.Text.RegularExpressions;
 
+using System.Diagnostics;
 namespace STTproject.Features.User.SalesInvoice.Services;
 
 public sealed class InvoiceDataValidator
@@ -61,38 +63,71 @@ public sealed class InvoiceDataValidator
         return (true, string.Empty);
     }
 
-    public static bool TryResolveCustomer(
-        string customerCode,
-        string customerName,
-        string? province,
-        string? cityMunicipality,
-        string? customerType,
-        string? address,
-        IReadOnlyDictionary<string, Data.Customer> customerByCode,
-        IReadOnlyDictionary<string, Data.Customer> customerByName,
-        IEnumerable<Data.Customer> allCustomers,
-        out Data.Customer? customer,
-        out List<Data.Customer>? suggestions)
-    {
-        suggestions = null;
-        var allCustomersList = allCustomers.ToList();
+public static bool TryResolveCustomer(
+    string customerCode,
+    string customerName,
+    string? province,
+    string? cityMunicipality,
+    string? customerType,
+    string? address,
+    IReadOnlyDictionary<string, Data.Customer> customerByCode,
+    IReadOnlyDictionary<string, Data.Customer> customerByName,
+    IEnumerable<Data.Customer> allCustomers,
+    out Data.Customer? customer,
+    out List<Data.Customer>? suggestions)
+{
+    suggestions = null;
+    var allCustomersList = allCustomers.ToList();
 
-        // STEP 1: Match by CustomerCode
-        if (!string.IsNullOrWhiteSpace(customerCode))
+    // STEP 1: Match by CustomerCode
+    if (!string.IsNullOrWhiteSpace(customerCode))
+    {
+        if (customerByCode.TryGetValue(NormalizeCustomerLookup(customerCode), out var found))
         {
-            if (customerByCode.TryGetValue(NormalizeCustomerLookup(customerCode), out var found))
-            {
-                customer = found;
-                return true;
-            }
+            customer = found;
+            return true;
+        }
+    }
+
+    // STEP 2: Try raw name match first (strip code prefix only, keep everything else)
+    var candidates = new List<Data.Customer>();
+    if (!string.IsNullOrWhiteSpace(customerName))
+    {
+        var rawName = StripCodePrefix(customerName);
+
+        candidates = allCustomersList
+            .Where(c => StripCodePrefix(c.CustomerName ?? string.Empty)
+                .Equals(rawName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (candidates.Count == 1)
+        {
+            customer = candidates[0];
+            return true;
         }
 
-        // STEP 2: Find all matching customer names
-        var candidates = new List<Data.Customer>();
-        var normalizedSearchName = string.Empty;
-        if (!string.IsNullOrWhiteSpace(customerName))
+        // STEP 2.1: Raw match had multiple — try exact normalized (keeps parens/slash/# intact)
+        if (candidates.Count > 1)
         {
-            normalizedSearchName = NormalizeCustomerLookup(customerName);
+            var normalizedSearchName = NormalizeCustomerLookup(customerName);
+            var exactFiltered = candidates
+                .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName)
+                .ToList();
+
+            if (exactFiltered.Count == 1)
+            {
+                customer = exactFiltered[0];
+                return true;
+            }
+
+            if (exactFiltered.Count > 1)
+                candidates = exactFiltered;
+        }
+
+        // STEP 2.2: No raw match — try normalized name (keeps parens so TONDO != PANSOL)
+        if (candidates.Count == 0)
+        {
+            var normalizedSearchName = NormalizeCustomerLookup(customerName);
             candidates = allCustomersList
                 .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName)
                 .ToList();
@@ -103,103 +138,142 @@ public sealed class InvoiceDataValidator
                 return true;
             }
         }
-
-        if (candidates.Count == 0)
-        {
-            customer = null!;
-            if (!string.IsNullOrWhiteSpace(normalizedSearchName))
-            {
-                suggestions = allCustomersList
-                    .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty).Contains(normalizedSearchName))
-                    .Take(5)
-                    .ToList();
-            }
-            else
-            {
-                suggestions = null;
-            }
-
-            return false;
-        }
-
-        // STEP 3: Filter by Province
-        if (!string.IsNullOrWhiteSpace(province))
-        {
-            var normalizedProvince = Normalize(province);
-            var filtered = candidates
-                .Where(c => Normalize(c.Province ?? string.Empty) == normalizedProvince)
-                .ToList();
-
-            if (filtered.Count == 1)
-            {
-                customer = filtered[0];
-                return true;
-            }
-
-            if (filtered.Count > 0)
-                candidates = filtered;
-        }
-
-        // STEP 4: Filter by CityMunicipality
-        if (!string.IsNullOrWhiteSpace(cityMunicipality))
-        {
-            var normalizedCity = Normalize(cityMunicipality);
-            var filtered = candidates
-                .Where(c => Normalize(c.City ?? string.Empty) == normalizedCity)
-                .ToList();
-
-            if (filtered.Count == 1)
-            {
-                customer = filtered[0];
-                return true;
-            }
-
-            if (filtered.Count > 0)
-                candidates = filtered;
-        }
-
-        // STEP 5: Filter by CustomerType
-        if (!string.IsNullOrWhiteSpace(customerType))
-        {
-            var normalizedType = Normalize(customerType);
-            var filtered = candidates
-                .Where(c => Normalize(c.CustomerType ?? string.Empty) == normalizedType)
-                .ToList();
-
-            if (filtered.Count == 1)
-            {
-                customer = filtered[0];
-                return true;
-            }
-
-            if (filtered.Count > 0)
-                candidates = filtered;
-        }
-
-        // STEP 6: Filter by Address
-        if (!string.IsNullOrWhiteSpace(address))
-        {
-            var normalizedAddress = NormalizeAddress(address);
-
-            var filtered = candidates
-                .Where(c => NormalizeAddress(c.AddressLine ?? string.Empty).Contains(normalizedAddress))
-                .ToList();
-
-            if (filtered.Count == 1)
-            {
-                customer = filtered[0];
-                return true;
-            }
-
-            if (filtered.Count > 0)
-                candidates = filtered;
-        }
-
-        customer = null!;
-        suggestions = candidates.Count > 0 ? candidates : null;
-        return false;
     }
 
+    // STEP 2.5: Still no single match — strip prefix/parens, use location hint as tiebreaker
+    if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(customerName))
+    {
+        var (strippedName, locationHint) = ExtractCustomerNameParts(customerName);
+
+        candidates = allCustomersList
+            .Where(c =>
+            {
+                var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
+                return dbStripped == strippedName;
+            })
+            .ToList();
+
+        if (candidates.Count == 1)
+        {
+            customer = candidates[0];
+            return true;
+        }
+
+        // Use parenthetical hint e.g. (TONDO) to break ties
+        if (candidates.Count > 1 && !string.IsNullOrWhiteSpace(locationHint))
+        {
+            var hintFiltered = candidates
+                .Where(c =>
+                    Normalize(c.City ?? string.Empty).Contains(locationHint) ||
+                    Normalize(c.Province ?? string.Empty).Contains(locationHint) ||
+                    Normalize(c.AddressLine ?? string.Empty).Contains(locationHint))
+                .ToList();
+
+            if (hintFiltered.Count == 1)
+            {
+                customer = hintFiltered[0];
+                return true;
+            }
+
+            if (hintFiltered.Count > 1)
+                candidates = hintFiltered;
+        }
+
+        // STEP 2.6: Compact fallback — strips all spaces
+        // handles CHICO'S STORE → "chicosstore" matching CHICO S STORE → "chicosstore"
+        if (candidates.Count == 0)
+        {
+            var compactSearch = NormalizeCustomerLookupCompact(customerName);
+            candidates = allCustomersList
+                .Where(c => NormalizeCustomerLookupCompact(c.CustomerName ?? string.Empty) == compactSearch)
+                .ToList();
+
+            if (candidates.Count == 1)
+            {
+                customer = candidates[0];
+                return true;
+            }
+
+            // Truly no match — exit with suggestions
+            if (candidates.Count == 0)
+            {
+                var (strippedForSuggestion, _) = ExtractCustomerNameParts(customerName);
+                customer = null!;
+                suggestions = !string.IsNullOrWhiteSpace(strippedForSuggestion)
+                    ? allCustomersList
+                        .Where(c =>
+                        {
+                            var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
+                            return dbStripped.Contains(strippedForSuggestion);
+                        })
+                        .Take(5)
+                        .ToList()
+                    : null;
+                return false;
+            }
+            // Count > 1 → fall through to Steps 3-6
+        }
+        // ✅ Count > 1 from either 2.5 or 2.6 reaches here and continues to Steps 3-6
+    }
+    // ✅ Steps 3-6 always reachable with any candidates > 1
+
+
+    // STEP 3: Filter by Province
+    if (!string.IsNullOrWhiteSpace(province))
+    {
+        var normalizedProvince = Normalize(province);
+        var filtered = candidates
+            .Where(c => Normalize(c.Province ?? string.Empty) == normalizedProvince)
+            .ToList();
+
+        if (filtered.Count == 1) { customer = filtered[0]; return true; }
+        if (filtered.Count > 0) candidates = filtered;
+    }
+
+Debug.WriteLine($"[DEBUG] Customer='{customerName}' cityMunicipality='{cityMunicipality}', candidates={candidates.Count}");
+foreach (var c in candidates)
+    Debug.WriteLine($"  DB customer='{c.CustomerName}' city='{c.City}' normalized='{Normalize(c.City ?? "")}'");
+
+    // STEP 4: Filter by CityMunicipality
+    if (!string.IsNullOrWhiteSpace(cityMunicipality))
+    {
+        var normalizedCity = Normalize(cityMunicipality);
+        var filtered = candidates
+            .Where(c => Normalize(c.City ?? string.Empty) == normalizedCity)
+            .ToList();
+
+        if (filtered.Count == 1) { customer = filtered[0]; return true; }
+        if (filtered.Count > 0) candidates = filtered;
+    }
+
+    // STEP 5: Filter by CustomerType
+    if (!string.IsNullOrWhiteSpace(customerType))
+    {
+        var normalizedType = Normalize(customerType);
+        var filtered = candidates
+            .Where(c => Normalize(c.CustomerType ?? string.Empty) == normalizedType)
+            .ToList();
+
+        if (filtered.Count == 1) { customer = filtered[0]; return true; }
+        if (filtered.Count > 0) candidates = filtered;
+    }
+
+    // STEP 6: Filter by Address
+    if (!string.IsNullOrWhiteSpace(address))
+    {
+        var normalizedAddress = NormalizeAddress(address);
+        var filtered = candidates
+            .Where(c => NormalizeAddress(c.AddressLine ?? string.Empty).Contains(normalizedAddress))
+            .ToList();
+
+        if (filtered.Count == 1) { customer = filtered[0]; return true; }
+        if (filtered.Count > 0) candidates = filtered;
+    }
+
+    customer = null!;
+    suggestions = candidates.Count > 0 ? candidates : null;
+    return false;
+}
     public static bool ResolveOrderType(
     string? orderType,
     decimal? netAmount,
@@ -532,12 +606,54 @@ public sealed class InvoiceDataValidator
     private static string Normalize(string value)
         => value?.Trim().ToLowerInvariant() ?? string.Empty;
 
-    private static string NormalizeCustomerLookup(string value)
-        => Normalize(value)
-            .Replace("'", string.Empty)
-            .Replace("`", string.Empty)
-            .Replace("'", string.Empty);
+    private static (string normalizedName, string? locationHint) ExtractCustomerNameParts(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return (string.Empty, null);
 
+        var cleaned = value.Trim()
+            .Replace("'", "")
+            .Replace("'", "")
+            .Replace("`", "");
+
+        // Strip leading code prefix like "10798 - "
+        var dashIndex = cleaned.IndexOf(" - ");
+        if (dashIndex >= 0)
+            cleaned = cleaned[(dashIndex + 3)..];
+
+        // Strip trailing noise suffixes like "##", "/ ##"
+        cleaned = Regex.Replace(cleaned, @"[\s/]*#+\s*$", string.Empty).Trim();
+
+        // Extract parenthetical as location hint BEFORE stripping
+        string? locationHint = null;
+        var parenMatch = Regex.Match(cleaned, @"\((.+?)\)");
+        if (parenMatch.Success)
+        {
+            locationHint = parenMatch.Groups[1].Value.Trim().ToLowerInvariant();
+            cleaned = cleaned.Replace(parenMatch.Value, string.Empty);
+        }
+
+        cleaned = Regex.Replace(cleaned.ToLowerInvariant(), @"[^a-z0-9\s]", string.Empty);
+        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+
+        return (cleaned, locationHint);
+    }
+    private static string NormalizeCustomerLookup(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+        var cleaned = value.Trim()
+            .Replace("'", "")
+            .Replace("'", "")
+            .Replace("`", "")
+            .Replace("\"", "");
+
+        // Strip trailing noise suffixes like "##", "/ ##", "/ #", "#"
+        cleaned = Regex.Replace(cleaned, @"[\s/]*#+\s*$", string.Empty).Trim();
+
+        // Keep parens, slash so other suffixes stay distinct
+        cleaned = Regex.Replace(cleaned.ToLowerInvariant(), @"[^a-z0-9\s()/#]", string.Empty);
+        return Regex.Replace(cleaned, @"\s+", " ").Trim();
+    }
     private static string NormalizeAddress(string value)
     {
         return new string(
@@ -575,6 +691,23 @@ public sealed class InvoiceDataValidator
             .Replace(" ", "");
 
         return cleaned;
+    }
+    // After apostrophe removal, strip ALL spaces for comparison purposes
+    private static string NormalizeCustomerLookupCompact(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+        var cleaned = value.Trim()
+            .Replace("'", "").Replace("'", "").Replace("`", "").Replace("\"", "");
+
+        // Strip everything except letters and digits (no spaces either)
+        return Regex.Replace(cleaned.ToLowerInvariant(), @"[^a-z0-9]", string.Empty);
+    }
+    private static string StripCodePrefix(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var dashIndex = value.IndexOf(" - ");
+        return dashIndex >= 0 ? value[(dashIndex + 3)..].Trim() : value.Trim();
     }
 
 }

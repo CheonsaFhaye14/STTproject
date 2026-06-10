@@ -38,7 +38,7 @@ public class PriceIncreaseWorker : BackgroundService
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(stoppingToken);
         await db.Database.ExecuteSqlRawAsync(
-            "EXEC ojt.sp_ApplyDuePriceIncrease",
+            "EXEC sp_ApplyDuePriceIncrease",
             stoppingToken);
     }
 }
