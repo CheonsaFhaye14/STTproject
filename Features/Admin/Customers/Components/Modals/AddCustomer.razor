@@ -1,6 +1,7 @@
 @using STTproject.Features.Admin.Customers.Validators
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 @inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
+@inject STTproject.Services.IUserContextService UserContextService
 
 <div class="modal-overlay">
     <div class="modal-box">
@@ -10,12 +11,12 @@
 
         <div class="modal-body">
             <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span class="required-asterisk">
-                    *</span></label>
+                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span
+                    class="required-asterisk">*</span></label>
                     <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
                                          @ref="subdAutocomplete" Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
                                          ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
-                                         Placeholder="Search subdistributor..." IsDisabled=@isViewMode/>
+                                         Placeholder="Search subdistributor..." IsDisabled=@isViewMode />
                     @if (ShowValidationErrors &&
                     !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
                     {
@@ -24,9 +25,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label>@CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk">
-                        *</span></label>
-                        <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode/>
+                    <label>@CustomerValidations.AddCustomer.customercode.Label<span
+                        class="required-asterisk">*</span></label>
+                        <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode />
                         @if (ShowValidationErrors &&
                         !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customercode.Key)))
                         {
@@ -35,9 +36,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label>@CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk">
-                            *</span></label>
-                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode/>
+                        <label>@CustomerValidations.AddCustomer.customername.Label<span
+                            class="required-asterisk">*</span></label>
+                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode />
                             @if (ShowValidationErrors &&
                             !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customername.Key)))
                             {
@@ -46,11 +47,12 @@
                         </div>
 
                         <div class="form-group">
-                            <label>@CustomerValidations.AddCustomer.customertype.Label<span class="required-asterisk">
-                                *</span></label>
+                            <label>@CustomerValidations.AddCustomer.customertype.Label<span
+                                class="required-asterisk">*</span></label>
                                 <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes"
                                                      @bind-Value="CustomerType" ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected" IsDisabled=@isViewMode />
+                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected"
+                                                     IsDisabled=@isViewMode />
                                 @if (ShowValidationErrors &&
                                 !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
                                 {
@@ -60,7 +62,7 @@
 
                             <div class="form-group">
                                 <label>
-                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode/>
+                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
                                     Is Active
                                 </label>
                             </div>
@@ -90,7 +92,36 @@
                                 <label>Zip Code</label>
                                 <input @bind="ZipCode" @ref="zipCodeInput" disabled=@isViewMode />
                             </div>
-                            @* TODO form is disable at first change button to Edit so use can edit the data *@
+
+                            @* Audit info — view mode only *@
+                            @if (isEdit && isViewMode)
+                            {
+                                <h4>Audit Information</h4>
+
+                                <div class="form-group">
+                                    <label>Created Date</label>
+                                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Created By</label>
+                                    <input value="@(CreatedByName ?? CreatedById?.ToString() ?? "—")" disabled />
+                                </div>
+
+                                @if (UpdatedDate.HasValue)
+                                {
+                                    <div class="form-group">
+                                        <label>Updated Date</label>
+                                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Updated By</label>
+                                        <input value="@(UpdatedByName ?? UpdatedById?.ToString() ?? "—")" disabled />
+                                    </div>
+                                }
+                            }
+
                             <div class="action-buttons">
                                 @if (isEdit && isViewMode)
                                 {
@@ -105,7 +136,6 @@
                                     <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
                                 }
                             </div>
-
                         </div>
                     </div>
                 </div>
@@ -114,7 +144,9 @@
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public CustomerCreateDto? PendingDto { get; private set; }
-    private bool isViewMode = false;    
+    public CustomerUpdateDto? PendingUpdateDto { get; private set; }
+
+    private bool isViewMode = false;
     private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
     private GenericAutocomplete<string>? customerTypeAutocomplete;
     private GenericAutocomplete<string>? ProvinceAutocomplete;
@@ -139,11 +171,21 @@
     private List<string?> Provinces { get; set; } = new();
     private List<string> ExistingCustomerTypes { get; set; } = new();
 
+    // Audit fields (view mode only)
+    private DateTime CreatedDate { get; set; }
+    private DateTime? UpdatedDate { get; set; }
+    private int? CreatedById { get; set; }
+    private int? UpdatedById { get; set; }
+    private string? CreatedByName { get; set; }
+    private string? UpdatedByName { get; set; }
+
     private Dictionary<string, string> Errors { get; set; } = new();
     private bool ShowValidationErrors { get; set; } = false;
     private bool isSubmitting = false;
+
     [Parameter] public int? CustomerId { get; set; }
     private bool isEdit => CustomerId.HasValue;
+    private int? CurrentUserId => UserContextService.UserId;
 
     private string GetFieldError(string key) =>
         Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
@@ -173,16 +215,22 @@
                 Province = customer.Province;
                 ZipCode = customer.ZipCode;
 
+                // Audit
+                CreatedDate = customer.CreatedDate;
+                UpdatedDate = customer.UpdatedDate;
+                CreatedById = customer.CreatedBy;
+                UpdatedById = customer.UpdatedBy;
+                CreatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.CreatedBy);
+                if (customer.UpdatedBy != null)
+                    UpdatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.UpdatedBy);
+
                 if (!string.IsNullOrWhiteSpace(Province))
                     CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
             }
         }
     }
 
-    private void EnableEdit()
-    {
-        isViewMode = false;
-    }
+    private void EnableEdit() => isViewMode = false;
 
     private async Task CreateCustomer()
     {
@@ -212,7 +260,8 @@
                 AddressLine = AddressLine,
                 City = City,
                 Province = Province,
-                ZipCode = ZipCode
+                ZipCode = ZipCode,
+                UpdatedBy = CurrentUserId // ← current user
             };
         }
         else
@@ -227,22 +276,31 @@
                 AddressLine = AddressLine,
                 City = City,
                 Province = Province,
-                ZipCode = ZipCode
+                ZipCode = ZipCode,
+                CreatedBy = CurrentUserId // ← current user
             };
         }
 
         await OnRequestConfirm.InvokeAsync();
     }
-    public CustomerUpdateDto? PendingUpdateDto { get; private set; }
 
     public async Task<(bool success, string? error)> SubmitAsync()
     {
-        if (PendingDto == null) return (false, "No pending data.");
         isSubmitting = true;
         try
         {
-            await AdminCustomerService.CreateCustomerAsync(PendingDto);
-            return (true, null);
+            if (isEdit)
+            {
+                if (PendingUpdateDto == null) return (false, "No pending update data.");
+                await AdminCustomerService.UpdateCustomerAsync(PendingUpdateDto);
+                return (true, null);
+            }
+            else
+            {
+                if (PendingDto == null) return (false, "No pending data.");
+                await AdminCustomerService.CreateCustomerAsync(PendingDto);
+                return (true, null);
+            }
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
             when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
@@ -258,6 +316,7 @@
             isSubmitting = false;
         }
     }
+
     private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
     {
         if (sd != null)
@@ -267,6 +326,7 @@
         }
         return Task.CompletedTask;
     }
+
     private Task OnCustomerTypeSelected(string? selected)
     {
         CustomerType = selected;
@@ -298,7 +358,19 @@
     private async Task OnCitySelected(string? selected)
     {
         City = selected;
-        await UpdateZipCode();
+
+        if (!string.IsNullOrWhiteSpace(selected) && string.IsNullOrWhiteSpace(Province))
+        {
+            var inferredProvince = await GeographicDataService.GetProvinceByCityAsync(selected);
+            if (!string.IsNullOrWhiteSpace(inferredProvince))
+            {
+                Province = inferredProvince;
+                CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+
+        await UpdateZipCode(); // ← now Province is guaranteed to be set before this runs
     }
 
     private async Task UpdateZipCode()
@@ -307,7 +379,9 @@
         {
             try
             {
+                Console.WriteLine($"[ZIP] Province='{Province}' City='{City}'");
                 ZipCode = await GeographicDataService.GetZipCodeAsync(Province, City);
+                Console.WriteLine($"[ZIP] Result={ZipCode}");
             }
             catch (Exception ex)
             {

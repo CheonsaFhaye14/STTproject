@@ -20,7 +20,7 @@
         <div class="clt-page-header">
             <div>
                 <h1 class="clt-page-title">Customers</h1>
-        <p class="clt-page-sub">@totalCount total customers</p>
+                <p class="clt-page-sub">@totalCount total customers</p>
             </div>
             <button class="clt-add-btn" @onclick="OpenAddCustomerModal">
                 <span class="clt-add-icon">+</span> Add customer
@@ -31,8 +31,10 @@
         <CustomerListTable @ref="customerTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                            OnViewCustomer="OpenEditModal" />
 
-        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal" Title="Confirm Creation of Customer"
-                      Message="Are you sure you want to create this customer?" OnYes="ConfirmAddCustomer" OnNo="CancelConfirm" />
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                      Title="@(editCustomerId.HasValue ? "Confirm Update of Customer" : "Confirm Creation of Customer")"
+                      Message="@(editCustomerId.HasValue ? "Are you sure you want to save changes to this customer?" : "Are you sure you want to create this customer?")"
+                      OnYes="ConfirmAddCustomer" OnNo="CancelConfirm" />
 
         @if (showAddModal)
         {

@@ -42,11 +42,13 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? City { get; set; }
         public string? Province { get; set; }
         public int? ZipCode { get; set; }
+        public int? CreatedBy { get; set; } // ← add
     }
 
     public class CustomerUpdateDto : CustomerCreateDto
     {
         public int CustomerId { get; set; }
+        public int? UpdatedBy { get; set; } // ← add
     }
 
     public class SubDistributorDto

@@ -1,8 +1,101 @@
 ﻿@page "/admin/users"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.Users.DTOs
+@using STTproject.Features.Admin.Users.Components.Modals
+@using STTproject.Features.Admin.Users.Components.Sections
 
-<h3>User</h3>
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading users…</p>
+    </div>
+}
+
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        @* ------------- Header ----------------- *@
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Users</h1>
+                <p class="clt-page-sub">@totalCount total users</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddUserModal">
+                <span class="clt-add-icon">+</span> Add user
+            </button>
+        </div>
+
+        @* ------------- User List Table ----------------- *@
+        <UserListTable @ref="userTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                       OnEditUser="OpenEditModal" />
+
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                      Title="@(editUserId.HasValue ? "Confirm Update of User" : "Confirm Creation of User")"
+                      Message="@(editUserId.HasValue ? "Are you sure you want to save changes to this user?" : "Are you sure you want to create this user?")"
+                      OnYes="ConfirmAddUser" OnNo="CancelConfirm" />
+
+        @if (showAddModal)
+        {
+            <AddUser @ref="addUserModal" UserId="editUserId" onCancel="CancelAddUser" OnRequestConfirm="OpenConfirmModal" />
+        }
+
+    </div>
+</div>
+
 
 @code {
+    private ConfirmModal? confirmAddModal;
+    private bool showConfirmAddModal;
+    private bool showAddModal;
+    private bool isLoading = true;
+    private int totalCount = 0;
+    private UserListTable? userTable;
+    private AddUser? addUserModal;
 
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private int? editUserId;
+
+    private void OpenAddUserModal()
+    {
+        editUserId = null; // new user
+        showAddModal = true;
+    }
+
+    // called from UserListTable OnViewUser
+    private void OpenEditModal(int id)
+    {
+        editUserId = id;
+        showAddModal = true;
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void OpenConfirmModal() => showConfirmAddModal = true;
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddUser() => showAddModal = false;
+
+    private async Task ConfirmAddUser()
+    {
+        showConfirmAddModal = false;
+
+        if (addUserModal == null) return;
+
+        var (success, _) = await addUserModal.SubmitAsync();
+
+        if (success)
+        {
+            showAddModal = false;
+            if (userTable != null)
+                await userTable.LoadPageAsync();
+        }
+    }
 }

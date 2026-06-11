@@ -34,7 +34,7 @@
                         </div>
                         <div class="form-group">
                             <label>Created Date</label>
-                            <input value="@InvoiceDetails.CreatedDate.ToString("yyyy-MM-dd HH:mm")" disabled />
+                            <input value="@InvoiceDetails.CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
                         </div>
                     </div>
 
@@ -67,7 +67,7 @@
 
                                 <div class="mb-2">
                                     <strong>Total Amount:</strong> @FormatHelper.FormatPrice(InvoiceDetails.ItemDetails.Sum(item =>
-                                                            item.Price))
+                                                                                                item.Price))
                                 </div>
 
                             }

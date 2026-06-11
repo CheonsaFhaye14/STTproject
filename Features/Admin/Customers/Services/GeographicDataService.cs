@@ -7,10 +7,12 @@ namespace STTproject.Features.Admin.Customers.Services
     {
         private readonly IWebHostEnvironment env;
         private readonly List<GeographicDataDto> geographicData = new();
+
         public GeographicDataService(IWebHostEnvironment env)
         {
             this.env = env;
         }
+
         public async Task InitializeAsync()
         {
             if (geographicData.Count > 0) return;
@@ -27,14 +29,10 @@ namespace STTproject.Features.Admin.Customers.Services
                 if (string.IsNullOrWhiteSpace(province) ||
                     string.IsNullOrWhiteSpace(city) ||
                     string.IsNullOrWhiteSpace(zipText))
-                {
                     continue;
-                }
 
                 if (!int.TryParse(zipText, out var zipCode))
-                {
                     continue;
-                }
 
                 geographicData.Add(new GeographicDataDto
                 {
@@ -44,6 +42,14 @@ namespace STTproject.Features.Admin.Customers.Services
                 });
             }
             await Task.CompletedTask;
+        }
+
+        public async Task<string?> GetProvinceByCityAsync(string cityMunicipality)  // ← no interface line above this
+        {
+            await InitializeAsync();
+            return geographicData
+                .FirstOrDefault(g => g.CityMunicipality == cityMunicipality)
+                ?.Province;
         }
 
         public async Task<IReadOnlyList<string?>> GetAllProvincesAsync()
@@ -67,11 +73,13 @@ namespace STTproject.Features.Admin.Customers.Services
                                  .OrderBy(g => g)
                                  .ToList();
         }
+
         public async Task<int> GetZipCodeAsync(string? province, string? cityMunicipality)
         {
             await InitializeAsync();
-            return geographicData.FirstOrDefault(g => g.Province == province && g.CityMunicipality == cityMunicipality)?.ZipCode ?? 0;
+            return geographicData
+                .FirstOrDefault(g => g.Province == province && g.CityMunicipality == cityMunicipality)
+                ?.ZipCode ?? 0;
         }
-
     }
 }

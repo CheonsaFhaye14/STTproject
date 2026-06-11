@@ -171,7 +171,7 @@ public sealed class ImportSalesInvoiceService
 			if (!result.HasIssues)
 				result.AddError(0, string.Empty, "No invoice rows were found in the template.");
 			return result;
-		}	
+		}
 
 		// Group by invoice code plus customer and key header fields so rows with the same invoice code
 		// but different customer/order/date are treated as separate prepared invoices.
@@ -486,61 +486,61 @@ public sealed class ImportSalesInvoiceService
 		var hasItemNameColumn = headers.TryGetValue("ItemName", out var itemNameColumn);
 
 		// Quantity columns
-		var hasQuantityColumn        = headers.TryGetValue("Quantity",         out var quantityColumn);
-		var hasCaseQuantityColumn    = headers.TryGetValue("CaseQuantity",     out var caseQuantityColumn);
-		var hasDozenQuantityColumn   = headers.TryGetValue("DozenQuantity",    out var dozenQuantityColumn);
-		var hasPieceQuantityColumn   = headers.TryGetValue("PieceQuantity",    out var pieceQuantityColumn);
-		var hasInBoxQuantityColumn   = headers.TryGetValue("InBoxQuantity",    out var inBoxQuantityColumn);
-		var useSplitQuantities       = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
+		var hasQuantityColumn = headers.TryGetValue("Quantity", out var quantityColumn);
+		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
+		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
+		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
+		var hasInBoxQuantityColumn = headers.TryGetValue("InBoxQuantity", out var inBoxQuantityColumn);
+		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
 
 		// UOM column (required when using simple Quantity)
-		var hasUomColumn             = headers.TryGetValue("UnitOfMeasure",              out var uomColumn);
+		var hasUomColumn = headers.TryGetValue("UnitOfMeasure", out var uomColumn);
 
 		// Order columns
-		var hasOrderTypeColumn       = headers.TryGetValue("OrderType",        out var orderTypeColumn);
-		var hasNetAmountColumn       = headers.TryGetValue("NetAmount",        out var netAmountColumn);
+		var hasOrderTypeColumn = headers.TryGetValue("OrderType", out var orderTypeColumn);
+		var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
 
 		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
 
 			// ── Read raw cell values ─────────────────────────────────────────────
-			var invoiceCode  = GetString(row, headers["InvoiceCode"]);
-			var customerCode = hasCustomerCodeColumn     ? GetString(row, headers["CustomerCode"])  : string.Empty;
-			var customerName = hasCustomerNameColumn      ? GetString(row, customerNameColumn)       : string.Empty;
-			var customerType = hasCustomerTypeColumn      ? GetString(row, customerTypeColumn)       : null;
-			var province     = hasProvinceColumn          ? GetString(row, provinceColumn)           : null;
-			var city         = hasCityMunicipalityColumn  ? GetString(row, cityMunicipalityColumn)   : null;
-			var addressLine  = hasAddressLineColumn       ? GetString(row, addressLineColumn)        : null;
-			var orderType    = hasOrderTypeColumn         ? GetString(row, orderTypeColumn)          : string.Empty;
-			var skuCode      = hasSkuCodeColumn           ? GetString(row, headers["SkuCode"])       : string.Empty;
-			var itemName     = hasItemNameColumn          ? GetString(row, itemNameColumn)           : string.Empty;
-			var uom          = hasUomColumn               ? GetString(row, uomColumn)               : string.Empty;
+			var invoiceCode = GetString(row, headers["InvoiceCode"]);
+			var customerCode = hasCustomerCodeColumn ? GetString(row, headers["CustomerCode"]) : string.Empty;
+			var customerName = hasCustomerNameColumn ? GetString(row, customerNameColumn) : string.Empty;
+			var customerType = hasCustomerTypeColumn ? GetString(row, customerTypeColumn) : null;
+			var province = hasProvinceColumn ? GetString(row, provinceColumn) : null;
+			var city = hasCityMunicipalityColumn ? GetString(row, cityMunicipalityColumn) : null;
+			var addressLine = hasAddressLineColumn ? GetString(row, addressLineColumn) : null;
+			var orderType = hasOrderTypeColumn ? GetString(row, orderTypeColumn) : string.Empty;
+			var skuCode = hasSkuCodeColumn ? GetString(row, headers["SkuCode"]) : string.Empty;
+			var itemName = hasItemNameColumn ? GetString(row, itemNameColumn) : string.Empty;
+			var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
 			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
-			var netAmountCell = hasNetAmountColumn        ? row.Cell(netAmountColumn)               : null;
+			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
 
-		// ── Skip completely empty rows ───────────────────────────────────────
-		if (string.IsNullOrWhiteSpace(invoiceCode) &&
-			string.IsNullOrWhiteSpace(customerCode) &&
-			string.IsNullOrWhiteSpace(customerName) &&
-			string.IsNullOrWhiteSpace(orderType) &&
-			string.IsNullOrWhiteSpace(skuCode) &&
-			string.IsNullOrWhiteSpace(itemName) &&
-			string.IsNullOrWhiteSpace(uom) &&
-			IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])) &&
-			(!hasQuantityColumn      || IsCellEffectivelyEmpty(row.Cell(quantityColumn))) &&
-			(!hasCaseQuantityColumn  || IsCellEffectivelyEmpty(row.Cell(caseQuantityColumn))) &&
-			(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
-			(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
-			(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
-			(netAmountCell is null   || IsCellEffectivelyEmpty(netAmountCell)))
-		{
-			continue;
-		}
+			// ── Skip completely empty rows ───────────────────────────────────────
+			if (string.IsNullOrWhiteSpace(invoiceCode) &&
+				string.IsNullOrWhiteSpace(customerCode) &&
+				string.IsNullOrWhiteSpace(customerName) &&
+				string.IsNullOrWhiteSpace(orderType) &&
+				string.IsNullOrWhiteSpace(skuCode) &&
+				string.IsNullOrWhiteSpace(itemName) &&
+				string.IsNullOrWhiteSpace(uom) &&
+				IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])) &&
+				(!hasQuantityColumn || IsCellEffectivelyEmpty(row.Cell(quantityColumn))) &&
+				(!hasCaseQuantityColumn || IsCellEffectivelyEmpty(row.Cell(caseQuantityColumn))) &&
+				(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
+				(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
+				(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
+				(netAmountCell is null || IsCellEffectivelyEmpty(netAmountCell)))
+			{
+				continue;
+			}
 
-			DateOnly invoiceDate  = default;
-			var emittedRows       = new List<ImportedInvoiceRow>();
-			var rowHasErrors      = false;
+			DateOnly invoiceDate = default;
+			var emittedRows = new List<ImportedInvoiceRow>();
+			var rowHasErrors = false;
 
 			// Local function to add an error for the current row and mark it as having errors, which will prevent it from being emitted.
 			void AddRowError(string message, string? columnName = null)
@@ -570,7 +570,7 @@ public sealed class ImportSalesInvoiceService
 					AddRowError("Customer code or name is required.", "CustomerCode");
 				else
 				{
-					var label   = BuildCustomerDisplayValue(customerCode, customerName);
+					var label = BuildCustomerDisplayValue(customerCode, customerName);
 					var colName = string.IsNullOrWhiteSpace(customerName) ? "CustomerCode" : "CustomerName";
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
@@ -642,7 +642,7 @@ public sealed class ImportSalesInvoiceService
 			{
 				if (resolvedItem is null)
 					return 0;
-			
+
 				foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
 				{
 					if (InvoiceDataValidator.TryResolveUom(
@@ -654,7 +654,7 @@ public sealed class ImportSalesInvoiceService
 						return matched.ItemsUomId;
 					}
 				}
-			
+
 				return 0;
 			}
 
@@ -664,7 +664,7 @@ public sealed class ImportSalesInvoiceService
 				int? rawQuantity = null;
 				if (!IsCellEffectivelyEmpty(row.Cell(quantityColumn)) && TryGetInt(row.Cell(quantityColumn), out var parsedQty))
 					rawQuantity = parsedQty;
-			
+
 				if (!InvoiceDataValidator.TryResolveQuantity(
 						rawQuantity,
 						uom,
@@ -687,39 +687,39 @@ public sealed class ImportSalesInvoiceService
 				{
 					if (resolvedQty == 0)
 						continue;
-			
+
 					// Quantity sign as final fallback for order type
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
-			
+
 					var resolvedUomId = ResolveUomId(resolvedUom);
 					if (resolvedUomId == 0 && resolvedItem is not null)
 						AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'.", "UOM");
-			
+
 					if (!rowHasErrors)
 					{
 						emittedRows.Add(new ImportedInvoiceRow(
-							RowNumber:            rowNumber,
-							InvoiceCode:          invoiceCode,
-							InvoiceDate:          invoiceDate,
-							CustomerCode:         customerCode,
-							CustomerName:         customerName,
-							OrderType:            normalizedOrderType,
-							SalesManName:         salesManName,
-							SkuCode:              skuCode,
-							ItemName:             itemName,
-							UOM:                  resolvedUom,
-							Quantity:             resolvedQty,
-							Province:             province,
-							CityMunicipality:     city,
-							CustomerType:         customerType,
-							AddressLine:          addressLine,
-							ResolvedCustomerId:   resolvedCustomer?.CustomerId ?? 0,
+							RowNumber: rowNumber,
+							InvoiceCode: invoiceCode,
+							InvoiceDate: invoiceDate,
+							CustomerCode: customerCode,
+							CustomerName: customerName,
+							OrderType: normalizedOrderType,
+							SalesManName: salesManName,
+							SkuCode: skuCode,
+							ItemName: itemName,
+							UOM: resolvedUom,
+							Quantity: resolvedQty,
+							Province: province,
+							CityMunicipality: city,
+							CustomerType: customerType,
+							AddressLine: addressLine,
+							ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
 							ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
 							ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-							ResolvedSubdItemId:   resolvedItem?.SubdItemId ?? 0,
+							ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 							ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-							ResolvedItemsUomId:   resolvedUomId));
+							ResolvedItemsUomId: resolvedUomId));
 					}
 				}
 			}
@@ -732,67 +732,67 @@ public sealed class ImportSalesInvoiceService
 				{
 					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
 						return;
-			
+
 					// Use the same missing-value rule as the validator (handles "-", "–", "n/a")
 					var rawValue = row.Cell(columnIndex).GetString().Trim();
 					if (InvoiceDataValidator.IsMissingUomValue(rawValue))
 						return;
-			
+
 					if (!TryGetInt(row.Cell(columnIndex), out var qty))
 					{
 						AddRowError($"{errorField} must be a whole number.", errorField);
 						return;
 					}
-			
+
 					if (qty == 0)
 						return;
-			
+
 					var rowOrderType = string.IsNullOrWhiteSpace(normalizedOrderType)
 						? (qty < 0 ? "Credit" : "Invoice")
 						: normalizedOrderType;
-			
+
 					// Normalize the UOM label and resolve its ID via synonyms
 					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
-					var resolvedUomId     = ResolveUomId(normalizedUomName);
-			
+					var resolvedUomId = ResolveUomId(normalizedUomName);
+
 					if (resolvedUomId == 0 && resolvedItem is not null)
 					{
 						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'.", errorField);
 						return;
 					}
-			
+
 					emittedRows.Add(new ImportedInvoiceRow(
-						RowNumber:            rowNumber,
-						InvoiceCode:          invoiceCode,
-						InvoiceDate:          invoiceDate,
-						CustomerCode:         customerCode,
-						CustomerName:         customerName,
-						OrderType:            rowOrderType,
-						SalesManName:         salesManName,
-						SkuCode:              skuCode,
-						ItemName:             itemName,
-						UOM:                  normalizedUomName,
-						Quantity:             qty,
-						Province:             province,
-						CityMunicipality:     city,
-						CustomerType:         customerType,
-						AddressLine:          addressLine,
-						ResolvedCustomerId:   resolvedCustomer?.CustomerId ?? 0,
+						RowNumber: rowNumber,
+						InvoiceCode: invoiceCode,
+						InvoiceDate: invoiceDate,
+						CustomerCode: customerCode,
+						CustomerName: customerName,
+						OrderType: rowOrderType,
+						SalesManName: salesManName,
+						SkuCode: skuCode,
+						ItemName: itemName,
+						UOM: normalizedUomName,
+						Quantity: qty,
+						Province: province,
+						CityMunicipality: city,
+						CustomerType: customerType,
+						AddressLine: addressLine,
+						ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
 						ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
 						ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-						ResolvedSubdItemId:   resolvedItem?.SubdItemId ?? 0,
+						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-						ResolvedItemsUomId:   resolvedUomId));
+						ResolvedItemsUomId: resolvedUomId));
 				}
-			
-				TryEmitSplitRow(hasCaseQuantityColumn,  caseQuantityColumn,  "case",  "CaseQuantity");
+
+				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
 				TryEmitSplitRow(hasDozenQuantityColumn, dozenQuantityColumn, "dozen", "DozenQuantity");
 				TryEmitSplitRow(hasPieceQuantityColumn, pieceQuantityColumn, "piece", "PieceQuantity");
 				TryEmitSplitRow(hasInBoxQuantityColumn, inBoxQuantityColumn, "inbox", "InBoxQuantity");
-			
+
 				if (emittedRows.Count == 0 && !rowHasErrors)
 				{
-					var errorCol = hasCaseQuantityColumn  ? "CaseQuantity"  :
+					var errorCol = hasCaseQuantityColumn ? "CaseQuantity" :
 								hasPieceQuantityColumn ? "PieceQuantity" :
 								hasInBoxQuantityColumn ? "InBoxQuantity" : "DozenQuantity";
 					AddRowError("At least one quantity column (Case, Dozen, Piece, or InBox) is required.", errorCol);
@@ -800,10 +800,10 @@ public sealed class ImportSalesInvoiceService
 			}
 			if (rowHasErrors)
 				continue;
-		
+
 			rows.AddRange(emittedRows);
 		}
-		
+
 		return rows;
 	}
 	private static int DetectHeaderRow(IXLWorksheet worksheet, SubDistributor subDistributor)
@@ -896,8 +896,8 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		return 0;
-	}	
-private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, SubDistributor subDistributor)
+	}
+	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, SubDistributor subDistributor)
 	{
 		var headerRow = worksheet.Row(headerRowNumber);
 		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

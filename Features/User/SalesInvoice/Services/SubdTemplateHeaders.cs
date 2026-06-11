@@ -35,7 +35,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerCode"] = new[] { "customer_code" };
 				map["CustomerName"] = new[] { "customer_name" };
 				map["AddressLine"] = new[] { "address" };
-				map["CityMunicipality"] = new[] { "municipality" };
+				map["CityMunicipality"] = new[] { "city" };
 				map["Province"] = new[] { "province" };
 				map["NetAmount"] = new[] { "net_amount" };
 				map["SkuCode"] = new[] { "item_number" };

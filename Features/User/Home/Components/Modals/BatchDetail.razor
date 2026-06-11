@@ -28,7 +28,7 @@
                                     <td>@invoiceRow.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
                                     <td>@invoiceRow.SubdName</td>
                                     <td>@invoiceRow.CustomerName</td>
-                                    <td>@invoiceRow.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@invoiceRow.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
                                     <td>
                                         <button class="btn-primary"
                                                 @onclick="async () => await OnViewInvoiceDetails.InvokeAsync(invoiceRow.SalesInvoiceId)">

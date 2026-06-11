@@ -109,8 +109,8 @@
                             <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
                             <td>@row.SubdName</td>
                             <td>@row.CustomerName</td>
-                            <td>@row.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td>
-                             <td>   <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                            <td>@row.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
+                            <td> <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
                             </td>
                         </tr>
                     }

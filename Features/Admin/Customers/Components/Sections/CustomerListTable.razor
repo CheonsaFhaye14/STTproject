@@ -12,7 +12,7 @@
                 <div class="clt-stat">
                     <span class="clt-stat-label">Total</span>
                     <span class="clt-stat-value">@totalCount</span>
-        </div>
+                </div>
                 <div class="clt-stat">
                     <span class="clt-stat-label">Active</span>
                     <span class="clt-stat-value clt-stat-active">@activeCount</span>
@@ -105,12 +105,24 @@
                         <table class="clt-table">
                             <thead>
                                 <tr>
-                                    <th>Code</th>
-                                    <th>Customer name</th>
-                                    <th>Type</th>
-                                    <th>Subdistributor</th>
-                                    <th>Created</th>
-                                    <th>Status</th>
+                                    <th @onclick='() => SortBy("CustomerCode")' style="cursor:pointer">
+                                        Code @SortIndicator("CustomerCode")
+                                    </th>
+                                    <th @onclick='() => SortBy("CustomerName")' style="cursor:pointer">
+                                        Customer name @SortIndicator("CustomerName")
+                                    </th>
+                                    <th @onclick='() => SortBy("CustomerType")' style="cursor:pointer">
+                                        Type @SortIndicator("CustomerType")
+                                    </th>
+                                    <th @onclick='() => SortBy("SubDistributor")' style="cursor:pointer">
+                                        Subdistributor @SortIndicator("SubDistributor")
+                                    </th>
+                                    <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
+                                        Created @SortIndicator("CreatedDate")
+                                    </th>
+                                    <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">
+                                        Status @SortIndicator("IsActive")
+                                    </th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -145,7 +157,9 @@
                                             <td class="clt-name">@customer.CustomerName</td>
                                             <td><span class="clt-type-badge">@customer.CustomerType</span></td>
                                             <td class="clt-muted">@customer.SubDistributorName</td>
-                                            <td class="clt-muted">@customer.CreatedDate.ToString("MMM d, yyyy")</td>
+                                            <td class="clt-muted">
+                                                @customer.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
+                                            </td>
                                             <td>
                                                 @if (customer.IsActive)
                                                 {
@@ -208,6 +222,11 @@
     private List<CustomerListDto> PagedCustomers { get; set; } = new();
     private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
     private List<string> AllCustomerTypes { get; set; } = new();
+
+    // Add this helper to @code
+    private static readonly TimeZoneInfo PhTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
 
     private string _searchTerm = "";
     private string SearchTerm
@@ -282,7 +301,8 @@
         {
             var (items, total) = await AdminCustomerService.GetPagedAsync(
                 currentPage, pageSize, _searchTerm, SelectedStatus,
-                SelectedCustomerType, SelectedSubDistributorId);
+                SelectedCustomerType, SelectedSubDistributorId,
+                SortColumn, SortAscending); // ← add these
 
             PagedCustomers = items.ToList();
             totalCount = total;
@@ -357,4 +377,29 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
+    private string SortColumn { get; set; } = "CustomerName";
+    private bool SortAscending { get; set; } = true;
+
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column)
+        {
+            return string.Empty;
+        }
+
+        return SortAscending ? " ▲" : " ▼";
+    }
 }

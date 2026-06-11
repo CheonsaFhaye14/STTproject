@@ -1,5 +1,248 @@
-﻿<h3>AddUser</h3>
+@using STTproject.Features.Admin.Users.Validators
+@inject STTproject.Features.Admin.Users.Services.IAdminUserService AdminUserService
+@inject STTproject.Services.IUserContextService UserContextService
+
+<div class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>@(isEdit ? (isViewMode ? "View User" : "Edit User") : "Add New User")</h3>
+        </div>
+
+        <div class="modal-body">
+            <div class="form-group">
+                <label>@UserValidations.AddUser.fullname.Label<span class="required-asterisk">*</span></label>
+                <input @bind="FullName" @ref="fullNameInput" disabled=@isViewMode />
+                @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.fullname.Key)))
+                {
+                    <span class="error-text">@GetFieldError(UserValidations.AddUser.fullname.Key)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>@UserValidations.AddUser.email.Label<span class="required-asterisk">*</span></label>
+                <input @bind="Email" @ref="emailInput" disabled=@isViewMode />
+                @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.email.Key)))
+                {
+                    <span class="error-text">@GetFieldError(UserValidations.AddUser.email.Key)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>@UserValidations.AddUser.username.Label<span class="required-asterisk">*</span></label>
+                <input @bind="UserName" @ref="userNameInput" disabled=@isViewMode />
+                @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.username.Key)))
+                {
+                    <span class="error-text">@GetFieldError(UserValidations.AddUser.username.Key)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>@UserValidations.AddUser.role.Label<span class="required-asterisk">*</span></label>
+                <select @bind="Role" @ref="RoleSelect" disabled=@isViewMode>
+                    <option value="">Select Role</option>
+                    <option value="Admin">Admin</option>
+                    <option value="User">User</option>
+                </select>
+                @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.role.Key)))
+                {
+                    <span class="error-text">@GetFieldError(UserValidations.AddUser.role.Key)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
+                    Is Active
+                </label>
+            </div>
+
+            @if (isEdit && isViewMode)
+            {
+                <h4>Audit Information</h4>
+                <div class="form-group">
+                    <label>Created Date</label>
+                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                </div>
+                @if (UpdatedDate.HasValue)
+                {
+                    <div class="form-group">
+                        <label>Updated Date</label>
+                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                    </div>
+                }
+            }
+
+            <div class="action-buttons">
+                @if (isEdit && isViewMode)
+                {
+                    <button @onclick="EnableEdit">Edit</button>
+                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
+                }
+                else
+                {
+                    <button @onclick="CreateUser" disabled="@isSubmitting">
+                        @(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create User"))
+                    </button>
+                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
+    [Parameter] public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback OnRequestConfirm { get; set; }
+    public UserCreateDto? PendingDto { get; private set; }
+    public UserUpdateDto? PendingUpdateDto { get; private set; }
 
+    private bool isViewMode = false;
+    private ElementReference fullNameInput;
+    private ElementReference emailInput;
+    private ElementReference userNameInput;
+    private ElementReference RoleSelect;
+    private string? FullName { get; set; }
+    private string? Email { get; set; }
+    private string? UserName { get; set; }
+    private string? Role { get; set; }
+    private bool IsActive { get; set; } = true;
+
+    // Audit fields (view mode only)
+    private DateTime CreatedDate { get; set; }
+    private DateTime? UpdatedDate { get; set; }
+    @* private int? CreatedById { get; set; }
+    private int? UpdatedById { get; set; }
+    private string? CreatedByName { get; set; }
+    private string? UpdatedByName { get; set; }*@
+
+    private Dictionary<string, string> Errors { get; set; } = new();
+    private bool ShowValidationErrors { get; set; } = false;
+    private bool isSubmitting = false;
+
+    [Parameter] public int? UserId { get; set; }
+    private bool isEdit => UserId.HasValue;
+    private int? CurrentUserId => UserContextService.UserId;
+
+    private string GetFieldError(string key) =>
+        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (isEdit)
+        {
+            isViewMode = true;
+            var user = await AdminUserService.GetUserByIdAsync(UserId!.Value);
+            if (user != null)
+            {
+                FullName = user.FullName;
+                Email = user.Email;
+                UserName = user.UserName;
+                Role = user.Role;
+                IsActive = user.IsActive;
+                // Audit
+                CreatedDate = user.CreatedDate;
+                UpdatedDate = user.UpdatedDate;
+                @*
+                CreatedById = user.CreatedBy;
+                UpdatedById = user.UpdatedBy;
+                CreatedByName = await AdminUserService.GetUserNameByIdAsync(user.CreatedBy);
+                if (user.UpdatedBy != null)
+                    UpdatedByName = await AdminUserService.GetUserNameByIdAsync(user.UpdatedBy);
+                    *@
+
+            }
+        }
+    }
+
+    private void EnableEdit() => isViewMode = false;
+
+    private async Task CreateUser()
+    {
+
+        var userToValidate = new STTproject.Data.User
+        {
+            FullName = FullName ?? string.Empty,
+            Email = Email ?? string.Empty,
+            Username = UserName ?? string.Empty, // 👈 lowercase n
+            Role = Role ?? string.Empty,
+        };
+
+        Errors = await UserValidations.ValidateAddUserAsync(userToValidate);
+        ShowValidationErrors = true;
+
+        if (Errors.Any()) return;
+
+        if (isEdit)
+        {
+            PendingUpdateDto = new UserUpdateDto
+            {
+                UserId = UserId!.Value,
+                FullName = FullName,
+                Email = Email,
+                UserName = UserName,
+                Role = Role,
+                IsActive = IsActive,
+                // UpdatedBy = CurrentUserId
+            };
+        }
+        else
+        {
+            PendingDto = new UserCreateDto
+            {
+                FullName = FullName,
+                Email = Email,
+                UserName = UserName,
+                Role = Role,
+                IsActive = IsActive,
+
+                // CreatedBy = CurrentUserId // ← current user
+            };
+        }
+
+        await OnRequestConfirm.InvokeAsync();
+    }
+
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        isSubmitting = true;
+        try
+        {
+            if (isEdit)
+            {
+                if (PendingUpdateDto == null) return (false, "No pending update data.");
+                await AdminUserService.UpdateUserAsync(PendingUpdateDto);
+                return (true, null);
+            }
+            else
+            {
+                if (PendingDto == null) return (false, "No pending data.");
+                await AdminUserService.CreateUserAsync(PendingDto);
+                return (true, null);
+            }
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
+        {
+            Errors[UserValidations.AddUser.username.Key] =
+                "This Username already exists.";
+            ShowValidationErrors = true;
+            await InvokeAsync(StateHasChanged);
+            return (false, "Duplicate username.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private Task Cancel()
+    {
+        if (onCancel.HasDelegate)
+            return onCancel.InvokeAsync();
+        return Task.CompletedTask;
+    }
 }
