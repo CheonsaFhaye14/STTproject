@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.User.Profile.DTOS;
+using BCrypt.Net;
 
 namespace STTproject.Features.User.Profile.Services;
 
@@ -64,10 +65,12 @@ public class ProfileService : IProfileService
 
         if (user == null) return false;
 
-        // Here you would typically hash the passwords and compare hashes
-        if (user.Password != currentPassword) return false;
+        // 👇 verify current password against stored hash
+        if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.Password))
+            return false;
 
-        user.Password = newPassword; // In a real application, hash this password!
+        // 👇 hash the new password before saving
+        user.Password = BCrypt.Net.BCrypt.HashPassword(newPassword);
         user.UpdatedDate = DateTime.UtcNow;
 
         await context.SaveChangesAsync();

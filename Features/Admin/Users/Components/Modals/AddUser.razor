@@ -38,6 +38,18 @@
                     <span class="error-text">@GetFieldError(UserValidations.AddUser.username.Key)</span>
                 }
             </div>
+            @if (isEdit && !isViewMode)
+            {
+                <div class="form-group">
+                    <button type="button" @onclick="ResetPasswordAndSendEmail" disabled="@isSendingPassword">
+                        @(isSendingPassword ? "Sending..." : "🔄 Reset Password & Send to Email")
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(passwordResetMessage))
+                    {
+                        <span style="color:green;font-size:13px;">@passwordResetMessage</span>
+                    }
+                </div>
+            }
 
             <div class="form-group">
                 <label>@UserValidations.AddUser.role.Label<span class="required-asterisk">*</span></label>
@@ -100,6 +112,7 @@
     public UserCreateDto? PendingDto { get; private set; }
     public UserUpdateDto? PendingUpdateDto { get; private set; }
 
+    private string? Password { get; set; }
     private bool isViewMode = false;
     private ElementReference fullNameInput;
     private ElementReference emailInput;
@@ -159,7 +172,6 @@
     }
 
     private void EnableEdit() => isViewMode = false;
-
     private async Task CreateUser()
     {
 
@@ -244,5 +256,49 @@
         if (onCancel.HasDelegate)
             return onCancel.InvokeAsync();
         return Task.CompletedTask;
+    }
+    private bool isSendingPassword;
+    private string? passwordResetMessage;
+
+    private async Task ResetPasswordAndSendEmail()
+    {
+        if (UserId == null) return;
+
+        // must have an email
+        if (string.IsNullOrWhiteSpace(Email))
+        {
+            passwordResetMessage = "⚠️ No email on this user — cannot send password.";
+            return;
+        }
+
+        isSendingPassword = true;
+        passwordResetMessage = null;
+
+        var newPass = GenerateRandomPassword();
+
+        var dto = new UserUpdateDto
+        {
+            UserId = UserId!.Value,
+            FullName = FullName,
+            Email = Email,
+            UserName = UserName,
+            Role = Role,
+            IsActive = IsActive,
+            Password = newPass, // service will hash + email this
+        };
+
+        await AdminUserService.UpdateUserAsync(dto);
+
+        isSendingPassword = false;
+        passwordResetMessage = $"✅ New password sent to {Email}";
+    }
+
+    private static string GenerateRandomPassword(int length = 12)
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+        var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        var bytes = new byte[length];
+        rng.GetBytes(bytes);
+        return new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
     }
 }

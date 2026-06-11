@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using STTproject.Data;
+using BCrypt.Net;
 
 namespace STTproject.Features.Login.Services
 {
@@ -26,26 +27,20 @@ namespace STTproject.Features.Login.Services
 
         public async Task<(bool Success, STTproject.Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password)
         {
-            // Validate inputs
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-            {
                 return (false, null, "missing");
-            }
 
             try
             {
                 await using var context = await _contextFactory.CreateDbContextAsync();
+
+                // 👇 find by username only first, then verify password separately
                 var user = await context.Users
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(u =>
-                        u.IsActive &&
-                        u.Username == username &&
-                        u.Password == password);
+                    .FirstOrDefaultAsync(u => u.IsActive && u.Username == username);
 
-                if (user == null)
-                {
+                if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.Password))
                     return (false, null, "invalid");
-                }
 
                 return (true, user, null);
             }

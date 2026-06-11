@@ -120,13 +120,28 @@ namespace STTproject.Features.Admin.Users.Services
             entity.Email = dto.Email ?? entity.Email;
             entity.UpdatedDate = NowPh();
 
+            var passwordChanged = false;
             if (!string.IsNullOrWhiteSpace(dto.Password))
+            {
                 entity.Password = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                passwordChanged = true;
+            }
 
             await db.SaveChangesAsync();
+
+            // 👇 send email only if password was changed and email exists
+            if (passwordChanged && !string.IsNullOrWhiteSpace(entity.Email))
+            {
+                await SendAccountEmailAsync(
+                    toEmail: entity.Email,
+                    fullName: entity.FullName ?? entity.Username ?? "",
+                    username: entity.Username ?? "",
+                    plainPassword: dto.Password!,
+                    isNewUser: false);
+            }
+
             return dto;
         }
-
         public async Task ToggleUserStatusAsync(int id, bool isActive)
         {
             await using var db = _dbFactory.CreateDbContext();
