@@ -44,7 +44,7 @@
                 <select @bind="Role" @ref="RoleSelect" disabled=@isViewMode>
                     <option value="">Select Role</option>
                     <option value="Admin">Admin</option>
-                    <option value="User">User</option>
+                    <option value="Encoder">Encoder</option>
                 </select>
                 @if (ShowValidationErrors &&
                         !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.role.Key)))
