@@ -1,8 +1,141 @@
-﻿<h3>CustPerSubd</h3>
+﻿@using STTproject.Features.Admin.Dashboard.DTOs
+@using STTproject.Features.Admin.Dashboard.Services
+@inject IAdminDashboardService DashboardService
 
-<div class="card">
-    @* a card that shows a bar graph of number of customers per subd also tha total number customers it sould also indicate the number of active and not active  *@
+<div class="cpsd-card">
+    <div class="cpsd-header">
+        <div class="cpsd-title">CUSTOMERS PER SUB DISTRIBUTOR</div>
+        <div class="cpsd-summary">
+            <span class="cpsd-summary-item total">Total: <strong>@totalCustomers</strong></span>
+            <span class="cpsd-summary-item active">Active: <strong>@data.Sum(x => x.ActiveCount)</strong></span>
+            <span class="cpsd-summary-item inactive">Inactive: <strong>@data.Sum(x => x.InactiveCount)</strong></span>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="cpsd-loading">Loading...</p>
+    }
+    else
+    {
+        <!-- Search + Sort controls -->
+        <div class="cpsd-controls">
+            <input class="cpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="searchTerm" />
+            <select class="cpsd-sort" @bind="sortBy">
+                <option value="name">Sort by Name</option>
+                <option value="total">Sort by Total ↓</option>
+                <option value="active">Sort by Active ↓</option>
+                <option value="inactive">Sort by Inactive ↓</option>
+            </select>
+        </div>
+
+        <!-- Legend -->
+        <div class="cpsd-legend">
+            <span><span class="dot dot-active"></span>Active</span>
+            <span><span class="dot dot-inactive"></span>Inactive</span>
+        </div>
+
+        <!-- Table -->
+        <div class="cpsd-table">
+            <div class="cpsd-table-header">
+                <div class="col-code">Code</div>
+                <div class="col-name">Name</div>
+                <div class="col-bar">Distribution</div>
+                <div class="col-num">Active</div>
+                <div class="col-num">Inactive</div>
+                <div class="col-num">Total</div>
+            </div>
+
+            @foreach (var item in PagedData)
+            {
+                var activeW = item.TotalCount == 0 ? 0.0 : (item.ActiveCount * 100.0 / maxTotal);
+                var inactiveW = item.TotalCount == 0 ? 0.0 : (item.InactiveCount * 100.0 / maxTotal);
+
+                <div class="cpsd-table-row">
+                    <div class="col-code">
+                        <span class="cpsd-code">@item.SubdCode</span>
+                    </div>
+                    <div class="col-name" title="@item.SubdName">@item.SubdName</div>
+                    <div class="col-bar">
+                        <div class="mini-bar-track">
+                            <div class="mini-bar-active"
+                                 style="width:@(activeW.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
+                            </div>
+                            <div class="mini-bar-inactive"
+                                 style="width:@(inactiveW.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-num active-num">@item.ActiveCount</div>
+                    <div class="col-num inactive-num">@item.InactiveCount</div>
+                    <div class="col-num total-num">@item.TotalCount</div>
+                </div>
+            }
+
+            @if (!PagedData.Any())
+            {
+                <div class="cpsd-empty">No results found.</div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <div class="cpsd-pagination">
+                <button class="cpsd-page-btn" disabled="@(currentPage == 1)" @onclick="() => currentPage--">←</button>
+                <span>Page @currentPage of @totalPages</span>
+                <button class="cpsd-page-btn" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++">→</button>
+            </div>
+        }
+        <div class="cpsd-footer">Showing @PagedData.Count() of @FilteredData.Count() sub distributors</div>
+    }
 </div>
-@code {
 
+@code {
+    private List<CustomerPerSubdDto> data = new();
+    private int totalCustomers;
+    private int maxTotal;
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string sortBy = "name";
+    private int currentPage = 1;
+    private const int pageSize = 10;
+
+    private IEnumerable<CustomerPerSubdDto> FilteredData => data
+        .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                    x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(_ => sortBy switch
+        {
+            "total" => 0,
+            "active" => 0,
+            "inactive" => 0,
+            _ => 0
+        })
+        .ThenBy(x => sortBy == "name" ? x.SubdName : "")
+        .ThenByDescending(x => sortBy == "total" ? x.TotalCount :
+                               sortBy == "active" ? x.ActiveCount :
+                               sortBy == "inactive" ? x.InactiveCount : 0);
+
+    private int totalPages => (int)Math.Ceiling(FilteredData.Count() / (double)pageSize);
+
+    private IEnumerable<CustomerPerSubdDto> PagedData => FilteredData
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        data = await DashboardService.GetCustomersPerSubdAsync();
+        totalCustomers = await DashboardService.GetTotalCustomersAsync();
+        maxTotal = data.Any() ? data.Max(x => x.TotalCount) : 1;
+        isLoading = false;
+    }
+
+    // Reset to page 1 when search or sort changes
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set { _searchTerm = value; searchTerm = value; currentPage = 1; }
+    }
 }

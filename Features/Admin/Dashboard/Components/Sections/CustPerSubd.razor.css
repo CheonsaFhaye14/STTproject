@@ -1,2 +1,242 @@
-﻿body {
-}
+﻿
+    .cpsd-card {
+        background: linear-gradient(135deg, #4a6fa5, #6b93c4);
+        border-radius: 16px;
+        padding: 24px;
+        color: white;
+        font-family: Arial, sans-serif;
+    }
+
+    .cpsd-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .cpsd-title {
+        font-weight: bold;
+        font-size: 13px;
+        letter-spacing: 1px;
+    }
+
+    .cpsd-summary {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+    }
+
+    .cpsd-summary-item {
+        opacity: 0.9;
+    }
+
+    .cpsd-summary-item.active strong {
+        color: #4fc3f7;
+    }
+
+    .cpsd-summary-item.inactive strong {
+        color: #ff9800;
+    }
+
+    .cpsd-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .cpsd-search {
+        flex: 1;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        font-size: 12px;
+    }
+
+    .cpsd-search::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .cpsd-search:focus {
+        outline: none;
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    .cpsd-sort {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .cpsd-sort option {
+        background: #4a6fa5;
+        color: white;
+    }
+
+    .cpsd-legend {
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        margin-bottom: 10px;
+        align-items: center;
+    }
+
+    .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+    }
+
+    .dot-active {
+        background: #4fc3f7;
+    }
+
+    .dot-inactive {
+        background: #ff9800;
+    }
+
+    .cpsd-table {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .cpsd-table-header,
+    .cpsd-table-row {
+        display: grid;
+        grid-template-columns: 80px 1fr 180px 55px 55px 55px;
+        align-items: center;
+        padding: 6px 8px;
+        font-size: 12px;
+        gap: 8px;
+    }
+
+    .cpsd-table-header {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .cpsd-table-row {
+        border-radius: 6px;
+        transition: background 0.15s;
+    }
+
+    .cpsd-table-row:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .cpsd-code {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    .col-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 12px;
+    }
+
+    .col-num {
+        text-align: center;
+        font-weight: bold;
+        font-size: 12px;
+    }
+
+    .active-num {
+        color: #4fc3f7;
+    }
+
+    .inactive-num {
+        color: #ff9800;
+    }
+
+    .total-num {
+        color: white;
+    }
+
+    .mini-bar-track {
+        height: 10px;
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: 4px;
+        display: flex;
+        overflow: hidden;
+        width: 100%;
+    }
+
+    .mini-bar-active {
+        height: 100%;
+        background: #4fc3f7;
+        transition: width 0.4s ease;
+    }
+
+    .mini-bar-inactive {
+        height: 100%;
+        background: #ff9800;
+        transition: width 0.4s ease;
+    }
+
+    .cpsd-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        margin-top: 16px;
+        font-size: 12px;
+    }
+
+    .cpsd-page-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 6px;
+        color: white;
+        padding: 4px 12px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .cpsd-page-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .cpsd-page-btn:not(:disabled):hover {
+        background: rgba(255, 255, 255, 0.35);
+    }
+
+    .cpsd-footer {
+        text-align: center;
+        font-size: 11px;
+        opacity: 0.6;
+        margin-top: 6px;
+    }
+
+    .cpsd-empty {
+        text-align: center;
+        padding: 24px;
+        opacity: 0.6;
+        font-size: 13px;
+    }
+
+    .cpsd-loading {
+        text-align: center;
+        opacity: 0.7;
+        padding: 40px;
+    }

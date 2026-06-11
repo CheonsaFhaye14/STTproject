@@ -8,6 +8,7 @@ using STTproject.Features.User.Profile.Services;
 using STTproject.Features.User.Customer.Services;
 using STTproject.Features.Admin.Customers.Services;
 using STTproject.Features.Admin.Users.Services;
+using STTproject.Features.Admin.Dashboard.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,7 @@ builder.Services.AddHostedService<PriceIncreaseWorker>();
 builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
 builder.Services.AddScoped<IGeographicDataService, GeographicDataService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
 var app = builder.Build();
 
