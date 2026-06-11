@@ -1,5 +1,386 @@
-﻿<h3>CompanyItemTable</h3>
+@using STTproject.Features.Admin.CompanyItem.DTOs
+@inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
+
+<div class="clt-page">
+
+    <div class="clt-layout">
+
+        <!-- Sidebar -->
+        <aside class="clt-sidebar">
+
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@totalCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Active</span>
+                    <span class="clt-stat-value clt-stat-active">@activeCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Inactive</span>
+                    <span class="clt-stat-value clt-stat-inactive">@inactiveCount</span>
+                </div>
+            </div>
+
+            <div class="clt-divider"></div>
+
+            <!-- Search -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Search</label>
+                <div class="clt-search-wrap">
+                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
+                           placeholder="Search…" />
+                </div>
+            </div>
+
+            <!-- Status filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Status</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                        <input type="radio" name="status" value=""
+                               @onchange="() => OnFilterChanged(status: string.Empty)" checked="@(SelectedStatus == "")" />
+                        <span>All</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
+                        <input type="radio" name="status" value="active"
+                               @onchange='() => OnFilterChanged(status: "active")'
+                               checked="@(SelectedStatus == "active")" />
+                        <span>Active</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
+                        <input type="radio" name="status" value="inactive"
+                               @onchange='() => OnFilterChanged(status: "inactive")'
+                               checked="@(SelectedStatus == "inactive")" />
+                        <span>Inactive</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Principal filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="principalFilter">Principal</label>
+                <select id="principalFilter" class="clt-select"
+                        @onchange="e => OnFilterChanged(principal: e.Value?.ToString())">
+                    <option value="">All</option>
+                    @foreach (var principal in Principals)
+                    {
+                        <option value="@principal" selected="@(SelectedPrincipalId == principal)">
+                            @principal
+                        </option>
+                    }
+                </select>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+
+        </aside>
+
+        <!-- Main content -->
+        <main class="clt-main">
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th @onclick='() => SortBy("ItemCode")' style="cursor:pointer">
+                                    Item Code @SortIndicator("ItemCode")
+                                </th>
+                                <th @onclick='() => SortBy("ItemName")' style="cursor:pointer">
+                                    Item Name @SortIndicator("ItemName")
+                                </th>
+                                <th @onclick='() => SortBy("Principal")' style="cursor:pointer">
+                                    Principal @SortIndicator("Principal")
+                                </th>
+                                <th @onclick='() => SortBy("Category")' style="cursor:pointer">
+                                    Category @SortIndicator("Category")
+                                </th>
+                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
+                                    Created @SortIndicator("CreatedDate")
+                                </th>
+                                <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">
+                                    Status @SortIndicator("IsActive")
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>Loading…</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!PagedCompanyItems.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>No company items match your filters</p>
+                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var companyItem in PagedCompanyItems)
+                                {
+                                    <tr class="@(!companyItem.IsActive ? "clt-row-inactive" : "")">
+                                        <td><span class="clt-code">@companyItem.CompanyItemId</span></td>
+                                        <td class="clt-name">@companyItem.ItemName</td>
+                                        <td><span class="clt-type-badge">@companyItem.Category</span></td>
+                                        <td class="clt-muted">@companyItem.Principal</td>
+                                        <td class="clt-muted">
+                                            @companyItem.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
+                                        </td>
+                                        <td>
+                                            @if (companyItem.IsActive)
+                                            {
+                                                <span class="clt-status clt-status-active">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clt-status clt-status-inactive">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit"
+                                                        @onclick="() => OnEditCompanyItem.InvokeAsync(companyItem.CompanyItemId)">Edit</button>
+                                                @if (companyItem.IsActive)
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-deactivate"
+                                                            @onclick="() => SetActive(companyItem.CompanyItemId, false)">Deactivate</button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-activate"
+                                                            @onclick="() => SetActive(companyItem.CompanyItemId, true)">Activate</button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">
+                    Showing @PagedCompanyItems.Count of @totalCount company items
+                </span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(currentPage == 1)"
+                                @onclick="() => GoToPage(currentPage - 1)">←</button>
+                        <span>Page @currentPage of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                                @onclick="() => GoToPage(currentPage + 1)">→</button>
+                    </div>
+                }
+            </div>
+        </main>
+
+    </div>
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
+                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
+</div>
 
 @code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    private List<string> Principals { get; set; } = new();
+    private static readonly TimeZoneInfo PhTimeZone =
+           TimeZoneInfo.FindSystemTimeZoneById(
+               OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
 
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(async _ =>
+            {
+                currentPage = 1;
+                await InvokeAsync(LoadPageAsync); // ← add InvokeAsync here
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+    private List<CompanyItemListDto> PagedCompanyItems { get; set; } = new();
+    private string SelectedPrincipalId { get; set; } = "";
+    private bool showToggleConfirmModal;
+    private int pendingToggleId;
+    private bool pendingToggleStatus;
+    private string toggleConfirmMessage = "";
+
+    [Parameter] public EventCallback<int> OnEditCompanyItem { get; set; }
+    private string SelectedStatus { get; set; } = "";
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount = 0;
+    private int activeCount = 0;
+    private int inactiveCount = 0;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
+        !string.IsNullOrWhiteSpace(SelectedPrincipalId) ||
+        !string.IsNullOrWhiteSpace(SelectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load principals once here, not on every LoadPageAsync call
+            var allItems = await AdminCompanyItemService.GetAllAsync();
+            Principals = allItems
+                .Where(x => !string.IsNullOrWhiteSpace(x.Principal))
+                .Select(x => x.Principal!)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            await LoadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading company items: {ex.Message}");
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async Task LoadPageAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+
+            var (items, total) = await AdminCompanyItemService.GetPagedAsync(
+                            currentPage, pageSize, _searchTerm, SelectedStatus,
+                            SelectedPrincipalId,
+                            SortColumn, SortAscending); // ← add these
+
+            PagedCompanyItems = items.ToList();
+            totalCount = total;
+
+            // Get active/inactive counts (only on first load or filter change)
+            var (_, activeTotal) = await AdminCompanyItemService.GetPagedAsync(
+                1, 1, _searchTerm, "active", SelectedPrincipalId);
+            var (_, inactiveTotal) = await AdminCompanyItemService.GetPagedAsync(
+                1, 1, _searchTerm, "inactive", SelectedPrincipalId);
+            activeCount = activeTotal;
+            inactiveCount = inactiveTotal;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading page: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate)
+                await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate)
+                await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnFilterChanged(string? status = null, string? principal = null)
+    {
+        if (status != null) SelectedStatus = status;
+        if (principal != null) SelectedPrincipalId = principal;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = "";
+        SelectedPrincipalId = "";
+        SelectedStatus = "";
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private void SetActive(int id, bool isActive)
+    {
+        pendingToggleId = id;
+        pendingToggleStatus = isActive;
+        toggleConfirmMessage = isActive
+            ? "Are you sure you want to activate this company item?"
+            : "Are you sure you want to deactivate this company item?";
+        showToggleConfirmModal = true;
+    }
+
+    private async Task ConfirmToggle()
+    {
+        showToggleConfirmModal = false;
+        await AdminCompanyItemService.ToggleCompanyItemStatusAsync(pendingToggleId, pendingToggleStatus);
+        var companyItem = PagedCompanyItems.FirstOrDefault(x => x.CompanyItemId == pendingToggleId);
+        if (companyItem != null) companyItem.IsActive = pendingToggleStatus;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelToggle() => showToggleConfirmModal = false;
+    private string SortColumn { get; set; } = "ItemCode";
+    private bool SortAscending { get; set; } = true;
+
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column)
+        {
+            return string.Empty;
+        }
+
+        return SortAscending ? " ▲" : " ▼";
+    }
 }

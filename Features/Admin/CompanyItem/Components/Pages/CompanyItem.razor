@@ -1,8 +1,101 @@
 ﻿@page "/admin/companyitem"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.CompanyItem.Components.Modals
+@using STTproject.Features.Admin.CompanyItem.Components.Sections
 
-<h3>CompanyItem</h3>
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading company items…</p>
+    </div>
+}
+
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        @* ------------- Header ----------------- *@
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Company Items</h1>
+                <p class="clt-page-sub">@totalCount total company items</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddCompanyItemModal">
+                <span class="clt-add-icon">+</span> Add company item
+            </button>
+        </div>
+
+        @* ------------- Company Item List Table ----------------- *@
+        <CompanyItemTable @ref="companyItemTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                          OnEditCompanyItem="OpenEditModal" />
+
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                      Title="@(editCompanyItemId.HasValue ? "Confirm Update of Company Item" : "Confirm Creation of Company Item")"
+                      Message="@(editCompanyItemId.HasValue ? "Are you sure you want to save changes to this company item?" : "Are you sure you want to create this company item?")"
+                      OnYes="ConfirmAddCompanyItem" OnNo="CancelConfirm" />
+
+        @if (showAddModal)
+        {
+            <AddCompanyItem @ref="addCompanyItemModal" CompanyItemId="editCompanyItemId" onCancel="CancelAddCompanyItem"
+                            OnRequestConfirm="OpenConfirmModal" />
+        }
+
+    </div>
+</div>
+
 
 @code {
+    private ConfirmModal? confirmAddModal;
+    private bool showConfirmAddModal;
+    private bool showAddModal;
+    private bool isLoading = true;
+    private int totalCount = 0;
+    private CompanyItemTable? companyItemTable;
+    private AddCompanyItem? addCompanyItemModal;
 
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private int? editCompanyItemId;
+
+    private void OpenAddCompanyItemModal()
+    {
+        editCompanyItemId = null; // new company item
+        showAddModal = true;
+    }
+
+    // called from CompanyItemListTable OnViewCompanyItem
+    private void OpenEditModal(int id)
+    {
+        editCompanyItemId = id;
+        showAddModal = true;
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void OpenConfirmModal() => showConfirmAddModal = true;
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddCompanyItem() => showAddModal = false;
+
+    private async Task ConfirmAddCompanyItem()
+    {
+        showConfirmAddModal = false;
+
+        if (addCompanyItemModal == null) return;
+
+        var (success, _) = await addCompanyItemModal.SubmitAsync();
+
+        if (success)
+        {
+            showAddModal = false;
+            if (companyItemTable != null)
+                await companyItemTable.LoadPageAsync();
+        }
+    }
 }

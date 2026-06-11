@@ -9,6 +9,7 @@ using STTproject.Features.User.Customer.Services;
 using STTproject.Features.Admin.Customers.Services;
 using STTproject.Features.Admin.Users.Services;
 using STTproject.Features.Admin.Dashboard.Services;
+using STTproject.Features.Admin.CompanyItem.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,7 +44,7 @@ builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
 builder.Services.AddScoped<IGeographicDataService, GeographicDataService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
-
+builder.Services.AddScoped<IAdminCompanyItemService, AdminCompanyItemService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

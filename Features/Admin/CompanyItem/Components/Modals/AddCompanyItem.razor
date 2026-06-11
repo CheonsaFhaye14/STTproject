@@ -1,5 +1,275 @@
-﻿<h3>AddCompanyItem</h3>
+@using STTproject.Features.Admin.CompanyItem.Validators
+@inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
+@inject STTproject.Services.IUserContextService UserContextService
+
+<div class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")</h3>
+        </div>
+
+        <div class="modal-body">
+            <div class="form-group">
+                <label>@CompanyItemValidations.AddCompanyItem.ItemCode.Label<span
+                    class="required-asterisk">*</span></label>
+                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode />
+                    @if (ShowValidationErrors &&
+                            !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)</span>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>@CompanyItemValidations.AddCompanyItem.ItemName.Label<span
+                        class="required-asterisk">*</span></label>
+                        <input @bind="ItemName" @ref="itemNameInput" disabled=@isViewMode />
+                        @if (ShowValidationErrors &&
+                                !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)))
+                        {
+                            <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label>@CompanyItemValidations.AddCompanyItem.Principal.Label<span
+                            class="required-asterisk">*</span></label>
+                            <input @bind="Principal" @ref="principalInput" disabled=@isViewMode />
+                            @if (ShowValidationErrors &&
+                                    !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)))
+                            {
+                                <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)</span>
+                            }
+                        </div>
+                        <div class="form-group">
+                            <label>@CompanyItemValidations.AddCompanyItem.Category.Label<span
+                                class="required-asterisk">*</span></label>
+                                <input @bind="Category" @ref="categoryInput" disabled=@isViewMode />
+                                @if (ShowValidationErrors &&
+                                        !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)))
+                                {
+                                    <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)</span>
+                                }
+                            </div>
+                            @if (isEdit && !isViewMode)
+                            {
+                                <div class="form-group">
+                                    <button type="button" @onclick="AddPriceIncrease" disabled="@isSendingPriceIncrease">
+                                        @(isSendingPriceIncrease ? "Sending..." : "Add Price Increase")
+                                    </button>
+                                </div>
+                            }
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
+                                    Is Active
+                                </label>
+                            </div>
+                            //add created by and updated by info in view mode
+                            @if (isEdit && isViewMode)
+                            {
+                                <h4>Audit Information</h4>
+                                <div class="form-group">
+                                    <label>Created Date</label>
+                                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                </div>
+                                @if (UpdatedDate.HasValue)
+                                {
+                                    <div class="form-group">
+                                        <label>Updated Date</label>
+                                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                    </div>
+                                }
+                            }
+
+                            <div class="action-buttons">
+                                @if (isEdit && isViewMode)
+                                {
+                                    <h4>Audit Information</h4>
+                                    <div class="form-group">
+                                        <label>Created Date</label>
+                                        <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(CreatedByName))
+                                    {
+                                        <div class="form-group">
+                                            <label>Created By</label>
+                                            <input value="@CreatedByName" disabled />
+                                        </div>
+                                    }
+                                    @if (UpdatedDate.HasValue)
+                                    {
+                                        <div class="form-group">
+                                            <label>Updated Date</label>
+                                            <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(UpdatedByName))
+                                    {
+                                        <div class="form-group">
+                                            <label>Updated By</label>
+                                            <input value="@UpdatedByName" disabled />
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
 @code {
+    [Parameter] public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback OnRequestConfirm { get; set; }
+    public CompanyItemCreateDto? PendingDto { get; private set; }
+    public CompanyItemUpdateDto? PendingUpdateDto { get; private set; }
+    private string? ItemCode { get; set; }
+    private string? ItemName { get; set; }
+    private string? Principal { get; set; }
+    private string? Category { get; set; }
+    private bool IsActive { get; set; } = true;
+    private bool isViewMode = false;
+    private bool isSendingPriceIncrease = false;
 
+    // Audit fields (view mode only)
+    private DateTime CreatedDate { get; set; }
+    private DateTime? UpdatedDate { get; set; }
+    private int? CreatedById { get; set; }
+    private int? UpdatedById { get; set; }
+    private string? CreatedByName { get; set; }
+    private string? UpdatedByName { get; set; }
+    private ElementReference itemCodeInput;
+    private ElementReference itemNameInput;
+    private ElementReference principalInput;
+    private ElementReference categoryInput;
+    private Dictionary<string, string> Errors { get; set; } = new();
+    private bool ShowValidationErrors { get; set; } = false;
+    private bool isSubmitting = false;
+
+    [Parameter] public int? CompanyItemId { get; set; }
+    private bool isEdit => CompanyItemId.HasValue;
+    private int? CurrentUserId => UserContextService.UserId;
+
+    private string GetFieldError(string key) =>
+        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+    private async Task AddPriceIncrease()
+    {
+        isSendingPriceIncrease = true;
+        // TODO: implement price increase logic
+        await Task.CompletedTask;
+        isSendingPriceIncrease = false;
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        if (isEdit)
+        {
+            isViewMode = true;
+            var companyItem = await AdminCompanyItemService.GetCompanyItemByIdAsync(CompanyItemId!.Value);
+            if (companyItem != null)
+            {
+                ItemCode = companyItem.ItemCode;
+                ItemName = companyItem.ItemName;
+                Principal = companyItem.Principal;
+                Category = companyItem.Category;
+                IsActive = companyItem.IsActive;
+                // Audit
+                CreatedDate = companyItem.CreatedDate;
+                UpdatedDate = companyItem.UpdatedDate;
+
+                CreatedById = companyItem.CreatedBy;
+                UpdatedById = companyItem.UpdatedBy;
+                CreatedByName = await AdminCompanyItemService.GetUserNameByIdAsync(companyItem.CreatedBy);
+                if (companyItem.UpdatedBy != null)
+                    UpdatedByName = await AdminCompanyItemService.GetUserNameByIdAsync(companyItem.UpdatedBy);
+
+                    
+            }
+        }
+    }
+
+    private void EnableEdit() => isViewMode = false;
+    private async Task CreateCompanyItem()
+    {
+
+        var companyItemToValidate = new STTproject.Data.CompanyItem
+        {
+            ItemCode = ItemCode ?? string.Empty,
+            ItemName = ItemName ?? string.Empty,
+            Principal = Principal ?? string.Empty,
+            Category = Category ?? string.Empty,
+        };
+
+        Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate);
+        ShowValidationErrors = true;
+
+        if (Errors.Any()) return;
+
+        if (isEdit)
+        {
+            PendingUpdateDto = new CompanyItemUpdateDto
+            {
+                CompanyItemId = CompanyItemId!.Value,
+                ItemCode = ItemCode,
+                ItemName = ItemName,
+                Principal = Principal,
+                Category = Category,
+                IsActive = IsActive,
+                UpdatedBy = CurrentUserId
+            };
+        }
+        else
+        {
+            PendingDto = new CompanyItemCreateDto
+            {
+                ItemCode = ItemCode,
+                ItemName = ItemName,
+                Principal = Principal,
+                Category = Category,
+                IsActive = IsActive,
+                CreatedBy = CurrentUserId
+            };
+        }
+
+        await OnRequestConfirm.InvokeAsync();
+    }
+
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        isSubmitting = true;
+        try
+        {
+            if (isEdit)
+            {
+                if (PendingUpdateDto == null) return (false, "No pending update data.");
+                await AdminCompanyItemService.UpdateCompanyItemAsync(PendingUpdateDto);
+                return (true, null);
+            }
+            else
+            {
+                if (PendingDto == null) return (false, "No pending data.");
+                await AdminCompanyItemService.CreateCompanyItemAsync(PendingDto);
+                return (true, null);
+            }
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
+        {
+            Errors[CompanyItemValidations.AddCompanyItem.ItemCode.Key] =
+                "This Item Code already exists.";
+            ShowValidationErrors = true;
+            await InvokeAsync(StateHasChanged);
+            return (false, "Duplicate item code.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private Task Cancel()
+    {
+        if (onCancel.HasDelegate)
+            return onCancel.InvokeAsync();
+        return Task.CompletedTask;
+    }
 }
