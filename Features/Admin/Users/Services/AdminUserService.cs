@@ -43,7 +43,9 @@ namespace STTproject.Features.Admin.Users.Services
             var entity = new Data.User
             {
                 Username = dto.UserName ?? string.Empty,
-                Password = BCrypt.Net.BCrypt.HashPassword(plainPassword),
+                // 🔓 Hashing disabled for now — will re-enable later
+                // Password = BCrypt.Net.BCrypt.HashPassword(plainPassword),
+                Password = plainPassword,
                 FullName = dto.FullName ?? string.Empty,
                 Role = dto.Role ?? string.Empty,
                 IsActive = dto.IsActive,
@@ -53,15 +55,18 @@ namespace STTproject.Features.Admin.Users.Services
             };
             db.Users.Add(entity);
             await db.SaveChangesAsync();
-            if (!string.IsNullOrWhiteSpace(dto.Email))
-            {
-                await SendAccountEmailAsync(
-                    toEmail: dto.Email,
-                    fullName: dto.FullName ?? dto.UserName ?? "",
-                    username: dto.UserName ?? "",
-                    plainPassword: plainPassword,
-                    isNewUser: true);
-            }
+
+            // 📧 Email sending disabled for now — will re-enable later
+            // if (!string.IsNullOrWhiteSpace(dto.Email))
+            // {
+            //     await SendAccountEmailAsync(
+            //         toEmail: dto.Email,
+            //         fullName: dto.FullName ?? dto.UserName ?? "",
+            //         username: dto.UserName ?? "",
+            //         plainPassword: plainPassword,
+            //         isNewUser: true);
+            // }
+
             return await GetUserByIdAsync(entity.UserId);
         }
         private async Task SendAccountEmailAsync(string toEmail, string fullName, string username, string plainPassword, bool isNewUser)
@@ -120,25 +125,26 @@ namespace STTproject.Features.Admin.Users.Services
             entity.Email = dto.Email ?? entity.Email;
             entity.UpdatedDate = NowPh();
 
-            var passwordChanged = false;
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
-                entity.Password = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-                passwordChanged = true;
+                // 🔓 Hashing disabled for now — will re-enable later
+                // entity.Password = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                entity.Password = dto.Password;
             }
 
             await db.SaveChangesAsync();
 
-            // 👇 send email only if password was changed and email exists
-            if (passwordChanged && !string.IsNullOrWhiteSpace(entity.Email))
-            {
-                await SendAccountEmailAsync(
-                    toEmail: entity.Email,
-                    fullName: entity.FullName ?? entity.Username ?? "",
-                    username: entity.Username ?? "",
-                    plainPassword: dto.Password!,
-                    isNewUser: false);
-            }
+            // 📧 Email sending disabled for now — will re-enable later
+            // var passwordChanged = !string.IsNullOrWhiteSpace(dto.Password);
+            // if (passwordChanged && !string.IsNullOrWhiteSpace(entity.Email))
+            // {
+            //     await SendAccountEmailAsync(
+            //         toEmail: entity.Email,
+            //         fullName: entity.FullName ?? entity.Username ?? "",
+            //         username: entity.Username ?? "",
+            //         plainPassword: dto.Password!,
+            //         isNewUser: false);
+            // }
 
             return dto;
         }

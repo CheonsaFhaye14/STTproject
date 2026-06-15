@@ -1,6 +1,7 @@
 @using STTproject.Features.Admin.CompanyItem.Validators
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
+<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
 
 <div class="modal-overlay">
     <div class="modal-box">
@@ -66,7 +67,6 @@
                                     Is Active
                                 </label>
                             </div>
-                            //add created by and updated by info in view mode
                             @if (isEdit && isViewMode)
                             {
                                 <h4>Audit Information</h4>
@@ -84,6 +84,8 @@
                             }
 
                             <div class="action-buttons">
+
+                                <button type="button" @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
                                 @if (isEdit && isViewMode)
                                 {
                                     <h4>Audit Information</h4>

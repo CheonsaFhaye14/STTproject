@@ -38,7 +38,42 @@
                     <span class="error-text">@GetFieldError(UserValidations.AddUser.username.Key)</span>
                 }
             </div>
-            @if (isEdit && !isViewMode)
+
+            @if (!isViewMode)
+            {
+                <div class="form-group">
+                    <label>
+                        @UserValidations.AddUser.password.Label
+                        @if (!isEdit)
+                        {
+                            <span class="required-asterisk">*</span>
+                        }
+                        else
+                        {
+                            <small style="font-weight:normal;"> (leave blank to keep current password)</small>
+                        }
+                    </label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="@(showPassword ? "text" : "password")"
+                               @bind="Password"
+                               @bind:event="oninput"
+                               placeholder="@(isEdit ? "Leave blank to keep current password" : "Enter password")" />
+                        <button type="button" @onclick="ToggleShowPassword">
+                            @(showPassword ? "Hide" : "Show")
+                        </button>
+                        <button type="button" @onclick="GenerateAndFillPassword">
+                            🎲 Generate
+                        </button>
+                    </div>
+                    @if (ShowValidationErrors &&
+                            !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.password.Key)))
+                    {
+                        <span class="error-text">@GetFieldError(UserValidations.AddUser.password.Key)</span>
+                    }
+                </div>
+            }
+
+            @* @if (isEdit && !isViewMode)
             {
                 <div class="form-group">
                     <button type="button" @onclick="ResetPasswordAndSendEmail" disabled="@isSendingPassword">
@@ -49,7 +84,7 @@
                         <span style="color:green;font-size:13px;">@passwordResetMessage</span>
                     }
                 </div>
-            }
+            } *@
 
             <div class="form-group">
                 <label>@UserValidations.AddUser.role.Label<span class="required-asterisk">*</span></label>
@@ -113,6 +148,7 @@
     public UserUpdateDto? PendingUpdateDto { get; private set; }
 
     private string? Password { get; set; }
+    private bool showPassword = false;
     private bool isViewMode = false;
     private ElementReference fullNameInput;
     private ElementReference emailInput;
@@ -171,7 +207,21 @@
         }
     }
 
-    private void EnableEdit() => isViewMode = false;
+    private void EnableEdit()
+    {
+        isViewMode = false;
+        Password = null;
+        showPassword = false;
+    }
+
+    private void ToggleShowPassword() => showPassword = !showPassword;
+
+    private void GenerateAndFillPassword()
+    {
+        Password = GenerateRandomPassword();
+        showPassword = true; // reveal so the user can copy/note it down
+    }
+
     private async Task CreateUser()
     {
 
@@ -184,6 +234,18 @@
         };
 
         Errors = await UserValidations.ValidateAddUserAsync(userToValidate);
+
+        // Password is required when creating a new user.
+        // For edits, it's optional (blank = keep current password).
+        if (!isEdit && string.IsNullOrWhiteSpace(Password))
+        {
+            Errors[UserValidations.AddUser.password.Key] = UserValidations.AddUser.password.ErrorMessage;
+        }
+        else if (!string.IsNullOrEmpty(Password) && Password.Length < 6)
+        {
+            Errors[UserValidations.AddUser.password.Key] = "Password must be at least 6 characters.";
+        }
+
         ShowValidationErrors = true;
 
         if (Errors.Any()) return;
@@ -198,6 +260,8 @@
                 UserName = UserName,
                 Role = Role,
                 IsActive = IsActive,
+                // Only send a password if the admin entered/generated a new one.
+                Password = string.IsNullOrWhiteSpace(Password) ? null : Password,
                 // UpdatedBy = CurrentUserId
             };
         }
@@ -210,6 +274,7 @@
                 UserName = UserName,
                 Role = Role,
                 IsActive = IsActive,
+                Password = Password,
 
                 // CreatedBy = CurrentUserId // ← current user
             };
@@ -237,13 +302,22 @@
             }
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
-            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx &&
+                  (sqlEx.Number == 2601 || sqlEx.Number == 2627))
         {
+            // 2601: duplicate key in a unique INDEX
+            // 2627: duplicate key in a unique/primary KEY CONSTRAINT
             Errors[UserValidations.AddUser.username.Key] =
                 "This Username already exists.";
             ShowValidationErrors = true;
             await InvokeAsync(StateHasChanged);
-            return (false, "Duplicate username.");
+            return (false, "This Username already exists. Please choose a different one.");
+        }
+        catch (Exception)
+        {
+            // Catch-all so unexpected errors surface in the confirm modal
+            // instead of crashing the Blazor circuit.
+            return (false, "Something went wrong while saving. Please try again.");
         }
         finally
         {

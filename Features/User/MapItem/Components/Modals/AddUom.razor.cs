@@ -12,7 +12,7 @@ namespace STTproject.Features.User.MapItem.Components.Modals;
 public partial class AddUom
 {
     private const string BaseUomName = "PC";
-
+    [Parameter] public HashSet<string> InUseUomNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
     [Parameter] public string? DraftStorageKey { get; set; }
@@ -222,7 +222,7 @@ public partial class AddUom
 
     private async Task RemoveUomEntry(string uomName)
     {
-        if (!IsBaseUom(uomName))
+        if (!IsBaseUom(uomName) && !IsUomInUse(uomName))
         {
             workingUomEntries.Remove(uomName);
             await PersistDraftAsync();
@@ -495,7 +495,8 @@ public partial class AddUom
         var normalized = (uomName ?? string.Empty).Trim().ToLowerInvariant();
         return normalized is "piece" or "pcs" or "pc";
     }
-
+    private bool IsUomInUse(string? uomName) =>
+        !string.IsNullOrWhiteSpace(uomName) && InUseUomNames.Contains(uomName.Trim());
     private static string NormalizeBaseUomName(string? uomName)
     {
         return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();

@@ -126,5 +126,6 @@
                    OnClose="CloseImportDetailsModal" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
-            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" />
+            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName"
+            InUseUomNames="@inUseUomNames" />
 </div>

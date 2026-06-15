@@ -1,5 +1,6 @@
 @using STTproject.Features.Admin.Users.DTOs
 @inject STTproject.Features.Admin.Users.Services.IAdminUserService AdminUserService
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
 <div class="clt-page">
 
@@ -95,11 +96,11 @@
                                 <th @onclick='() => SortBy("FullName")' style="cursor:pointer">
                                     Full Name @SortIndicator("FullName")
                                 </th>
-                                <th @onclick='() => SortBy("Email")' style="cursor:pointer">
-                                    Email @SortIndicator("Email")
-                                </th>
                                 <th @onclick='() => SortBy("Role")' style="cursor:pointer">
                                     Role @SortIndicator("Role")
+                                </th>
+                                <th @onclick='() => SortBy("Email")' style="cursor:pointer">
+                                    Email @SortIndicator("Email")
                                 </th>
                                 <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
                                     Created @SortIndicator("CreatedDate")
@@ -139,7 +140,7 @@
                                     <tr class="@(!user.IsActive ? "clt-row-inactive" : "")">
                                         <td><span class="clt-code">@user.UserId</span></td>
                                         <td class="clt-name">@user.UserName</td>
-                                        <td><span class="clt-type-badge">@user.Role</span></td>
+                                        <td><span class="clt-type-badge">@user.Role</span></td> 
                                         <td class="clt-muted">@user.Email</td>
                                         <td class="clt-muted">
                                             @user.CreatedDate.ToString("MMM d, yyyy hh:mm tt")

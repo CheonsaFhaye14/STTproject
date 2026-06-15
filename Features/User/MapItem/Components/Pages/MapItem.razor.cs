@@ -14,6 +14,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 {
     public partial class MapItem
     {
+        private HashSet<string> inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
         private const string BaseUomName = "PC";
         private bool isLoading = false;
         private string loadingMessage = "";
@@ -269,24 +270,34 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 NormalizePart(row.CompanyItemName));
         }
 
-        private Task OpenAddUomModal()
+    private async Task OpenAddUomModal()
+    {
+        if (selectedCompanyItemId.HasValue)
         {
-            if (selectedCompanyItemId.HasValue)
-            {
-                var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
-                modalCompanyItemCode = ci?.ItemCode;
-                modalCompanyItemName = ci?.ItemName;
-            }
-            else
-            {
-                modalCompanyItemCode = null;
-                modalCompanyItemName = null;
-            }
-
-            showAddUomModal = true;
-            _ = PersistDraftAsync();
-            return Task.CompletedTask;
+            var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
+            modalCompanyItemCode = ci?.ItemCode;
+            modalCompanyItemName = ci?.ItemName;
         }
+        else
+        {
+            modalCompanyItemCode = null;
+            modalCompanyItemName = null;
+        }
+
+        // Fetch in-use UOM names only when editing an existing item
+        if (editingSubdItemId.HasValue)
+        {
+            var usedNames = await mapItemService.GetInvoiceUsedUomNamesAsync(editingSubdItemId.Value);
+            inUseUomNames = usedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
+        }
+
+        showAddUomModal = true;
+        _ = PersistDraftAsync();
+    }
 
         private Task CloseAddUomModalAsync()
         {
