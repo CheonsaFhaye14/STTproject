@@ -102,6 +102,9 @@
                     <table class="clt-table">
                         <thead>
                             <tr>
+                                <th>
+                                    <input type="checkbox" @bind="selectAll" @bind:after="ToggleSelectAll" />
+                                </th>
                                 <th @onclick='() => SortBy("SalesInvoiceCode")' style="cursor:pointer">
                                     Code @SortIndicator("SalesInvoiceCode")
                                 </th>
@@ -137,10 +140,17 @@
                             else if (!PagedSalesInvoices.Any())
                             {
                                 <tr>
-                                    <td colspan="7" class="clt-empty">
+                                    <td colspan="8" class="clt-empty">
                                         <div class="clt-empty-inner">
-                                            <p>No sales invoices match your filters</p>
-                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                            @if (HasActiveFilters)
+                                            {
+                                                <p>No sales invoices match your filters</p>
+                                                <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                            }
+                                            else
+                                            {
+                                                <p>No sales invoices found</p>
+                                            }
                                         </div>
                                     </td>
                                 </tr>
@@ -150,6 +160,10 @@
                                 @foreach (var invoice in PagedSalesInvoices)
                                 {
                                     <tr>
+                                        <td>
+                                            <input type="checkbox" checked="@selectedIds.Contains(invoice.SalesInvoiceId)"
+                                                   @onchange="e => ToggleSelect(invoice.SalesInvoiceId, (bool)e.Value!)" />
+                                        </td>
                                         <td><span class="clt-code">@invoice.SalesInvoiceCode</span></td>
                                         <td class="clt-muted">
                                             @invoice.SalesInvoiceDate.ToString("MMM d, yyyy")
@@ -184,6 +198,12 @@
                 <span class="clt-footer-count">
                     Showing @PagedSalesInvoices.Count of @totalCount sales invoices
                 </span>
+                @if (selectedIds.Any())
+                {
+                    <button class="clt-btn-toggle clt-btn-delete" @onclick="OpenMassDeleteConfirm">
+                        Delete selected (@selectedIds.Count)
+                    </button>
+                }
                 @if (totalPages > 1)
                 {
                     <div class="clt-pagination">
@@ -201,16 +221,66 @@
 
     <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Delete" Message="@toggleConfirmMessage"
                   OnYes="ConfirmDelete" OnNo="CancelDelete" />
+    <ConfirmModal Show="showMassDeleteModal" Title="Confirm Mass Delete"
+                  Message="@($"Are you sure you want to delete {selectedIds.Count} selected sales invoice(s)? This cannot be undone.")"
+                  OnYes="ConfirmMassDelete" OnNo="() => showMassDeleteModal = false" />
 </div>
 
 @code {
+    // ── Mass delete state ─────────────────────────────────────────────────────
+    private HashSet<int> selectedIds = new();
+    private bool selectAll = false;
+    private bool showMassDeleteModal = false;
+
+    private void ToggleSelect(int id, bool selected)
+    {
+        if (selected) selectedIds.Add(id);
+        else selectedIds.Remove(id);
+
+        // Update selectAll checkbox state
+        selectAll = PagedSalesInvoices.Any() &&
+                    PagedSalesInvoices.All(i => selectedIds.Contains(i.SalesInvoiceId));
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (selectAll)
+            foreach (var invoice in PagedSalesInvoices)
+                selectedIds.Add(invoice.SalesInvoiceId);
+        else
+            selectedIds.Clear();
+    }
+
+    private void OpenMassDeleteConfirm() => showMassDeleteModal = true;
+
+    private async Task ConfirmMassDelete()
+    {
+        showMassDeleteModal = false;
+
+        var failed = new List<int>();
+
+        foreach (var id in selectedIds.ToList())
+        {
+            var result = await SalesInvoiceService.DeleteSalesInvoiceAsync(id);
+            if (!result.IsDeleted)
+            {
+                Console.WriteLine($"Failed to delete invoice {id}: {result.ErrorMessage}");
+                failed.Add(id);
+            }
+        }
+
+        // Clear only the successfully deleted ones
+        selectedIds = failed.ToHashSet();
+        selectAll = false;
+
+        await LoadPageAsync();
+    }
     [Parameter] public EventCallback OnLoaded { get; set; }
     [Parameter] public EventCallback<int> OnCountChanged { get; set; }
     [Parameter] public EventCallback<int> OnViewInvoice { get; set; }
 
-    private List<SalesInvoiceListRow> PagedSalesInvoices { get; set; } = new(); private List<(int Id, string? Name)>
-    SubDistributors
-    { get; set; } = new();
+    private List<SalesInvoiceListRow> PagedSalesInvoices { get; set; } = new();
+    private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
     private List<(int Id, string? Name)> Customers { get; set; } = new();
 
     private string SelectedOrderType { get; set; } = "";
@@ -308,6 +378,8 @@
                 await OnCountChanged.InvokeAsync(totalCount);
             if (OnLoaded.HasDelegate)
                 await OnLoaded.InvokeAsync();
+            selectedIds.Clear();
+            selectAll = false;
         }
     }
 
