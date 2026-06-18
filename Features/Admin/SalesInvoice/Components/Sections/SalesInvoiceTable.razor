@@ -1,5 +1,390 @@
-﻿<h3>SalesInvoiceTable</h3>
+﻿@using STTproject.Features.Admin.SalesInvoice.DTOs
+@using STTproject.Features.Admin.SalesInvoice.Components.Modals
+@using STTproject.Shared.Components
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+<div class="clt-page">
+    <div class="clt-layout">
+
+        <!-- Sidebar -->
+        <aside class="clt-sidebar">
+
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@totalCount</span>
+                </div>
+            </div>
+
+            <div class="clt-divider"></div>
+
+            <!-- Search -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Search</label>
+                <div class="clt-search-wrap">
+                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
+                           placeholder="Search..." />
+                </div>
+            </div>
+
+            <!-- Order type filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Order type</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedOrderType == "" ? "selected" : "")">
+                        <input type="radio" name="orderType" value=""
+                               @onchange="() => OnFilterChanged(orderType: string.Empty)"
+                               checked="@(SelectedOrderType == "")" />
+                        <span>All</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedOrderType == "invoice" ? "selected" : "")">
+                        <input type="radio" name="orderType" value="invoice"
+                               @onchange='() => OnFilterChanged(orderType: "invoice")'
+                               checked="@(SelectedOrderType == "invoice")" />
+                        <span>Invoice</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedOrderType == "credit" ? "selected" : "")">
+                        <input type="radio" name="orderType" value="credit"
+                               @onchange='() => OnFilterChanged(orderType: "credit")'
+                               checked="@(SelectedOrderType == "credit")" />
+                        <span>Credit</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Customer filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="customerFilter">Customer</label>
+                <select id="customerFilter" class="clt-select"
+                        @onchange="e => OnFilterChanged(customerId: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All customers</option>
+                    @foreach (var customer in Customers)
+                    {
+                        <option value="@customer.Id" selected="@(SelectedCustomerId?.ToString() == customer.Id.ToString())">
+                            @(customer.Name ?? "—")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <!-- Subdistributor filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
+                <select id="subdistFilter" class="clt-select"
+                        @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All subdistributors</option>
+                    @foreach (var sd in SubDistributors)
+                    {
+                        <option value="@sd.Id" selected="@(SelectedSubDistributorId?.ToString() == sd.Id.ToString())">
+                            @(sd.Name ?? "—")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+
+        </aside>
+
+        <!-- Main content -->
+        <main class="clt-main">
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th @onclick='() => SortBy("SalesInvoiceCode")' style="cursor:pointer">
+                                    Code @SortIndicator("SalesInvoiceCode")
+                                </th>
+                                <th @onclick='() => SortBy("SalesInvoiceDate")' style="cursor:pointer">
+                                    Date @SortIndicator("SalesInvoiceDate")
+                                </th>
+                                <th @onclick='() => SortBy("CustomerName")' style="cursor:pointer">
+                                    Customer @SortIndicator("CustomerName")
+                                </th>
+                                <th @onclick='() => SortBy("OrderType")' style="cursor:pointer">
+                                    Type @SortIndicator("OrderType")
+                                </th>
+                                <th @onclick='() => SortBy("SubDistributor")' style="cursor:pointer">
+                                    Subdistributor @SortIndicator("SubDistributor")
+                                </th>
+                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
+                                    Created @SortIndicator("CreatedDate")
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>Loading…</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!PagedSalesInvoices.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>No sales invoices match your filters</p>
+                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var invoice in PagedSalesInvoices)
+                                {
+                                    <tr>
+                                        <td><span class="clt-code">@invoice.SalesInvoiceCode</span></td>
+                                        <td class="clt-muted">
+                                            @invoice.SalesInvoiceDate.ToString("MMM d, yyyy")
+                                        </td>
+                                        <td class="clt-name">@invoice.CustomerName</td>
+                                        <td><span class="clt-type-badge">@invoice.OrderType</span></td>
+                                        <td class="clt-muted">@invoice.SubdName</td>
+                                        <td class="clt-muted">
+                                            @invoice.CreatedDate.ToString("MMM d, yyyy")
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit"
+                                                        @onclick="() => OnViewInvoice.InvokeAsync(invoice.SalesInvoiceId)">
+                                                    View
+                                                </button>
+                                                <button class="clt-btn-toggle clt-btn-delete"
+                                                        @onclick="() => DeleteSalesInvoice(invoice.SalesInvoiceId)">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">
+                    Showing @PagedSalesInvoices.Count of @totalCount sales invoices
+                </span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(currentPage == 1)"
+                                @onclick="() => GoToPage(currentPage - 1)">←</button>
+                        <span>Page @currentPage of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                                @onclick="() => GoToPage(currentPage + 1)">→</button>
+                    </div>
+                }
+            </div>
+        </main>
+
+    </div>
+
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Delete" Message="@toggleConfirmMessage"
+                  OnYes="ConfirmDelete" OnNo="CancelDelete" />
+</div>
 
 @code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    [Parameter] public EventCallback<int> OnViewInvoice { get; set; }
 
+    private List<SalesInvoiceListRow> PagedSalesInvoices { get; set; } = new(); private List<(int Id, string? Name)>
+    SubDistributors
+    { get; set; } = new();
+    private List<(int Id, string? Name)> Customers { get; set; } = new();
+
+    private string SelectedOrderType { get; set; } = "";
+    private int? SelectedCustomerId { get; set; }
+    private int? SelectedSubDistributorId { get; set; }
+
+    private string SortColumn { get; set; } = "SalesInvoiceDate";
+    private bool SortAscending { get; set; } = false;
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount = 0;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    // Confirm delete state
+    private bool showToggleConfirmModal;
+    private int pendingDeleteId;
+    private string toggleConfirmMessage = "";
+
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(async _ =>
+            {
+                currentPage = 1;
+                await InvokeAsync(LoadPageAsync);
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
+        SelectedSubDistributorId.HasValue ||
+        SelectedCustomerId.HasValue ||
+        !string.IsNullOrWhiteSpace(SelectedOrderType);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            SubDistributors = (await SalesInvoiceService.GetSubDistributorsAsync())
+    .Select(sd => (sd.SubDistributorId, (string?)sd.SubdName))
+    .ToList();
+
+            Customers = (await SalesInvoiceService.GetCustomersForDropdownAsync(0))
+                .Select(c => (c.CustomerId, (string?)c.CustomerName))
+                .ToList();
+
+            await LoadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing sales invoices: {ex.Message}");
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async Task LoadPageAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var (items, total) = await SalesInvoiceService.GetPagedAsync(
+                currentPage, pageSize,
+                _searchTerm,
+                SelectedOrderType,
+                SelectedCustomerId,
+                SelectedSubDistributorId,
+                SortColumn,
+                SortAscending);
+
+            PagedSalesInvoices = items.ToList();
+            totalCount = total;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading sales invoices: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate)
+                await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate)
+                await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnFilterChanged(
+        string? orderType = null,
+        string? customerId = null,
+        string? subdId = null)
+    {
+        if (orderType != null) SelectedOrderType = orderType;
+        if (customerId != null)
+            SelectedCustomerId = int.TryParse(customerId, out var cid) && cid > 0 ? cid : null;
+        if (subdId != null)
+            SelectedSubDistributorId = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = "";
+        SelectedOrderType = "";
+        SelectedCustomerId = null;
+        SelectedSubDistributorId = null;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private void DeleteSalesInvoice(int id)
+    {
+        pendingDeleteId = id;
+        toggleConfirmMessage = "Are you sure you want to delete this sales invoice? This cannot be undone.";
+        showToggleConfirmModal = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        showToggleConfirmModal = false;
+
+        var result = await SalesInvoiceService.DeleteSalesInvoiceAsync(pendingDeleteId);
+
+        if (result.IsDeleted)
+        {
+            await LoadPageAsync();
+        }
+        else
+        {
+            // Surface the error so you can see what's failing
+            Console.WriteLine($"Delete failed: {result.ErrorMessage}");
+            // Optionally show an error to the user
+        }
+    }
+
+    private void CancelDelete() => showToggleConfirmModal = false;
+
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column) return string.Empty;
+        return SortAscending ? " ▲" : " ▼";
+    }
 }

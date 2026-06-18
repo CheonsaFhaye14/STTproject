@@ -461,7 +461,14 @@ public sealed class InvoiceDataValidator
             unitOfMeasure = bracketedUom;
 
         var normalizedUom = Normalize(unitOfMeasure);
-        return uomLookup.TryGetValue((subdItemId, normalizedUom), out uom);
+
+        if (!uomLookup.TryGetValue((subdItemId, normalizedUom), out var found) || !found.IsActive)
+        {
+            return false;
+        }
+
+        uom = found;
+        return true;
     }
 
     private static bool TryExtractBracketedUom(string? value, out string extractedUom)

@@ -1,5 +1,544 @@
-﻿<h3>AddSalesInvoice</h3>
+﻿@using STTproject.Features.Admin.SalesInvoice.DTOs
+@using STTproject.Shared.Components
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+@inject STTproject.Services.IUserContextService UserContextService
+@using STTproject.Features.Admin.SalesInvoice.Validators
+
+<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
+<div class="modal-overlay">
+    <div class="modal-box modal-box--wide">
+        <div class="modal-header">
+            <h3>@(isEdit ? (isViewMode ? "View Sales Invoice" : "Edit Sales Invoice") : "Add New Sales Invoice")</h3>
+        </div>
+
+        <div class="modal-body">
+
+            <div class="form-group">
+                <label>Subdistributor <span class="required-asterisk">*</span></label>
+                <GenericAutocomplete TItem="SalesInvoiceSubDistributorDropdownItem" @ref="subdAutocomplete"
+                                     Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
+                                     ItemLabel="@(sd => sd.SubdName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
+                                     Placeholder="Search subdistributor..." IsDisabled="@isViewMode" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Invoice Code <span class="required-asterisk">*</span></label>
+                <input @bind="SalesInvoiceCode" disabled="@isViewMode" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Invoice Date <span class="required-asterisk">*</span></label>
+                <input type="date" @bind="SalesInvoiceDate" disabled="@isViewMode" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Customer <span class="required-asterisk">*</span></label>
+                <GenericAutocomplete TItem="SalesInvoiceCustomerDropdownItem" @ref="customerAutocomplete"
+                                     Items="Customers" @bind-Value="SelectedCustomerName"
+                                     ItemLabel="@(c => $"{c.CustomerCode} – {c.CustomerName}")" OnSelected="OnCustomerSelected"
+                                     Placeholder="Search customer..." IsDisabled="@isViewMode" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.Customer)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.Customer)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Order Type <span class="required-asterisk">*</span></label>
+                <select @bind="OrderType" @bind:after="OnOrderTypeChanged" disabled="@isViewMode">
+                    <option value="">— select —</option>
+                    <option value="Invoice">Invoice</option>
+                    <option value="Credit">Credit</option>
+                </select>
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.OrderType)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.OrderType)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Salesman</label>
+                <input @bind="SalesMan" disabled="@isViewMode" />
+            </div>
+
+            <h4>Items</h4>
+
+            @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.Items)))
+            {
+                <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.Items)</span>
+            }
+
+            <table class="clt-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>UOM</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Amount</th>
+                        @if (!isViewMode)
+                        {
+                            <th></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in LineItems)
+                    {
+                        <tr>
+                            <td>
+                                @if (isViewMode)
+                                {
+                                    <span>@line.ItemName</span>
+                                }
+                                else
+                                {
+                                    <GenericAutocomplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
+                                                         @bind-Value="line.ItemSearchText" ItemLabel="@(i => i.ItemName)"
+                                                         OnSelected="item => OnItemSelected(line, item)" Placeholder="Search item..." />
+                                }
+                            </td>
+                            <td>
+                                @if (isViewMode)
+                                {
+                                    <span>@line.UomName</span>
+                                }
+                                else
+                                {
+                                    <select @bind="line.SelectedUomId" @bind:after="() => OnUomChanged(line)"
+                                            disabled="@(!line.AvailableUoms.Any())">
+                                        <option value="0">— UOM —</option>
+                                        @foreach (var uom in line.AvailableUoms)
+                                        {
+                                            <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                        }
+                                    </select>
+                                }
+                            </td>
+                            <td>
+                                @if (isViewMode)
+                                {
+                                    <span>@line.Quantity</span>
+                                }
+                                else
+                                {
+                                    <input type="number" min="1" @bind="line.Quantity" @bind:after="() => RecalcLine(line)" />
+                                }
+                            </td>
+                            <td>@line.UnitPrice.ToString("N2")</td>
+                            <td>@line.Amount.ToString("N2")</td>
+                            @if (!isViewMode)
+                            {
+                                <td>
+                                    <button class="clt-btn-delete" @onclick="() => RemoveLine(line)">✕</button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="@(isViewMode ? 4 : 5)" style="text-align:right"><strong>Total</strong></td>
+                        <td><strong>@LineItems.Sum(l => l.Amount).ToString("N2")</strong></td>
+                        @if (!isViewMode)
+                        {
+                            <td></td>
+                        }
+                    </tr>
+                </tfoot>
+            </table>
+
+            @if (!isViewMode)
+            {
+                <button class="clt-btn-edit" style="margin-top:.5rem" @onclick="AddLine">+ Add Item</button>
+            }
+
+            
+            @if (isEdit && isViewMode)
+            {
+                <h4>Audit Information</h4>
+
+                <div class="form-group">
+                    <label>Created Date</label>
+                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                </div>
+
+                <div class="form-group">
+                    <label>Created By</label>
+                    <input value="@(CreatedByName ?? "—")" disabled />
+                </div>
+
+                @if (UpdatedDate.HasValue)
+                {
+                    <div class="form-group">
+                        <label>Updated Date</label>
+                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Updated By</label>
+                        <input value="@(UpdatedByName ?? "—")" disabled />
+                    </div>
+                }
+            }
+
+            <div class="action-buttons">
+                @if (isEdit && isViewMode)
+                {
+                    <button @onclick="EnableEdit">Edit</button>
+                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
+                }
+                else
+                {
+                    <button @onclick="Submit" disabled="@isSubmitting">
+                        @(isSubmitting
+                            ? (isEdit ? "Saving..." : "Creating...")
+                            : (isEdit ? "Save Changes" : "Create Invoice"))
+                    </button>
+                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
+                }
+            </div>
+
+        </div>
+    </div>
+</div>
 
 @code {
+    // ── Parameters ────────────────────────────────────────────────────────────
+    [Parameter] public int? SalesInvoiceId { get; set; }
+    [Parameter] public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback OnRequestConfirm { get; set; }
+
+    // Pending DTOs exposed to parent (same pattern as AddCustomer)
+    public CreateSalesInvoiceDto? PendingDto { get; private set; }
+    public UpdateSalesInvoiceDto? PendingUpdateDto { get; private set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    private bool isViewMode = false;
+    private bool isEdit => SalesInvoiceId.HasValue;
+    private bool isSubmitting = false;
+    private bool ShowValidationErrors = false;
+    private Dictionary<string, string> Errors { get; set; } = new();
+
+    private int? CurrentUserId => UserContextService.UserId;
+
+    // ── Autocomplete refs ─────────────────────────────────────────────────────
+    private GenericAutocomplete<SalesInvoiceSubDistributorDropdownItem>? subdAutocomplete;
+    private GenericAutocomplete<SalesInvoiceCustomerDropdownItem>? customerAutocomplete; // ← add this back
+
+    // ── Dropdown data ─────────────────────────────────────────────────────────
+    private List<SalesInvoiceSubDistributorDropdownItem> SubDistributors { get; set; } = new();
+    private List<SalesInvoiceCustomerDropdownItem> Customers { get; set; } = new();
+    private List<SalesInvoiceSubdItemDropdownItem> SubdItems { get; set; } = new();
+
+    // ── Header fields ─────────────────────────────────────────────────────────
+    private int SubDistributorId { get; set; }
+    private string? SelectedSubDistributorName { get; set; }
+    private string? SalesInvoiceCode { get; set; }
+    private DateOnly SalesInvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    private int CustomerId { get; set; }
+    private string? SelectedCustomerName { get; set; }
+    private string? OrderType { get; set; }
+    private string? SalesMan { get; set; }
+
+    
+    // ── Audit fields ──────────────────────────────────────────────────────────
+    private DateTime CreatedDate { get; set; }
+    private DateTime? UpdatedDate { get; set; }
+    private string? CreatedByName { get; set; }
+    private string? UpdatedByName { get; set; }
+
+    // ── Line items ────────────────────────────────────────────────────────────
+    private List<LineItemModel> LineItems { get; set; } = new();
+
+    private sealed class LineItemModel
+    {
+        public int SalesInvoiceItemId { get; set; } // 0 = new
+        public int SubdItemId { get; set; }
+        public string? ItemSearchText { get; set; }
+        public string? ItemName { get; set; }
+        public List<SalesInvoiceUomOption> AvailableUoms { get; set; } = new();
+        public int SelectedUomId { get; set; }
+        public string? UomName { get; set; }
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; } = 1;
+        public decimal Amount { get; set; }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        SubDistributors = await SalesInvoiceService.GetSubDistributorsAsync();
+
+        if (isEdit)
+        {
+            isViewMode = true;
+            var detail = await SalesInvoiceService.GetSalesInvoiceDetailAsync(SalesInvoiceId!.Value);
+            if (detail is not null)
+            {
+                SubDistributorId = detail.SubDistributorId;
+                SelectedSubDistributorName = detail.SubdName;
+
+                // Load customers and items scoped to this subdistributor
+                await LoadDropdownsForSubdistributor(SubDistributorId);
+
+                SalesInvoiceCode = detail.SalesInvoiceCode;
+                SalesInvoiceDate = detail.SalesInvoiceDate;
+                CustomerId = detail.CustomerId;
+                SelectedCustomerName = detail.CustomerName;
+                OrderType = detail.OrderType;
+                SalesMan = detail.SalesMan;
+                CreatedDate = detail.CreatedDate;
+                UpdatedDate = detail.UpdatedDate;
+                CreatedByName = detail.CreatedByName;
+                UpdatedByName = detail.UpdatedByName;
+
+                LineItems = detail.Items.Select(i => new LineItemModel
+                {
+                    SalesInvoiceItemId = i.SalesInvoiceItemId,
+                    SubdItemId = i.SubdItemId,
+                    ItemSearchText = $"{i.SubdItemCode} – {i.ItemName}",
+                    ItemName = i.ItemName,
+                    SelectedUomId = i.ItemsUomId,
+                    UomName = i.UomName,
+                    UnitPrice = i.UomPrice,
+                    Quantity = i.Quantity,
+                    Amount = i.Amount,
+                    AvailableUoms = SubdItems
+                        .FirstOrDefault(s => s.SubdItemId == i.SubdItemId)?.Uoms ?? new()
+                }).ToList();
+            }
+        }
+    }
+
+    private async Task LoadDropdownsForSubdistributor(int subdId)
+    {
+        Customers = await SalesInvoiceService.GetCustomersForDropdownAsync(subdId);
+        SubdItems = await SalesInvoiceService.GetSubdItemsForDropdownAsync(subdId);
+    }
+
+    // ── Selection handlers ────────────────────────────────────────────────────
+    private async Task OnSubDistributorSelected(SalesInvoiceSubDistributorDropdownItem? sd)
+    {
+        if (sd is null) return;
+        SubDistributorId = sd.SubDistributorId;
+        SelectedSubDistributorName = sd.SubdName;
+
+        // Reset dependent fields
+        CustomerId = 0;
+        SelectedCustomerName = null;
+        LineItems.Clear();
+        await LoadDropdownsForSubdistributor(SubDistributorId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnCustomerSelected(SalesInvoiceCustomerDropdownItem? c)
+    {
+        if (c is null) return Task.CompletedTask;
+        CustomerId = c.CustomerId;
+        SelectedCustomerName = $"{c.CustomerCode} – {c.CustomerName}";
+        return Task.CompletedTask;
+    }
+
+    private void OnItemSelected(LineItemModel line, SalesInvoiceSubdItemDropdownItem? item)
+    {
+        if (item is null) return;
+        line.SubdItemId = item.SubdItemId;
+        line.ItemSearchText = item.ItemName;
+        line.ItemName = item.ItemName;
+        line.AvailableUoms = item.Uoms;
+        line.SelectedUomId = item.Uoms.FirstOrDefault()?.ItemsUomId ?? 0;
+        line.UomName = item.Uoms.FirstOrDefault()?.UomName;
+        line.UnitPrice = ApplySign(item.Uoms.FirstOrDefault()?.Price ?? 0);
+        RecalcLine(line);
+        StateHasChanged();
+    }
+
+    private void OnUomChanged(LineItemModel line)
+    {
+        var uom = line.AvailableUoms.FirstOrDefault(u => u.ItemsUomId == line.SelectedUomId);
+        line.UomName = uom?.UomName;
+        line.UnitPrice = ApplySign(uom?.Price ?? 0);
+        RecalcLine(line);
+    }
+
+    private static void RecalcLine(LineItemModel line)
+        => line.Amount = line.UnitPrice * line.Quantity;
+
+    // Makes price/amount negative for Credit, positive for Invoice
+    private decimal ApplySign(decimal value)
+    {
+        var isCredit = string.Equals(OrderType, "Credit", StringComparison.OrdinalIgnoreCase);
+        var abs = Math.Abs(value);
+        return isCredit ? -abs : abs;
+    }
+
+    // ── Line item management ──────────────────────────────────────────────────
+    private void AddLine() => LineItems.Add(new LineItemModel());
+    private void RemoveLine(LineItemModel line) => LineItems.Remove(line);
+
+    // ── Validation ────────────────────────────────────────────────────────────
+    private bool Validate()
+    {
+        Errors = isEdit
+            ? SalesInvoiceValidator.ValidateUpdate(new UpdateSalesInvoiceDto
+            {
+                SalesInvoiceId = SalesInvoiceId!.Value,
+                SalesInvoiceCode = SalesInvoiceCode ?? "",
+                SalesInvoiceDate = SalesInvoiceDate,
+                CustomerId = CustomerId,
+                SubDistributorId = SubDistributorId,
+                OrderType = OrderType ?? "",
+                Items = LineItems.Select(l => new UpdateSalesInvoiceItemDto
+                {
+                    SalesInvoiceItemId = l.SalesInvoiceItemId,
+                    SubdItemId = l.SubdItemId,
+                    ItemsUomId = l.SelectedUomId,
+                    Quantity = l.Quantity,
+                    Amount = l.Amount
+                }).ToList()
+            })
+            : SalesInvoiceValidator.ValidateCreate(new CreateSalesInvoiceDto
+            {
+                SalesInvoiceCode = SalesInvoiceCode ?? "",
+                SalesInvoiceDate = SalesInvoiceDate,
+                CustomerId = CustomerId,
+                SubDistributorId = SubDistributorId,
+                OrderType = OrderType ?? "",
+                Items = LineItems.Select(l => new CreateSalesInvoiceItemDto
+                {
+                    SubdItemId = l.SubdItemId,
+                    ItemsUomId = l.SelectedUomId,
+                    Quantity = l.Quantity,
+                    Amount = l.Amount
+                }).ToList()
+            });
+
+        return !Errors.Any();
+    }
+
+    // ── Submit (same two-step pattern as AddCustomer) ─────────────────────────
+    private async Task Submit()
+    {
+        ShowValidationErrors = true;
+        if (!Validate()) return;
+
+        if (isEdit)
+        {
+            PendingUpdateDto = new UpdateSalesInvoiceDto
+            {
+                SalesInvoiceId = SalesInvoiceId!.Value,
+                SalesInvoiceCode = SalesInvoiceCode!,
+                SalesInvoiceDate = SalesInvoiceDate,
+                CustomerId = CustomerId,
+                SubDistributorId = SubDistributorId,
+                OrderType = OrderType!,
+                SalesMan = SalesMan,
+                Items = LineItems.Select(l => new UpdateSalesInvoiceItemDto
+                {
+                    SalesInvoiceItemId = l.SalesInvoiceItemId,
+                    SubdItemId = l.SubdItemId,
+                    ItemsUomId = l.SelectedUomId,
+                    Quantity = l.Quantity,
+                    Amount = l.Amount
+                }).ToList()
+            };
+        }
+        else
+        {
+            PendingDto = new CreateSalesInvoiceDto
+            {
+                SalesInvoiceCode = SalesInvoiceCode!,
+                SalesInvoiceDate = SalesInvoiceDate,
+                CustomerId = CustomerId,
+                SubDistributorId = SubDistributorId,
+                OrderType = OrderType!,
+                SalesMan = SalesMan,
+                Items = LineItems.Select(l => new CreateSalesInvoiceItemDto
+                {
+                    SubdItemId = l.SubdItemId,
+                    ItemsUomId = l.SelectedUomId,
+                    Quantity = l.Quantity,
+                    Amount = l.Amount
+                }).ToList()
+            };
+        }
+
+        await OnRequestConfirm.InvokeAsync();
+    }
+
+    // Called by the parent confirm modal (same as AddCustomer.SubmitAsync)
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        isSubmitting = true;
+        try
+        {
+            if (isEdit)
+            {
+                if (PendingUpdateDto is null) return (false, "No pending update data.");
+                var result = await SalesInvoiceService.UpdateSalesInvoiceAsync(
+                    PendingUpdateDto, CurrentUserId!.Value);
+                if (!result.IsSuccess) return (false, result.ErrorMessage);
+                return (true, null);
+            }
+            else
+            {
+                if (PendingDto is null) return (false, "No pending data.");
+                var result = await SalesInvoiceService.CreateSalesInvoiceAsync(
+                    PendingDto, CurrentUserId!.Value);
+
+                if (!result.IsSuccess)
+                {
+                    // Surface duplicate code error inline
+                    if (result.ErrorMessage?.Contains("already exists") == true)
+                    {
+                        Errors[SalesInvoiceValidator.Fields.InvoiceCode] = result.ErrorMessage;
+                        ShowValidationErrors = true;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    return (false, result.ErrorMessage);
+                }
+                return (true, null);
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void EnableEdit() => isViewMode = false;
+
+    private Task Cancel()
+        => onCancel.HasDelegate ? onCancel.InvokeAsync() : Task.CompletedTask;
+
+    private string GetFieldError(string key)
+        => Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+
+    private void OnOrderTypeChanged()
+    {
+        foreach (var line in LineItems)
+        {
+            line.UnitPrice = ApplySign(line.UnitPrice);
+            RecalcLine(line);
+        }
+    }
 
 }

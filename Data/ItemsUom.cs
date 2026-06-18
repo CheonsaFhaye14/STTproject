@@ -25,6 +25,8 @@ public partial class ItemsUom
 
     public int SubdItemId { get; set; }
 
+    public bool IsActive { get; set; }
+
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();

@@ -21,12 +21,11 @@ public static class AddUomValidator
         {
             errors["conversion"] = "Conversion must be a positive integer.";
         }
-        else if (existingEntries.Values.Any(entry => entry.Conversion == conversion))
+        else if (existingEntries.Values.Any(entry => entry.IsActive && entry.Conversion == conversion))
         {
             errors["conversion"] = "Conversion value must be unique.";
         }
 
-        // If the UOM is a piece-type, conversion must be 1
         if (int.TryParse(conversionInput, out var conv) && IsPieceUom(uomName) && conv != 1)
         {
             errors["conversion"] = "Unit 'PC/PCS/PIECE' must have conversion 1.";
@@ -40,14 +39,13 @@ public static class AddUomValidator
             }
         }
 
-        if (existingEntries.ContainsKey(uomName))
+        if (existingEntries.TryGetValue(uomName, out var existingEntry) && existingEntry.IsActive)
         {
             errors["uom"] = $"'{uomName}' already exists.";
         }
 
         return errors;
     }
-
     public static Dictionary<string, string> ValidateFinalUomEntries(Dictionary<string, UomEntry> entries)
     {
         var errors = new Dictionary<string, string>();

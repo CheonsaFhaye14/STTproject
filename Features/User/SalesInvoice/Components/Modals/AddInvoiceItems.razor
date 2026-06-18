@@ -76,7 +76,8 @@
                         <option value="0">-- Select --</option>
                         @if (CurrentSubdItem != null)
                         {
-                            @foreach (var uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId))
+                            @foreach (ItemsUom uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
+                                                u.IsActive))
                             {
                                 <option value="@uom.ItemsUomId">@uom.UomName</option>
                             }

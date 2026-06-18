@@ -1,8 +1,109 @@
 ﻿@page "/admin/salesinvoice"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.SalesInvoice.Components.Modals
+@using STTproject.Features.Admin.SalesInvoice.Components.Sections
+@using STTproject.Shared.Components
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading sales invoices…</p>
+    </div>
+}
 
-<h3>SalesInvoice</h3>
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+
+        <!-- Header -->
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Sales Invoices</h1>
+                <p class="clt-page-sub">@totalCount total sales invoices</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddModal">
+                <span class="clt-add-icon">+</span> Add invoice
+            </button>
+        </div>
+
+        <!-- List table -->
+        <SalesInvoiceTable @ref="invoiceTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                           OnViewInvoice="OpenEditModal" />
+
+        <!-- Confirm create/update modal -->
+        <ConfirmModal @ref="confirmModal" Show="showConfirmModal"
+                      Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
+                      Message="@(editInvoiceId.HasValue
+                                                                                                                                                                        ? "Are you sure you want to save changes to this sales invoice?"
+                                                                                                                                                                        : "Are you sure you want to create this sales invoice?")"
+                      OnYes="ConfirmSave" OnNo="CancelConfirm" />
+
+        <!-- Add / Edit modal -->
+        @if (showAddModal)
+        {
+            <AddSalesInvoice @ref="addInvoiceModal" SalesInvoiceId="editInvoiceId" onCancel="CancelAddModal"
+                             OnRequestConfirm="OpenConfirmModal" />
+        }
+
+    </div>
+</div>
 
 @code {
+    private ConfirmModal? confirmModal;
+    private SalesInvoiceTable? invoiceTable;
+    private AddSalesInvoice? addInvoiceModal;
 
+    private bool showConfirmModal = false;
+    private bool showAddModal = false;
+    private bool isLoading = true;
+    private int totalCount = 0;
+    private int? editInvoiceId;
+
+    // ── Table events ──────────────────────────────────────────────────────────
+
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    // ── Open / close ──────────────────────────────────────────────────────────
+
+    private void OpenAddModal()
+    {
+        editInvoiceId = null; // new invoice
+        showAddModal = true;
+    }
+
+    private void OpenEditModal(int id)
+    {
+        editInvoiceId = id;
+        showAddModal = true;
+    }
+
+    private void OpenConfirmModal() => showConfirmModal = true;
+    private void CancelConfirm() => showConfirmModal = false;
+    private void CancelAddModal() => showAddModal = false;
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
+    private async Task ConfirmSave()
+    {
+        showConfirmModal = false;
+
+        if (addInvoiceModal is null) return;
+
+        var (success, _) = await addInvoiceModal.SubmitAsync();
+
+        if (success)
+        {
+            showAddModal = false;
+            if (invoiceTable is not null)
+                await invoiceTable.LoadPageAsync();
+        }
+        // on failure: confirm closes, form stays open showing inline errors
+    }
 }

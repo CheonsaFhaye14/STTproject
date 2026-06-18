@@ -13,7 +13,7 @@ public interface IMapItemService
     Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
     Task<List<string>> GetCompanyItemUomsAsync(int companyItemId, CancellationToken cancellationToken = default);
     Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default);
-    Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, CancellationToken cancellationToken = default);
+    Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, bool includeInactive = false, CancellationToken cancellationToken = default);
     Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
@@ -137,9 +137,9 @@ public class MapItemService : IMapItemService
             si.ItemName,
             si.CompanyItemId,
             CompanyItemName = si.CompanyItem.ItemName,
-            Price = si.ItemsUom != null ? si.ItemsUom.Price : 0m,
+            Price = si.ItemsUom != null && si.ItemsUom.IsActive ? si.ItemsUom.Price : 0m,
             Principal = si.CompanyItem.Principal,
-            UomName = si.ItemsUom != null ? si.ItemsUom.UomName : string.Empty,
+            UomName = si.ItemsUom != null && si.ItemsUom.IsActive ? si.ItemsUom.UomName : string.Empty,
             si.SubDistributor.SubdName,
             si.CreatedDate
         });
@@ -239,21 +239,26 @@ public class MapItemService : IMapItemService
     public async Task<ItemsUom?> GetSubdItemUomAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        // Return the primary/base UOM if available
         return await context.ItemsUoms
             .AsNoTracking()
-            .Where(u => u.SubdItemId == subdItemId)
+            .Where(u => u.SubdItemId == subdItemId && u.IsActive)
             .OrderByDescending(u => u.IsBaseUnit)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, CancellationToken cancellationToken = default)
+    public async Task<List<ItemsUom>> GetSubdItemUomsAsync(int subdItemId, bool includeInactive = false, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        return await context.ItemsUoms
+        var query = context.ItemsUoms
             .AsNoTracking()
-            .Where(u => u.SubdItemId == subdItemId)
-            .ToListAsync(cancellationToken);
+            .Where(u => u.SubdItemId == subdItemId);
+
+        if (!includeInactive)
+        {
+            query = query.Where(u => u.IsActive);
+        }
+
+        return await query.ToListAsync(cancellationToken);
     }
 
     public async Task<bool> AddSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default)
@@ -295,7 +300,7 @@ public class MapItemService : IMapItemService
             {
                 bool coreFieldsChanged =
                     existing.SubdItemCode != item.SubdItemCode ||
-                    existing.ItemName     != item.ItemName     ||
+                    existing.ItemName != item.ItemName ||
                     existing.CompanyItemId != item.CompanyItemId;
 
                 if (coreFieldsChanged)
@@ -304,11 +309,11 @@ public class MapItemService : IMapItemService
                 }
             }
 
-            existing.SubdItemCode  = item.SubdItemCode;
-            existing.ItemName      = item.ItemName;
+            existing.SubdItemCode = item.SubdItemCode;
+            existing.ItemName = item.ItemName;
             existing.CompanyItemId = item.CompanyItemId;
-            existing.UpdatedBy     = item.UpdatedBy;
-            existing.UpdatedDate   = DateTime.UtcNow;
+            existing.UpdatedBy = item.UpdatedBy;
+            existing.UpdatedDate = DateTime.UtcNow;
 
             await context.SaveChangesAsync(cancellationToken);
             return UpdateSubdItemResult.Success();
@@ -332,7 +337,6 @@ public class MapItemService : IMapItemService
                     .Where(u => u.SubdItemId == subdItemId)
                     .ToListAsync(cancellationToken);
 
-                // Fetch UOM IDs already used in invoices for this subd item
                 var uomIdsInUse = await context.SalesInvoiceItems
                     .AsNoTracking()
                     .Where(sii => sii.SubdItemId == subdItemId)
@@ -353,26 +357,13 @@ public class MapItemService : IMapItemService
                     var existing = existingUoms.FirstOrDefault(e =>
                         string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
 
-                    if (existing != null && uomIdsInUse.Contains(existing.ItemsUomId))
-                    {
-                        // This UOM is referenced by invoices — block edits
-                        bool changed = existing.Price != (entry.Price ?? 0m)
-                                    || existing.ConversionToBase != entry.Conversion;
-                        if (changed)
-                        {
-                            await tx.RollbackAsync(cancellationToken);
-                            return false; // caller shows generic error
-                        }
-
-                        // No changes — skip update, leave it alone
-                        continue;
-                    }
-
                     if (existing != null)
                     {
+                        // Edits are now allowed even when referenced by invoices.
                         existing.ConversionToBase = entry.Conversion;
                         existing.Price = entry.Price ?? 0m;
                         existing.IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase);
+                        existing.IsActive = entry.IsActive;
                         existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
                         existing.UpdatedDate = DateTime.UtcNow;
                         context.ItemsUoms.Update(existing);
@@ -385,6 +376,7 @@ public class MapItemService : IMapItemService
                             ConversionToBase = entry.Conversion,
                             Price = entry.Price ?? 0m,
                             IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase),
+                            IsActive = entry.IsActive,
                             SubdItemId = subdItemId,
                             CreatedDate = DateTime.UtcNow,
                             UpdatedDate = DateTime.UtcNow,
@@ -394,24 +386,26 @@ public class MapItemService : IMapItemService
                     }
                 }
 
-                // Block deletion of UOMs used by invoices
+                // Fallback safety net: anything missing entirely from the incoming dictionary
+                // (rather than just flagged inactive) gets soft-deleted if in use, hard-deleted otherwise.
                 var toRemove = existingUoms
                     .Where(e => !incomingNames.Any(n =>
                         string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
-                var protectedRemovals = toRemove
-                    .Where(e => uomIdsInUse.Contains(e.ItemsUomId))
-                    .ToList();
+                var toDeactivate = toRemove.Where(e => uomIdsInUse.Contains(e.ItemsUomId)).ToList();
+                var toHardDelete = toRemove.Except(toDeactivate).ToList();
 
-                if (protectedRemovals.Any())
+                foreach (var entry in toDeactivate)
                 {
-                    await tx.RollbackAsync(cancellationToken);
-                    return false;
+                    entry.IsActive = false;
+                    entry.UpdatedBy = currentUserId > 0 ? currentUserId : entry.UpdatedBy;
+                    entry.UpdatedDate = DateTime.UtcNow;
+                    context.ItemsUoms.Update(entry);
                 }
 
-                if (toRemove.Any())
-                    context.ItemsUoms.RemoveRange(toRemove);
+                if (toHardDelete.Any())
+                    context.ItemsUoms.RemoveRange(toHardDelete);
 
                 await context.SaveChangesAsync(cancellationToken);
                 await tx.CommitAsync(cancellationToken);
@@ -427,7 +421,7 @@ public class MapItemService : IMapItemService
         {
             return false;
         }
-    }   
+    }
     public async Task<List<string>> GetInvoiceUsedUomNamesAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();

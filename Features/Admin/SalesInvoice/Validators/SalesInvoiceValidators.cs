@@ -8,15 +8,15 @@ public static class SalesInvoiceValidator
 
     public static class Fields
     {
-        public const string InvoiceCode     = "invoiceCode";
-        public const string InvoiceDate     = "invoiceDate";
-        public const string Customer        = "customerId";
-        public const string SubDistributor  = "subDistributorId";
-        public const string OrderType       = "orderType";
-        public const string Items           = "items";
+        public const string InvoiceCode = "invoiceCode";
+        public const string InvoiceDate = "invoiceDate";
+        public const string Customer = "customerId";
+        public const string SubDistributor = "subDistributorId";
+        public const string OrderType = "orderType";
+        public const string Items = "items";
     }
 
-    public static readonly string[] ValidOrderTypes = { "Regular", "Return", "Consignment" };
+    public static readonly string[] ValidOrderTypes = { "Credit", "Invoice" };
 
     // ─── Create ─────────────────────────────────────────────────────────────
 
@@ -24,8 +24,10 @@ public static class SalesInvoiceValidator
     {
         var errors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         ValidateHeader(dto.SalesInvoiceCode, dto.SalesInvoiceDate, dto.CustomerId, dto.SubDistributorId, dto.OrderType, errors);
-        ValidateItems(dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity, i.Amount)).ToList(), errors);
-        return errors;
+        ValidateItems(
+            dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity, i.Amount)).ToList(),
+            dto.OrderType,
+            errors); return errors;
     }
 
     // ─── Update ─────────────────────────────────────────────────────────────
@@ -38,8 +40,10 @@ public static class SalesInvoiceValidator
             errors[Fields.InvoiceCode] = "Invalid sales invoice.";
 
         ValidateHeader(dto.SalesInvoiceCode, dto.SalesInvoiceDate, dto.CustomerId, dto.SubDistributorId, dto.OrderType, errors);
-        ValidateItems(dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity, i.Amount)).ToList(), errors);
-        return errors;
+        ValidateItems(
+            dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity, i.Amount)).ToList(),
+            dto.OrderType,
+            errors); return errors;
     }
 
     // ─── Shared header validation ────────────────────────────────────────────
@@ -78,6 +82,7 @@ public static class SalesInvoiceValidator
 
     private static void ValidateItems(
         List<(int SubdItemId, int ItemsUomId, int Quantity, decimal Amount)> items,
+        string orderType,
         Dictionary<string, string> errors)
     {
         if (items.Count == 0)
@@ -85,6 +90,9 @@ public static class SalesInvoiceValidator
             errors[Fields.Items] = "At least one item is required.";
             return;
         }
+
+        var isCredit =
+            string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -100,22 +108,29 @@ public static class SalesInvoiceValidator
             if (item.Quantity <= 0)
                 errors[$"{prefix}.quantity"] = "Quantity must be greater than zero.";
 
-            if (item.Amount < 0)
-                errors[$"{prefix}.amount"] = "Amount cannot be negative.";
+            if (isCredit)
+            {
+                if (item.Amount >= 0)
+                    errors[$"{prefix}.amount"] =
+                        "Amount must be negative for credit transactions.";
+            }
+            else
+            {
+                if (item.Amount < 0)
+                    errors[$"{prefix}.amount"] =
+                        "Amount cannot be negative for invoice transactions.";
+            }
         }
 
-        // Duplicate SubdItemId + UOM combination check
         var duplicates = items
             .GroupBy(x => new { x.SubdItemId, x.ItemsUomId })
             .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
             .ToList();
 
         if (duplicates.Any())
-            errors[Fields.Items] = "Duplicate item and UOM combinations are not allowed.";
-    }
-
-    // ─── Single field helpers (for inline validation in UI) ──────────────────
+            errors[Fields.Items] =
+                "Duplicate item and UOM combinations are not allowed.";
+    }  // ─── Single field helpers (for inline validation in UI) ──────────────────
 
     public static string? ValidateInvoiceCode(string? value)
     {
@@ -148,6 +163,20 @@ public static class SalesInvoiceValidator
     public static string? ValidateQuantity(int? value)
         => value is null or <= 0 ? "Quantity must be greater than zero." : null;
 
-    public static string? ValidateAmount(decimal? value)
-        => value is null or < 0 ? "Amount cannot be negative." : null;
+    public static string? ValidateAmount(decimal? value, string? orderType)
+    {
+        if (value is null)
+            return "Amount is required.";
+
+        var isCredit =
+            string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase);
+
+        if (isCredit && value >= 0)
+            return "Amount must be negative for credit transactions.";
+
+        if (!isCredit && value < 0)
+            return "Amount cannot be negative for invoice transactions.";
+
+        return null;
+    }
 }

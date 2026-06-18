@@ -4,30 +4,6 @@ using STTproject.Features.Admin.SalesInvoice.DTOs;
 
 namespace STTproject.Features.Admin.SalesInvoice.Services;
 
-// ─── Interface ───────────────────────────────────────────────────────────────
-
-public interface IAdminSalesInvoiceService
-{
-    // View
-    Task<List<SalesInvoiceListRow>> GetSalesInvoicesAsync(int subDistributorId, CancellationToken cancellationToken = default);
-    Task<SalesInvoiceDetailDto?> GetSalesInvoiceDetailAsync(int salesInvoiceId, CancellationToken cancellationToken = default);
-    Task<bool> InvoiceCodeExistsAsync(string code, int subDistributorId, int? excludeId = null, CancellationToken cancellationToken = default);
-
-    // Dropdowns
-    Task<List<SalesInvoiceCustomerDropdownItem>> GetCustomersForDropdownAsync(int subDistributorId, CancellationToken cancellationToken = default);
-    Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(int subDistributorId, CancellationToken cancellationToken = default);
-
-    // CRUD
-    Task<SalesInvoiceResult> CreateSalesInvoiceAsync(CreateSalesInvoiceDto dto, int createdByUserId, CancellationToken cancellationToken = default);
-    Task<SalesInvoiceResult> UpdateSalesInvoiceAsync(UpdateSalesInvoiceDto dto, int updatedByUserId, CancellationToken cancellationToken = default);
-    Task<DeleteSalesInvoiceResult> DeleteSalesInvoiceAsync(int salesInvoiceId, CancellationToken cancellationToken = default);
-
-    // User
-    Task<string?> GetUserNameByIdAsync(int? userId);
-}
-
-// ─── Implementation ──────────────────────────────────────────────────────────
-
 public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 {
     private readonly IDbContextFactory<SttprojectContext> _contextFactory;
@@ -40,7 +16,6 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
         _contextFactory = contextFactory;
         _logger = logger;
     }
-
     // ─── User ────────────────────────────────────────────────────────────────
 
     public async Task<string?> GetUserNameByIdAsync(int? userId)
@@ -74,26 +49,100 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .ThenByDescending(si => si.CreatedDate)
             .Select(si => new SalesInvoiceListRow
             {
-                SalesInvoiceId   = si.SalesInvoiceId,
+                SalesInvoiceId = si.SalesInvoiceId,
                 SalesInvoiceCode = si.SalesInvoiceCode,
                 SalesInvoiceDate = si.SalesInvoiceDate,
-                CustomerName     = si.Customer.CustomerName,
-                CustomerCode     = si.Customer.CustomerCode,
-                SubdName         = si.SubDistributor.SubdName,
-                OrderType        = si.OrderType,
-                SalesMan         = si.SalesMan,
-                TotalAmount      = si.SalesInvoiceItems.Sum(item => item.Amount),
-                TotalItems       = si.SalesInvoiceItems.Count,
-                CreatedDate      = si.CreatedDate,
-                UpdatedDate      = si.UpdatedDate,
-                CreatedByName    = si.CreatedByNavigation != null
+                CustomerName = si.Customer.CustomerName,
+                CustomerCode = si.Customer.CustomerCode,
+                SubdName = si.SubDistributor.SubdName,
+                OrderType = si.OrderType,
+                SalesMan = si.SalesMan,
+                TotalAmount = si.SalesInvoiceItems.Sum(item => item.Amount),
+                TotalItems = si.SalesInvoiceItems.Count,
+                CreatedDate = si.CreatedDate,
+                UpdatedDate = si.UpdatedDate,
+                CreatedByName = si.CreatedByNavigation != null
                                      ? (si.CreatedByNavigation.FullName ?? si.CreatedByNavigation.Username)
                                      : null,
-                UpdatedByName    = si.UpdatedByNavigation != null
+                UpdatedByName = si.UpdatedByNavigation != null
                                      ? (si.UpdatedByNavigation.FullName ?? si.UpdatedByNavigation.Username)
                                      : null,
             })
             .ToListAsync(cancellationToken);
+    }
+    public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
+    int page, int pageSize,
+    string? search,
+    string? orderType,
+    int? customerId,
+    int? subDistributorId,
+    string sortColumn,
+    bool sortAscending,
+    CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        var query = context.SalesInvoices.AsNoTracking().AsQueryable();
+
+        // ── Filters ───────────────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(si =>
+                si.SalesInvoiceCode.Contains(search) ||
+                si.Customer.CustomerName.Contains(search) ||
+                si.Customer.CustomerCode.Contains(search));
+
+        if (!string.IsNullOrWhiteSpace(orderType))
+            query = query.Where(si =>
+                si.OrderType.ToLower() == orderType.ToLower());
+
+        if (customerId > 0)
+            query = query.Where(si => si.CustomerId == customerId);
+
+        if (subDistributorId > 0)
+            query = query.Where(si => si.SubDistributorId == subDistributorId);
+
+        // ── Total count ───────────────────────────────────────────────────────
+        var total = await query.CountAsync(cancellationToken);
+
+        // ── Sorting ───────────────────────────────────────────────────────────
+        query = sortColumn switch
+        {
+            "SalesInvoiceCode" => sortAscending ? query.OrderBy(si => si.SalesInvoiceCode) : query.OrderByDescending(si => si.SalesInvoiceCode),
+            "SalesInvoiceDate" => sortAscending ? query.OrderBy(si => si.SalesInvoiceDate) : query.OrderByDescending(si => si.SalesInvoiceDate),
+            "CustomerName" => sortAscending ? query.OrderBy(si => si.Customer.CustomerName) : query.OrderByDescending(si => si.Customer.CustomerName),
+            "OrderType" => sortAscending ? query.OrderBy(si => si.OrderType) : query.OrderByDescending(si => si.OrderType),
+            "SubDistributor" => sortAscending ? query.OrderBy(si => si.SubDistributor.SubdName) : query.OrderByDescending(si => si.SubDistributor.SubdName),
+            "CreatedDate" => sortAscending ? query.OrderBy(si => si.CreatedDate) : query.OrderByDescending(si => si.CreatedDate),
+            _ => query.OrderByDescending(si => si.SalesInvoiceDate)
+        };
+        // ── Paging ────────────────────────────────────────────────────────────
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(si => new SalesInvoiceListRow
+            {
+                SalesInvoiceId = si.SalesInvoiceId,
+                SalesInvoiceCode = si.SalesInvoiceCode,
+                SalesInvoiceDate = si.SalesInvoiceDate,
+                CustomerName = si.Customer.CustomerName,
+                CustomerCode = si.Customer.CustomerCode,
+                SubdName = si.SubDistributor.SubdName,
+                OrderType = si.OrderType,
+                SalesMan = si.SalesMan,
+                TotalAmount = si.SalesInvoiceItems.Sum(item => item.Amount),
+                TotalItems = si.SalesInvoiceItems.Count,
+                CreatedDate = si.CreatedDate,
+                UpdatedDate = si.UpdatedDate,
+                CreatedByName = si.CreatedByNavigation != null
+                                       ? (si.CreatedByNavigation.FullName ?? si.CreatedByNavigation.Username)
+                                       : null,
+                UpdatedByName = si.UpdatedByNavigation != null
+                                       ? (si.UpdatedByNavigation.FullName ?? si.UpdatedByNavigation.Username)
+                                       : null,
+            })
+            .ToListAsync(cancellationToken);
+
+        return (items, total);
     }
 
     public async Task<SalesInvoiceDetailDto?> GetSalesInvoiceDetailAsync(
@@ -107,36 +156,36 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .Where(si => si.SalesInvoiceId == salesInvoiceId)
             .Select(si => new SalesInvoiceDetailDto
             {
-                SalesInvoiceId   = si.SalesInvoiceId,
+                SalesInvoiceId = si.SalesInvoiceId,
                 SalesInvoiceCode = si.SalesInvoiceCode,
                 SalesInvoiceDate = si.SalesInvoiceDate,
-                CustomerId       = si.CustomerId,
-                CustomerName     = si.Customer.CustomerName,
-                CustomerCode     = si.Customer.CustomerCode,
+                CustomerId = si.CustomerId,
+                CustomerName = si.Customer.CustomerName,
+                CustomerCode = si.Customer.CustomerCode,
                 SubDistributorId = si.SubDistributorId,
-                SubdName         = si.SubDistributor.SubdName,
-                OrderType        = si.OrderType,
-                SalesMan         = si.SalesMan,
-                CreatedDate      = si.CreatedDate,
-                UpdatedDate      = si.UpdatedDate,
-                CreatedByName    = si.CreatedByNavigation != null
+                SubdName = si.SubDistributor.SubdName,
+                OrderType = si.OrderType,
+                SalesMan = si.SalesMan,
+                CreatedDate = si.CreatedDate,
+                UpdatedDate = si.UpdatedDate,
+                CreatedByName = si.CreatedByNavigation != null
                                      ? (si.CreatedByNavigation.FullName ?? si.CreatedByNavigation.Username)
                                      : null,
-                UpdatedByName    = si.UpdatedByNavigation != null
+                UpdatedByName = si.UpdatedByNavigation != null
                                      ? (si.UpdatedByNavigation.FullName ?? si.UpdatedByNavigation.Username)
                                      : null,
                 Items = si.SalesInvoiceItems
                     .Select(item => new SalesInvoiceItemDto
                     {
                         SalesInvoiceItemId = item.SalesInvoiceItemId,
-                        SubdItemId         = item.SubdItemId,
-                        SubdItemCode       = item.SubdItem.SubdItemCode,
-                        ItemName           = item.SubdItem.ItemName,
-                        ItemsUomId         = item.ItemsUomId,
-                        UomName            = item.ItemsUom.UomName,
-                        UomPrice           = item.ItemsUom.Price,
-                        Quantity           = item.Quantity,
-                        Amount             = item.Amount
+                        SubdItemId = item.SubdItemId,
+                        SubdItemCode = item.SubdItem.SubdItemCode,
+                        ItemName = item.SubdItem.ItemName,
+                        ItemsUomId = item.ItemsUomId,
+                        UomName = item.ItemsUom.UomName,
+                        UomPrice = item.ItemsUom.Price,
+                        Quantity = item.Quantity,
+                        Amount = item.Amount
                     })
                     .OrderBy(item => item.SubdItemCode)
                     .ToList()
@@ -175,7 +224,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .OrderBy(c => c.CustomerName)
             .Select(c => new SalesInvoiceCustomerDropdownItem
             {
-                CustomerId   = c.CustomerId,
+                CustomerId = c.CustomerId,
                 CustomerCode = c.CustomerCode,
                 CustomerName = c.CustomerName
             })
@@ -194,20 +243,36 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .OrderBy(si => si.SubdItemCode)
             .Select(si => new SalesInvoiceSubdItemDropdownItem
             {
-                SubdItemId   = si.SubdItemId,
+                SubdItemId = si.SubdItemId,
                 SubdItemCode = si.SubdItemCode,
-                ItemName     = si.ItemName,
-                Uoms         = context.ItemsUoms
-                    .Where(u => u.SubdItemId == si.SubdItemId)
-                    .Select(u => new SalesInvoiceUomOption
-                    {
-                        ItemsUomId       = u.ItemsUomId,
-                        UomName          = u.UomName,
-                        Price            = u.Price,
-                        ConversionToBase = u.ConversionToBase
-                    })
-                    .OrderBy(u => u.UomName)
-                    .ToList()
+                ItemName = si.ItemName,
+                Uoms = context.ItemsUoms
+    .Where(u => u.SubdItemId == si.SubdItemId && u.IsActive)
+    .Select(u => new SalesInvoiceUomOption
+    {
+        ItemsUomId = u.ItemsUomId,
+        UomName = u.UomName,
+        Price = u.Price,
+        ConversionToBase = u.ConversionToBase
+    })
+    .OrderBy(u => u.UomName)
+    .ToList()
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    // In AdminSalesInvoiceService:
+    public async Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        return await context.SubDistributors
+            .AsNoTracking()
+            .OrderBy(sd => sd.SubdName)
+            .Select(sd => new SalesInvoiceSubDistributorDropdownItem
+            {
+                SubDistributorId = sd.SubDistributorId,
+                SubdName = sd.SubdName
             })
             .ToListAsync(cancellationToken);
     }
@@ -235,22 +300,22 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
             var invoice = new STTproject.Data.SalesInvoice
             {
-                SalesInvoiceCode  = dto.SalesInvoiceCode.Trim(),
-                SalesInvoiceDate  = dto.SalesInvoiceDate,
-                CustomerId        = dto.CustomerId,
-                SubDistributorId  = dto.SubDistributorId,
-                OrderType         = dto.OrderType.Trim(),
-                SalesMan          = dto.SalesMan?.Trim(),
-                CreatedDate       = DateTime.UtcNow,
-                CreatedBy         = createdByUserId,
+                SalesInvoiceCode = dto.SalesInvoiceCode.Trim(),
+                SalesInvoiceDate = dto.SalesInvoiceDate,
+                CustomerId = dto.CustomerId,
+                SubDistributorId = dto.SubDistributorId,
+                OrderType = dto.OrderType.Trim(),
+                SalesMan = dto.SalesMan?.Trim(),
+                CreatedDate = DateTime.UtcNow,
+                CreatedBy = createdByUserId,
                 SalesInvoiceItems = dto.Items.Select(i => new SalesInvoiceItem
                 {
-                    SubdItemId  = i.SubdItemId,
-                    ItemsUomId  = i.ItemsUomId,
-                    Quantity    = i.Quantity,
-                    Amount      = i.Amount,
+                    SubdItemId = i.SubdItemId,
+                    ItemsUomId = i.ItemsUomId,
+                    Quantity = i.Quantity,
+                    Amount = i.Amount,
                     CreatedDate = DateTime.UtcNow,
-                    CreatedBy   = createdByUserId
+                    CreatedBy = createdByUserId
                 }).ToList()
             };
 
@@ -300,12 +365,12 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
             existing.SalesInvoiceCode = dto.SalesInvoiceCode.Trim();
             existing.SalesInvoiceDate = dto.SalesInvoiceDate;
-            existing.CustomerId       = dto.CustomerId;
+            existing.CustomerId = dto.CustomerId;
             existing.SubDistributorId = dto.SubDistributorId;
-            existing.OrderType        = dto.OrderType.Trim();
-            existing.SalesMan         = dto.SalesMan?.Trim();
-            existing.UpdatedDate      = DateTime.UtcNow;
-            existing.UpdatedBy        = updatedByUserId;
+            existing.OrderType = dto.OrderType.Trim();
+            existing.SalesMan = dto.SalesMan?.Trim();
+            existing.UpdatedDate = DateTime.UtcNow;
+            existing.UpdatedBy = updatedByUserId;
 
             // Reconcile items: delete removed, update existing, add new
             var incomingIds = dto.Items
@@ -328,24 +393,24 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
                     if (existingItem is not null)
                     {
-                        existingItem.SubdItemId  = itemDto.SubdItemId;
-                        existingItem.ItemsUomId  = itemDto.ItemsUomId;
-                        existingItem.Quantity    = itemDto.Quantity;
-                        existingItem.Amount      = itemDto.Amount;
+                        existingItem.SubdItemId = itemDto.SubdItemId;
+                        existingItem.ItemsUomId = itemDto.ItemsUomId;
+                        existingItem.Quantity = itemDto.Quantity;
+                        existingItem.Amount = itemDto.Amount;
                         existingItem.UpdatedDate = DateTime.UtcNow;
-                        existingItem.UpdatedBy   = updatedByUserId;
+                        existingItem.UpdatedBy = updatedByUserId;
                     }
                 }
                 else
                 {
                     existing.SalesInvoiceItems.Add(new SalesInvoiceItem
                     {
-                        SubdItemId  = itemDto.SubdItemId,
-                        ItemsUomId  = itemDto.ItemsUomId,
-                        Quantity    = itemDto.Quantity,
-                        Amount      = itemDto.Amount,
+                        SubdItemId = itemDto.SubdItemId,
+                        ItemsUomId = itemDto.ItemsUomId,
+                        Quantity = itemDto.Quantity,
+                        Amount = itemDto.Amount,
                         CreatedDate = DateTime.UtcNow,
-                        CreatedBy   = updatedByUserId
+                        CreatedBy = updatedByUserId
                     });
                 }
             }

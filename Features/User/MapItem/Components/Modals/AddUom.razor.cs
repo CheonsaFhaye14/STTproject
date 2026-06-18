@@ -174,6 +174,7 @@ public partial class AddUom
         {
             Conversion = int.Parse(conversionInput),
             Price = price,
+            IsActive = true,
             IsAutoCalculated = autoCalc || !price.HasValue
         };
 
@@ -222,13 +223,61 @@ public partial class AddUom
 
     private async Task RemoveUomEntry(string uomName)
     {
-        if (!IsBaseUom(uomName) && !IsUomInUse(uomName))
+        if (IsBaseUom(uomName))
         {
-            workingUomEntries.Remove(uomName);
-            await PersistDraftAsync();
+            return;
         }
+
+        if (!workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            return;
+        }
+
+        if (IsUomInUse(uomName))
+        {
+            entry.IsActive = false; // preserve history for existing references
+        }
+        else
+        {
+            workingUomEntries.Remove(uomName); // never referenced, safe to drop entirely
+        }
+
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+    private bool showReactivateConflictModal;
+    private string reactivateConflictMessage = string.Empty;
+    private async Task ReactivateUomEntry(string uomName)
+    {
+        if (!workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            return;
+        }
+
+        var conflict = workingUomEntries.FirstOrDefault(kv =>
+            kv.Value.IsActive &&
+            !string.Equals(kv.Key, uomName, StringComparison.OrdinalIgnoreCase) &&
+            kv.Value.Conversion == entry.Conversion);
+
+        if (!string.IsNullOrEmpty(conflict.Key))
+        {
+            reactivateConflictMessage =
+                $"Cannot reactivate '{uomName}': conversion {entry.Conversion} is already used by '{conflict.Key}'. Update the conversion first.";
+            showReactivateConflictModal = true;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        entry.IsActive = true;
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
+    private void DismissReactivateConflictModal()
+    {
+        showReactivateConflictModal = false;
+        reactivateConflictMessage = string.Empty;
+    }
     private async Task AddAsync()
     {
         if (!workingUomEntries.TryGetValue(BaseUomName, out var baseEntry))

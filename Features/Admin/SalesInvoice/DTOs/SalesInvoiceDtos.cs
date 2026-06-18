@@ -51,6 +51,7 @@ public sealed class SalesInvoiceItemDto
     public decimal UomPrice { get; init; }
     public int Quantity { get; init; }
     public decimal Amount { get; init; }
+    public decimal UnitPrice { get; init; }
 }
 
 // ─── Add ────────────────────────────────────────────────────────────────────
@@ -145,4 +146,10 @@ public sealed class DeleteSalesInvoiceResult
     public static DeleteSalesInvoiceResult Success() => new() { IsDeleted = true };
     public static DeleteSalesInvoiceResult NotFound() => new() { IsDeleted = false, ErrorMessage = "Sales invoice not found." };
     public static DeleteSalesInvoiceResult Failed(string msg) => new() { IsDeleted = false, ErrorMessage = msg };
+}
+// Add to SalesInvoiceDTO.cs:
+public sealed class SalesInvoiceSubDistributorDropdownItem
+{
+    public int SubDistributorId { get; init; }
+    public string? SubdName { get; init; }
 }
