@@ -584,24 +584,32 @@ public sealed class InvoiceDataValidator
         {
             case "cs":
             case "case":
+            case "cases":
                 yield return "case";
+                yield return "cases";
                 yield return "cs";
                 yield break;
             case "dz":
             case "dozen":
+            case "dozens":
                 yield return "dozen";
+                yield return "dozens";
                 yield return "dz";
                 yield break;
             case "pc":
             case "pcs":
             case "piece":
+            case "pieces":
                 yield return "piece";
+                yield return "pieces";
                 yield return "pc";
                 yield return "pcs";
                 yield break;
             case "pckg":
             case "package":
+            case "packages":
                 yield return "package";
+                yield return "packages";
                 yield return "pckg";
                 yield break;
             default:
@@ -711,7 +719,7 @@ public sealed class InvoiceDataValidator
         // Strip everything except letters and digits (no spaces either)
         return Regex.Replace(cleaned.ToLowerInvariant(), @"[^a-z0-9]", string.Empty);
     }
-    private static string StripCodePrefix(string value)
+    private static string StripCodePrefix(string value)   
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
         var dashIndex = value.IndexOf(" - ");

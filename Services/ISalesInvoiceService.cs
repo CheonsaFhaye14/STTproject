@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using STTproject.Models;
 using STTproject.Data;
 namespace STTproject.Services;

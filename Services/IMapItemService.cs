@@ -323,106 +323,134 @@ public class MapItemService : IMapItemService
             return UpdateSubdItemResult.Failed("Unable to update the sub distributor item.");
         }
     }
-    public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default)
+public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default)
+{
+    await using var context = _contextFactory.CreateDbContext();
+    try
     {
-        await using var context = _contextFactory.CreateDbContext();
+        if (uomEntries == null) return false;
+
+        await using var tx = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (uomEntries == null) return false;
+            var existingUoms = await context.ItemsUoms
+                .Where(u => u.SubdItemId == subdItemId)
+                .ToListAsync(cancellationToken);
 
-            await using var tx = await context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var uomIdsInUse = await context.SalesInvoiceItems
+                .AsNoTracking()
+                .Where(sii => sii.SubdItemId == subdItemId)
+                .Select(sii => sii.ItemsUomId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var incomingNames = uomEntries.Keys
+                .Select(k => k.Trim())
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .ToList();
+
+            var companyItemId = await context.SubdItems
+                .Where(si => si.SubdItemId == subdItemId)
+                .Select(si => si.CompanyItemId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var now = DateTime.Now; // matches sp_ApplyDuePriceIncrease's GETDATE() convention
+
+            foreach (var kv in uomEntries)
             {
-                var existingUoms = await context.ItemsUoms
-                    .Where(u => u.SubdItemId == subdItemId)
-                    .ToListAsync(cancellationToken);
+                var name = kv.Key.Trim();
+                var entry = kv.Value;
 
-                var uomIdsInUse = await context.SalesInvoiceItems
-                    .AsNoTracking()
-                    .Where(sii => sii.SubdItemId == subdItemId)
-                    .Select(sii => sii.ItemsUomId)
-                    .Distinct()
-                    .ToListAsync(cancellationToken);
+                var existing = existingUoms.FirstOrDefault(e =>
+                    string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
 
-                var incomingNames = uomEntries.Keys
-                    .Select(k => k.Trim())
-                    .Where(k => !string.IsNullOrWhiteSpace(k))
-                    .ToList();
-
-                foreach (var kv in uomEntries)
+                if (existing != null)
                 {
-                    var name = kv.Key.Trim();
-                    var entry = kv.Value;
+                    var oldPrice = existing.Price;
+                    var newPrice = entry.Price ?? 0m;
 
-                    var existing = existingUoms.FirstOrDefault(e =>
-                        string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
-
-                    if (existing != null)
+                    if (oldPrice != newPrice)
                     {
-                        // Edits are now allowed even when referenced by invoices.
-                        existing.ConversionToBase = entry.Conversion;
-                        existing.Price = entry.Price ?? 0m;
-                        existing.IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase);
-                        existing.IsActive = entry.IsActive;
-                        existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
-                        existing.UpdatedDate = DateTime.UtcNow;
-                        context.ItemsUoms.Update(existing);
-                    }
-                    else
-                    {
-                        context.ItemsUoms.Add(new ItemsUom
+                        context.ItemsUomPriceHistories.Add(new ItemsUomPriceHistory
                         {
-                            UomName = name,
-                            ConversionToBase = entry.Conversion,
-                            Price = entry.Price ?? 0m,
-                            IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase),
-                            IsActive = entry.IsActive,
-                            SubdItemId = subdItemId,
-                            CreatedDate = DateTime.UtcNow,
-                            UpdatedDate = DateTime.UtcNow,
-                            CreatedBy = currentUserId > 0 ? currentUserId : null,
-                            UpdatedBy = currentUserId > 0 ? currentUserId : null
+                            ItemsUomId = existing.ItemsUomId,
+                            CompanyItemId = companyItemId,
+                            OldPrice = oldPrice,
+                            NewPrice = newPrice,
+                            PriceIncreasePercent = oldPrice != 0
+                                ? Math.Round((newPrice - oldPrice) / oldPrice * 100m, 2)
+                                : (decimal?)null,
+                            EffectivityDate = now,
+                            AppliedDate = now,
+                            CreatedDate = now,
+                            CreatedBy = currentUserId > 0 ? currentUserId : null
                         });
                     }
+
+                    // Edits are now allowed even when referenced by invoices.
+                    existing.ConversionToBase = entry.Conversion;
+                    existing.Price = newPrice;
+                    existing.IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase);
+                    existing.IsActive = entry.IsActive;
+                    existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
+                    existing.UpdatedDate = now;
+                    context.ItemsUoms.Update(existing);
                 }
-
-                // Fallback safety net: anything missing entirely from the incoming dictionary
-                // (rather than just flagged inactive) gets soft-deleted if in use, hard-deleted otherwise.
-                var toRemove = existingUoms
-                    .Where(e => !incomingNames.Any(n =>
-                        string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
-
-                var toDeactivate = toRemove.Where(e => uomIdsInUse.Contains(e.ItemsUomId)).ToList();
-                var toHardDelete = toRemove.Except(toDeactivate).ToList();
-
-                foreach (var entry in toDeactivate)
+                else
                 {
-                    entry.IsActive = false;
-                    entry.UpdatedBy = currentUserId > 0 ? currentUserId : entry.UpdatedBy;
-                    entry.UpdatedDate = DateTime.UtcNow;
-                    context.ItemsUoms.Update(entry);
+                    context.ItemsUoms.Add(new ItemsUom
+                    {
+                        UomName = name,
+                        ConversionToBase = entry.Conversion,
+                        Price = entry.Price ?? 0m,
+                        IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase),
+                        IsActive = entry.IsActive,
+                        SubdItemId = subdItemId,
+                        CreatedDate = now,
+                        UpdatedDate = now,
+                        CreatedBy = currentUserId > 0 ? currentUserId : null,
+                        UpdatedBy = currentUserId > 0 ? currentUserId : null
+                    });
                 }
-
-                if (toHardDelete.Any())
-                    context.ItemsUoms.RemoveRange(toHardDelete);
-
-                await context.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
-                return true;
             }
-            catch
+
+            // Fallback safety net: anything missing entirely from the incoming dictionary
+            // (rather than just flagged inactive) gets soft-deleted if in use, hard-deleted otherwise.
+            var toRemove = existingUoms
+                .Where(e => !incomingNames.Any(n =>
+                    string.Equals(n, e.UomName, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var toDeactivate = toRemove.Where(e => uomIdsInUse.Contains(e.ItemsUomId)).ToList();
+            var toHardDelete = toRemove.Except(toDeactivate).ToList();
+
+            foreach (var entry in toDeactivate)
             {
-                await tx.RollbackAsync(cancellationToken);
-                return false;
+                entry.IsActive = false;
+                entry.UpdatedBy = currentUserId > 0 ? currentUserId : entry.UpdatedBy;
+                entry.UpdatedDate = now;
+                context.ItemsUoms.Update(entry);
             }
+
+            if (toHardDelete.Any())
+                context.ItemsUoms.RemoveRange(toHardDelete);
+
+            await context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return true;
         }
         catch
         {
+            await tx.RollbackAsync(cancellationToken);
             return false;
         }
     }
-    public async Task<List<string>> GetInvoiceUsedUomNamesAsync(int subdItemId, CancellationToken cancellationToken = default)
+    catch
+    {
+        return false;
+    }
+}
+  public async Task<List<string>> GetInvoiceUsedUomNamesAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
         return await context.SalesInvoiceItems
