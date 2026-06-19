@@ -70,16 +70,17 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             })
             .ToListAsync(cancellationToken);
     }
-    public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
+public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
     int page, int pageSize,
     string? search,
     string? orderType,
     int? customerId,
     int? subDistributorId,
+    int? subdItemId,
     string sortColumn,
     bool sortAscending,
     CancellationToken cancellationToken = default)
-    {
+{
         await using var context = _contextFactory.CreateDbContext();
 
         var query = context.SalesInvoices.AsNoTracking().AsQueryable();
@@ -231,6 +232,25 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<SalesInvoiceItemDropdownItem>> GetItemsForDropdownAsync(
+    CancellationToken cancellationToken = default)
+{
+    await using var context = _contextFactory.CreateDbContext();
+
+    return await context.SalesInvoiceItems
+        .AsNoTracking()
+        .Select(sii => new { sii.SubdItemId, sii.SubdItem.SubdItemCode, sii.SubdItem.ItemName })
+        .Distinct()
+        .OrderBy(x => x.SubdItemCode)
+        .Select(x => new SalesInvoiceItemDropdownItem
+        {
+            SubdItemId = x.SubdItemId,
+            SubdItemCode = x.SubdItemCode,
+            ItemName = x.ItemName
+        })
+        .ToListAsync(cancellationToken);
+}
+
     public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
         int subDistributorId,
         CancellationToken cancellationToken = default)
@@ -260,6 +280,8 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             })
             .ToListAsync(cancellationToken);
     }
+
+    
 
     // In AdminSalesInvoiceService:
     public async Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(

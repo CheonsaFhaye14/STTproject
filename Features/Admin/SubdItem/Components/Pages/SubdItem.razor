@@ -2,6 +2,13 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 
 <h3>SubdItem</h3>
+@* The straightforward, low-risk version of this: a pricelist page that lists items with their current price (pulling from ItemsUoms/SubdItem much like GetMapSubDistributorItemsAsync already does), lets the admin edit prices inline or in a modal, and saves through the same SaveSubdItemUomPricesAsync you already have — meaning it inherits the history-logging behavior for free. No new invoice-related code needed at all; you're just giving admins a more convenient surface for something the system already supports.
+A few things worth adding while you're building it, since they fit naturally:
+Since you're now actually populating ItemsUomPriceHistory, this page is a good place to surface it — an expandable row or a small "price history" panel per item showing past changes (old price, new price, when it took effect), pulled straight from that table. That gives admins visibility into when and why a price moved, which is useful on its own and also makes the "this doesn't touch past invoices" behavior more transparent, since they can literally see the timeline.
+On the UI itself, I'd put a small, persistent note near the price-edit control — something like "price changes apply to new invoices going forward; existing invoices are not affected" — so it's explicit rather than something admins have to intuit. That single sentence prevents the exact misunderstanding we just untangled, where someone assumes editing a price here will retroactively fix invoices.
+For validation, since this page will probably be used more casually than the Map Item screen (a quick "update this item's price" workflow rather than a full item edit), it's worth double-checking your existing oldPrice != newPrice comparison handles decimal precision sensibly — e.g. if the UI rounds displayed prices to 2 decimals but the underlying value has more precision, you don't want spurious history rows logging a "change" from 100.001 to 100.00 that the admin never actually intended.
+What I'd explicitly leave out, at least for now: any button or flow that says "apply this new price to existing invoices." If that need comes up later — a genuine, audited correction to invoices already issued — build it as its own deliberate feature with its own confirmation step and audit trail, separate from this page, rather than bolting it onto the pricelist editor as a checkbox. 
+*@
 
 @code {
 

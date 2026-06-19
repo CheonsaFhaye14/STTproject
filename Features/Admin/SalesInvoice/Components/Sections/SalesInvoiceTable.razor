@@ -87,6 +87,20 @@
                     }
                 </select>
             </div>
+                        <!-- Items filter -->
+            <div class="clt-filter-group">
+    <label class="clt-filter-label" for="itemFilter">Item</label>
+    <select id="itemFilter" class="clt-select"
+            @onchange="e => OnFilterChanged(itemId: e.Value?.ToString() ?? string.Empty)">
+        <option value="">All items</option>
+        @foreach (var item in Items)
+        {
+            <option value="@item.Id" selected="@(SelectedItemId?.ToString() == item.Id.ToString())">
+                @(item.Name ?? "—")
+            </option>
+        }
+    </select>
+</div>
 
             @if (HasActiveFilters)
             {
@@ -319,11 +333,12 @@
         }
     }
 
-    private bool HasActiveFilters =>
-        !string.IsNullOrWhiteSpace(_searchTerm) ||
-        SelectedSubDistributorId.HasValue ||
-        SelectedCustomerId.HasValue ||
-        !string.IsNullOrWhiteSpace(SelectedOrderType);
+private bool HasActiveFilters =>
+    !string.IsNullOrWhiteSpace(_searchTerm) ||
+    SelectedSubDistributorId.HasValue ||
+    SelectedCustomerId.HasValue ||
+    SelectedItemId.HasValue ||
+    !string.IsNullOrWhiteSpace(SelectedOrderType);
 
     protected override async Task OnInitializedAsync()
     {
@@ -336,7 +351,9 @@
             Customers = (await SalesInvoiceService.GetCustomersForDropdownAsync(0))
                 .Select(c => (c.CustomerId, (string?)c.CustomerName))
                 .ToList();
-
+Items = (await SalesInvoiceService.GetItemsForDropdownAsync())
+    .Select(i => (i.SubdItemId, (string?)$"{i.SubdItemCode} - {i.ItemName}"))
+    .ToList();
             await LoadPageAsync();
         }
         catch (Exception ex)
@@ -346,6 +363,8 @@
             await InvokeAsync(StateHasChanged);
         }
     }
+    private List<(int Id, string? Name)> Items { get; set; } = new();
+private int? SelectedItemId { get; set; }
 
     public async Task LoadPageAsync()
     {
@@ -354,14 +373,15 @@
 
         try
         {
-            var (items, total) = await SalesInvoiceService.GetPagedAsync(
-                currentPage, pageSize,
-                _searchTerm,
-                SelectedOrderType,
-                SelectedCustomerId,
-                SelectedSubDistributorId,
-                SortColumn,
-                SortAscending);
+        var (items, total) = await SalesInvoiceService.GetPagedAsync(
+            currentPage, pageSize,
+            _searchTerm,
+            SelectedOrderType,
+            SelectedCustomerId,
+            SelectedSubDistributorId,
+            SelectedItemId,
+            SortColumn,
+            SortAscending);
 
             PagedSalesInvoices = items.ToList();
             totalCount = total;
@@ -383,20 +403,23 @@
         }
     }
 
-    private async Task OnFilterChanged(
-        string? orderType = null,
-        string? customerId = null,
-        string? subdId = null)
-    {
-        if (orderType != null) SelectedOrderType = orderType;
-        if (customerId != null)
-            SelectedCustomerId = int.TryParse(customerId, out var cid) && cid > 0 ? cid : null;
-        if (subdId != null)
-            SelectedSubDistributorId = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
+private async Task OnFilterChanged(
+    string? orderType = null,
+    string? customerId = null,
+    string? subdId = null,
+    string? itemId = null)
+{
+    if (orderType != null) SelectedOrderType = orderType;
+    if (customerId != null)
+        SelectedCustomerId = int.TryParse(customerId, out var cid) && cid > 0 ? cid : null;
+    if (subdId != null)
+        SelectedSubDistributorId = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
+    if (itemId != null)
+        SelectedItemId = int.TryParse(itemId, out var iid) && iid > 0 ? iid : null;
 
-        currentPage = 1;
-        await LoadPageAsync();
-    }
+    currentPage = 1;
+    await LoadPageAsync();
+}
 
     private async Task GoToPage(int page)
     {
@@ -410,6 +433,7 @@
         SelectedOrderType = "";
         SelectedCustomerId = null;
         SelectedSubDistributorId = null;
+        SelectedItemId = null;
         currentPage = 1;
         await LoadPageAsync();
     }

@@ -123,6 +123,12 @@ public sealed class SalesInvoiceUomOption
     public decimal Price { get; init; }
     public decimal ConversionToBase { get; init; }
 }
+public sealed class SalesInvoiceItemDropdownItem
+{
+    public int SubdItemId { get; set; }
+    public string SubdItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+}
 
 // ─── Operation results ───────────────────────────────────────────────────────
 

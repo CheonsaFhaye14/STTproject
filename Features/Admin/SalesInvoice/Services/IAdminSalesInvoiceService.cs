@@ -11,6 +11,7 @@ public interface IAdminSalesInvoiceService
     string? orderType,
     int? customerId,
     int? subDistributorId,
+    int? subdItemId,
     string sortColumn,
     bool sortAscending,
     CancellationToken cancellationToken = default);
@@ -38,6 +39,7 @@ public interface IAdminSalesInvoiceService
         int subDistributorId,
         CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(CancellationToken cancellationToken = default);
+    Task<List<SalesInvoiceItemDropdownItem>> GetItemsForDropdownAsync(CancellationToken cancellationToken = default);
 
     // CRUD
     Task<SalesInvoiceResult> CreateSalesInvoiceAsync(
