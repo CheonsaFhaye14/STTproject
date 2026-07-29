@@ -68,7 +68,12 @@
                             </div>
 
                             <h4>Customer Address</h4>
-
+                            <div class="form-group">
+                                <label>Island</label>
+                                <GenericAutocomplete @ref="IslandAutocomplete" Items="Islands" TItem="string" @bind-Value="Island"
+                                                     ItemLabel="@(p => p ?? string.Empty)" OnSelected="OnIslandSelected" ShowAllOnOpen="true"
+                                                     Placeholder="Select or type island..." IsDisabled=@isViewMode />
+                            </div>
                             <div class="form-group">
                                 <label>Province</label>
                                 <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string" @bind-Value="Province"
@@ -149,6 +154,7 @@
     private bool isViewMode = false;
     private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
     private GenericAutocomplete<string>? customerTypeAutocomplete;
+    private GenericAutocomplete<string>? IslandAutocomplete;
     private GenericAutocomplete<string>? ProvinceAutocomplete;
     private GenericAutocomplete<string>? CityAutocomplete;
     private ElementReference customerCodeInput;
@@ -165,9 +171,11 @@
     private bool IsActive { get; set; } = true;
     private string? AddressLine { get; set; }
     private string? City { get; set; }
+    private string? Island { get; set; }
     private string? Province { get; set; }
     private int? ZipCode { get; set; }
     private List<string?> CitiesMunicipalities { get; set; } = new();
+    private List<string?> Islands { get; set; } = new();
     private List<string?> Provinces { get; set; } = new();
     private List<string> ExistingCustomerTypes { get; set; } = new();
 
@@ -195,6 +203,7 @@
         SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
         ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
         Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
+        Islands = (await GeographicDataService.GetAllIslandsAsync()).ToList();
         CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
 
         if (isEdit)
@@ -332,7 +341,23 @@
         CustomerType = selected;
         return Task.CompletedTask;
     }
-
+    private async Task OnIslandSelected(string? selected)
+    {
+        Island = selected;
+        await UpdateProvincesBasedOnIsland();
+    }
+    private async Task UpdateProvincesBasedOnIsland()
+    {
+        if (!string.IsNullOrWhiteSpace(Island))
+        {
+            Provinces = (await GeographicDataService.GetProvincesByIslandAsync(Island)).ToList();
+            Province = null;
+            CitiesMunicipalities = (await GeographicDataService.GetCitiesMunicipalitiesByIslandAsync(Island)).ToList();
+            City = null;
+            ZipCode = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
     private async Task OnProvinceSelected(string? selected)
     {
         Province = selected;
@@ -344,14 +369,16 @@
         try
         {
             CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"[AddCustomer] ProvinceChanged error: {ex.Message}");
             CitiesMunicipalities = new();
         }
 
-        City = CitiesMunicipalities.FirstOrDefault();
+        City = null;
+        Island = (await GeographicDataService.GetIslandByProvinceAsync(Province));
+        ZipCode = null;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -369,7 +396,7 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
-
+        Island = (await GeographicDataService.GetIslandByProvinceAsync(Province));
         await UpdateZipCode(); // ← now Province is guaranteed to be set before this runs
     }
 

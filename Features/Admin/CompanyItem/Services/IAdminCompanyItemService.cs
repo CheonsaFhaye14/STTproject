@@ -15,6 +15,5 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         Task<CompanyItemListDto?> GetCompanyItemByIdAsync(int id);
         Task<string?> GetUserNameByIdAsync(int? userId);
         Task<string?> GetCompanyItemNameByIdAsync(int? companyItemId);
-
     }
 }
