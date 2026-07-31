@@ -141,10 +141,10 @@
                                 @foreach (var companyItem in PagedCompanyItems)
                                 {
                                     <tr class="@(!companyItem.IsActive ? "clt-row-inactive" : "")">
-                                        <td><span class="clt-code">@companyItem.CompanyItemId</span></td>
+                                        <td><span class="clt-code">@companyItem.ItemCode</span></td>
                                         <td class="clt-name">@companyItem.ItemName</td>
-                                        <td><span class="clt-type-badge">@companyItem.Category</span></td>
                                         <td class="clt-muted">@companyItem.Principal</td>
+                                        <td><span class="clt-type-badge">@companyItem.Category</span></td>
                                         <td class="clt-muted">
                                             @companyItem.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
                                         </td>

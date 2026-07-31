@@ -117,7 +117,10 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
     }
 
     httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), cookieOptions);
-
+    httpContext.Response.Cookies.Append(
+        "sttproject_username",
+        user.Username,
+    cookieOptions);
     return Results.Redirect(normalizedRole == "Admin" ? "/admin" : "/home");
 });
 

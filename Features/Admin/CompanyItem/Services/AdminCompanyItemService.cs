@@ -146,6 +146,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                     CompanyItemId = u.CompanyItemId,
                     ItemCode = u.ItemCode,
                     ItemName = u.ItemName,
+                    Principal = u.Principal,
                     Category = u.Category,
                     IsActive = u.IsActive,
                     CreatedDate = u.CreatedDate,
@@ -179,6 +180,30 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 CreatedBy = entity.CreatedBy,
                 UpdatedBy = entity.UpdatedBy,
             };
+        }
+
+        public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems
+                .Select(c => c.Principal)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToListAsync();
+        }
+
+        public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems
+                .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName);
+        }
+
+        public async Task<bool> ItemCodeExistsAsync(string itemCode)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems
+                .AnyAsync(c => c.ItemCode == itemCode);
         }
     }
 }

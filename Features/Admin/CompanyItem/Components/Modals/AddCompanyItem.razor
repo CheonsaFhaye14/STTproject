@@ -13,7 +13,7 @@
             <div class="form-group">
                 <label>@CompanyItemValidations.AddCompanyItem.ItemCode.Label<span
                     class="required-asterisk">*</span></label>
-                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode />
+                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode placeholder="" />
                     @if (ShowValidationErrors &&
                             !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)))
                     {
@@ -35,7 +35,13 @@
                     <div class="form-group">
                         <label>@CompanyItemValidations.AddCompanyItem.Principal.Label<span
                             class="required-asterisk">*</span></label>
-                            <input @bind="Principal" @ref="principalInput" disabled=@isViewMode />
+                            <select @bind="Principal" @ref="principalInput" disabled=@isViewMode>
+                                <option value="">Select a principal</option>
+                                @foreach (var principal in Principals)
+                                {
+                                    <option value="@principal">@principal</option>
+                                }
+                            </select>
                             @if (ShowValidationErrors &&
                                     !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)))
                             {
@@ -127,6 +133,7 @@
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public CompanyItemCreateDto? PendingDto { get; private set; }
     public CompanyItemUpdateDto? PendingUpdateDto { get; private set; }
+    private IReadOnlyList<string?> Principals { get; set; } = new List<string?>();
     private string? ItemCode { get; set; }
     private string? ItemName { get; set; }
     private string? Principal { get; set; }
@@ -165,9 +172,10 @@
     }
     protected override async Task OnInitializedAsync()
     {
+        Principals = await AdminCompanyItemService.GetAllPrincipalsAsync();
         if (isEdit)
         {
-            isViewMode = true;
+            isViewMode = false;
             var companyItem = await AdminCompanyItemService.GetCompanyItemByIdAsync(CompanyItemId!.Value);
             if (companyItem != null)
             {
@@ -203,8 +211,7 @@
             Category = Category ?? string.Empty,
         };
 
-        Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate);
-        ShowValidationErrors = true;
+Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService);        ShowValidationErrors = true;
 
         if (Errors.Any()) return;
 

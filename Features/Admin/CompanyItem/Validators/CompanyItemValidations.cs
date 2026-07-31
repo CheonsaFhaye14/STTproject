@@ -1,4 +1,5 @@
 using STTproject.Data;
+using STTproject.Features.Admin.CompanyItem.Services;
 
 namespace STTproject.Features.Admin.CompanyItem.Validators;
 
@@ -18,7 +19,8 @@ public static class CompanyItemValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddCompanyItemAsync(
-        Data.CompanyItem companyItem
+        Data.CompanyItem companyItem,
+        IAdminCompanyItemService service
     )
     {
         var errors = new Dictionary<string, string>();
@@ -33,6 +35,19 @@ public static class CompanyItemValidations
             errors[AddCompanyItem.ItemName.Key] = AddCompanyItem.ItemName.ErrorMessage;
         }
 
+        if (!string.IsNullOrWhiteSpace(companyItem.ItemCode) &&
+            !string.IsNullOrWhiteSpace(companyItem.ItemName) &&
+            await service.CompanyItemExistsAsync(companyItem.ItemCode, companyItem.ItemName))
+        {
+            errors[AddCompanyItem.ItemCode.Key] = "This Item Code and Item Name combination already exists.";
+            errors[AddCompanyItem.ItemName.Key] = "This Item Code and Item Name combination already exists.";
+        }
+        if (!string.IsNullOrWhiteSpace(companyItem.ItemCode) &&
+            await service.ItemCodeExistsAsync(companyItem.ItemCode))
+        {
+            errors[AddCompanyItem.ItemCode.Key] = "This Item Code already exists.";
+        }
+
         if (string.IsNullOrWhiteSpace(companyItem.Principal))
         {
             errors[AddCompanyItem.Principal.Key] = AddCompanyItem.Principal.ErrorMessage;
@@ -42,9 +57,9 @@ public static class CompanyItemValidations
         {
             errors[AddCompanyItem.Category.Key] = AddCompanyItem.Category.ErrorMessage;
         }
+
         return errors;
     }
 }
-
 
 public sealed record CompanyItemField(string Key, string Label, bool Required, string ErrorMessage);
