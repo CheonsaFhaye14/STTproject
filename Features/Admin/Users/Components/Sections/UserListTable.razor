@@ -198,6 +198,7 @@
 
     </div>
     <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
+                  Details="@toggleConfirmDetails" 
                   OnYes="ConfirmToggle" OnNo="CancelToggle" />
 </div>
 
@@ -232,6 +233,7 @@
     private int pendingToggleId;
     private bool pendingToggleStatus;
     private string toggleConfirmMessage = "";
+    private string toggleConfirmDetails = "";
 
     [Parameter] public EventCallback<int> OnEditUser { get; set; }
 
@@ -341,6 +343,9 @@
         toggleConfirmMessage = isActive
             ? "Are you sure you want to activate this user?"
             : "Are you sure you want to deactivate this user?";
+        toggleConfirmDetails = isActive
+            ? "Activating this user will allow them to log in and access the system."
+            : "Deactivating this user will prevent them from logging in and accessing the system.";
         showToggleConfirmModal = true;
     }
 

@@ -142,6 +142,15 @@
 </div>
 
 @code {
+    // originals, for confirm-dialog diff display (edit mode only)
+    public string? OriginalFullName { get; private set; }
+    public string? OriginalEmail { get; private set; }
+    public string? OriginalUserName { get; private set; }
+
+    public string? FullNameForDisplay => FullName;
+    public string? EmailForDisplay => Email;
+    public string? UserNameForDisplay => UserName;
+
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public UserCreateDto? PendingDto { get; private set; }
@@ -192,6 +201,11 @@
                 UserName = user.UserName;
                 Role = user.Role;
                 IsActive = user.IsActive;
+
+                // Store originals for confirm-dialog diff display
+                OriginalFullName = user.FullName;
+                OriginalEmail = user.Email;
+                OriginalUserName = user.UserName;
                 // Audit
                 CreatedDate = user.CreatedDate;
                 UpdatedDate = user.UpdatedDate;

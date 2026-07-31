@@ -221,6 +221,14 @@
 </div>
 
 @code {
+    // originals, for confirm-dialog diff display (edit mode only)
+    public string? OriginalSubDistributorName { get; private set; }
+    public string? OriginalCustomerName { get; private set; }
+    public string? OriginalSalesInvoiceCode { get; private set; }
+
+    public string? SelectedSubDistributorNameForDisplay => SelectedSubDistributorName;
+    public string? SelectedCustomerNameForDisplay => SelectedCustomerName;
+
     // ── Parameters ────────────────────────────────────────────────────────────
     [Parameter] public int? SalesInvoiceId { get; set; }
     [Parameter] public EventCallback onCancel { get; set; }
@@ -309,6 +317,10 @@
                 UpdatedDate = detail.UpdatedDate;
                 CreatedByName = detail.CreatedByName;
                 UpdatedByName = detail.UpdatedByName;
+                // snapshot originals for confirm-dialog diff
+                OriginalSubDistributorName = SelectedSubDistributorName;
+                OriginalCustomerName = SelectedCustomerName;
+                OriginalSalesInvoiceCode = SalesInvoiceCode;
 
                 LineItems = detail.Items.Select(i => new LineItemModel
                 {

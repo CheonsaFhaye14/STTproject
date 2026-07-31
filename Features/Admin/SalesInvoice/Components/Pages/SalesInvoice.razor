@@ -33,11 +33,10 @@
 
         <!-- Confirm create/update modal -->
         <ConfirmModal @ref="confirmModal" Show="showConfirmModal"
-                      Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
-                      Message="@(editInvoiceId.HasValue
-                                                                                                                                                                        ? "Are you sure you want to save changes to this sales invoice?"
-                                                                                                                                                                        : "Are you sure you want to create this sales invoice?")"
-                      OnYes="ConfirmSave" OnNo="CancelConfirm" />
+                    Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
+                    Message="@(editInvoiceId.HasValue ? "Are you sure you want to save changes to this sales invoice?" : "Are you sure you want to create this sales invoice?")"
+                    Details="@confirmDetails"
+                    OnYes="ConfirmSave" OnNo="CancelConfirm" />
 
         <!-- Add / Edit modal -->
         @if (showAddModal)
@@ -60,7 +59,6 @@
     private int totalCount = 0;
     private int? editInvoiceId;
 
-    // ── Table events ──────────────────────────────────────────────────────────
 
     private async Task OnTableLoaded()
     {
@@ -84,7 +82,34 @@
         showAddModal = true;
     }
 
-    private void OpenConfirmModal() => showConfirmModal = true;
+private string confirmDetails = "";
+
+private void OpenConfirmModal()
+{
+    if (addInvoiceModal is null) { confirmDetails = ""; showConfirmModal = true; return; }
+
+    if (editInvoiceId.HasValue)
+    {
+        var dto = addInvoiceModal.PendingUpdateDto;
+        confirmDetails = dto == null ? "" :
+            $"Invoice Code: {addInvoiceModal.OriginalSalesInvoiceCode} → {dto.SalesInvoiceCode}{Environment.NewLine}" +
+            $"Subdistributor: {addInvoiceModal.OriginalSubDistributorName} → {addInvoiceModal.SelectedSubDistributorNameForDisplay}{Environment.NewLine}" +
+            $"Customer: {addInvoiceModal.OriginalCustomerName} → {addInvoiceModal.SelectedCustomerNameForDisplay}{Environment.NewLine}{Environment.NewLine}" +
+            "Saving will update this sales invoice's record.";
+            ;
+    }
+    else
+    {
+        var dto = addInvoiceModal.PendingDto;
+        confirmDetails = dto == null ? "" :
+            $"Invoice Code: {dto.SalesInvoiceCode}{Environment.NewLine}" +
+            $"Subdistributor: {addInvoiceModal.SelectedSubDistributorNameForDisplay}{Environment.NewLine}" +
+            $"Customer: {addInvoiceModal.SelectedCustomerNameForDisplay}{Environment.NewLine}{Environment.NewLine}" +
+            "A new sales invoice record will be created and made available for future use.";
+    }
+
+    showConfirmModal = true;
+}
     private void CancelConfirm() => showConfirmModal = false;
     private void CancelAddModal() => showAddModal = false;
 

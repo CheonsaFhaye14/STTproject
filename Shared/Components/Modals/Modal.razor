@@ -1,0 +1,141 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+
+@if (ShowModal)
+{
+    <div class="modal-overlay" @onclick="OnClose">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                @if (Icon != null)
+                {
+                    <div class="modal-icon">
+                        @Icon
+                    </div>
+                }
+                else if (IconType != ModalIconType.None)
+                {
+                    <div class="modal-icon">
+                        <i class="@GetIconClass()"></i>
+                    </div>
+                }
+                <div class="modal-header-text">
+                    <h4>@Title</h4>
+                    <p>@Subtitle</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                @ChildContent
+            </div>
+            <div class="modal-footer">
+                @FooterContent
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-overlay 
+    {
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .modal-box 
+    {
+        border: 1px solid #ffffff;
+        background: white;
+        border-radius: 10px;
+        min-width: 300px;
+        max-width: 600px;
+        height: auto;
+        width: auto;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    .modal-icon 
+    {
+        border-radius: 8px;
+        border: 1px solid #3a3a3a;
+        background-color: #2f2f2f;
+        color: #bd9359;
+        height: 50px;
+        width: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+    .modal-header 
+    {
+        background-color: #212020;
+        color: white;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .modal-header-text
+    {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    .modal-header h4 
+    {
+        margin: 0;
+        font-weight: 600;
+        color: #ffffff;
+    }
+    .modal-header p 
+    {
+        margin: 2px 0 0;
+        color: #a0a0a0;
+    }
+    .modal-body 
+    {
+        padding: 20px;
+    }
+    .modal-footer
+    {
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 20px;
+    }
+
+</style>
+@code {
+    [Parameter] public bool ShowModal { get; set; }
+    [Parameter] public string Title { get; set; } = "Modal Title";
+    [Parameter] public string Subtitle { get; set; } = "Modal Subtitle";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public ModalIconType IconType { get; set; } = ModalIconType.None;
+
+    private static readonly Dictionary<ModalIconType, string> IconClassMap = new()
+    {
+        { ModalIconType.Warning,  "fa-solid fa-triangle-exclamation" },
+        { ModalIconType.Upload,   "fa-solid fa-upload" },
+        { ModalIconType.Success,  "fa-solid fa-check" },
+        { ModalIconType.Error,    "fa-solid fa-xmark" },
+        { ModalIconType.Info,     "fa-solid fa-info" },
+        { ModalIconType.Question, "fa-solid fa-question" },
+    };
+
+    private string GetIconClass() =>
+        IconClassMap.TryGetValue(IconType, out var cls) ? cls : "";
+}

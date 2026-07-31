@@ -1,4 +1,5 @@
 @using STTproject.Features.Admin.CompanyItem.DTOs
+@using STTproject.Shared.Components.Modals
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 <div class="clt-page">
@@ -201,8 +202,8 @@
 
     </div>
     <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
-                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
-</div>
+                  OnYes="ConfirmToggle" OnNo="CancelToggle" Details="@toggleConfirmDetails"/>
+</div>  
 
 @code {
     [Parameter] public EventCallback OnLoaded { get; set; }
@@ -233,6 +234,7 @@
     private int pendingToggleId;
     private bool pendingToggleStatus;
     private string toggleConfirmMessage = "";
+    private string toggleConfirmDetails = "";
 
     [Parameter] public EventCallback<int> OnEditCompanyItem { get; set; }
     private string SelectedStatus { get; set; } = "";
@@ -342,9 +344,23 @@
     {
         pendingToggleId = id;
         pendingToggleStatus = isActive;
+
+        var companyItem = PagedCompanyItems.FirstOrDefault(x => x.CompanyItemId == id);
+
         toggleConfirmMessage = isActive
             ? "Are you sure you want to activate this company item?"
             : "Are you sure you want to deactivate this company item?";
+
+        toggleConfirmDetails = companyItem == null
+            ? ""
+            : $"Item Code: {companyItem.ItemCode}{Environment.NewLine}" +
+            $"Item Name: {companyItem.ItemName}{Environment.NewLine}{Environment.NewLine}" +
+            (isActive
+                ? "This item will become available for new mappings and future transactions."
+                : "This item will no longer be available for new mappings and future transactions.") +
+            $"{Environment.NewLine}" +
+            "Existing mappings and sales invoices are not affected.";
+
         showToggleConfirmModal = true;
     }
 

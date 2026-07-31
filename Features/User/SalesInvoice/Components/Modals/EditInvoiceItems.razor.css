@@ -10,10 +10,7 @@
     gap: 12px;
 }
 
-.modal-header {
-    margin-bottom: 16px;
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
-}
+
 
 .modal-body {
     padding-top: 4px;
