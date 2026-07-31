@@ -27,7 +27,7 @@
                 <div class="form-group">
                     <label>@CustomerValidations.AddCustomer.customercode.Label<span
                         class="required-asterisk">*</span></label>
-                        <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode />
+                        <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode Placeholder="Enter customer code..." />
                         @if (ShowValidationErrors &&
                         !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customercode.Key)))
                         {
@@ -38,7 +38,7 @@
                     <div class="form-group">
                         <label>@CustomerValidations.AddCustomer.customername.Label<span
                             class="required-asterisk">*</span></label>
-                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode />
+                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode Placeholder="Enter customer name..." />
                             @if (ShowValidationErrors &&
                             !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customername.Key)))
                             {
@@ -90,12 +90,12 @@
 
                             <div class="form-group">
                                 <label>Address Line</label>
-                                <input @bind="AddressLine" @ref="addressLineInput" disabled=@isViewMode />
+                                <input @bind="AddressLine" @ref="addressLineInput" disabled=@isViewMode Placeholder="Enter address line..." />
                             </div>
 
                             <div class="form-group">
                                 <label>Zip Code</label>
-                                <input @bind="ZipCode" @ref="zipCodeInput" disabled=@isViewMode />
+                                <input @bind="ZipCode" @ref="zipCodeInput" disabled=True Placeholder="Auto-populated based on selected city..." />
                             </div>
 
                             @* Audit info — view mode only *@
