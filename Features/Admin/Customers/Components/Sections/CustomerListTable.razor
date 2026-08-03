@@ -212,12 +212,11 @@
             </main>
 
         </div>
-        <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"  Details="@toggleConfirmDetails"
+        <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
                       OnYes="ConfirmToggle" OnNo="CancelToggle" />
     </div>
 
 @code {
-    private string toggleConfirmDetails = "";
     [Parameter] public EventCallback OnLoaded { get; set; }
     [Parameter] public EventCallback<int> OnCountChanged { get; set; }
     private List<CustomerListDto> PagedCustomers { get; set; } = new();
@@ -362,17 +361,9 @@
     {
         pendingToggleId = id;
         pendingToggleStatus = isActive;
-        var customer = PagedCustomers.FirstOrDefault(x => x.CustomerId == id);
         toggleConfirmMessage = isActive
             ? "Are you sure you want to activate this customer?"
             : "Are you sure you want to deactivate this customer?";
-        
-        toggleConfirmDetails = customer == null 
-        ? "" 
-        : $"Customer Code: {customer.CustomerName}{Environment.NewLine}"+
-        $"Customer Name: {customer.CustomerCode}{Environment.NewLine}{Environment.NewLine}"+
-        (isActive ? "This will make the customer available for future sales invoices." : "This will prevent the customer from being used in future sales invoices.");
-
         showToggleConfirmModal = true;
     }
 

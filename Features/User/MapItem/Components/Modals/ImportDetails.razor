@@ -612,7 +612,5 @@
 
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items"
-              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")" 
-              Details="This action will save the selected items to the database. Once committed, this action cannot be undone."
-              OnYes="ConfirmCommit" OnNo="CancelCommit"
+              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")" OnYes="ConfirmCommit" OnNo="CancelCommit"
               CloseOnOverlayClick="true" />

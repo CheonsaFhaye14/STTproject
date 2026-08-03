@@ -30,14 +30,13 @@
         <UserListTable @ref="userTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                        OnEditUser="OpenEditModal" />
 
-        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
-                    Title="@(editUserId.HasValue ? "Confirm Update of User" : "Confirm Creation of User")"
-                    Message="@(showConfirmError ? null : (editUserId.HasValue ? "Are you sure you want to save changes to this user?" : "Are you sure you want to create this user?"))"
-                    Details="@confirmDetails"
-                    ErrorMessage="@confirmErrorMessage"
-                    ShowError="showConfirmError"
-                    OnYes="ConfirmAddUser" OnNo="CancelConfirm"
-                    OnErrorConfirm="DismissConfirmError" />
+<ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+              Title="@(editUserId.HasValue ? "Confirm Update of User" : "Confirm Creation of User")"
+              Message="@(showConfirmError ? null : (editUserId.HasValue ? "Are you sure you want to save changes to this user?" : "Are you sure you want to create this user?"))"
+              ErrorMessage="@confirmErrorMessage"
+              ShowError="showConfirmError"
+              OnYes="ConfirmAddUser" OnNo="CancelConfirm"
+              OnErrorConfirm="DismissConfirmError" />
 
 
         @if (showAddModal)
@@ -82,35 +81,12 @@
 
     private void OnCountChanged(int count) => totalCount = count;
 
-private string confirmDetails = "";
-
-private void OpenConfirmModal()
-{
-    showConfirmError = false;
-    confirmErrorMessage = null;
-
-    if (addUserModal != null)
+    private void OpenConfirmModal()
     {
-        if (editUserId.HasValue)
-        {
-            confirmDetails =
-                $"Full Name: {addUserModal.OriginalFullName} → {addUserModal.FullNameForDisplay}{Environment.NewLine}" +
-                $"Email: {addUserModal.OriginalEmail} → {addUserModal.EmailForDisplay}{Environment.NewLine}" +
-                $"Username: {addUserModal.OriginalUserName} → {addUserModal.UserNameForDisplay}{Environment.NewLine}{Environment.NewLine}"+
-                "Saving will update this user's record.";
-        }
-        else
-        {
-            confirmDetails =
-                $"Full Name: {addUserModal.FullNameForDisplay}{Environment.NewLine}" +
-                $"Email: {addUserModal.EmailForDisplay}{Environment.NewLine}" +
-                $"Username: {addUserModal.UserNameForDisplay}{Environment.NewLine}{Environment.NewLine}" +
-                "A new user record will be created and made available for future use.";
-        }
+        showConfirmError = false;
+        confirmErrorMessage = null;
+        showConfirmAddModal = true;
     }
-
-    showConfirmAddModal = true;
-}
 
     private void CancelConfirm() => showConfirmAddModal = false;
 

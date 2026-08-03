@@ -1,5 +1,5 @@
-@inject NavigationManager Navigation
-@using STTproject.Shared.Components.Modals
+
+
 <header class="user-topbar">
 
     <!-- Left Side -->
@@ -29,31 +29,20 @@
     <!-- Right Side -->
     <div class="topbar-right">
 
-        <a class="logout-btn" @onclick="() => showLogoutConfirmModal = true">
-            <span class="bi bi-box-arrow-right" aria-hidden="true"></span>
-            <span class="logout-label">Logout</span>
+        <a class="logout-btn"
+           href="/logout">
+
+            <span class="bi bi-box-arrow-right"></span>
+
+            Logout
+
         </a>
 
     </div>
-    <ConfirmModal @ref="logoutConfirmModal" Show="showLogoutConfirmModal"
-                  Title="Confirm Logout"
-                  Message="Are you sure you want to log out?"
-                  OnYes="ConfirmLogout" OnNo="CancelLogout" />
+
 </header>
 
 @code {
     [Parameter]
     public EventCallback OnHamburgerClick { get; set; }
-     private bool showLogoutConfirmModal;
-
-    private ConfirmModal? logoutConfirmModal;
-    private void ConfirmLogout()
-    {
-        showLogoutConfirmModal = false;
-        Navigation.NavigateTo("/logout", forceLoad: true);
-    }
-    private void CancelLogout()
-    {
-        showLogoutConfirmModal = false;
-    }
 }

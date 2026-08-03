@@ -1,6 +1,7 @@
 @using STTproject.Features.Admin.CompanyItem.Validators
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
+<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
 
 <div class="modal-overlay">
     <div class="modal-box">
@@ -12,7 +13,7 @@
             <div class="form-group">
                 <label>@CompanyItemValidations.AddCompanyItem.ItemCode.Label<span
                     class="required-asterisk">*</span></label>
-                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode placeholder="Enter item code..." />
+                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode placeholder="" />
                     @if (ShowValidationErrors &&
                             !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)))
                     {
@@ -23,7 +24,7 @@
                 <div class="form-group">
                     <label>@CompanyItemValidations.AddCompanyItem.ItemName.Label<span
                         class="required-asterisk">*</span></label>
-                        <input @bind="ItemName" @ref="itemNameInput" disabled=@isViewMode placeholder="Enter item name..." />
+                        <input @bind="ItemName" @ref="itemNameInput" disabled=@isViewMode />
                         @if (ShowValidationErrors &&
                                 !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)))
                         {
@@ -34,7 +35,7 @@
                     <div class="form-group">
                         <label>@CompanyItemValidations.AddCompanyItem.Principal.Label<span
                             class="required-asterisk">*</span></label>
-                            <select @bind="Principal" @ref="principalInput" disabled=@isViewMode Placeholder="Select or type principal...">
+                            <select @bind="Principal" @ref="principalInput" disabled=@isViewMode>
                                 <option value="">Select a principal</option>
                                 @foreach (var principal in Principals)
                                 {
@@ -50,7 +51,7 @@
                         <div class="form-group">
                             <label>@CompanyItemValidations.AddCompanyItem.Category.Label<span
                                 class="required-asterisk">*</span></label>
-                                <input @bind="Category" @ref="categoryInput" disabled=@isViewMode placeholder="Enter category..." />
+                                <input @bind="Category" @ref="categoryInput" disabled=@isViewMode />
                                 @if (ShowValidationErrors &&
                                         !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)))
                                 {
@@ -87,6 +88,12 @@
                                     </div>
                                 }
                             }
+
+                            <div class="action-buttons">
+                                <button type="button" @onclick="CreateCompanyItem" disabled="@isSubmitting">
+                                    @(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))
+                                </button>
+                                <button type="button" @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
                                 @if (isEdit && isViewMode)
                                 {
                                     <h4>Audit Information</h4>
@@ -116,12 +123,6 @@
                                         </div>
                                     }
                                 }
-                            <div class="action-buttons">
-                                <button type="button" @onclick="CreateCompanyItem" disabled="@isSubmitting">
-                                    @(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))
-                                </button>
-                                <button type="button" @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
-
                             </div>
                         </div>
                     </div>
@@ -133,9 +134,6 @@
     public CompanyItemCreateDto? PendingDto { get; private set; }
     public CompanyItemUpdateDto? PendingUpdateDto { get; private set; }
     private IReadOnlyList<string?> Principals { get; set; } = new List<string?>();
-    public string? OriginalItemCode { get; private set; }
-    public string? OriginalItemName { get; private set; }
-    public string? OriginalPrincipal { get; private set; }
     private string? ItemCode { get; set; }
     private string? ItemName { get; set; }
     private string? Principal { get; set; }
@@ -181,10 +179,6 @@
             var companyItem = await AdminCompanyItemService.GetCompanyItemByIdAsync(CompanyItemId!.Value);
             if (companyItem != null)
             {
-                OriginalItemCode = companyItem.ItemCode;
-                OriginalItemName = companyItem.ItemName;
-                OriginalPrincipal = companyItem.Principal;
-
                 ItemCode = companyItem.ItemCode;
                 ItemName = companyItem.ItemName;
                 Principal = companyItem.Principal;
@@ -217,8 +211,7 @@
             Category = Category ?? string.Empty,
         };
 
-Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService, excludeId: isEdit ? CompanyItemId : null);        
-ShowValidationErrors = true;
+Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService);        ShowValidationErrors = true;
 
         if (Errors.Any()) return;
 

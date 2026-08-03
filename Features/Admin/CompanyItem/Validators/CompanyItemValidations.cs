@@ -20,8 +20,8 @@ public static class CompanyItemValidations
 
     public static async Task<Dictionary<string, string>> ValidateAddCompanyItemAsync(
         Data.CompanyItem companyItem,
-        IAdminCompanyItemService service,
-        int? excludeId = null)
+        IAdminCompanyItemService service
+    )
     {
         var errors = new Dictionary<string, string>();
 
@@ -37,13 +37,13 @@ public static class CompanyItemValidations
 
         if (!string.IsNullOrWhiteSpace(companyItem.ItemCode) &&
             !string.IsNullOrWhiteSpace(companyItem.ItemName) &&
-            await service.CompanyItemExistsAsync(companyItem.ItemCode, companyItem.ItemName, excludeId))
+            await service.CompanyItemExistsAsync(companyItem.ItemCode, companyItem.ItemName))
         {
             errors[AddCompanyItem.ItemCode.Key] = "This Item Code and Item Name combination already exists.";
             errors[AddCompanyItem.ItemName.Key] = "This Item Code and Item Name combination already exists.";
         }
         if (!string.IsNullOrWhiteSpace(companyItem.ItemCode) &&
-            await service.ItemCodeExistsAsync(companyItem.ItemCode, excludeId))
+            await service.ItemCodeExistsAsync(companyItem.ItemCode))
         {
             errors[AddCompanyItem.ItemCode.Key] = "This Item Code already exists.";
         }

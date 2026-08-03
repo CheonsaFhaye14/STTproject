@@ -146,12 +146,6 @@
                 </div>
 
 @code {
-    // originals, for confirm-dialog diff display
-    public string? SelectedSubDistributorNameForDisplay => SelectedSubDistributorName;
-    public string? OriginalSubDistributorName { get; private set; }
-    public string? OriginalCustomerCode { get; private set; }
-    public string? OriginalCustomerName { get; private set; }
-
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public CustomerCreateDto? PendingDto { get; private set; }
@@ -229,11 +223,6 @@
                 City = customer.City;
                 Province = customer.Province;
                 ZipCode = customer.ZipCode;
-
-                // Store original values for confirm-dialog diff display
-                OriginalSubDistributorName = SelectedSubDistributorName;
-                OriginalCustomerCode = CustomerCode;
-                OriginalCustomerName = CustomerName;
 
                 // Audit
                 CreatedDate = customer.CreatedDate;

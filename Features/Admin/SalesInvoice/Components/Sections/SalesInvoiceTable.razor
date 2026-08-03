@@ -233,17 +233,14 @@
 
     </div>
 
-    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Delete" IconType="ModalIconType.Warning"  Message="@toggleConfirmMessage"
-                  OnYes="ConfirmDelete" OnNo="CancelDelete" Details="@toggleConfirmDetails"/>
-    <ConfirmModal Show="showMassDeleteModal" Title="Confirm Mass Delete" IconType="ModalIconType.Warning" 
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Delete" Message="@toggleConfirmMessage"
+                  OnYes="ConfirmDelete" OnNo="CancelDelete" />
+    <ConfirmModal Show="showMassDeleteModal" Title="Confirm Mass Delete"
                   Message="@($"Are you sure you want to delete {selectedIds.Count} selected sales invoice(s)? This cannot be undone.")"
-                  OnYes="ConfirmMassDelete" OnNo="() => showMassDeleteModal = false" Details="@massDeleteDetails"/>
+                  OnYes="ConfirmMassDelete" OnNo="() => showMassDeleteModal = false" />
 </div>
 
 @code {
-    private string toggleConfirmDetails = "";
-    private string massDeleteDetails = "";
-
     // ── Mass delete state ─────────────────────────────────────────────────────
     private HashSet<int> selectedIds = new();
     private bool selectAll = false;
@@ -268,20 +265,8 @@
             selectedIds.Clear();
     }
 
-    private void OpenMassDeleteConfirm()
-    {
-        var codes = PagedSalesInvoices
-            .Where(i => selectedIds.Contains(i.SalesInvoiceId))
-            .Select(i => i.SalesInvoiceCode)
-            .ToList();
+    private void OpenMassDeleteConfirm() => showMassDeleteModal = true;
 
-        massDeleteDetails = codes.Any()
-            ? $"Invoices to delete: {string.Join(", ", codes)}{Environment.NewLine}{Environment.NewLine}This action cannot be undone."+
-            "Deleting these invoices will remove them from the system and they will no longer be available for future use."
-            : "";
-
-        showMassDeleteModal = true;
-    }
     private async Task ConfirmMassDelete()
     {
         showMassDeleteModal = false;
@@ -453,19 +438,12 @@ private async Task OnFilterChanged(
         await LoadPageAsync();
     }
 
-private void DeleteSalesInvoice(int id)
-{
-    pendingDeleteId = id;
-    toggleConfirmMessage = "Are you sure you want to delete this sales invoice? This cannot be undone.";
-
-    var invoice = PagedSalesInvoices.FirstOrDefault(i => i.SalesInvoiceId == id);
-    toggleConfirmDetails = invoice == null ? "" :
-        $"Invoice Code: {invoice.SalesInvoiceCode}{Environment.NewLine}" +
-        $"Customer: {invoice.CustomerName}{Environment.NewLine}" +
-        $"Subdistributor: {invoice.SubdName}{Environment.NewLine}{Environment.NewLine}" +
-        "Deleting this sales invoice will remove it from the system and cannot be undone.";
-    showToggleConfirmModal = true;
-}
+    private void DeleteSalesInvoice(int id)
+    {
+        pendingDeleteId = id;
+        toggleConfirmMessage = "Are you sure you want to delete this sales invoice? This cannot be undone.";
+        showToggleConfirmModal = true;
+    }
 
     private async Task ConfirmDelete()
     {

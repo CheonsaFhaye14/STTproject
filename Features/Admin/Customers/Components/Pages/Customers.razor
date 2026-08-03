@@ -34,7 +34,6 @@
         <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
                       Title="@(editCustomerId.HasValue ? "Confirm Update of Customer" : "Confirm Creation of Customer")"
                       Message="@(editCustomerId.HasValue ? "Are you sure you want to save changes to this customer?" : "Are you sure you want to create this customer?")"
-                      Details="@confirmDetails"
                       OnYes="ConfirmAddCustomer" OnNo="CancelConfirm" />
 
         @if (showAddModal)
@@ -47,7 +46,6 @@
 </div>
 
 @code {
-    private string confirmDetails = "";
     private ConfirmModal? confirmAddModal;
     private bool showConfirmAddModal;
     private bool showAddModal;
@@ -78,37 +76,7 @@
 
     private void OnCountChanged(int count) => totalCount = count;
 
-private void OpenConfirmModal()
-{
-    if (editCustomerId.HasValue)
-    {
-        var dto = addCustomerModal?.PendingUpdateDto;
-        if (dto == null) { confirmDetails = ""; }
-        else
-        {
-            confirmDetails =
-                $"Subdistributor: {addCustomerModal!.OriginalSubDistributorName} → {addCustomerModal.SelectedSubDistributorNameForDisplay}{Environment.NewLine}" +
-                $"Customer Code: {addCustomerModal.OriginalCustomerCode} → {dto.CustomerCode}{Environment.NewLine}" +
-                $"Customer Name: {addCustomerModal.OriginalCustomerName} → {dto.CustomerName}{Environment.NewLine}{Environment.NewLine}" +
-              "Saving will update this customer's record. Any sales invoices already linked to this customer will be updated to reflect the new information.";
-        }
-    }
-    else
-    {
-        var dto = addCustomerModal?.PendingDto;
-        if (dto == null) { confirmDetails = ""; }
-        else
-        {
-            confirmDetails =
-                $"Subdistributor: {addCustomerModal!.SelectedSubDistributorNameForDisplay}{Environment.NewLine}" +
-                $"Customer Code: {dto.CustomerCode}{Environment.NewLine}" +
-                $"Customer Name: {dto.CustomerName}{Environment.NewLine}{Environment.NewLine}" +
-                "A new customer record will be created and made available for future sales invoices.";
-        }
-    }
-
-    showConfirmAddModal = true;
-}
+    private void OpenConfirmModal() => showConfirmAddModal = true;
 
     private void CancelConfirm() => showConfirmAddModal = false;
 

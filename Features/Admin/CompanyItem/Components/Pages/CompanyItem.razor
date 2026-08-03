@@ -3,7 +3,6 @@
 @using STTproject.Features.Admin.CompanyItem.Components.Modals
 @using STTproject.Features.Admin.CompanyItem.Components.Sections
 
-
 @if (isLoading)
 {
     <div class="loading-overlay">
@@ -35,7 +34,6 @@
         <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
                       Title="@(editCompanyItemId.HasValue ? "Confirm Update of Company Item" : "Confirm Creation of Company Item")"
                       Message="@(editCompanyItemId.HasValue ? "Are you sure you want to save changes to this company item?" : "Are you sure you want to create this company item?")"
-                      Details="@confirmDetails"
                       OnYes="ConfirmAddCompanyItem" OnNo="CancelConfirm" />
 
         @if (showAddModal)
@@ -49,7 +47,6 @@
 
 
 @code {
-    private string confirmDetails = "";
     private ConfirmModal? confirmAddModal;
     private bool showConfirmAddModal;
     private bool showAddModal;
@@ -80,29 +77,8 @@
 
     private void OnCountChanged(int count) => totalCount = count;
 
-    private void OpenConfirmModal()
-    {
-        if (editCompanyItemId.HasValue)
-        {
-            var dto = addCompanyItemModal?.PendingUpdateDto;
-            confirmDetails = dto == null ? "" :
-                $"Principal: {addCompanyItemModal!.OriginalPrincipal} → {dto.Principal}{Environment.NewLine}" +
-                $"Item Code: {addCompanyItemModal.OriginalItemCode} → {dto.ItemCode}{Environment.NewLine}" +
-                $"Item Name: {addCompanyItemModal.OriginalItemName} → {dto.ItemName}{Environment.NewLine}{Environment.NewLine}" +
-                "Editing the company item won't affect existing mappings and sales invoices.";
-        }   
-        else
-        {
-            var dto = addCompanyItemModal?.PendingDto;
-            confirmDetails = dto == null ? "" :
-                $"Principal: {dto.Principal}{Environment.NewLine}" +
-                $"Item Code: {dto.ItemCode}{Environment.NewLine}" +
-                $"Item Name: {dto.ItemName}{Environment.NewLine}{Environment.NewLine}" +
-                "Adding a new company item will make it available for mapping to Sub Distributor Items and can be used in future sales invoices after mapping.";
-        }
+    private void OpenConfirmModal() => showConfirmAddModal = true;
 
-        showConfirmAddModal = true;
-    }
     private void CancelConfirm() => showConfirmAddModal = false;
 
     private void CancelAddCompanyItem() => showAddModal = false;

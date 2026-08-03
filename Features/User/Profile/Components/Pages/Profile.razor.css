@@ -265,6 +265,19 @@
     font-weight: 500;
 }
 
+/* ── Edit modal ── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(58, 40, 112, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.18s ease;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;

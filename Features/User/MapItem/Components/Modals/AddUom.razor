@@ -177,14 +177,13 @@
             @if (showClearDraftConfirmModal)
             {
                 <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
-                              Message="Clear all unsaved changes for this UOM draft?" Details="This action will remove all unsaved changes for this UOM draft."
-                              OnYes="ConfirmClearDraftAsync"
+                              Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
                               OnNo="CancelClearDraftConfirm" />
             }
 
             @if (showReactivateConflictModal)
             {
-                <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage" 
+                <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
                               OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
             }
         </div>

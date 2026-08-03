@@ -173,7 +173,6 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 CompanyItemId = entity.CompanyItemId,
                 ItemCode = entity.ItemCode,
                 ItemName = entity.ItemName,
-                Principal = entity.Principal,
                 Category = entity.Category,
                 IsActive = entity.IsActive,
                 CreatedDate = entity.CreatedDate,
@@ -193,18 +192,18 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 .ToListAsync();
         }
 
-        public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null)
+        public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
-                .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName && c.CompanyItemId != excludeId);
+                .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName);
         }
 
-        public async Task<bool> ItemCodeExistsAsync(string itemCode , int? excludeId = null)
+        public async Task<bool> ItemCodeExistsAsync(string itemCode)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
-                .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId);
+                .AnyAsync(c => c.ItemCode == itemCode);
         }
     }
 }
