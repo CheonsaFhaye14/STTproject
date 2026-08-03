@@ -8,32 +8,45 @@
 @inject NavigationManager Navigation
 
 <div class="layout-container">
-    <nav class="@sidebarClass">
+        <nav class="@sidebarClass">
         <div class="sidebar-header">
             <h5 class="sidebar-label">Admin</h5>
         </div>
 
         <ul class="sidebar-menu">
+            @if (IsBoss)
+            {
             <li>
                 <NavLink class="sidebar-link" href="/admin" Match="NavLinkMatch.All">
                     <span class="bi bi-speedometer2 me-2" aria-hidden="true"></span> Dashboard
                 </NavLink>
             </li>
-            <li>
-                <NavLink class="sidebar-link" href="/admin/mapitem">
-                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Map Items
-                </NavLink>
-            </li>
-            <li>
-                <NavLink class="sidebar-link" href="/admin/companyitem">
-                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Company Items
-                </NavLink>
-            </li>
+            }
             <li>
                 <NavLink class="sidebar-link" href="/admin/customer">
                     <span class="bi bi-file-earmark-text me-2" aria-hidden="true"></span> Customers
                 </NavLink>
             </li>
+
+            <li>
+                <NavLink class="sidebar-link" href="/admin/companyitem">
+                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Company Items
+                </NavLink>
+            </li>
+
+            <li>
+                <NavLink class="sidebar-link" href="/admin/mapitem">
+                    <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Map Items
+                </NavLink>
+            </li>
+
+            @if (IsBoss)
+            {
+                <li>
+                    <NavLink class="sidebar-link" href="/admin/users">
+                        <span class="bi bi-bar-chart me-2" aria-hidden="true"></span> Users
+                    </NavLink>
+                </li>
             <li>
                 <NavLink class="sidebar-link" href="/admin/report">
                     <span class="bi bi-archive me-2" aria-hidden="true"></span> Report
@@ -49,13 +62,9 @@
                     <span class="bi bi-people me-2" aria-hidden="true"></span> SubDistributors Items
                 </NavLink>
             </li>
-            <li>
-                <NavLink class="sidebar-link" href="/admin/users">
-                    <span class="bi bi-bar-chart me-2" aria-hidden="true"></span> Users
-                </NavLink>
-            </li>
+            }
         </ul>
-    </nav>
+        </nav>
 
     <div class="right-column">
         <AdminTopBar OnHamburgerClick="ToggleSidebar" />
@@ -68,7 +77,10 @@
 
 @code {
     private bool sidebarOpen = true;
-
+    private List<string> BossUsernames = new List<string> { "angelfhaye14", "manilyn" };
+    private bool IsBoss =>
+        userContext.Username is not null &&
+        BossUsernames.Contains(userContext.Username);
     private string sidebarClass => sidebarOpen ? "sidebar sidebar-open" : "sidebar sidebar-closed";
 
     private Task ToggleSidebar()

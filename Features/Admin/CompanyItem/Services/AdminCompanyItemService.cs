@@ -195,18 +195,18 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 .ToListAsync();
         }
 
-        public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName)
+        public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
-                .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName);
+                .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName && c.CompanyItemId != excludeId);
         }
 
-        public async Task<bool> ItemCodeExistsAsync(string itemCode)
+        public async Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
-                .AnyAsync(c => c.ItemCode == itemCode);
+                 .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId);
         }
     }
 }

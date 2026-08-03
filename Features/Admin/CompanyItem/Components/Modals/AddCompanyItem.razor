@@ -211,7 +211,7 @@
             Category = Category ?? string.Empty,
         };
 
-Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService);        ShowValidationErrors = true;
+Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService, CompanyItemId);        ShowValidationErrors = true;
 
         if (Errors.Any()) return;
 
