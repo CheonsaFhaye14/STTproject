@@ -39,6 +39,13 @@
                     <span class="bi bi-box-seam me-2" aria-hidden="true"></span> Map Items
                 </NavLink>
             </li>
+            @* 
+            <li>
+                <NavLink class="sidebar-link" href="/admin/subdistributor">
+                    <span class="bi bi-people me-2" aria-hidden="true"></span> SubDistributors
+                </NavLink>
+            </li>
+             *@
 
             @if (IsBoss)
             {
@@ -77,7 +84,7 @@
 
 @code {
     private bool sidebarOpen = true;
-    private List<string> BossUsernames = new List<string> { "angelfhaye14", "manilyn" };
+    private List<string> BossUsernames = new List<string> { "angelfhaye14", "Manilyn" };
     private bool IsBoss =>
         userContext.Username is not null &&
         BossUsernames.Contains(userContext.Username);

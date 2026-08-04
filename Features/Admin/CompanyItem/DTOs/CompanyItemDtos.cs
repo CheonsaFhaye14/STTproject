@@ -34,11 +34,5 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public bool IsActive { get; set; }
         public int? UpdatedBy { get; set; }
     }
-    public class AddPriceIncreaseDto
-    {
-        public int CompanyItemId { get; set; }
-        public bool IsActive { get; set; }
-        public DateTime EffectivityDate { get; set; }
-        public decimal PriceIncreasePercent { get; set; }
-    }
+
 }
