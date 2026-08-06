@@ -1,0 +1,27 @@
+@namespace STTproject.Shared.Components.Filter
+@typeparam TValue
+
+<div class="d-flex gap-2">
+    @foreach (var opt in Options.Where(o => o.Visible))
+    {
+        var isActive = EqualityComparer<TValue>.Default.Equals(SelectedValue, opt.Value);
+        <button type="button"
+                class="btn @(isActive ? opt.ActiveClass : opt.InactiveClass)"
+                @onclick="() => Toggle(opt.Value)">
+            @opt.Label
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public List<FilterToggleOption<TValue>> Options { get; set; } = new();
+    [Parameter] public TValue SelectedValue { get; set; } = default!;
+    [Parameter] public TValue DefaultValue { get; set; } = default!;
+    [Parameter] public EventCallback<TValue> SelectedValueChanged { get; set; }
+
+    private async Task Toggle(TValue value)
+    {
+        var next = EqualityComparer<TValue>.Default.Equals(SelectedValue, value) ? DefaultValue : value;
+        await SelectedValueChanged.InvokeAsync(next);
+    }
+}

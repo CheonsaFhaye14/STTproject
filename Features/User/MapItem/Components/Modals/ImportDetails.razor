@@ -1,23 +1,40 @@
 @using STTproject.Features.User.MapItem.DTOs
 
-@* Import Details Modal *@
 <div class="modal @(Show ? "show" : "")"
-     style="@(Show ? "display: block; background-color: rgba(0,0,0,0.5);" : "display: none;")">
+     style="@(Show ? "display: block;" : "display: none;")">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Import Results</h5>
+
+            @* ── Modal header ── *@
+            <div class="modal-header-ent">
+                <div class="mh-left">
+                    <div class="mh-icon">
+                        <i class="ti ti-replace" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <div class="mh-title">Import results</div>
+                        <div class="mh-sub">Subdistributor Item mapping</div>
+                    </div>
+                </div>
+                <button type="button" class="mh-close" @onclick="HandleClose" aria-label="Close">
+                    <i class="ti ti-x" aria-hidden="true"></i>
+                </button>
             </div>
-            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+
+            @* ── Modal body ── *@
+            <div class="modal-body-ent">
                 @if (ImportResult == null)
                 {
-                    <p>No import result to display.</p>
+                    <p class="text-muted" style="font-size:13px;">No import result to display.</p>
                 }
                 else if (!GetGlobalIssues().Any() && !ImportResult.Rows.Any())
                 {
-                    <div class="alert alert-warning">
-                        <strong>No rows to import</strong>
-                        <p>The import file did not contain any valid rows to process.</p>
+                    <div class="global-alert">
+                        <i class="ti ti-alert-triangle global-alert-icon" aria-hidden="true"></i>
+                        <div>
+                            <div class="global-alert-title">No rows to import</div>
+                            <p class="hint-text" style="margin:0;">The import file did not contain any valid rows to process.</p>
+                        </div>
                     </div>
                 }
                 else
@@ -34,288 +51,395 @@
                         }
                     }
 
-                    var hasSuccessGroups = groups.Any(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count ==
-                0));
+                    var hasSuccessGroups = groups.Any(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0));
                     var hasErrorGroups = groups.Any(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0));
-                    var selectableCount = groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count ==
-                0) && !g.IsSaved);
-                    var selectedCount = groups.Count(g => g.Selected && !g.IsSaved && (g.Issues?.Count ?? 0) == 0 &&
-                g.Rows.All(r => r.Issues.Count == 0));
+                    var selectableCount = groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
+                    var selectedCount = groups.Count(g => g.Selected && !g.IsSaved && (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0));
+                    var totalRows = ImportResult.Rows.Count;
 
-                    @* Global Issues Error *@
-                    if (globalIssues.Any())
+                    @* ── Summary stat bar ── *@
+                    <div class="stat-bar">
+                        <div class="sc">
+                            <div class="sc-label">Total rows</div>
+                            <div class="sc-val">@totalRows</div>
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">Items</div>
+                            <div class="sc-val">@groups.Count</div>
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">Valid</div>
+                            <div class="sc-val sc-ok">@groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0))</div>
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">With errors</div>
+                            <div class="sc-val @(hasErrorGroups ? "sc-er" : "")">@groups.Count(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0))</div>
+                        </div>
+                    </div>
+
+                    @* ── Global file-level failure ── *@
+                    @if (globalIssues.Any())
                     {
-                        <div class="alert alert-danger">
-                            <strong>Import Failed</strong>
-                            <ul class="mb-0 mt-2">
-                                @foreach (var issue in globalIssues)
-                                {
-                                    <li>
-                                        <small class="text-muted">Row @issue.RowNumber</small>
-                                        <span>: @issue.Message</span>
-                                    </li>
-                                }
-                            </ul>
+                        <div class="global-alert">
+                            <i class="ti ti-shield-x global-alert-icon" aria-hidden="true"></i>
+                            <div>
+                                <div class="global-alert-title">Import failed — file could not be processed</div>
+                                <ul class="global-alert-list">
+                                    @foreach (var issue in globalIssues)
+                                    {
+                                        <li>
+                                            <span class="row-tag">Row @issue.RowNumber</span>
+                                            @issue.Message
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                        <p class="hint-text">Fix the issues in your file and re-upload to continue.</p>
+                    }
+
+                    @* ── Pure success (no groups, no global issues) ── *@
+                    @if (!groups.Any() && !globalIssues.Any())
+                    {
+                        <div class="success-banner">
+                            <div class="success-banner-icon">
+                                <i class="ti ti-circle-check" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <div class="success-banner-title">Import complete</div>
+                                <div class="success-banner-sub">All rows have already been processed. Nothing left to commit.</div>
+                            </div>
                         </div>
                     }
 
-                    <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
-                        <div class="d-flex align-items-center me-2">
-                            @if (groupFilter == GroupFilter.SuccessOnly && selectableCount > 0)
+                    @* ── Tabs ── *@
+                    @if (groups.Any())
+                    {
+                        <div class="tabs">
+                            <button type="button" class="tab @GetTabClass(GroupFilter.All)" @onclick='() => SetTab(GroupFilter.All)'>
+                                All (@groups.Count)
+                            </button>
+                            @if (hasSuccessGroups)
                             {
-                                <div class="form-check d-flex align-items-center me-2">
-                                    <input class="form-check-input me-2" type="checkbox"
-                                           checked="@(selectedCount == selectableCount)"
-                                           @onchange="(e) => ToggleSelectAllCards(e.Value)" />
-                                    <label class="form-check-label">Select All (@selectedCount/@selectableCount)</label>
-                                </div>
+                                <button type="button" class="tab @GetTabClass(GroupFilter.SuccessOnly)" @onclick='() => SetTab(GroupFilter.SuccessOnly)'>
+                                    <span class="dot dot-ok"></span>
+                                    Valid (@groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0)))
+                                </button>
                             }
-
-                            
-                            @if (groupFilter == GroupFilter.ErrorOnly && hasErrorGroups)
+                            @if (hasErrorGroups)
                             {
-                                <div class="d-flex align-items-center">
-                                    <label class="me-2">Errors: @GetTotalErrorCount()</label>
-                                        <div class="form-group">
-                                    <select
-                                            @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
-                                        <option value="">All errors</option>
-                                        @foreach (var entry in GetDistinctErrorMessages())
-                                        {
-                                            var display = entry.Message.Length > 120 ? entry.Message.Substring(0, 117) + "..." : entry.Message;
-                                            <option value="@entry.Message">@display (@entry.Count)</option>
-                                        }
-                                    </select>
-                                        </div>
-                                    @if (!string.IsNullOrEmpty(selectedErrorFilter))
-                                    {
-                                        <button type="button" class="btn btn-link btn-sm ms-2 p-0" @onclick="ClearErrorFilter">Clear</button>
-                                    }
-                                </div>
+                                <button type="button" class="tab @GetTabClass(GroupFilter.ErrorOnly)" @onclick='() => SetTab(GroupFilter.ErrorOnly)'>
+                                    <span class="dot dot-er"></span>
+                                    Errors (@groups.Count(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0)))
+                                </button>
                             }
                         </div>
 
-                        @if (hasSuccessGroups)
+                        @* ── Error filter bar (only on error tab) ── *@
+                        @if (groupFilter == GroupFilter.ErrorOnly && hasErrorGroups)
                         {
-                            <button type="button"
-                                    class="btn @(groupFilter == GroupFilter.SuccessOnly ? "btn-success" : "btn-outline-success")"
-                                    @onclick="ToggleSuccessOnly">
-                                Success Only
-                            </button>
+                            <div class="err-filter-bar">
+                                <span class="err-filter-label">
+                                    <i class="ti ti-filter" aria-hidden="true"></i>
+                                    Errors: @GetTotalErrorCount()
+                                </span>
+                                <select @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
+                                    <option value="">All errors</option>
+                                    @foreach (var entry in GetDistinctErrorMessages())
+                                    {
+                                        var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
+                                        <option value="@entry.Message">@display (@entry.Count)</option>
+                                    }
+                                </select>
+                                @if (!string.IsNullOrEmpty(selectedErrorFilter))
+                                {
+                                    <button type="button" class="clear-filter-btn" @onclick="ClearErrorFilter">
+                                        <i class="ti ti-x" aria-hidden="true"></i>
+                                        Clear
+                                    </button>
+                                }
+                            </div>
                         }
 
-                        @if (hasErrorGroups)
+                        @* ── Select all (only on valid / all tab) ── *@
+                        @if (groupFilter != GroupFilter.ErrorOnly && selectableCount > 0)
                         {
-                            <button type="button"
-                                    class="btn @(groupFilter == GroupFilter.ErrorOnly ? "btn-danger" : "btn-outline-danger")"
-                                    @onclick="ToggleErrorOnly">
-                                Error Only
-                            </button>
+                            <div class="sel-all-bar">
+                                <input type="checkbox" id="select-all-check"
+                                       checked="@(selectedCount == selectableCount)"
+                                       @onchange="(e) => ToggleSelectAllCards(e.Value)" />
+                                <label for="select-all-check">Select all valid (@selectedCount / @selectableCount ready)</label>
+                            </div>
                         }
-                    </div>
 
-                    <div class="import-results">
-                        @foreach (var group in groups
-                            .Where(ShouldShowGroup)
-                            .OrderBy(GetGroupSortKey))
-                        {
-                            var groupRows = group.Rows!;
-                            var hasErrors = (group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0);
-                            var first = groupRows.FirstOrDefault();
-                            var displayName = first == null
-                                ? "[Orphan]"
-                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                    {first.CompanyItemName}");
+                        @* ── Item cards ── *@
+                        <div class="import-results">
+                            @foreach (var group in groups.Where(ShouldShowGroup).OrderBy(GetGroupSortKey))
+                            {
+                                var groupRows = group.Rows!;
+                                var hasErrors = (group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0);
+                                var first = groupRows.FirstOrDefault();
+                                var displayName = first == null
+                                    ? "[Orphan]"
+                                    : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} - {first.CompanyItemName}");
+                                var groupKey = first != null ? BuildGroupKey(first) : Guid.NewGuid().ToString();
+                                var isExpanded = expandedGroups.Contains(groupKey);
 
-                            <div class="card mb-3 @(hasErrors ? "border-danger" : "border-success")">
-                                <div
-                                    class="card-header d-flex justify-content-between align-items-center @(hasErrors ? "bg-danger text-white" : "bg-success text-white")">
-                                    <div>
-                                        <h6 class="mb-0">Company Item: <strong>@displayName</strong></h6>
-                                    </div>
-                                    <div>
-                                        @if (group.IsSaved)
-                                        {
-                                            <span class="badge bg-light text-success">Saved</span>
-                                        }
-                                        else if (hasErrors)
-                                        {
-                                            var groupErrorCount = GetGroupErrorRowCount(group);
-                                            <span class="badge bg-light text-danger">@((groupErrorCount == 1) ? "1 error" :$"{groupErrorCount} errors")</span>
-                                            }
-                                        else if (groupRows.Count > 0)
-                                            {
-                                                <input type="checkbox" checked="@group.Selected"
-                                                       @onchange="(e) => ToggleGroupSelectionLocal(group, e.Value)" />
-                                            }
-                                        </div>
-                                    </div>
-                                    <div class="card-body">
-                                        @if (first != null)
-                                        {
-                                            <div class="mb-2">
-                                                <small class="text-muted">Principal:</small> @first.Principal &nbsp; | &nbsp;
-                                                <small class="text-muted">Subdistributor:</small> @first.SubDistributorCode -
-                                                @first.SubDistributorName &nbsp; |
-                                                &nbsp;
-                                                <small class="text-muted">Subdistributor Item:</small> @first.SubdItemCode -
-                                                @first.SubdItemName
+                                @if (!hasErrors)
+                                {
+                                    <div class="icard">
+                                        <div class="ich ich-ok @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
+                                            <div class="ich-left">
+                                                <div class="iicon iicon-ok">
+                                                    <i class="ti ti-package" aria-hidden="true"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="inv-num inv-ok">@displayName</div>
+                                                    @if (first != null)
+                                                    {
+                                                        <div class="inv-sub inv-sub-ok">
+                                                            <span>@first.SubDistributorCode - @first.SubDistributorName</span>
+                                                            <span class="sep">·</span>
+                                                            <span>@groupRows.Count row(s)</span>
+                                                        </div>
+                                                    }
+                                                </div>
                                             </div>
-
-                                            <table class="table table-sm">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Row</th>
-                                                        <th>UOM</th>
-                                                        <th>Conversion</th>
-                                                        <th>Price</th>
-                                                        <th>Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var row in groupRows.OrderBy(r => r.RowNumber))
-                                                    {
-                                                        <tr>
-                                                            <td>@row.RowNumber</td>
-                                                            <td>@row.UomName</td>
-                                                            <td>@row.Conversion</td>
-                                                            <td>@row.Price?.ToString("N2")</td>
-                                                            <td>
-                                                                @if (row.Issues.Count > 0)
-                                                                {
-                                                                    <span class="badge bg-danger">@((GetDisplayRowErrorCount(row) == 1) ? "1 error" : $"{GetDisplayRowErrorCount(row)} errors")</span>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span class="badge bg-success">Valid</span>
-                                                                }
-                                                            </td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </table>
-                                        }
-
-                                        @{
-                                            var visibleIssues = (group.Issues ?? new List<ImportMapItemIssue>())
-                                                .Concat(groupRows.SelectMany(r => r.Issues.Select(i => new ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))));
-
-                                            if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
-                                            {
-                                                if (selectedErrorFilter == "SubdItem Duplicated In Excel")
+                                            <div class="ich-right">
+                                                @if (group.IsSaved)
                                                 {
-                                                    var matching = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter).ToList();
-
-                                                    // include other rows in the import that have the same SubdItemCode
-                                                    var dupCodes = groupRows.Select(r => r.SubdItemCode).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                                                    var extras = new List<ImportMapItemIssue>();
-                                                    var allRows = ImportResult?.Rows ?? new List<ImportMapItemRowResult>();
-                                                    foreach (var code in dupCodes)
-                                                    {
-                                                        var others = allRows.Where(rr => rr.RowNumber > 0 && !string.IsNullOrWhiteSpace(rr.SubdItemCode) && string.Equals(rr.SubdItemCode, code, StringComparison.OrdinalIgnoreCase)).ToList();
-                                                        foreach (var other in others)
-                                                        {
-                                                            if (!groupRows.Any(r => r.RowNumber == other.RowNumber))
-                                                            {
-                                                                var msg = $"SubdItem code '{other.SubdItemCode}' is duplicated within the uploaded Excel for SubDistributor '{other.SubDistributorCode}'.";
-                                                                extras.Add(new ImportMapItemIssue(other.RowNumber, other.SubdItemCode, msg));
-                                                            }
-                                                        }
-                                                    }
-
-                                                    visibleIssues = matching.Concat(extras);
+                                                    <span class="badge badge-saved">
+                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                        Saved
+                                                    </span>
                                                 }
                                                 else
                                                 {
-                                                    visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
+                                                    <span class="badge badge-ready">
+                                                        <i class="ti ti-check" aria-hidden="true"></i>
+                                                        Ready
+                                                    </span>
+                                                    <div class="chk" @onclick:stopPropagation="true">
+                                                        <input type="checkbox" checked="@group.Selected"
+                                                               @onchange="(e) => ToggleGroupSelectionLocal(group, e.Value)"
+                                                               id="chk-@groupKey" />
+                                                        <label for="chk-@groupKey">Select</label>
+                                                    </div>
                                                 }
-                                            }
+                                                <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                            </div>
+                                        </div>
 
-                                            var grouped = visibleIssues
-                                                .GroupBy(i => new { i.RowNumber, i.Message })
-                                                .Select(g => g.First())
-                                                .GroupBy(i => i.RowNumber)
-                                                .OrderBy(g => g.Key)
-                                                .ToList();
-
-                                            if (grouped.Any())
-                                            {
-                                                <div class="mt-2">
-                                                    <ul class="list-unstyled text-danger mb-0">
-                                                        @foreach (var rowGroup in grouped)
-                                                        {
-                                                            var rowNum = rowGroup.Key;
-                                                            var combined = string.Join("\n\n", rowGroup.Select(i => i.Message));
-                                                            <li>
-                                                                <small class="text-muted">Row @rowNum</small>
-                                                                <span style="white-space: pre-line;">: @combined</span>
-                                                            </li>
-                                                        }
-                                                    </ul>
+                                        @if (isExpanded && first != null)
+                                        {
+                                            <div class="icb">
+                                                <div class="cust-meta">
+                                                    <div>
+                                                        <span class="cust-meta-label">Principal</span>
+                                                        <strong>@first.Principal</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span class="cust-meta-label">Subdistributor</span>
+                                                        <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
+                                                    </div>
+                                                    <div style="grid-column: 1 / -1;">
+                                                        <span class="cust-meta-label">Subdistributor Item</span>
+                                                        <strong>@first.SubdItemCode - @first.SubdItemName</strong>
+                                                    </div>
                                                 </div>
-                                            }
+                                                <div class="itbl-wrap">
+                                                    <table class="itbl">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Row</th>
+                                                                <th>UOM</th>
+                                                                <th class="r">Conversion</th>
+                                                                <th class="r">Price</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var row in groupRows.OrderBy(r => r.RowNumber))
+                                                            {
+                                                                <tr>
+                                                                    <td class="mono">@row.RowNumber</td>
+                                                                    <td>@row.UomName</td>
+                                                                    <td class="r">@row.Conversion</td>
+                                                                    <td class="r">@row.Price?.ToString("N2")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
                                         }
                                     </div>
-                                </div>
+                                }
+                                else
+                                {
+                                    var groupErrorCount = GetGroupErrorRowCount(group);
+
+                                    var visibleIssues = (group.Issues ?? new List<ImportMapItemIssue>())
+                                        .Concat(groupRows.SelectMany(r => r.Issues.Select(i => new ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))));
+
+                                    if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                                    {
+                                        if (selectedErrorFilter == "SubdItem Duplicated In Excel")
+                                        {
+                                            var matching = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter).ToList();
+                                            var dupCodes = groupRows.Select(r => r.SubdItemCode).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                                            var extras = new List<ImportMapItemIssue>();
+                                            var allRows = ImportResult?.Rows ?? new List<ImportMapItemRowResult>();
+                                            foreach (var code in dupCodes)
+                                            {
+                                                var others = allRows.Where(rr => rr.RowNumber > 0 && !string.IsNullOrWhiteSpace(rr.SubdItemCode) && string.Equals(rr.SubdItemCode, code, StringComparison.OrdinalIgnoreCase)).ToList();
+                                                foreach (var other in others)
+                                                {
+                                                    if (!groupRows.Any(r => r.RowNumber == other.RowNumber))
+                                                    {
+                                                        var msg = $"SubdItem code '{other.SubdItemCode}' is duplicated within the uploaded Excel for SubDistributor '{other.SubDistributorCode}'.";
+                                                        extras.Add(new ImportMapItemIssue(other.RowNumber, other.SubdItemCode, msg));
+                                                    }
+                                                }
+                                            }
+                                            visibleIssues = matching.Concat(extras);
+                                        }
+                                        else
+                                        {
+                                            visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
+                                        }
+                                    }
+
+                                    var grouped = visibleIssues
+                                        .GroupBy(i => new { i.RowNumber, i.Message })
+                                        .Select(g => g.First())
+                                        .GroupBy(i => i.RowNumber)
+                                        .OrderBy(g => g.Key)
+                                        .ToList();
+
+                                    <div class="icard">
+                                        <div class="ich ich-er">
+                                            <div class="ich-left">
+                                                <div class="iicon iicon-er">
+                                                    <i class="ti ti-package-off" aria-hidden="true"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="inv-num inv-er">@displayName</div>
+                                                    @if (first != null)
+                                                    {
+                                                        <div class="inv-sub inv-sub-er">
+                                                            <span>@first.SubDistributorCode - @first.SubDistributorName</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="badge badge-err">
+                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                @((groupErrorCount == 1) ? "1 error" : $"{groupErrorCount} errors")
+                                            </span>
+                                        </div>
+
+                                        @if (grouped.Any())
+                                        {
+                                            <div class="icb-err-rows">
+                                                @foreach (var rowGroup in grouped)
+                                                {
+                                                    var rowNum = rowGroup.Key;
+                                                    @foreach (var issue in rowGroup)
+                                                    {
+                                                        <div class="err-msg-card">
+                                                            <div class="err-msg-hdr">
+                                                                <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                                <div>
+                                                                    <div class="err-msg-text">@issue.Message</div>
+                                                                    @if (rowNum > 0)
+                                                                    {
+                                                                        <div class="err-rows-pill">
+                                                                            <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                            Row: @rowNum
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
                             }
                         </div>
                     }
-                </div>
-                <div class="modal-footer">
-                    @if (ImportResult != null && GetSelectedCardCount() > 0)
-                    {
-                        <button type="button" class="btn btn-primary" disabled="@(!CanCommit)"
-                                @onclick="OpenCommitConfirmModal">Commit Mapped Items</button>
-                    }
-                    <button type="button" class="btn btn-secondary" @onclick="HandleClose">Close</button>
-                </div>
+                }
             </div>
+
+            @* ── Modal footer ── *@
+            <div class="modal-footer-ent">
+                @if (ImportResult != null && GetSelectedCardCount() > 0)
+                {
+                    <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
+                        <i class="ti ti-send" aria-hidden="true"></i>
+                        Commit mapped items (@GetSelectedCardCount())
+                    </button>
+                }
+                <button type="button" class="btn-close-modal" @onclick="HandleClose">Close</button>
+            </div>
+
         </div>
     </div>
+</div>
+
+<ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items"
+              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")"
+              OnYes="ConfirmCommit" OnNo="CancelCommit" CloseOnOverlayClick="true" />
 
 @code {
-    [Parameter]
-    public bool Show { get; set; }
-
-    [Parameter]
-    public ImportMapItemResult? ImportResult { get; set; }
-
-    [Parameter]
-    public EventCallback OnCommit { get; set; }
-
-    [Parameter]
-    public EventCallback OnClose { get; set; }
-
-    [Parameter]
-    public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public ImportMapItemResult? ImportResult { get; set; }
+    [Parameter] public EventCallback OnCommit { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     private bool showCommitConfirmModal;
     private bool wasShown;
+    private GroupFilter groupFilter = GroupFilter.All;
+    private string? selectedErrorFilter;
+    private HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
 
     protected override void OnParametersSet()
     {
-        if (Show && !wasShown)
-        {
-            groupFilter = GroupFilter.SuccessOnly;
-            wasShown = true;
-        }
-        else if (!Show)
-        {
-            wasShown = false;
-        }
+        if (Show && !wasShown) { groupFilter = GroupFilter.SuccessOnly; wasShown = true; }
+        else if (!Show) { wasShown = false; }
     }
 
     private bool CanCommit => ImportResult != null && GetSelectedCardCount() > 0;
 
+    private void ToggleExpand(string key)
+    {
+        if (!expandedGroups.Remove(key))
+            expandedGroups.Add(key);
+    }
+
+    private string GetTabClass(GroupFilter filter) => groupFilter == filter
+        ? filter switch
+        {
+            GroupFilter.SuccessOnly => "tab act-ok",
+            GroupFilter.ErrorOnly => "tab act-er",
+            _ => "tab act-all"
+        }
+        : "tab";
+
+    private void SetTab(GroupFilter filter)
+    {
+        groupFilter = filter;
+        selectedErrorFilter = null;
+    }
+
     private List<ImportMapItemIssue> GetGlobalIssues()
     {
-        if (ImportResult == null)
-        {
-            return new List<ImportMapItemIssue>();
-        }
+        if (ImportResult == null) return new List<ImportMapItemIssue>();
 
-        var headerIssues = ImportResult.Issues
-            .Where(i => i.RowNumber == 0)
-            .ToList();
+        var headerIssues = ImportResult.Issues.Where(i => i.RowNumber == 0).ToList();
 
         var rowHeaderIssues = ImportResult.Rows
             .Where(row => row.RowNumber == 0)
@@ -335,11 +459,6 @@
             .ToList();
     }
 
-    
-
-    private GroupFilter groupFilter = GroupFilter.All;
-    private string? selectedErrorFilter;
-
     private IEnumerable<(string Message, int Count)> GetDistinctErrorMessages()
     {
         if (ImportResult?.PreparedGroups == null)
@@ -350,7 +469,6 @@
         {
             if (g.Issues != null)
                 all.AddRange(g.Issues.Select(i => NormalizeMessageType(i.Message)));
-
             if (g.Rows != null)
                 all.AddRange(g.Rows.SelectMany(r => r.Issues.Select(i => NormalizeMessageType(i))));
         }
@@ -371,16 +489,12 @@
         var msg = NormalizeMessage(m).ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
 
-        // common canonicalizations
         if (msg.Contains("duplicate") && msg.Contains("uom")) return "Duplicate UOM";
         if (msg.Contains("duplicate") && msg.Contains("conversion")) return "Duplicate Conversion";
         if (msg.Contains("already exist") && msg.Contains("subd")) return "SubdItem Already Exists In Excel";
-        // e.g. "Subditem code '82246' Item is duplicated within the uploaded Excel for SubDistributor '01GMA07'."
         if (msg.Contains("duplicat") && (msg.Contains("uploaded") || msg.Contains("excel")) && (msg.Contains("subd") || msg.Contains("subditem") || msg.Contains("subdistributor")))
             return "SubdItem Duplicated In Excel";
-
         if (msg.Contains("already mapped") || (msg.Contains("already") && msg.Contains("mapped"))) return "Already Mapped";
-
         if (msg.Contains("uom not found") || (msg.Contains("not found") && msg.Contains("uom"))) return "UOM Not Found";
         if (msg.Contains("invalid uom") || (msg.Contains("invalid") && msg.Contains("uom"))) return "Invalid UOM";
         if (msg.Contains("conversion mismatch") || (msg.Contains("mismatch") && msg.Contains("conversion"))) return "Conversion Mismatch";
@@ -388,66 +502,30 @@
         if (msg.Contains("price is required") || msg.Contains("price missing")) return "Price Required";
         if (msg.Contains("conversion is required")) return "Conversion Required";
 
-        // fallback: return original trimmed message
         return NormalizeMessage(m);
     }
 
-    private void OnErrorFilterChanged(ChangeEventArgs e)
-    {
-        selectedErrorFilter = e?.Value?.ToString();
-    }
-
-    private void ClearErrorFilter()
-    {
-        selectedErrorFilter = null;
-    }
-
-    private void ToggleSuccessOnly()
-    {
-        groupFilter = groupFilter == GroupFilter.SuccessOnly ? GroupFilter.All : GroupFilter.SuccessOnly;
-    }
-
-    private void ToggleErrorOnly()
-    {
-        if (groupFilter == GroupFilter.ErrorOnly)
-        {
-            groupFilter = GroupFilter.All;
-            selectedErrorFilter = null;
-        }
-        else
-        {
-            groupFilter = GroupFilter.ErrorOnly;
-        }
-    }
+    private void OnErrorFilterChanged(ChangeEventArgs e) => selectedErrorFilter = e?.Value?.ToString();
+    private void ClearErrorFilter() => selectedErrorFilter = null;
 
     private int GetSelectedCardCount()
     {
-        if (ImportResult == null)
-        {
-            return 0;
-        }
+        if (ImportResult == null) return 0;
         var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
-        return groups.Count(g => g.Rows.Any() && SelectedGroupKeys.Contains(BuildGroupKey(g.Rows.First())) && (g.Issues?.Count
-?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
+        return groups.Count(g => g.Rows.Any() && SelectedGroupKeys.Contains(BuildGroupKey(g.Rows.First()))
+            && (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
     }
 
     private int GetTotalErrorCount()
     {
-        if (ImportResult == null)
-        {
-            return 0;
-        }
-
+        if (ImportResult == null) return 0;
         var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
         return groups.Sum(group => (group.Issues?.Count ?? 0) + group.Rows.Sum(row => row.Issues.Count));
     }
 
     private void ToggleSelectAllCards(object? checkedValue)
     {
-        if (checkedValue is not bool isChecked || ImportResult == null)
-        {
-            return;
-        }
+        if (checkedValue is not bool isChecked || ImportResult == null) return;
 
         var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
         foreach (var g in groups)
@@ -455,44 +533,21 @@
             if (g.Rows == null || g.Rows.Count == 0) continue;
             if ((g.Issues?.Count ?? 0) > 0) continue;
             var key = BuildGroupKey(g.Rows.First());
-            if (isChecked)
-            {
-                SelectedGroupKeys.Add(key);
-                g.Selected = true;
-            }
-            else
-            {
-                SelectedGroupKeys.Remove(key);
-                g.Selected = false;
-            }
+            if (isChecked) { SelectedGroupKeys.Add(key); g.Selected = true; }
+            else { SelectedGroupKeys.Remove(key); g.Selected = false; }
         }
     }
 
-    private enum GroupFilter
-    {
-        All,
-        SuccessOnly,
-        ErrorOnly
-    }
+    private enum GroupFilter { All, SuccessOnly, ErrorOnly }
 
     private static string BuildGroupKey(ImportMapItemRowResult row)
     {
         static string NormalizePart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
-        return string.Join("|",
-            NormalizePart(row.SubDistributorCode),
-            NormalizePart(row.CompanyItemCode),
-            NormalizePart(row.CompanyItemName));
+        return string.Join("|", NormalizePart(row.SubDistributorCode), NormalizePart(row.CompanyItemCode), NormalizePart(row.CompanyItemName));
     }
 
-    private void OpenCommitConfirmModal()
-    {
-        showCommitConfirmModal = true;
-    }
-
-    private void CancelCommit()
-    {
-        showCommitConfirmModal = false;
-    }
+    private void OpenCommitConfirmModal() => showCommitConfirmModal = true;
+    private void CancelCommit() => showCommitConfirmModal = false;
 
     private async Task ConfirmCommit()
     {
@@ -502,18 +557,12 @@
 
     private async Task HandleCommit()
     {
-        if (OnCommit.HasDelegate)
-        {
-            await OnCommit.InvokeAsync(null);
-        }
+        if (OnCommit.HasDelegate) await OnCommit.InvokeAsync(null);
     }
 
     private async Task HandleClose()
     {
-        if (OnClose.HasDelegate)
-        {
-            await OnClose.InvokeAsync(null);
-        }
+        if (OnClose.HasDelegate) await OnClose.InvokeAsync(null);
     }
 
     private void ToggleGroupSelectionLocal(PreparedItemGroup? prepared, object? checkedValue)
@@ -523,14 +572,7 @@
         if (prepared.Rows.Any())
         {
             var key = BuildGroupKey(prepared.Rows.First());
-            if (isChecked)
-            {
-                SelectedGroupKeys.Add(key);
-            }
-            else
-            {
-                SelectedGroupKeys.Remove(key);
-            }
+            if (isChecked) SelectedGroupKeys.Add(key); else SelectedGroupKeys.Remove(key);
         }
     }
 
@@ -553,7 +595,6 @@
     {
         if (string.IsNullOrWhiteSpace(message)) return false;
         var norm = NormalizeMessageType(message);
-
         if (group.Issues != null && group.Issues.Any(i => NormalizeMessageType(i.Message) == norm)) return true;
         if (group.Rows != null && group.Rows.Any(r => r.Issues.Any(i => NormalizeMessageType(i) == norm))) return true;
         return false;
@@ -575,18 +616,10 @@
     {
         var affectedRows = new HashSet<int>();
 
-        // rows' issues
         foreach (var row in group.Rows.Where(r => r.Issues.Count > 0))
         {
-            if (string.IsNullOrWhiteSpace(selectedErrorFilter))
-            {
-                affectedRows.Add(row.RowNumber);
-            }
-            else
-            {
-                if (row.Issues.Any(i => NormalizeMessageType(i) == selectedErrorFilter))
-                    affectedRows.Add(row.RowNumber);
-            }
+            if (string.IsNullOrWhiteSpace(selectedErrorFilter)) affectedRows.Add(row.RowNumber);
+            else if (row.Issues.Any(i => NormalizeMessageType(i) == selectedErrorFilter)) affectedRows.Add(row.RowNumber);
         }
 
         if (group.Issues != null)
@@ -601,16 +634,9 @@
             }
 
             if (group.Issues.Any(issue => issue.RowNumber == 0 && (string.IsNullOrWhiteSpace(selectedErrorFilter) || NormalizeMessageType(issue.Message) == selectedErrorFilter)))
-            {
                 return affectedRows.Count + 1;
-            }
         }
 
         return affectedRows.Count;
     }
 }
-
-
-<ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items"
-              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")" OnYes="ConfirmCommit" OnNo="CancelCommit"
-              CloseOnOverlayClick="true" />

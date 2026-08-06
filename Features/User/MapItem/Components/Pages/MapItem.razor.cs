@@ -154,9 +154,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 loadingMessage = "";
                 await InvokeAsync(StateHasChanged);
              }
-
-
-   
         }
 
         private async Task HandleCommitImportAsync()

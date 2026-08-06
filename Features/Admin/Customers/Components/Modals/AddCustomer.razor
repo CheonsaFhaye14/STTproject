@@ -251,8 +251,10 @@
             CustomerType = CustomerType ?? string.Empty,
         };
 
-        Errors = await CustomerValidations.ValidateAddCustomerAsync(customerToValidate);
-        ShowValidationErrors = true;
+Errors = await CustomerValidations.ValidateAddCustomerAsync(
+    customerToValidate,
+    AdminCustomerService,
+    isEdit ? CustomerId : null);        ShowValidationErrors = true;
 
         if (Errors.Any()) return;
 

@@ -47,6 +47,7 @@ builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 builder.Services.AddScoped<IAdminCompanyItemService, AdminCompanyItemService>();
 builder.Services.AddScoped<IAdminSalesInvoiceService, AdminSalesInvoiceService>();
+builder.Services.AddScoped<ImportCustomersService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -187,7 +187,19 @@ namespace STTproject.Features.Admin.Customers.Services
 
             return (items, total);
         }
+        public async Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, int? excludeId = null)
+        {
+            await using var db = _dbFactory.CreateDbContext();
 
+            var query = db.Customers.Where(c =>
+                c.CustomerCode == customerCode &&
+                c.SubDistributorId == subDistributorId);
+
+            if (excludeId.HasValue)
+                query = query.Where(c => c.CustomerId != excludeId.Value);
+
+            return await query.AnyAsync();
+        }
         public async Task<IEnumerable<SubDistributorDto>> GetSubDistributorsAsync(string? query = null)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -246,4 +258,6 @@ namespace STTproject.Features.Admin.Customers.Services
         public async Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto)
             => await UpdateCustomerAsync(dto.CustomerId, dto);
     }
+
+       
 }

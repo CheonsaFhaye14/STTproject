@@ -1,0 +1,114 @@
+
+@typeparam TRow where TRow : IImportRow
+@typeparam TGroup where TGroup : IImportGroup<TRow>
+@using STTproject.Shared.Components.Filter
+
+<div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+    <div class="d-flex align-items-center me-2">
+        @if (Filter == ImportGroupFilter.SuccessOnly && SelectableCount > 0)
+        {
+            <div class="form-check d-flex align-items-center me-2">
+                <input class="form-check-input me-2" type="checkbox"
+                       checked="@(SelectedCount == SelectableCount)"
+                       @onchange="e => ToggleSelectAll(e.Value)" />
+                <label class="form-check-label">Select All (@SelectedCount/@SelectableCount)</label>
+            </div>
+        }
+
+        @if (Filter == ImportGroupFilter.ErrorOnly && HasErrorGroups)
+        {
+            <div class="d-flex align-items-center">
+                <label class="me-2">Errors: @TotalErrorCount</label>
+                <select @onchange="OnErrorFilterChanged" value="@(SelectedErrorFilter ?? string.Empty)">
+                    <option value="">All errors</option>
+                    @foreach (var entry in DistinctErrorMessages)
+                    {
+                        var display = entry.Message.Length > 120 ? entry.Message.Substring(0, 117) + "..." : entry.Message;
+                        <option value="@entry.Message">@display (@entry.Count)</option>
+                    }
+                </select>
+                @if (!string.IsNullOrEmpty(SelectedErrorFilter))
+                {
+                    <button type="button" class="btn btn-link btn-sm ms-2 p-0" @onclick="ClearErrorFilter">Clear</button>
+                }
+            </div>
+        }
+    </div>
+
+    <FilterToggleGroup TValue="ImportGroupFilter"
+                        SelectedValue="Filter"
+                        DefaultValue="ImportGroupFilter.All"
+                        SelectedValueChanged="OnFilterChanged"
+                        Options="filterOptions" />
+</div>
+
+@code {
+    [Parameter] public List<TGroup> Groups { get; set; } = new();
+    [Parameter] public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [Parameter] public ImportGroupFilter Filter { get; set; } = ImportGroupFilter.All;
+    [Parameter] public EventCallback<ImportGroupFilter> FilterChanged { get; set; }
+    [Parameter] public string? SelectedErrorFilter { get; set; }
+    [Parameter] public EventCallback<string?> SelectedErrorFilterChanged { get; set; }
+    [Parameter] public Func<string, string> NormalizeMessageType { get; set; } = m => (m ?? string.Empty).Trim();
+
+    private static bool IsGroupClean(TGroup g) => g.Issues.Count == 0 && g.Rows.All(r => r.Issues.Count == 0);
+
+    private bool HasSuccessGroups => Groups.Any(IsGroupClean);
+    private bool HasErrorGroups => Groups.Any(g => !IsGroupClean(g));
+    private int SelectableCount => Groups.Count(g => IsGroupClean(g) && !g.IsSaved);
+    private int SelectedCount => Groups.Count(g => g.Selected && !g.IsSaved && IsGroupClean(g));
+    private int TotalErrorCount => Groups.Sum(g => g.Issues.Count + g.Rows.Sum(r => r.Issues.Count));
+
+    private List<FilterToggleOption<ImportGroupFilter>> filterOptions => new()
+    {
+        new() { Value = ImportGroupFilter.SuccessOnly, Label = "Success Only",
+                ActiveClass = "btn-success", InactiveClass = "btn-outline-success",
+                Visible = HasSuccessGroups },
+        new() { Value = ImportGroupFilter.ErrorOnly, Label = "Error Only",
+                ActiveClass = "btn-danger", InactiveClass = "btn-outline-danger",
+                Visible = HasErrorGroups },
+    };
+
+    private IEnumerable<(string Message, int Count)> DistinctErrorMessages
+    {
+        get
+        {
+            var all = new List<string>();
+            foreach (var g in Groups)
+            {
+                all.AddRange(g.Issues.Select(NormalizeMessageType));
+                all.AddRange(g.Rows.SelectMany(r => r.Issues.Select(NormalizeMessageType)));
+            }
+            return all.Where(m => !string.IsNullOrWhiteSpace(m))
+                .GroupBy(m => m)
+                .Select(g => (Message: g.Key, Count: g.Count()))
+                .OrderByDescending(x => x.Count).ThenBy(x => x.Message)
+                .ToList();
+        }
+    }
+
+    private async Task OnFilterChanged(ImportGroupFilter next)
+    {
+        if (next != ImportGroupFilter.ErrorOnly)
+            await SelectedErrorFilterChanged.InvokeAsync(null);
+        await FilterChanged.InvokeAsync(next);
+    }
+
+    private async Task OnErrorFilterChanged(ChangeEventArgs e) =>
+        await SelectedErrorFilterChanged.InvokeAsync(e?.Value?.ToString());
+
+    private async Task ClearErrorFilter() =>
+        await SelectedErrorFilterChanged.InvokeAsync(null);
+
+    private async Task ToggleSelectAll(object? checkedValue)
+    {
+        if (checkedValue is not bool isChecked) return;
+        foreach (var g in Groups)
+        {
+            if (g.Rows.Count == 0 || !IsGroupClean(g) || g.IsSaved) continue;
+            if (isChecked) SelectedGroupKeys.Add(g.GroupKey);
+            else SelectedGroupKeys.Remove(g.GroupKey);
+            g.Selected = isChecked;
+        }
+    }
+}

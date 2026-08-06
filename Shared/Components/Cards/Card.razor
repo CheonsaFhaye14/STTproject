@@ -1,0 +1,15 @@
+<div classname="card">
+    <div class="card-header">
+        <h5>@Title</h5>
+    </div>
+    <div class="card-body">
+        @ChildContent
+    </div>
+</div>
+<style>
+    
+</style>
+@code{
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

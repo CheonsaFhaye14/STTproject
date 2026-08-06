@@ -1,0 +1,76 @@
+@using Microsoft.AspNetCore.Components.Forms
+
+<label class="dropzone" for="@InputId">
+    <InputFile id="@InputId" OnChange="HandleFileSelected" accept="@Accept" class="dropzone-input" />
+    <div class="dropzone-icon">
+        <i class="fa-solid fa-upload"></i>
+    </div>
+    <div class="dropzone-title">@Title</div>
+    <div class="dropzone-subtitle">
+        @(selectedFileName ?? Subtitle)
+    </div>
+</label>
+
+<style>
+    .dropzone
+    {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 1.5px dashed #cfc7ba;
+        border-radius: 10px;
+        padding: 28px 16px;
+        cursor: pointer;
+        background-color: #fafaf8;
+        transition: border-color 0.15s, background-color 0.15s;
+        text-align: center;
+        position: relative;
+    }
+    .dropzone:hover
+    {
+        border-color: #bd9359;
+        background-color: #fbf7f1;
+    }
+    .dropzone-input
+    {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+    .dropzone-icon
+    {
+        color: #bd9359;
+        font-size: 22px;
+        margin-bottom: 4px;
+    }
+    .dropzone-title
+    {
+        font-weight: 700;
+        color: #2b2b2b;
+        font-size: 14px;
+    }
+    .dropzone-subtitle
+    {
+        color: #8a8a8a;
+        font-size: 12.5px;
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<IBrowserFile> OnFileSelected { get; set; }
+    [Parameter] public string Title { get; set; } = "Select Excel or CSV File (.xlsx, .csv)";
+    [Parameter] public string Subtitle { get; set; } = "Sample template format supported";
+    [Parameter] public string Accept { get; set; } = ".xlsx,.csv";
+    [Parameter] public string InputId { get; set; } = "fileInput";
+
+    private string? selectedFileName;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFileName = e.File.Name;
+        await OnFileSelected.InvokeAsync(e.File);
+    }
+}

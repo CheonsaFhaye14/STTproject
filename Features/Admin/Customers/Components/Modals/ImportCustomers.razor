@@ -1,0 +1,151 @@
+@using STTproject.Services
+@inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
+@inject STTproject.Features.Admin.Customers.Services.ImportCustomersService ImportCustomersService
+@inject IUserContextService UserContext
+
+@if (isPreparing)
+{
+    <div class="import-progress-toast">Checking file, please wait…</div>
+}
+
+@if (Show)
+{
+    <Modal ShowModal="Show"
+           Title="Customer Batch Data Import"
+           Subtitle="Add new customers to your database by importing a CSV file."
+           IconType="ModalIconType.Upload"
+           Details="Excel should contain the following column headers required: Customer Code, Customer Name, Customer Type, City/Municipality, and Province."
+           OnClose="OnClose">
+        <ChildContent>
+            <Select
+                Label="Assign to Subdistributor"
+                TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                Required="true"
+                Items="SubDistributors"
+                ValueSelector="x => x.SubDistributorId.ToString()"
+                TextSelector="x => x.SubDistributorName ?? string.Empty"
+                SelectedValue="selectedSubdistributorId"
+                SelectedValueChanged="OnSubdistributorChanged" />
+
+            <FileInput OnFileSelected="HandleFileSelected" />
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Cancel" OnClick="OnClose" Variant="ButtonVariant.Secondary" />
+            <Button Title="Check File"
+                    OnClick="OnPrepare"
+                    Disabled="@(selectedFile == null || string.IsNullOrEmpty(selectedSubdistributorId) || isPreparing)"
+                    Icon="fa-solid fa-check"
+                    Variant="ButtonVariant.Primary" />
+        </FooterContent>
+    </Modal>
+}
+
+<ImportCustomersResult Show="showResults"
+                        ImportResult="importResult"
+                        SelectedGroupKeys="selectedGroupKeys"
+                        OnCommit="HandleCommitAsync"
+                        OnClose="CloseResults" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnImportCompleted { get; set; }
+
+    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new();
+    private string? selectedSubdistributorId;
+    private IBrowserFile? selectedFile;
+    private bool isPreparing;
+    private bool showResults;
+    private STTproject.Features.Admin.Customers.DTOs.CustomerImportResult? importResult;
+    private HashSet<string> selectedGroupKeys = new(StringComparer.OrdinalIgnoreCase);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
+    }
+
+    private void OnSubdistributorChanged(string value) => selectedSubdistributorId = value;
+
+    private void HandleFileSelected(IBrowserFile file)
+    {
+        selectedFile = file;
+        importResult = null;
+    }
+
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024;
+
+    private async Task OnPrepare()
+    {
+        if (selectedFile == null || string.IsNullOrEmpty(selectedSubdistributorId))
+            return;
+
+        Show = false;
+        isPreparing = true;
+        importResult = null;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(MaxFileSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            var subdistributorId = int.Parse(selectedSubdistributorId);
+            importResult = await ImportCustomersService.PrepareFromExcelAsync(ms, subdistributorId);
+
+            selectedGroupKeys = importResult.PreparedGroups
+                .Where(g => g.Selected && !g.IsSaved)
+                .Select(GroupKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            importResult = new STTproject.Features.Admin.Customers.DTOs.CustomerImportResult();
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
+        }
+        finally
+        {
+            isPreparing = false;
+            showResults = importResult != null;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task HandleCommitAsync()
+    {
+        if (importResult == null || string.IsNullOrEmpty(selectedSubdistributorId)) return;
+
+        var subdistributorId = int.Parse(selectedSubdistributorId);
+        var userId = UserContext.UserId ?? 0;
+
+        var selectedGroups = importResult.PreparedGroups
+            .Where(g => g.Selected && !g.IsSaved && g.Issues.Count == 0 && selectedGroupKeys.Contains(GroupKey(g)))
+            .ToList();
+
+        var selectedRows = selectedGroups.SelectMany(g => g.Rows).ToList();
+        if (selectedRows.Count == 0) return;
+
+        var committedCount = await ImportCustomersService.CommitPreparedRowsAsync(selectedRows, subdistributorId, userId);
+
+        if (committedCount > 0)
+        {
+            foreach (var g in selectedGroups) g.IsSaved = true;
+            await OnImportCompleted.InvokeAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task CloseResults()
+    {
+        showResults = false;
+        importResult = null;
+        selectedGroupKeys.Clear();
+        await OnClose.InvokeAsync(); // now safe to unmount — nothing left to show
+    }
+
+    private static string GroupKey(STTproject.Features.Admin.Customers.DTOs.PreparedCustomerGroup g)
+        => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
+}

@@ -1,0 +1,64 @@
+@using Microsoft.JSInterop
+@typeparam TItem
+@using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrWhiteSpace(Label))
+{
+    <label class="form-label">
+        @Label
+        @if (Required)
+        {
+            <span class="required">*</span>
+        }
+    </label>
+}
+
+<select @onchange="OnSelectedValueChanged"
+        class="form-select"
+        disabled="@Disabled"
+        @ref="SelectElement">
+
+    <option value="" selected="@(string.IsNullOrEmpty(SelectedValue))">
+        @(Placeholder ?? "-- Select an option --")
+    </option>
+
+    @foreach (var item in Items)
+    {
+        var itemValue = ValueSelector(item);
+        <option value="@itemValue" selected="@(itemValue == SelectedValue)">
+            @TextSelector(item)
+        </option>
+    }
+</select>
+
+<style>
+.required {
+    color: #dc3545;
+    margin-left: 2px;
+}
+</style>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool Required { get; set; }
+
+    [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
+
+    [Parameter] public Func<TItem, string> ValueSelector { get; set; } = default!;
+    [Parameter] public Func<TItem, string> TextSelector { get; set; } = default!;
+
+    [Parameter] public string? SelectedValue { get; set; }
+    [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private ElementReference SelectElement;
+
+    private async Task OnSelectedValueChanged(ChangeEventArgs e)
+    {
+        SelectedValue = e.Value?.ToString() ?? string.Empty;
+        await SelectedValueChanged.InvokeAsync(SelectedValue);
+    }
+}

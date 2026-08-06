@@ -22,6 +22,7 @@
                 <h1 class="clt-page-title">Customers</h1>
                 <p class="clt-page-sub">@totalCount total customers</p>
             </div>
+            <button type="button" @onclick="OpenImportModal">Import Excel</button>
             <button class="clt-add-btn" @onclick="OpenAddCustomerModal">
                 <span class="clt-add-icon">+</span> Add customer
             </button>
@@ -41,11 +42,16 @@
             <AddCustomer @ref="addCustomerModal" CustomerId="editCustomerId" onCancel="CancelAddCustomer"
                          OnRequestConfirm="OpenConfirmModal" />
         }
+        @if (showImportModal)
+        {
+            <ImportCustomers Show="true" OnClose="CloseImportModal" />
+        }
 
     </div>
 </div>
 
 @code {
+    private bool showImportModal;
     private ConfirmModal? confirmAddModal;
     private bool showConfirmAddModal;
     private bool showAddModal;
@@ -63,11 +69,10 @@
 
     private void OpenAddCustomerModal()
     {
-        editCustomerId = null; // new customer
+        editCustomerId = null; 
         showAddModal = true;
     }
-
-    // called from CustomerListTable OnViewCustomer
+    
     private void OpenEditModal(int id)
     {
         editCustomerId = id;
@@ -96,6 +101,14 @@
             if (customerTable != null)
                 await customerTable.LoadPageAsync();
         }
-        // if not success, confirm closes but form stays open showing the error
+    }
+    private void OpenImportModal()
+    {
+        showImportModal = true;
+    }
+
+    private void CloseImportModal()
+    {
+        showImportModal = false;
     }
 }

@@ -1,4 +1,5 @@
 using STTproject.Data;
+using STTproject.Features.Admin.Customers.Services;
 
 namespace STTproject.Features.Admin.Customers.Validators;
 
@@ -18,7 +19,7 @@ public static class CustomerValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddCustomerAsync(
-        Customer customer
+        Customer customer, IAdminCustomerService service, int? excludeId = null
     )
     {
         var errors = new Dictionary<string, string>();
@@ -40,6 +41,13 @@ public static class CustomerValidations
         if (string.IsNullOrWhiteSpace(customer.CustomerType))
         {
             errors[AddCustomer.customertype.Key] = AddCustomer.customertype.ErrorMessage;
+        }
+        if (!string.IsNullOrWhiteSpace(customer.CustomerCode) && !string.IsNullOrWhiteSpace(customer.SubDistributorId.ToString()))
+        {
+            if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeId))
+            {
+                errors[AddCustomer.customercode.Key] = "This Customer Code already exists for the selected Subdistributor.";
+            }
         }
         return errors;
     }
