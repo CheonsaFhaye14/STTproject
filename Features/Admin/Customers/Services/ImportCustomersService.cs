@@ -53,7 +53,7 @@ public sealed class ImportCustomersService
     // PHASE 1 — parse + validate directly from the uploaded Excel stream. No customers are created here.
     public async Task<CustomerImportResult> PrepareFromExcelAsync(Stream excelStream, int subdistributorId, CancellationToken ct = default)
     {
-        var result = new CustomerImportResult();
+        var result = new CustomerImportResult { SubDistributorId = subdistributorId };
 
         if (excelStream is null || !excelStream.CanRead)
         {
@@ -65,6 +65,10 @@ public sealed class ImportCustomersService
             result.AddError(0, string.Empty, "Invalid subdistributor ID.");
             return result;
         }
+        var subdistributors = await _customerService.GetSubDistributorsAsync();
+        result.SubDistributorName = subdistributors
+            .FirstOrDefault(s => s.SubDistributorId == subdistributorId)?.SubDistributorName;
+
 
         using var workbook = new XLWorkbook(excelStream);
         var worksheet = workbook.Worksheets.FirstOrDefault();

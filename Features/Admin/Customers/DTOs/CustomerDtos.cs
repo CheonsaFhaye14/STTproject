@@ -104,6 +104,9 @@ namespace STTproject.Features.Admin.Customers.DTOs
     
     public sealed class CustomerImportResult
     {
+        public int SubDistributorId { get; set; }
+        public string? SubDistributorName { get; set; }
+
         public List<CustomerImportRowResult> Rows { get; } = new();
         public List<PreparedCustomerGroup> PreparedGroups { get; } = new();
         public List<CustomerImportIssue> Issues { get; } = new(); // header/global-level problems

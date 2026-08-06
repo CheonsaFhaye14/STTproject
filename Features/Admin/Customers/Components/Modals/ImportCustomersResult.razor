@@ -13,7 +13,14 @@
                     </div>
                     <div>
                         <div class="mh-title">Import results</div>
-                        <div class="mh-sub">Customers</div>
+                        <div class="mh-sub">
+                            Customers
+                            @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
+                            {
+                                <span class="sep">·</span>
+                                <span>@ImportResult.SubDistributorName</span>
+                            }
+                        </div>
                     </div>
                 </div>
                 <button type="button" class="mh-close" @onclick="HandleClose" aria-label="Close">
@@ -189,6 +196,11 @@
                                                 <div class="inv-num inv-ok">@row?.CustomerCode - @row?.CustomerName</div>
                                                 <div class="inv-sub inv-sub-ok">
                                                     <span>Row @row?.RowNumber</span>
+                                                    @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
+                                                    {
+                                                        <span class="sep">·</span>
+                                                        <span>@ImportResult.SubDistributorName</span>
+                                                    }
                                                     @if (!string.IsNullOrWhiteSpace(row?.CustomerType))
                                                     {
                                                         <span class="sep">·</span>
@@ -231,6 +243,10 @@
                                     {
                                         <div class="icb">
                                             <div class="cust-meta">
+                                                <div>
+                                                    <span class="cust-meta-label">Subdistributor</span>
+                                                    <strong>@(ImportResult?.SubDistributorName ?? "—")</strong>
+                                                </div>
                                                 <div>
                                                     <span class="cust-meta-label">Type</span>
                                                     <strong>@row.CustomerType</strong>
@@ -283,6 +299,11 @@
                                                 </div>
                                                 <div class="inv-sub inv-sub-er">
                                                     <span>Row @row?.RowNumber</span>
+                                                    @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
+                                                    {
+                                                        <span class="sep">·</span>
+                                                        <span>@ImportResult.SubDistributorName</span>
+                                                    }
                                                 </div>
                                             </div>
                                         </div>
