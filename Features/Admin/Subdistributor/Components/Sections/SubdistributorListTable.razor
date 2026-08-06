@@ -1,0 +1,370 @@
+@using STTproject.Features.Admin.Subdistributor.DTOs
+@inject STTproject.Features.Admin.Subdistributor.Services.IAdminSubDistributorService AdminSubDistributorService
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+
+<div class="clt-page">
+
+    <div class="clt-layout">
+
+        <!-- Sidebar -->
+        <aside class="clt-sidebar">
+
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@totalCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Active</span>
+                    <span class="clt-stat-value clt-stat-active">@activeCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Inactive</span>
+                    <span class="clt-stat-value clt-stat-inactive">@inactiveCount</span>
+                </div>
+            </div>
+
+            <div class="clt-divider"></div>
+
+            <!-- Search -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Search</label>
+                <div class="clt-search-wrap">
+                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
+                           placeholder="Search…" />
+                </div>
+            </div>
+
+            <!-- Status filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Status</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                        <input type="radio" name="status" value=""
+                               @onchange="() => OnFilterChanged(status: string.Empty)" checked="@(SelectedStatus == "")" />
+                        <span>All</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
+                        <input type="radio" name="status" value="active"
+                               @onchange='() => OnFilterChanged(status: "active")'
+                               checked="@(SelectedStatus == "active")" />
+                        <span>Active</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
+                        <input type="radio" name="status" value="inactive"
+                               @onchange='() => OnFilterChanged(status: "inactive")'
+                               checked="@(SelectedStatus == "inactive")" />
+                        <span>Inactive</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Province filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="provinceFilter">Province</label>
+                <input id="provinceFilter" class="clt-select" list="province-options"
+                       value="@SelectedProvince"
+                       @onchange="e => OnFilterChanged(province: e.Value?.ToString() ?? string.Empty)"
+                       placeholder="All provinces" />
+                <datalist id="province-options">
+                    @foreach (var p in KnownProvinces)
+                    {
+                        <option value="@p"></option>
+                    }
+                </datalist>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+
+        </aside>
+
+        <!-- Main content -->
+        <main class="clt-main">
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th @onclick='() => SortBy("SubdCode")' style="cursor:pointer">
+                                    Code @SortIndicator("SubdCode")
+                                </th>
+                                <th @onclick='() => SortBy("SubdName")' style="cursor:pointer">
+                                    Name @SortIndicator("SubdName")
+                                </th>
+                                <th>Encoder</th>
+                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
+                                    Created @SortIndicator("CreatedDate")
+                                </th>
+                                <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">
+                                    Status @SortIndicator("IsActive")
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="8" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>Loading…</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!PagedSubDistributors.Any())
+                            {
+                                <tr>
+                                    <td colspan="8" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>No subdistributors match your filters</p>
+                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var subd in PagedSubDistributors)
+                                {
+                                    <tr class="@(!subd.IsActive ? "clt-row-inactive" : "")">
+                                        <td><span class="clt-code">@subd.SubdCode</span></td>
+                                        <td class="clt-name">@subd.SubdName</td>
+                                        <td class="clt-muted">@(subd.EncoderName ?? "—")</td>
+                                        <td class="clt-muted">
+                                            @subd.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
+                                        </td>
+                                        <td>
+                                            @if (subd.IsActive)
+                                            {
+                                                <span class="clt-status clt-status-active">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clt-status clt-status-inactive">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit"
+                                                        @onclick="() => OnEditSubDistributor.InvokeAsync(subd.SubDistributorId)">Edit</button>
+                                                @if (subd.IsActive)
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-deactivate"
+                                                            @onclick="() => SetActive(subd.SubDistributorId, false)">Deactivate</button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-activate"
+                                                            @onclick="() => SetActive(subd.SubDistributorId, true)">Activate</button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">
+                    Showing @PagedSubDistributors.Count of @totalCount subdistributors
+                </span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(currentPage == 1)"
+                                @onclick="() => GoToPage(currentPage - 1)">←</button>
+                        <span>Page @currentPage of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                                @onclick="() => GoToPage(currentPage + 1)">→</button>
+                    </div>
+                }
+            </div>
+        </main>
+
+    </div>
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
+                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
+</div>
+
+@code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    [Parameter] public EventCallback<int> OnEditSubDistributor { get; set; }
+
+    private List<SubDistributorListDto> PagedSubDistributors { get; set; } = new();
+    private List<string> KnownProvinces { get; set; } = new();
+
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(async _ =>
+            {
+                currentPage = 1;
+                await InvokeAsync(LoadPageAsync);
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+
+    private bool showToggleConfirmModal;
+    private int pendingToggleId;
+    private bool pendingToggleStatus;
+    private string toggleConfirmMessage = "";
+
+    private string SelectedProvince { get; set; } = "";
+    private string SelectedStatus { get; set; } = "";
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount = 0;
+    private int activeCount = 0;
+    private int inactiveCount = 0;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
+        !string.IsNullOrWhiteSpace(SelectedProvince) ||
+        !string.IsNullOrWhiteSpace(SelectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadPageAsync();
+            var all = await AdminSubDistributorService.GetAllAsync();
+            KnownProvinces = all.Select(s => s.Province)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading subdistributors: {ex.Message}");
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async Task LoadPageAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var (items, total) = await AdminSubDistributorService.GetPagedAsync(
+                currentPage, pageSize, _searchTerm, SelectedStatus,
+                SelectedProvince, SortColumn, SortAscending);
+
+            PagedSubDistributors = items.ToList();
+            totalCount = total;
+
+            var (_, activeTotal) = await AdminSubDistributorService.GetPagedAsync(
+                1, 1, _searchTerm, "active", SelectedProvince);
+            var (_, inactiveTotal) = await AdminSubDistributorService.GetPagedAsync(
+                1, 1, _searchTerm, "inactive", SelectedProvince);
+            activeCount = activeTotal;
+            inactiveCount = inactiveTotal;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading page: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate)
+                await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate)
+                await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnFilterChanged(string? status = null, string? province = null)
+    {
+        if (status != null) SelectedStatus = status;
+        if (province != null) SelectedProvince = province;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = "";
+        SelectedProvince = "";
+        SelectedStatus = "";
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private void SetActive(int id, bool isActive)
+    {
+        pendingToggleId = id;
+        pendingToggleStatus = isActive;
+        toggleConfirmMessage = isActive
+            ? "Are you sure you want to activate this subdistributor?"
+            : "Are you sure you want to deactivate this subdistributor?";
+        showToggleConfirmModal = true;
+    }
+
+    private async Task ConfirmToggle()
+    {
+        showToggleConfirmModal = false;
+        await AdminSubDistributorService.ToggleSubDistributorStatusAsync(pendingToggleId, pendingToggleStatus);
+        var subd = PagedSubDistributors.FirstOrDefault(x => x.SubDistributorId == pendingToggleId);
+        if (subd != null) subd.IsActive = pendingToggleStatus;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelToggle() => showToggleConfirmModal = false;
+    private string SortColumn { get; set; } = "SubdName";
+    private bool SortAscending { get; set; } = true;
+
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column) return string.Empty;
+        return SortAscending ? " ▲" : " ▼";
+    }
+}

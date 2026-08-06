@@ -1,0 +1,118 @@
+﻿@page "/admin/subdistributor"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.Subdistributor.Components.Modals
+@using STTproject.Features.Admin.Subdistributor.Components.Sections
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading subdistributors…</p>
+    </div>
+}
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        @* ------------- Header ----------------- *@
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Subdistributors</h1>
+                <p class="clt-page-sub">@totalCount total subdistributors</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddSubDistributorModal">
+                <span class="clt-add-icon">+</span> Add subdistributor
+            </button>
+        </div>
+
+        @* ------------- Subdistributor List Table ----------------- *@
+        <SubdistributorListTable @ref="subDistributorTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                                  OnEditSubDistributor="OpenEditModal" />
+
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                      Title="@(editSubDistributorId.HasValue ? "Confirm Update of Subdistributor" : "Confirm Creation of Subdistributor")"
+                      Message="@(showConfirmError ? null : (editSubDistributorId.HasValue ? "Are you sure you want to save changes to this subdistributor?" : "Are you sure you want to create this subdistributor?"))"
+                      ErrorMessage="@confirmErrorMessage"
+                      ShowError="showConfirmError"
+                      OnYes="ConfirmAddSubDistributor" OnNo="CancelConfirm"
+                      OnErrorConfirm="DismissConfirmError" />
+
+        @if (showAddModal)
+        {
+            <AddSubdistributor @ref="addSubDistributorModal" SubDistributorId="editSubDistributorId"
+                                onCancel="CancelAddSubDistributor" OnRequestConfirm="OpenConfirmModal" />
+        }
+
+    </div>
+</div>
+
+@code {
+    private ConfirmModal? confirmAddModal;
+    private bool showConfirmAddModal;
+    private bool showConfirmError;
+    private string? confirmErrorMessage;
+    private bool showAddModal;
+    private bool isLoading = true;
+    private int totalCount = 0;
+    private SubdistributorListTable? subDistributorTable;
+    private AddSubdistributor? addSubDistributorModal;
+
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private int? editSubDistributorId;
+
+    private void OpenAddSubDistributorModal()
+    {
+        editSubDistributorId = null; // new subdistributor
+        showAddModal = true;
+    }
+
+    private void OpenEditModal(int id)
+    {
+        editSubDistributorId = id;
+        showAddModal = true;
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void OpenConfirmModal()
+    {
+        showConfirmError = false;
+        confirmErrorMessage = null;
+        showConfirmAddModal = true;
+    }
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddSubDistributor() => showAddModal = false;
+
+    private async Task ConfirmAddSubDistributor()
+    {
+        if (addSubDistributorModal == null) return;
+
+        var (success, error) = await addSubDistributorModal.SubmitAsync();
+
+        if (success)
+        {
+            showConfirmAddModal = false;
+            showAddModal = false;
+            if (subDistributorTable != null)
+                await subDistributorTable.LoadPageAsync();
+        }
+        else
+        {
+            confirmErrorMessage = error ?? "An unexpected error occurred. Please try again.";
+            showConfirmError = true;
+        }
+    }
+
+    private void DismissConfirmError()
+    {
+        showConfirmError = false;
+        confirmErrorMessage = null;
+        showConfirmAddModal = false;
+    }
+}
