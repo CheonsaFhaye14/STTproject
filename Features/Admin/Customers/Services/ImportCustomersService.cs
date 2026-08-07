@@ -138,7 +138,7 @@ public sealed class ImportCustomersService
                 continue;
             }
 
-            var entity = new Customer
+            var entity = new Customer 
             {
                 CustomerCode = rowResult.CustomerCode,
                 CustomerName = rowResult.CustomerName,
