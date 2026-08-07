@@ -1,0 +1,109 @@
+﻿@page "/admin/priceincrease"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.PriceIncrease.Components.Modals
+@using STTproject.Features.Admin.PriceIncrease.Components.Sections
+
+@if (isLoading)
+{
+    <div class="loading-overlay">
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill"></div>
+        </div>
+        <p>Loading price increases…</p>
+    </div>
+}
+
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        @* ------------- Header ----------------- *@
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Price Increases</h1>
+                <p class="clt-page-sub">@totalCount total price increases</p>
+            </div>
+            <button class="clt-add-btn" @onclick="OpenAddPriceIncreaseModal">
+                <span class="clt-add-icon">+</span> Add price increase
+            </button>
+        </div>
+
+        @* ------------- Price Increase List Table ----------------- *@
+        <PriceIncreaseTable @ref="priceIncreaseTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
+                            OnEditPriceIncrease="OpenEditModal"
+                             />
+
+        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                    Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Increase" : "Confirm Creation of Price Increase")"
+                    Message="@(editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price increase?" : "Are you sure you want to create this price increase?")"
+                    OnYes="ConfirmAddPriceIncrease"
+                    OnNo="CancelConfirm" />
+
+        @if (showAddModal)
+        {
+            <AddPriceIncrease @ref="addPriceIncreaseModal" PriceIncreaseId="editPriceIncreaseId" onCancel="CancelAddPriceIncrease"
+                            OnRequestConfirm="OpenConfirmModal" />
+        }
+       
+
+    </div>
+</div>
+
+
+@code {
+    private ConfirmModal? confirmAddModal;
+    private bool showConfirmAddModal;
+    private bool showAddModal;
+    private bool isLoading = true;
+    private int totalCount = 0;
+    private PriceIncreaseTable? priceIncreaseTable;
+    private AddPriceIncrease? addPriceIncreaseModal;
+
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private int? editPriceIncreaseId;
+
+    private void OpenAddPriceIncreaseModal()
+    {
+        editPriceIncreaseId = null; // new price increase
+        showAddModal = true;
+    }
+
+    // called from PriceIncreaseTable OnViewPriceIncrease
+    private void OpenEditModal(int id)
+    {
+        editPriceIncreaseId = id;
+        showAddModal = true;
+    }
+
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void OpenConfirmModal() => showConfirmAddModal = true;
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddPriceIncrease() => showAddModal = false;
+
+    private async Task ConfirmAddPriceIncrease()
+    {
+        showConfirmAddModal = false;
+
+        if (addPriceIncreaseModal == null) return;
+
+        var (success, error) = await addPriceIncreaseModal.SubmitAsync();
+
+        if (success)
+        {
+            showAddModal = false;
+            if (priceIncreaseTable != null)
+                await priceIncreaseTable.LoadPageAsync();
+        }
+        else
+        {
+            // surface the error somewhere visible — e.g. a toast, or re-show the modal with the message
+            Console.WriteLine($"Price increase save failed: {error}");
+        }
+    }
+}
