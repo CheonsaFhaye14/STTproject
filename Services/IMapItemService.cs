@@ -68,24 +68,33 @@ public class MapItemService : IMapItemService
 
         var recentCutoff = DateTime.Now.AddDays(-7);
 
-        var query = context.CompanyItems
-            .AsNoTracking()
-            .Where(ci => ci.IsActive)
-            .Select(ci => new MapCompanyItemRow
-            {
-                CompanyItemCode = ci.ItemCode,
-                Description = ci.ItemName,
-                Principal = ci.Principal,
-                Category = ci.Category,
-                CompanyItemId = ci.CompanyItemId,
-                EffectivityDate = ci.EffectivityDate,
-                PriceIncreasePercent = ci.PriceIncreasePercent,
-                RecentAppliedDate = ci.ItemsUomPriceHistories
-                    .Where(h => h.AppliedDate >= recentCutoff)
-                    .OrderByDescending(h => h.AppliedDate)
-                    .Select(h => (DateTime?)h.AppliedDate)
-                    .FirstOrDefault(),
-            });
+    var query = context.CompanyItems
+        .AsNoTracking()
+        .Where(ci => ci.IsActive)
+        .Select(ci => new MapCompanyItemRow
+        {
+            CompanyItemCode = ci.ItemCode,
+            Description = ci.ItemName,
+            Principal = ci.Principal,
+            Category = ci.Category,
+            CompanyItemId = ci.CompanyItemId,
+            StockPrice = ci.StockPrice,
+            EffectivityDate = ci.CompanyItemPriceHistories
+                .Where(h => h.AppliedDate == null)
+                .OrderByDescending(h => h.EffectivityDate)
+                .Select(h => (DateTime?)h.EffectivityDate)
+                .FirstOrDefault(),
+            PriceIncreaseAmount = ci.CompanyItemPriceHistories
+                .Where(h => h.AppliedDate == null)
+                .OrderByDescending(h => h.EffectivityDate)
+                .Select(h => (decimal?)h.PriceIncreaseAmount)
+                .FirstOrDefault(),
+            RecentAppliedDate = ci.ItemsUomPriceHistories
+                .Where(h => h.AppliedDate >= recentCutoff)
+                .OrderByDescending(h => h.AppliedDate)
+                .Select(h => (DateTime?)h.AppliedDate)
+                .FirstOrDefault(),
+        });
 
         if (!string.IsNullOrWhiteSpace(principal))
         {
@@ -659,12 +668,13 @@ public sealed class MapCompanyItemRow
     public string SubItemCode { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public decimal? StockPrice { get; set; }
     public string Principal { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public int CompanyItemId { get; set; }
     public string UomName { get; set; } = string.Empty;
     public DateTime? EffectivityDate { get; set; }
-    public decimal? PriceIncreasePercent { get; set; }
+    public decimal? PriceIncreaseAmount { get; set; }
     public DateTime? RecentAppliedDate { get; set; }
 }
 

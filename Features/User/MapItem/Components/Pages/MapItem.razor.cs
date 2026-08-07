@@ -860,8 +860,8 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                         .Select(x => x.EffectivityDate)
                         .OrderByDescending(date => date)
                         .FirstOrDefault(),
-                    PriceIncreasePercent = group.Where(x => x.PriceIncreasePercent.HasValue)
-                        .Select(x => x.PriceIncreasePercent)
+                    PriceIncreaseAmount = group.Where(x => x.PriceIncreaseAmount.HasValue)
+                        .Select(x => x.PriceIncreaseAmount)
                         .FirstOrDefault(),
                     RecentAppliedDate = group.Where(x => x.RecentAppliedDate.HasValue)
                         .Select(x => x.RecentAppliedDate)

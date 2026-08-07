@@ -1,28 +1,32 @@
 ﻿<div class="card-section">
 	<h3 class="subd-items-title">
 		SUB DISTRIBUTOR ITEMS
-		@if (SelectedCompanyItemIdForFilter.HasValue)
-		{
-			var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
-			if (selectedItem != null)
+			@if (SelectedCompanyItemIdForFilter.HasValue)
 			{
-				<span class="subd-items-selected-summary">
-					(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
-				</span>
-				<button class="btn-primary" type="button" @onclick="MapSelectedCompanyItemAsync">
-					MAP
-				</button>
-				@if (selectedItem.EffectivityDate.HasValue && selectedItem.EffectivityDate.Value > DateTime.Now)
+				var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
+				if (selectedItem != null)
 				{
-					<span class="price-scheduled-badge">
-						@($"Price increase scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreasePercent:0.##}%)")
+					<span class="subd-items-selected-summary">
+						(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
 					</span>
-				}
-				else if (selectedItem.HasRecentIncrease)
-				{
-					<span class="price-increased-badge">
-						@($"Price increased on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")} (+{selectedItem.PriceIncreasePercent:0.##}%)")
-					</span>
+					<button class="btn-primary" type="button" @onclick="MapSelectedCompanyItemAsync">
+						MAP
+					</button>
+					@if (selectedItem.EffectivityDate.HasValue)
+					{
+						var isOverdue = selectedItem.EffectivityDate.Value <= DateTime.Now;
+						<span class="@(isOverdue ? "price-due-badge" : "price-scheduled-badge")">
+							@(isOverdue
+								? $"Price increase due since {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})"
+								: $"Price increase scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})")
+						</span>
+					}
+					else if (selectedItem.HasRecentIncrease)
+					{
+						<span class="price-increased-badge">
+							@($"Price increased on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")}")
+						</span>
+					}
 				}
 			}
 		}

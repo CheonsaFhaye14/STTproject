@@ -45,10 +45,10 @@
         <tbody>
                 @if (FilteredCompanyItems.Any())
             {
-                    @foreach (var item in FilteredCompanyItems)
+                @foreach (var item in FilteredCompanyItems)
                 {
                     var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
-                    var isPriceIncreaseScheduled = item.EffectivityDate.HasValue && item.EffectivityDate.Value > DateTime.Now;
+                    var isPriceIncreasePending = item.EffectivityDate.HasValue;
                     var isMapped = item.IsMapped;
                     <tr @onclick="() => HandleRowClicked(item)"
                         class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
@@ -57,13 +57,14 @@
                         <td>
                             <div style="display: flex; flex-direction: column; gap: 4px;">
                                 <span>@item.ItemName</span>
-                                @if (isPriceIncreaseScheduled)
+                                @if (isPriceIncreasePending)
                                 {
-                                    <span class="badge bg-warning text-dark" style="align-self: flex-start;">
-                                        Price increase scheduled on @item.EffectivityDate?.ToString("MMM dd, yyyy")
-                                        @if (item.PriceIncreasePercent.HasValue)
+                                    var isOverdue = item.EffectivityDate!.Value <= DateTime.Now;
+                                    <span class="badge @(isOverdue ? "bg-danger text-white" : "bg-warning text-dark")" style="align-self: flex-start;">
+                                        @(isOverdue ? "Price increase due" : "Price increase scheduled") on @item.EffectivityDate?.ToString("MMM dd, yyyy")
+                                        @if (item.PriceIncreaseAmount.HasValue)
                                         {
-                                            <span>@($" (+{item.PriceIncreasePercent.Value:N2}%)")</span>
+                                            <span>@($" (+{item.PriceIncreaseAmount.Value:N2})")</span>
                                         }
                                     </span>
                                 }
@@ -71,6 +72,7 @@
                         </td>
                     </tr>
                 }
+           
             }
             else
             {

@@ -3,11 +3,9 @@ using System.Collections.Generic;
 
 namespace STTproject.Data;
 
-public partial class ItemsUomPriceHistory
+public partial class CompanyItemPriceHistory
 {
-    public int ItemsUomPriceHistoryId { get; set; }
-
-    public int ItemsUomId { get; set; }
+    public int CompanyItemPriceHistoryId { get; set; }
 
     public int CompanyItemId { get; set; }
 
@@ -15,7 +13,7 @@ public partial class ItemsUomPriceHistory
 
     public decimal NewPrice { get; set; }
 
-    public decimal? PriceIncreasePercent { get; set; }
+    public decimal PriceIncreaseAmount { get; set; }
 
     public DateTime EffectivityDate { get; set; }
 
@@ -25,11 +23,7 @@ public partial class ItemsUomPriceHistory
 
     public int? CreatedBy { get; set; }
 
-    public int? CompanyItemPriceHistoryId { get; set; }
-
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
-    public virtual CompanyItemPriceHistory? CompanyItemPriceHistory { get; set; }
-
-    public virtual ItemsUom ItemsUom { get; set; } = null!;
+    public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
 }

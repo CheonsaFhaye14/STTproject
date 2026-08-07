@@ -1,4 +1,5 @@
-﻿
+﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
 namespace STTproject.Data;
@@ -15,6 +16,8 @@ public partial class SttprojectContext : DbContext
     }
 
     public virtual DbSet<CompanyItem> CompanyItems { get; set; }
+
+    public virtual DbSet<CompanyItemPriceHistory> CompanyItemPriceHistories { get; set; }
 
     public virtual DbSet<Customer> Customers { get; set; }
 
@@ -52,17 +55,37 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
-            entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.ItemCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.ItemName).HasMaxLength(150);
-            entity.Property(e => e.PriceIncreasePercent).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.Principal)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.StockPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<CompanyItemPriceHistory>(entity =>
+        {
+            entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1344F66C7A5");
+
+            entity.ToTable("CompanyItemPriceHistory");
+
+            entity.Property(e => e.AppliedDate).HasColumnType("datetime");
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
+            entity.Property(e => e.NewPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OldPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PriceIncreaseAmount).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.CompanyItem).WithMany(p => p.CompanyItemPriceHistories)
+                .HasForeignKey(d => d.CompanyItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__CompanyIt__Compa__76619304");
         });
 
         modelBuilder.Entity<Customer>(entity =>
@@ -123,6 +146,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UomName)
                 .HasMaxLength(50)
@@ -164,6 +188,10 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.CompanyItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ItemsUomPriceHistory_CompanyItem");
+
+            entity.HasOne(d => d.CompanyItemPriceHistory).WithMany(p => p.ItemsUomPriceHistories)
+                .HasForeignKey(d => d.CompanyItemPriceHistoryId)
+                .HasConstraintName("FK__ItemsUomP__Compa__7849DB76");
 
             entity.HasOne(d => d.ItemsUom).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.ItemsUomId)
@@ -288,7 +316,6 @@ public partial class SttprojectContext : DbContext
             entity.HasIndex(e => new { e.SubDistributorId, e.SubdItemCode }, "UQ_SubdItem_SubdId_Code").IsUnique();
 
             entity.HasIndex(e => new { e.SubDistributorId, e.CompanyItemId }, "UQ_SubdItem_Subd_CompanyItem").IsUnique();
-
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
