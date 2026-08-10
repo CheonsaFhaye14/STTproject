@@ -1,30 +1,48 @@
 namespace STTproject.Features.Admin.PriceIncrease.DTOs
 {
-    public class PriceIncreaseListDto
+    public class PriceIncreaseTableListDto
     {
+        public int CompanyItemPriceHistoryId { get; set; }
         public int? CompanyItemId { get; set; }
         public string? CompanyItemName { get; set; }
         public string? CompanyItemCode { get; set; }
-        public string? Principal { get; set; }
-        public decimal? PriceIncreasePercentage { get; set; }
-        public string? EffectivityDate { get; set; }
+        public decimal? StockPrice { get; set; }
+        public decimal? PriceIncreaseAmount { get; set; }
+        public DateTime? EffectivityDate { get; set; }
+        public DateTime? AppliedDate { get; set; }
         public string? Status { get; set; }
+        public int? CreatedBy { get; set; }
+        public string? Principal { get; set; }
+        public DateTime CreatedDate { get; set; }
     }
 
-    public class PriceIncreaseCreateDto
+    public class PriceIncreaseViewDto //Inside PriceIncreaseListDto
     {
-        public int? CompanyItemId { get; set; }
-        public string? Principal { get; set; }
-        public string? CompanyItemCode { get; set; }
-        public string? CompanyItemName { get; set; }
-        public decimal? PriceIncreasePercentage { get; set; }
-        public string? EffectivityDate { get; set; }
+        public int? SubdItemId { get; set; }
+        public string? SubdItemCode { get; set; }
+        public string? SubdItemName { get; set; }
+        public string? UomName { get; set; }
+        public decimal? OldPrice { get; set; }
+        public decimal? NewPrice { get; set; }
+        public decimal? PriceIncreaseAmount { get; set; }
+        public DateTime? AppliedDate { get; set; }
         public int? CreatedBy { get; set; }
     }
 
-    public class PriceIncreaseUpdateDto
+    public class AddPriceIncreaseDto
     {
-        // include subditems connected to the price increase company item and show old and new price increase percentage and effectivity date
+        public int? CompanyItemId { get; set; }
+        public decimal? PriceIncreaseAmount { get; set; }
+        public DateTime? EffectivityDate { get; set; }
+        public int? CreatedBy { get; set; }
+        public string? Principal { get; set; }
     }
-
+    public class CompanyItemDropdownItem
+    {
+        public int CompanyItemId { get; set; }
+        public string CompanyItemCode { get; set; } = string.Empty;
+        public string CompanyItemName { get; set; } = string.Empty;
+        public decimal? StockPrice { get; set; }
+        public string Principal { get; set; } = string.Empty;
+    }
 }

@@ -12,6 +12,7 @@ using STTproject.Features.Admin.Dashboard.Services;
 using STTproject.Features.Admin.CompanyItem.Services;
 using STTproject.Features.Admin.SalesInvoice.Services;
 using STTproject.Features.Admin.Subdistributor.Services;
+using STTproject.Features.Admin.PriceIncrease.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,7 @@ builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 builder.Services.AddScoped<IAdminCompanyItemService, AdminCompanyItemService>();
 builder.Services.AddScoped<IAdminSalesInvoiceService, AdminSalesInvoiceService>();
 builder.Services.AddScoped<IAdminSubDistributorService, AdminSubDistributorService>();
+builder.Services.AddScoped<IAdminPriceIncreaseService, AdminPriceIncreaseService>();
 builder.Services.AddScoped<ImportCustomersService>();
 var app = builder.Build();
 

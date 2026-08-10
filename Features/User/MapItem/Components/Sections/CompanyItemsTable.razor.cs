@@ -30,8 +30,18 @@ public partial class CompanyItemsTable
     private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
     private bool SortAscending { get; set; } = true;
 
-    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => ApplySort(CompanyItems.Where(MatchesSearch));
+    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => 
+        ApplySort(CompanyItems.Where(MatchesSearch).Where(MatchesFilter));
 
+    private bool MatchesFilter(MapCompanyItemViewRow item)
+    {
+        return SelectedCompanyItemsFilterString switch
+        {
+            "Unmapped" => !item.IsMapped,
+            "Mapped" => item.IsMapped,
+            _ => true // "All"
+        };
+    }
     private Task SetSortByColumnAsync(CompanyItemSortColumn column)
     {
         if (SortColumn == column)
@@ -137,8 +147,12 @@ public partial class CompanyItemsTable
                 ? items.OrderBy(item => item.ItemName).ThenBy(item => item.CompanyItemCode)
                 : items.OrderByDescending(item => item.ItemName).ThenBy(item => item.CompanyItemCode),
             _ => SortAscending
-                ? items.OrderBy(item => item.CompanyItemCode).ThenBy(item => item.ItemName)
-                : items.OrderByDescending(item => item.CompanyItemCode).ThenBy(item => item.ItemName)
+                ? items.OrderBy(item => item.IsMapped ? 0 : 1)  // mapped first
+                    .ThenBy(item => item.CompanyItemCode)
+                    .ThenBy(item => item.ItemName)
+                : items.OrderBy(item => item.IsMapped ? 0 : 1)
+                    .ThenByDescending(item => item.CompanyItemCode)
+                    .ThenBy(item => item.ItemName)
         };
     }
 }

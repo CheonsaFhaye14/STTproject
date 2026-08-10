@@ -1,0 +1,292 @@
+@using STTproject.Features.Admin.PriceIncrease.DTOs
+@using STTproject.Features.Admin.PriceIncrease.Validators
+@using STTproject.Shared.Components
+@inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
+@inject STTproject.Services.IUserContextService UserContextService
+<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
+
+<div class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>@(isEdit ? "Edit Price Increase" : "Schedule Price Increase")</h3>
+        </div>
+
+        <div class="modal-body">
+            @if (!isEdit)
+            {
+                <div class="form-group">
+                    <label>Principal</label>
+                    <select @bind="Principal" @bind:after="OnPrincipalChanged">
+                        <option value="">Select a principal</option>
+                        @foreach (var principal in Principals)
+                        {
+                            <option value="@principal">@principal</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Company Item<span class="required-asterisk"> *</span></label>
+                    <GenericAutocomplete TItem="CompanyItemDropdownItem" @ref="CompanyItemAutocomplete"
+                                         Items="FilteredCompanyItems.ToList()" @bind-Value="SelectedCompanyItemLabel"
+                                         ItemLabel="@(c => $"{c.CompanyItemCode} - {c.CompanyItemName}")" OnSelected="OnCompanyItemSelected"
+                                         ShowAllOnOpen="true" Placeholder="Search company item..." />
+                    @if (ShowValidationErrors &&
+                            !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)))
+                    {
+                        <span
+                        class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label>Company Item</label>
+                    <input value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")" disabled />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(readOnlyReason))
+                {
+                    <p class="modal-note modal-note-warning">@readOnlyReason</p>
+                }
+            }
+
+            @if (SelectedStockPrice.HasValue)
+            {
+                <div class="form-group">
+                    <label>Stock Price</label>
+                    <input value="@SelectedStockPrice.Value.ToString("N2")" disabled />
+                </div>
+            }
+
+            <div class="form-group">
+                <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)</label>
+                <input type="number" step="0.01" @bind="PriceIncreaseAmount" disabled="@isReadOnly" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)))
+                {
+                    <span
+                    class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)</span>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)</label>
+                <input type="date" @bind="EffectivityDate" disabled="@isReadOnly" />
+                @if (ShowValidationErrors &&
+                !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)))
+                {
+                    <span
+                    class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)</span>
+                }
+            </div>
+
+            @if (isEdit)
+            {
+                <div class="form-group">
+                    <label>Status</label>
+                    <input value="@ViewStatus" disabled />
+                </div>
+
+                <h4>Audit Information</h4>
+                <div class="form-group">
+                    <label>Created Date</label>
+                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(CreatedByName))
+                {
+                    <div class="form-group">
+                        <label>Created By</label>
+                        <input value="@CreatedByName" disabled />
+                    </div>
+                }
+            }
+
+            @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
+            {
+                <span class="error-text">@generalError</span>
+            }
+
+            <div class="action-buttons">
+                @if (!isReadOnly)
+                {
+                    <button type="button" @onclick="RequestConfirm" disabled="@isSubmitting">
+                        @(isEdit ? "Save Changes" : "Schedule Increase")
+                    </button>
+                }
+                <button type="button" @onclick="Cancel" disabled="@isSubmitting">
+                    @(isReadOnly ? "Close" : "Cancel")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback onCancel { get; set; }
+    [Parameter] public EventCallback OnRequestConfirm { get; set; }
+    [Parameter] public int? PriceIncreaseId { get; set; }
+
+    private bool isEdit => PriceIncreaseId.HasValue;
+    private bool isReadOnly;
+    private string? readOnlyReason;
+    private int? CurrentUserId => UserContextService.UserId;
+
+    // Company item
+    private GenericAutocomplete<CompanyItemDropdownItem>? CompanyItemAutocomplete;
+    private string? SelectedCompanyItemLabel { get; set; }
+    private int? SelectedCompanyItemId { get; set; }
+    private IReadOnlyList<CompanyItemDropdownItem> CompanyItems { get; set; } = new List<CompanyItemDropdownItem>();
+    private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItems =>
+        string.IsNullOrWhiteSpace(Principal)
+            ? CompanyItems
+            : CompanyItems.Where(c => c.Principal == Principal);
+
+    private string? Principal { get; set; }
+    private IReadOnlyList<string?> Principals { get; set; } = new List<string>();
+    private decimal? SelectedStockPrice { get; set; }
+    private decimal? PriceIncreaseAmount { get; set; }
+    private DateTime? EffectivityDate { get; set; }
+
+    private string? ViewCompanyItemCode { get; set; }
+    private string? ViewCompanyItemName { get; set; }
+    private string? ViewStatus { get; set; }
+    private DateTime CreatedDate { get; set; }
+    private string? CreatedByName { get; set; }
+
+    private Dictionary<string, string> Errors { get; set; } = new();
+    private bool ShowValidationErrors { get; set; }
+    private bool isSubmitting;
+
+    private AddPriceIncreaseDto? PendingScheduleDto;
+    private (decimal Amount, DateTime EffectivityDate)? PendingEditData;
+
+    private string GetFieldError(string key) =>
+        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+
+    private Task OnCompanyItemSelected(CompanyItemDropdownItem? item)
+    {
+        if (item == null) return Task.CompletedTask;
+        SelectedCompanyItemId = item.CompanyItemId;
+        SelectedStockPrice = item.StockPrice;
+        Principal = item.Principal;
+        SelectedCompanyItemLabel = $"{item.CompanyItemCode} - {item.CompanyItemName}";
+        return Task.CompletedTask;
+    }
+
+    private void OnPrincipalChanged()
+    {
+        if (SelectedCompanyItemId.HasValue)
+        {
+            var stillValid = CompanyItems.Any(c =>
+                c.CompanyItemId == SelectedCompanyItemId.Value &&
+                (string.IsNullOrWhiteSpace(Principal) || c.Principal == Principal));
+
+            if (!stillValid)
+            {
+                SelectedCompanyItemId = null;
+                SelectedStockPrice = null;
+                SelectedCompanyItemLabel = null;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Principals = await AdminPriceIncreaseService.GetAllPrincipalsAsync();
+        if (isEdit)
+        {
+            var history = await AdminPriceIncreaseService.GetPriceIncreaseByIdAsync(PriceIncreaseId!.Value);
+            if (history != null)
+            {
+                ViewCompanyItemCode = history.CompanyItemCode;
+                ViewCompanyItemName = history.CompanyItemName;
+                SelectedStockPrice = history.StockPrice;
+                PriceIncreaseAmount = history.PriceIncreaseAmount;
+                EffectivityDate = history.EffectivityDate;
+                ViewStatus = history.Status;
+                CreatedDate = history.CreatedDate;
+                CreatedByName = await AdminPriceIncreaseService.GetUserNameByIdAsync(history.CreatedBy);
+
+                if (string.Equals(history.Status, "Applied", StringComparison.OrdinalIgnoreCase))
+                {
+                    isReadOnly = true;
+                    readOnlyReason = "This increase has already been applied and can no longer be edited.";
+                }
+            }
+        }
+        else
+        {
+            CompanyItems = await AdminPriceIncreaseService.GetCompanyItemsForDropdownAsync();
+        }
+    }
+
+    private async Task RequestConfirm()
+    {
+        if (isEdit)
+        {
+            var dtoToValidate = new AddPriceIncreaseDto
+            {
+                PriceIncreaseAmount = PriceIncreaseAmount,
+                EffectivityDate = EffectivityDate
+            };
+
+            Errors = await PriceIncreaseValidations.ValidateEditPriceIncreaseAsync(dtoToValidate);
+            ShowValidationErrors = true;
+            if (Errors.Any()) return;
+
+            PendingEditData = (PriceIncreaseAmount!.Value, EffectivityDate!.Value);
+        }
+        else
+        {
+            var dto = new AddPriceIncreaseDto
+            {
+                CompanyItemId = SelectedCompanyItemId,
+                PriceIncreaseAmount = PriceIncreaseAmount,
+                EffectivityDate = EffectivityDate,
+                CreatedBy = CurrentUserId
+            };
+
+            Errors = await PriceIncreaseValidations.ValidateAddPriceIncreaseAsync(dto, AdminPriceIncreaseService);
+            ShowValidationErrors = true;
+            if (Errors.Any()) return;
+
+            PendingScheduleDto = dto;
+        }
+
+        if (OnRequestConfirm.HasDelegate)
+            await OnRequestConfirm.InvokeAsync();
+    }
+
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        isSubmitting = true;
+        try
+        {
+            if (isEdit)
+            {
+                if (PendingEditData == null) return (false, "No pending changes.");
+                return await AdminPriceIncreaseService.UpdatePendingIncreaseAsync(
+                    PriceIncreaseId!.Value,
+                    PendingEditData.Value.Amount,
+                    PendingEditData.Value.EffectivityDate,
+                    CurrentUserId);
+            }
+            else
+            {
+                if (PendingScheduleDto == null) return (false, "No pending data.");
+                return await AdminPriceIncreaseService.ScheduleIncreaseAsync(PendingScheduleDto);
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private Task Cancel()
+    {
+        if (onCancel.HasDelegate) return onCancel.InvokeAsync();
+        return Task.CompletedTask;
+    }
+}

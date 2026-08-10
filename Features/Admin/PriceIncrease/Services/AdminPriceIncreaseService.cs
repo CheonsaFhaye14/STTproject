@@ -1,212 +1,299 @@
-
-
+using STTproject.Features.Admin.PriceIncrease.DTOs;
+using Microsoft.EntityFrameworkCore;
+using STTproject.Data;
 
 namespace STTproject.Features.Admin.PriceIncrease.Services
 {
-    
+    public class AdminPriceIncreaseService : IAdminPriceIncreaseService
+    {
+        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IConfiguration _config;
+
+        private static readonly TimeZoneInfo PhTimeZone =
+            TimeZoneInfo.FindSystemTimeZoneById(
+                OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
+
+        private static DateTime NowPh() =>
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
+
+        public AdminPriceIncreaseService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
+        {
+            _dbFactory = dbFactory;
+            _config = config;
+        }
+
+        public async Task<string?> GetUserNameByIdAsync(int? userId)
+        {
+            if (userId == null) return null;
+            await using var db = _dbFactory.CreateDbContext();
+            var user = await db.Users.FindAsync(userId.Value);
+            return user?.FullName ?? user?.Username;
+        }
+
+        public async Task<IEnumerable<PriceIncreaseTableListDto>> GetAllAsync()
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var now = NowPh();
+
+            return await db.CompanyItemPriceHistories
+                .AsNoTracking()
+                .Select(h => new PriceIncreaseTableListDto
+                {
+                    CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
+                    CompanyItemId = h.CompanyItemId,
+                    CompanyItemName = h.CompanyItem.ItemName,
+                    CompanyItemCode = h.CompanyItem.ItemCode,
+                    StockPrice = h.CompanyItem.StockPrice,
+                    PriceIncreaseAmount = h.PriceIncreaseAmount,
+                    EffectivityDate = h.EffectivityDate,
+                    AppliedDate = h.AppliedDate,
+                    CreatedBy = h.CreatedBy,
+                    CreatedDate = h.CreatedDate,
+                    Status = h.AppliedDate != null
+                        ? "Applied"
+                        : (h.EffectivityDate <= now ? "Overdue" : "Pending")
+                })
+                .OrderByDescending(x => x.CreatedDate)
+                .ToListAsync();
+        }
+
+        public async Task<(IEnumerable<PriceIncreaseTableListDto> Items, int TotalCount)> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search,
+            string? status,
+            string? principal,
+            string? sortColumn = "EffectivityDate",
+            bool sortAscending = true)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var now = NowPh();
+
+            var query = db.CompanyItemPriceHistories
+                .AsNoTracking()
+                .Include(h => h.CompanyItem)
+                .Where(h => string.IsNullOrEmpty(principal) || h.CompanyItem.Principal == principal)
+                .Where(h => string.IsNullOrEmpty(search) ||
+                    (h.CompanyItem.ItemCode != null && h.CompanyItem.ItemCode.Contains(search)) ||
+                    (h.CompanyItem.ItemName != null && h.CompanyItem.ItemName.Contains(search)) ||
+                    (h.CompanyItem.Category != null && h.CompanyItem.Category.Contains(search)));
+
+            query = status?.ToLowerInvariant() switch
+            {
+                "pending" => query.Where(h => h.AppliedDate == null && h.EffectivityDate > now),
+                "overdue" => query.Where(h => h.AppliedDate == null && h.EffectivityDate <= now),
+                "applied" => query.Where(h => h.AppliedDate != null),
+                _ => query // "all" or null/empty
+            };
+
+            var total = await query.CountAsync();
+
+            query = (sortColumn, sortAscending) switch
+            {
+                ("CompanyItemCode", true) => query.OrderBy(h => h.CompanyItem.ItemCode),
+                ("CompanyItemCode", false) => query.OrderByDescending(h => h.CompanyItem.ItemCode),
+                ("CompanyItemName", true) => query.OrderBy(h => h.CompanyItem.ItemName),
+                ("CompanyItemName", false) => query.OrderByDescending(h => h.CompanyItem.ItemName),
+                ("Principal", true) => query.OrderBy(h => h.CompanyItem.Principal),
+                ("Principal", false) => query.OrderByDescending(h => h.CompanyItem.Principal),
+                ("EffectivityDate", true) => query.OrderBy(h => h.EffectivityDate),
+                ("EffectivityDate", false) => query.OrderByDescending(h => h.EffectivityDate),
+                ("CreatedDate", true) => query.OrderBy(h => h.CreatedDate),
+                ("CreatedDate", false) => query.OrderByDescending(h => h.CreatedDate),
+                _ => query.OrderByDescending(h => h.EffectivityDate)
+            };
+
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(h => new PriceIncreaseTableListDto
+                {
+                    CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
+                    CompanyItemId = h.CompanyItemId,
+                    CompanyItemName = h.CompanyItem.ItemName,
+                    CompanyItemCode = h.CompanyItem.ItemCode,
+                    StockPrice = h.CompanyItem.StockPrice,
+                    PriceIncreaseAmount = h.PriceIncreaseAmount,
+                    EffectivityDate = h.EffectivityDate,
+                    AppliedDate = h.AppliedDate,
+                    CreatedBy = h.CreatedBy,
+                    CreatedDate = h.CreatedDate,
+                    Status = h.AppliedDate != null
+                        ? "Applied"
+                        : (h.EffectivityDate <= now ? "Overdue" : "Pending")
+                })
+                .ToListAsync();
+
+            return (items, total);
+        }
+
+        /// <summary>
+        /// Lazy-loaded detail for one increase event — call only when a row is expanded.
+        /// </summary>
+        public async Task<IReadOnlyList<PriceIncreaseViewDto>> GetCascadedUomDetailsAsync(int companyItemPriceHistoryId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.ItemsUomPriceHistories
+                .AsNoTracking()
+                .Where(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
+                .Select(h => new PriceIncreaseViewDto
+                {
+                    SubdItemId = h.ItemsUom.SubdItemId,
+                    SubdItemCode = h.ItemsUom.SubdItem.SubdItemCode,
+                    SubdItemName = h.ItemsUom.SubdItem.ItemName,
+                    UomName = h.ItemsUom.UomName,
+                    OldPrice = h.OldPrice,
+                    NewPrice = h.NewPrice,
+                    AppliedDate = h.AppliedDate,
+                    CreatedBy = h.CreatedBy
+                })
+                .OrderBy(d => d.SubdItemCode)
+                .ThenBy(d => d.UomName)
+                .ToListAsync();
+        }
+
+        public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems
+                .Select(c => c.Principal)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToListAsync();
+        }
+        
+        public async Task<PriceIncreaseTableListDto?> GetPriceIncreaseByIdAsync(int id)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var entity = await db.CompanyItemPriceHistories
+                .AsNoTracking()
+                .Include(h => h.CompanyItem)
+                .FirstOrDefaultAsync(h => h.CompanyItemPriceHistoryId == id);
+
+            if (entity == null) return null;
+
+            return new PriceIncreaseTableListDto
+            {
+                CompanyItemPriceHistoryId = entity.CompanyItemPriceHistoryId,
+                CompanyItemId = entity.CompanyItemId,
+                CompanyItemName = entity.CompanyItem.ItemName,
+                CompanyItemCode = entity.CompanyItem.ItemCode,
+                StockPrice = entity.CompanyItem.StockPrice,
+                PriceIncreaseAmount = entity.PriceIncreaseAmount,
+                EffectivityDate = entity.EffectivityDate,
+                AppliedDate = entity.AppliedDate,
+                CreatedBy = entity.CreatedBy,
+                CreatedDate = entity.CreatedDate,
+                Status = entity.AppliedDate != null
+                    ? "Applied"
+                    : (entity.EffectivityDate <= NowPh() ? "Overdue" : "Pending")
+            };
+        }
+
+        public async Task<IReadOnlyList<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync()
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems
+                .AsNoTracking()
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.ItemName)
+                .Select(c => new CompanyItemDropdownItem
+                {
+                    CompanyItemId = c.CompanyItemId,
+                    CompanyItemCode = c.ItemCode,
+                    CompanyItemName = c.ItemName,
+                    StockPrice = c.StockPrice,
+                    Principal = c.Principal
+                })
+                .ToListAsync();
+        }
+
+        public async Task<bool> HasPendingIncreaseAsync(int companyItemId, int? excludeId = null)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItemPriceHistories
+                .AsNoTracking()
+                .AnyAsync(h => h.CompanyItemId == companyItemId
+                    && h.AppliedDate == null
+                    && (!excludeId.HasValue || h.CompanyItemPriceHistoryId != excludeId.Value));
+        }
+
+        public async Task<(bool success, string? error)> ScheduleIncreaseAsync(AddPriceIncreaseDto dto)
+        {
+            if (!dto.CompanyItemId.HasValue || !dto.PriceIncreaseAmount.HasValue || !dto.EffectivityDate.HasValue)
+                return (false, "Missing required fields.");
+
+            await using var db = _dbFactory.CreateDbContext();
+            try
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync($@"
+                    EXEC sp_SchedulePriceIncrease
+                        @CompanyItemId = {dto.CompanyItemId.Value},
+                        @PriceIncreaseAmount = {dto.PriceIncreaseAmount.Value},
+                        @EffectivityDate = {dto.EffectivityDate.Value},
+                        @CreatedBy = {dto.CreatedBy}");
+                return (true, null);
+            }
+            catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 50001)
+            {
+                return (false, "This company item already has a pending price increase scheduled.");
+            }
+        }
+
+        /// <summary>
+        /// Edits a not-yet-applied increase: updates the company-level history row and
+        /// recomputes every linked UOM-level history row (their OldPrice snapshot is
+        /// preserved; only NewPrice and EffectivityDate change).
+        /// </summary>
+        public async Task<(bool success, string? error)> UpdatePendingIncreaseAsync(
+            int companyItemPriceHistoryId, decimal priceIncreaseAmount, DateTime effectivityDate, int? updatedBy)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            try
+            {
+                var history = await db.CompanyItemPriceHistories
+                    .FirstOrDefaultAsync(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId);
+
+                if (history == null)
+                    return (false, "Price increase not found.");
+
+                if (history.AppliedDate != null)
+                    return (false, "This increase has already been applied and can no longer be edited.");
+
+                var duplicateExists = await db.CompanyItemPriceHistories
+                    .AnyAsync(h => h.CompanyItemId == history.CompanyItemId
+                        && h.AppliedDate == null
+                        && h.CompanyItemPriceHistoryId != companyItemPriceHistoryId);
+
+                if (duplicateExists)
+                    return (false, "This company item already has another pending price increase.");
+
+                history.PriceIncreaseAmount = priceIncreaseAmount;
+                history.NewPrice = history.OldPrice + priceIncreaseAmount;
+                history.EffectivityDate = effectivityDate;
+
+                var uomRows = await db.ItemsUomPriceHistories
+                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId && u.AppliedDate == null)
+                    .Include(u => u.ItemsUom)
+                    .ToListAsync();
+
+                foreach (var uom in uomRows)
+                {
+                    var conversion = uom.ItemsUom?.ConversionToBase ?? 1m;
+                    uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion);
+                    uom.EffectivityDate = effectivityDate;
+                }
+
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return (false, $"Unable to update the price increase: {ex.GetBaseException().Message}");
+            }
+        }
+    }
 }
-// {
-//     public class AdminCompanyItemService : IAdminCompanyItemService
-//     {
-//         private readonly IDbContextFactory<SttprojectContext> _dbFactory;
-//         private readonly IConfiguration _config;
-//         private static readonly TimeZoneInfo PhTimeZone =
-//             TimeZoneInfo.FindSystemTimeZoneById(
-//                 OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
-
-//         private static DateTime NowPh() =>
-//             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
-
-
-//         public AdminCompanyItemService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
-//         {
-//             _dbFactory = dbFactory;
-//             _config = config;
-//         }
-//         public async Task<string?> GetUserNameByIdAsync(int? userId)
-//         {
-//             if (userId == null) return null;
-//             await using var db = _dbFactory.CreateDbContext();
-//             var user = await db.Users.FindAsync(userId.Value);
-//             return user?.FullName ?? user?.Username;
-//         }
-//         public async Task<string?> GetCompanyItemNameByIdAsync(int? companyItemId)
-//         {
-//             if (companyItemId == null) return null;
-//             await using var db = _dbFactory.CreateDbContext();
-//             var companyItem = await db.CompanyItems.FindAsync(companyItemId.Value);
-//             return companyItem?.ItemName;
-//         }
-//         public async Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-
-//             var entity = new Data.CompanyItem
-//             {
-//                 ItemCode = dto.ItemCode ?? string.Empty,
-//                 ItemName = dto.ItemName ?? string.Empty,
-//                 Principal = dto.Principal ?? string.Empty,
-//                 Category = dto.Category ?? string.Empty,
-//                 IsActive = dto.IsActive,
-//                 CreatedDate = NowPh(),
-//                 // CreatedBy = dto.CreatedBy,
-//             };
-//             db.CompanyItems.Add(entity);
-//             await db.SaveChangesAsync();
-//             return await GetCompanyItemByIdAsync(entity.CompanyItemId);
-//         }
-//         public async Task<CompanyItemUpdateDto?> UpdateCompanyItemAsync(CompanyItemUpdateDto dto)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             var entity = await db.CompanyItems.FindAsync(dto.CompanyItemId);
-//             if (entity == null) return null;
-
-//             entity.ItemCode = dto.ItemCode ?? entity.ItemCode;
-//             entity.ItemName = dto.ItemName ?? entity.ItemName;
-//             entity.Principal = dto.Principal ?? entity.Principal;
-//             entity.Category = dto.Category ?? entity.Category;
-//             entity.IsActive = dto.IsActive;
-//             entity.UpdatedDate = NowPh();
-
-//             await db.SaveChangesAsync();
-//             return dto;
-//         }
-//         public async Task ToggleCompanyItemStatusAsync(int id, bool isActive)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             var entity = await db.CompanyItems.FindAsync(id);
-//             if (entity == null) return;
-//             entity.IsActive = isActive;
-//             entity.UpdatedDate = NowPh();
-//             await db.SaveChangesAsync();
-//         }
-
-//         public async Task<IEnumerable<CompanyItemListDto>> GetAllAsync()
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             return await db.CompanyItems
-//                 .Select(u => new CompanyItemListDto
-//                 {
-//                     CompanyItemId = u.CompanyItemId,
-//                     ItemCode = u.ItemCode,
-//                     ItemName = u.ItemName,
-//                     Principal = u.Principal,
-//                     Category = u.Category,
-//                     IsActive = u.IsActive,
-//                     CreatedDate = u.CreatedDate,
-//                     UpdatedDate = u.UpdatedDate,
-//                     CreatedBy = u.CreatedBy,
-//                     UpdatedBy = u.UpdatedBy,
-//                 }).ToListAsync();
-//         }
-
-//         public async Task<(IEnumerable<CompanyItemListDto> Items, int TotalCount)> GetPagedAsync(
-//             int page,
-//             int pageSize,
-//             string? search,
-//             string? status,
-//             string? principal,
-//             string? sortColumn = "ItemCode",
-//             bool sortAscending = true)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-
-//             var query = db.CompanyItems
-//                 .AsNoTracking()
-//                 .Where(c => string.IsNullOrEmpty(status) ||
-//                     (status == "active" ? c.IsActive : !c.IsActive))
-//                 .Where(c => string.IsNullOrEmpty(principal) || c.Principal == principal)
-//                 .Where(c => string.IsNullOrEmpty(search) ||
-//                     (c.ItemCode != null && c.ItemCode.Contains(search)) ||
-//                     (c.ItemName != null && c.ItemName.Contains(search)) ||
-//                     (c.Category != null && c.Category.Contains(search)));
-
-//             var total = await query.CountAsync();
-
-//             query = (sortColumn, sortAscending) switch
-//             {
-//                 ("ItemCode", true) => query.OrderBy(c => c.ItemCode),
-//                 ("ItemCode", false) => query.OrderByDescending(c => c.ItemCode),
-//                 ("ItemName", true) => query.OrderBy(c => c.ItemName),
-//                 ("ItemName", false) => query.OrderByDescending(c => c.ItemName),
-//                 ("Principal", true) => query.OrderBy(c => c.Principal),
-//                 ("Principal", false) => query.OrderByDescending(c => c.Principal),
-//                 ("Category", true) => query.OrderBy(c => c.Category),
-//                 ("Category", false) => query.OrderByDescending(c => c.Category),
-//                 ("CreatedDate", true) => query.OrderBy(c => c.CreatedDate),
-//                 ("CreatedDate", false) => query.OrderByDescending(c => c.CreatedDate),
-//                 ("IsActive", true) => query.OrderBy(c => c.IsActive),
-//                 ("IsActive", false) => query.OrderByDescending(c => c.IsActive),
-//                 _ => query.OrderBy(c => c.ItemCode)
-//             };
-
-//             var items = await query
-//                 .Skip((page - 1) * pageSize)
-//                 .Take(pageSize)
-//                 .Select(u => new CompanyItemListDto
-//                 {
-//                     CompanyItemId = u.CompanyItemId,
-//                     ItemCode = u.ItemCode,
-//                     ItemName = u.ItemName,
-//                     Principal = u.Principal,
-//                     Category = u.Category,
-//                     IsActive = u.IsActive,
-//                     CreatedDate = u.CreatedDate,
-//                     UpdatedDate = u.UpdatedDate,
-//                     CreatedBy = u.CreatedBy,
-//                     UpdatedBy = u.UpdatedBy,
-//                 })
-//                 .ToListAsync();
-
-//             return (items, total);
-//         }
-
-//         public async Task<CompanyItemListDto?> GetCompanyItemByIdAsync(int id)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             var entity = await db.CompanyItems
-//                 .AsNoTracking()
-//                 .FirstOrDefaultAsync(u => u.CompanyItemId == id);
-
-//             if (entity == null) return null;
-
-//             return new CompanyItemListDto
-//             {
-//                 CompanyItemId = entity.CompanyItemId,
-//                 ItemCode = entity.ItemCode,
-//                 ItemName = entity.ItemName,
-//                 Principal = entity.Principal,
-//                 Category = entity.Category,
-//                 IsActive = entity.IsActive,
-//                 CreatedDate = entity.CreatedDate,
-//                 UpdatedDate = entity.UpdatedDate,
-//                 CreatedBy = entity.CreatedBy,
-//                 UpdatedBy = entity.UpdatedBy,
-//             };
-//         }
-
-//         public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             return await db.CompanyItems
-//                 .Select(c => c.Principal)
-//                 .Distinct()
-//                 .OrderBy(p => p)
-//                 .ToListAsync();
-//         }
-
-//         public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             return await db.CompanyItems
-//                 .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName && c.CompanyItemId != excludeId);
-//         }
-
-//         public async Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null)
-//         {
-//             await using var db = _dbFactory.CreateDbContext();
-//             return await db.CompanyItems
-//                  .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId);
-//         }
-//     }
-// }

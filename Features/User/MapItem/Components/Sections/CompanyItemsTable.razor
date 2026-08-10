@@ -27,8 +27,7 @@
             </select>
         </div>
         <div class="filter-group">
-            <select @bind="SelectedCompanyItemsFilterString" @bind:after="HandleFilterChanged"
-                    disabled="@(!IsSubDistributorSelected)">
+            <select @bind="SelectedCompanyItemsFilterString" @bind:after="HandleFilterChanged">
                 <option value="All">All company items</option>
                 <option value="Unmapped">Items for Mapping </option>
                 <option value="Mapped">Already Mapped</option>
