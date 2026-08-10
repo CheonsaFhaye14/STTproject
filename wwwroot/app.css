@@ -1,3 +1,15 @@
+:root {
+    --app-dark: #262625;
+    --app-dark-deep: #211A10;
+    --app-surface: #FAFAF9;
+    --app-accent: #E8D2AE;
+    --app-accent-strong: #B08D57;
+    --app-accent-dark: #8A6A34;
+    --app-muted: #8A8A92;
+    --app-border: #D8CBB8;
+    --app-link: #8A6A34;
+}
+
 *,
 *::before,
 *::after {
@@ -11,10 +23,12 @@ html, body {
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
+    background: var(--app-surface);
+    color: var(--app-dark-deep);
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: var(--app-link);
 }
 
 .title{
@@ -23,30 +37,29 @@ a, .btn-link {
 }
 
 .btn-primary {
-    background-color: #7A65B0;
-    color: white;
+    background-color: var(--app-accent-strong);
+    color: var(--app-dark-deep);
     border-radius: 10px;
     border: none;
-    box-shadow: 3px 3px 4px #9B85CC;
+    box-shadow: 0 2px 6px rgba(33, 26, 16, 0.16);
 }
     .btn-primary:hover {
-        background-color: #C9B8E8;
-        color: black;
+        background-color: var(--app-accent);
+        color: var(--app-dark-deep);
     }
 
 .btn-secondary {
-    background-color: white;
-    color: #4c2d99;
+    background-color: var(--app-surface);
+    color: var(--app-accent-dark);
     border-radius: 10px;
-    border: #7A65B0 solid 1px;
-    box-shadow: 3px 3px 4px #9B85CC;
+    border: 1px solid var(--app-border);
+    box-shadow: 0 2px 6px rgba(33, 26, 16, 0.08);
 }
 
     .btn-secondary:hover {
-        background-color: #b693f8;
-        color: black;
-        border-radius: 10px;
-        border: none;
+        background-color: var(--app-accent);
+        color: var(--app-dark-deep);
+        border-color: var(--app-accent-strong);
     }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
@@ -166,12 +179,13 @@ label {
 }
 
 .modal-box {
-    background-color: #FFFFFF;
+    background-color: var(--app-surface);
     border-radius: 16px;
     width: min(760px, 95%);
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 5px 10px rgba(255, 182, 193, 0.5);
+    box-shadow: 0 8px 24px rgba(33, 26, 16, 0.14);
+    border: 1px solid var(--app-border);
 }
 
 .modal-header {
@@ -179,12 +193,12 @@ label {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0px;
-    background-color: #c1a1fc;
-    color: white;
+    background-color: var(--app-accent);
+    color: var(--app-dark-deep);
     padding: 15px;
 }
 .modal-header h4{
-    color: black;
+    color: var(--app-dark-deep);
 }
 
 .close-btn {

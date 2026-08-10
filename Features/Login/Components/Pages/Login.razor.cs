@@ -20,7 +20,21 @@ namespace STTproject.Features.Login.Components.Pages
         [SupplyParameterFromQuery(Name = "role")]
         public string? SelectedRole { get; set; }
 
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "success")]
+        public string? SuccessCode { get; set; }
+
+        [Parameter]
+        [SupplyParameterFromQuery(Name = "returnUrl")]
+        public string? ReturnUrl { get; set; }
+
         private string? loginErrorMessage;
+
+        private bool ShowSuccessToast => string.Equals(SuccessCode, "true", StringComparison.OrdinalIgnoreCase);
+
+        // Where the toast redirects to once it's shown. Defaults to /dashboard —
+        // change this or pass ?returnUrl=/wherever from your /login handler.
+        private string RedirectTarget => string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl;
 
         private bool RememberMe => string.Equals(RememberMeRaw, "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(RememberMeRaw, "1", StringComparison.OrdinalIgnoreCase);

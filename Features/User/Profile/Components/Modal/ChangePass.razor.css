@@ -4,17 +4,18 @@
     gap: 6px;
     padding: 9px 16px;
     background: transparent;
-    color: #5c3fa8;
-    border: 1.5px solid #C9B8E8;
+    color: #8A6A34;
+    border: 1.5px solid #E5E3DD;
     border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, color 0.2s;
 }
 
     .btn-change-pass:hover {
-        background: rgba(232, 223, 245, 0.5);
+        background: #F7F6F4;
+        color: #1B1B1F;
     }
 
     .btn-change-pass:disabled {
@@ -25,7 +26,7 @@
 .cp-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(58, 40, 112, 0.35);
+    background: rgba(27, 27, 31, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -45,13 +46,13 @@
 }
 
 .cp-modal {
-    background: rgba(255, 255, 255, 0.95);
+    background: #FFFFFF;
     border-radius: 16px;
     width: 90%;
     max-width: 420px;
     overflow: hidden;
-    border: 1px solid #C9B8E8;
-    box-shadow: 2px 2px 20px rgba(154, 133, 204, 0.25);
+    border: 1px solid #E5E3DD;
+    box-shadow: 2px 2px 20px rgba(27, 27, 31, 0.12);
     animation: cpSlideUp 0.2s ease;
 }
 
@@ -68,16 +69,17 @@
 }
 
 .cp-header {
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    background: #d6d2c9;
     padding: 1.25rem 1.5rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid #E5E3DD;
 }
 
     .cp-header h4 {
         margin: 0;
-        color: #26215C;
+        color: #1B1B1F;
         font-size: 16px;
         font-weight: 600;
         display: flex;
@@ -86,8 +88,8 @@
     }
 
 .cp-close {
-    background: rgba(255, 255, 255, 0.35);
-    border: 1px solid rgba(201, 184, 232, 0.5);
+    background: #FFFFFF;
+    border: 1px solid #E5E3DD;
     border-radius: 50%;
     width: 28px;
     height: 28px;
@@ -95,13 +97,13 @@
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    color: #26215C;
+    color: #5F5E5A;
     cursor: pointer;
     line-height: 1;
 }
 
     .cp-close:hover {
-        background: rgba(255, 255, 255, 0.55);
+        background: #F7F6F4;
     }
 
 .cp-body {
@@ -112,9 +114,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
+    background: #FDECEC;
+    color: #A33A3A;
+    border: 1px solid #EAC2C2;
     border-radius: 10px;
     padding: 10px 14px;
     font-size: 13px;
@@ -124,7 +126,7 @@
 .cp-label {
     font-size: 11px;
     font-weight: 700;
-    color: #9B85CC;
+    color: #8A6A34;
     letter-spacing: 0.07em;
     text-transform: uppercase;
     margin-bottom: 6px;
@@ -145,7 +147,7 @@
         top: 50%;
         transform: translateY(-50%);
         font-size: 13px;
-        color: #9B85CC;
+        color: #8A6A34;
         pointer-events: none;
     }
 
@@ -153,32 +155,32 @@
     padding: 9px 12px 9px 32px;
     font-size: 14px;
     border-radius: 10px;
-    border: 1px solid #C9B8E8;
-    background: rgba(232, 223, 245, 0.15);
-    color: #3a2870;
+    border: 1px solid #E5E3DD;
+    background: #F7F6F4;
+    color: #1B1B1F;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
     .cp-input:hover {
-        border-color: #9B85CC;
+        border-color: #B08D57;
     }
 
     .cp-input:focus {
-        border-color: #5c3fa8;
-        box-shadow: 0 0 0 3px rgba(154, 133, 204, 0.18);
-        background: #fff;
+        border-color: #B08D57;
+        box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.18);
+        background: #FFFFFF;
         outline: none;
     }
 
     .cp-input::placeholder {
-        color: #C9B8E8;
+        color: #9A968C;
     }
 
 .cp-confirm-text {
     font-size: 14px;
-    color: #3a2870;
+    color: #1B1B1F;
     margin-bottom: 1.25rem;
     line-height: 1.6;
 }
@@ -215,23 +217,24 @@
     }
 
 .cp-btn-save {
-    background: linear-gradient(135deg, #9B85CC, #5c3fa8);
-    color: #fff;
+    background: #B08D57;
+    color: #2A1F0F;
     border: none;
     font-weight: 600;
-    box-shadow: 2px 2px 8px rgba(154, 133, 204, 0.3);
+    box-shadow: none;
 }
 
     .cp-btn-save:hover:not(:disabled) {
-        opacity: 0.88;
+        opacity: 0.92;
     }
 
 .cp-btn-cancel {
-    background: transparent;
-    color: #5c3fa8;
-    border: 1.5px solid #C9B8E8;
+    background: #FFFFFF;
+    color: #5F5E5A;
+    border: 1.5px solid #E5E3DD;
 }
 
     .cp-btn-cancel:hover:not(:disabled) {
-        background: rgba(232, 223, 245, 0.5);
+        background: #F7F6F4;
+        color: #1B1B1F;
     }

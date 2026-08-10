@@ -1,24 +1,54 @@
+.modal-header {
+    background-color: #d6d2c9;
+    text-transform:uppercase;
+    font-weight: 300;
 
-    .modal-body p {
-        margin: 0;
-        padding: 12px 14px;
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        line-height: 1.45;
-    }
+}
+.modal-body p {
+    margin: 0;
+    padding: 12px 14px;
+    background: #F7F6F4;
+    border: 1px solid #E5E3DD;
+    border-radius: 12px;
+    line-height: 1.45;
+    color: #1B1B1F;
+    font-weight:500;
+}
 
     .modal-body p:hover {
-        background: #f3f4f6;
+        background: #EFEDE7;
     }
 
 .modal-actions {
     padding: 16px 24px 20px;
     display: flex;
     justify-content: flex-end;
-    border-top: 1px solid #e5e7eb;
-    background: #fafafa;
+    border-top: 1px solid #E5E3DD;
+    background: #d6d2c9;
 }
+
+.btn-secondary {
+    background: #F7F6F4;
+    border: 1px solid #E5E3DD;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #1B1B1F;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+    .btn-secondary:hover {
+        background: #EFEDE7;
+        border-color: #B08D57;
+        color: #8A6A34;
+    }
+
+    .btn-secondary:active {
+        transform: scale(0.97);
+    }
 
 @keyframes modalFadeIn {
     from {

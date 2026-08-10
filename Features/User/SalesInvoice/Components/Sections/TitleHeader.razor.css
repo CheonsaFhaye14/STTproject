@@ -1,5 +1,65 @@
 ﻿.line {
     display: flex;
-    gap:100px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: #1B1B1F;
+    padding: 1px 4px 8px;
+    min-height: auto;
+    margin-top: 0;
+   
 }
 
+    .line .title {
+        margin: 15px;
+        padding-top: 10px;
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+        color: #1B1B1F;
+  
+    }
+
+    .line .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 100px; 
+        justify-content: center;
+    }
+
+        .line .filter-group label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #211A10;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .line .filter-group select,
+        .line .filter-group input {
+            min-height: 34px;
+            padding: 6px 10px;
+            border: 1px solid #C9B8B0;
+            border-radius: 10px;
+            box-sizing: border-box;
+            background: #FFFFFF;
+            color: #211A10;
+            font-size: 0.85rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+            .line .filter-group select:focus,
+            .line .filter-group input:focus {
+                outline: none;
+                border-color: #B08D57;
+                box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.18);
+            }
+
+            .line .filter-group select:disabled,
+            .line .filter-group input:disabled {
+                background: #F1EEE6;
+                color: #6B6459;
+                border-color: #DAD2C4;
+                cursor: not-allowed;
+            }

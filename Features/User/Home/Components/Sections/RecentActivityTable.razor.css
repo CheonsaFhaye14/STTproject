@@ -1,6 +1,6 @@
 ﻿/* ACTIVITY */
 .activity {
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 40%, #9B85CC 100%);
+    background: #FFFFFF;
     padding: clamp(12px, 2vw, 20px);
     border-radius: 15px;
     margin: 50px auto 1px;
@@ -9,21 +9,29 @@
     padding-right: clamp(12px, 4vw, 70px);
     height: 50vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
+    border: 2px solid #E5E3DD;
+    box-shadow: 0 4px 16px rgba(27, 27, 31, 0.08);
     box-sizing: border-box;
 }
-
+    .activity h3 {
+        margin-bottom: 12px;
+        font-size: 15px;
+        font-weight: 800;
+        color: #1B1B1F;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-family: 'Segoe UI', sans-serif;
+    }
 .activity-header {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    background: rgba(255, 255, 255, 0.6);
+    background: #F7F6F4;
     padding: 10px;
-    border-radius: 20px;
+    border-radius: 10px;
     font-weight: bold;
     text-align: center;
     margin-bottom: 10px;
-    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
-    color: #3a2870;
+    color: #1B1B1F;
 }
 
 .activity-table {
@@ -34,12 +42,11 @@
 }
 
     .activity-table thead th {
-        background: rgba(255, 255, 255, 0.6);
+        background: #d6d2c9;
         padding: clamp(8px, 1vw, 10px);
         font-weight: bold;
         text-align: center;
-        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
-        color: #3a2870;
+        color: #1B1B1F;
         overflow-wrap: anywhere;
     }
 
@@ -52,34 +59,38 @@
         }
 
     .activity-table tbody td {
-        background: rgba(255, 255, 255, 0.6);
+        background: #FFFFFF;
+        border: 1px solid #E5E3DD;
         padding: clamp(8px, 1vw, 10px);
         font-weight: bold;
         text-align: center;
-        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
-        color: #5A4890;
+        color: #5F5E5A;
         overflow-wrap: anywhere;
     }
 
         .activity-table tbody td:first-child {
             border-radius: 10px 0 0 10px;
+            border-right: none;
         }
 
         .activity-table tbody td:last-child {
             border-radius: 0 10px 10px 0;
+            border-left: none;
         }
 
     .activity-table .btn-primary {
         width: clamp(92px, 10vw, 120px);
         height: 32px;
-        background-color: #7A65B0;
+        background-color: #B08D57;
+        color: #2A1F0F;
         border: none;
-        box-shadow: 3px 3px 4px #9B85CC;
+        box-shadow: none;
+        font-weight: 500;
     }
 
         .activity-table .btn-primary:hover {
-            background-color: #C9B8E8;
-            color: #3a2870;
+            background-color: #8A6A34;
+            color: #FAFAF9;
         }
 
 .batch-details-modal {
@@ -101,18 +112,19 @@
 .activity-row {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    background: rgba(255, 255, 255, 0.6);
+    background: #FFFFFF;
+    border: 1px solid #E5E3DD;
     padding: 15px;
     border-radius: 15px;
     margin-bottom: 10px;
     text-align: center;
-    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
     transition: 0.2s;
-    color: #5A4890;
+    color: #5F5E5A;
 }
 
     .activity-row:hover {
         transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(27, 27, 31, 0.08);
     }
 
 /* VIEW MODE TOGGLE */
@@ -131,34 +143,34 @@
 
     .view-toggle .btn-toggle {
         padding: 8px 20px;
-        background: rgba(255, 255, 255, 0.6);
+        background: #F7F6F4;
         border-radius: 20px;
         cursor: pointer;
         font-weight: bold;
         transition: 0.3s;
         white-space: nowrap;
-        border: none;
-        box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
-        color: #5A4890;
+        border: 1px solid #E5E3DD;
+        color: #5F5E5A;
     }
 
         .view-toggle .btn-toggle:hover {
-            background: rgba(255, 255, 255, 0.8);
+            background: #EFEDE7;
         }
 
         .view-toggle .btn-toggle.active {
-            background-color: #7A65B0;
-            color: white;
+            background-color: #1B1B1F;
+            color: #FAFAF9;
+            border-color: #1B1B1F;
         }
 
 /* INVOICE SUMMARY */
 .invoice-summary {
-    background: rgba(255, 255, 255, 0.6);
+    background: #F7F6F4;
     padding: 15px;
     border-radius: 10px;
     margin-bottom: 15px;
-    box-shadow: 3px 3px 6px rgba(154, 133, 204, 0.3);
-    color: #5A4890;
+    border: 1px solid #E5E3DD;
+    color: #5F5E5A;
 }
 
 @media (max-width: 768px) {

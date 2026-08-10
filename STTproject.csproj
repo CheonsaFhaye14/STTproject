@@ -66,6 +66,7 @@
     <Folder Include="wwwroot\assets\" />
     <Folder Include="wwwroot\js\components\" />
     <Folder Include="wwwroot\js\utils\" />
+    <Folder Include="wwwroot\Videos\" />
   </ItemGroup>
 
 </Project>

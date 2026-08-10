@@ -21,11 +21,35 @@
 @implements IAsyncDisposable
 
 @rendermode InteractiveServer
-<button class="btn-secondary" @onclick="GoBackToHome" title="Press Esc to go back">
-    <i class="fa-solid fa-arrow-left"></i> Back
-</button>
-<TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
-             OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
+<div class="sales-invoice-header">
+    <div class="sales-invoice-title-area">
+        <button class="btn-icon-only" @onclick="GoBackToHome" title="Press Esc to go back" aria-label="Go back">
+            <i class="fa-solid fa-arrow-left"></i>
+        </button>
+
+        <div class="sales-invoice-title-wrap">
+            <TitleHeader Subdistributors="subdList" @bind-SelectedSubdId="invoice.SubdistributorId"
+                         OnSubdChanged="UpdateSubdDisplay" IsSaved="isSaved" />
+        </div>
+    </div>
+
+    <div class="top-buttons">
+        <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">
+            <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z"/></svg>
+            </span>
+            <span>Download Template</span>
+        </button>
+        <button class="btn-primary" type="button" @onclick="OpenImportFilePicker"
+                disabled="@(invoice.SubdistributorId <= 0)">
+            <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z"/></svg>
+            </span>
+            <span>Import</span>
+        </button>
+        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
+    </div>
+</div>
 
 @if (isLoading)
 {
@@ -45,13 +69,6 @@
     </div>
 }
 
-<div class="top-buttons">
-    <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">Download
-        Template</button>
-        <button class="btn-primary" type="button" @onclick="OpenImportFilePicker"
-                disabled="@(invoice.SubdistributorId <= 0)">Import</button>
-        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
-    </div>
 
     <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
                   OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />

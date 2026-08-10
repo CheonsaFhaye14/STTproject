@@ -1,10 +1,10 @@
 ﻿.card {
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    background: #FFFFFF;
     margin-top: 17px;
     border-radius: 15px;
     height: 350px;
-    padding: 0 20px 12px;
-    box-shadow: 0 8px 32px rgba(150, 100, 200, 0.2), inset 0 0 10px rgba(255,255,255,0.3);
+    padding: 18px 20px 16px;
+    box-shadow: 0 4px 12px rgba(27, 27, 31, 0.08);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -12,12 +12,12 @@
 
 .table-title {
     text-align: center;
-    font-weight: bold;
+    font-weight: 800;
     font-family: "Segoe UI", Arial, sans-serif;
-    font-size: 26px;
-    color: #3a2870;
+    font-size: 20px;
+    color: #211A10;
     flex-shrink: 0;
-    margin: 8px 0 6px;
+    margin: 0 0 12px;
 }
 
 /* Scrollable wrapper */
@@ -26,6 +26,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     border-radius: 10px;
+    border: 1px solid #E8E3D8;
 }
 
     .table-scroll::-webkit-scrollbar {
@@ -38,14 +39,13 @@
     }
 
     .table-scroll::-webkit-scrollbar-thumb {
-        background: #9B85CC;
+        background: #B08D57;
         border-radius: 99px;
     }
 
 table {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0 5px;
+    border-collapse: collapse;
     table-layout: fixed;
 }
 
@@ -87,61 +87,58 @@ table {
 }
 
 .card th {
-    background: #ffffff;
-    box-shadow: 0 2px 4px rgba(154, 133, 204, 0.4);
-    padding: 8px 10px;
-    color: #3a2870;
-    font-weight: 600;
+    background: #d6d2c9;/* test*/
+    padding: 10px 12px;
+    color: #211A10;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #C9B8B0;
 }
 
-    .card th:first-child {
-        border-top-left-radius: 10px;
-        border-bottom-left-radius: 10px;
-    }
-
-    .card th:last-child {
-        border-top-right-radius: 10px;
-        border-bottom-right-radius: 10px;
-    }
-
 .card td {
-    padding: 9px 10px;
-    color: #3a2870;
+    padding: 11px 12px;
+    color: #211A10;
     font-size: 13px;
-    background: rgba(255, 255, 255, 0.55);
-    box-shadow: 0 2px 6px rgba(154, 133, 204, 0.15);
-    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-    border-top: 1px solid rgba(255, 255, 255, 0.7);
-    border-bottom: 1px solid rgba(201, 184, 232, 0.25);
+    background: #FFFFFF;
+    border-bottom: 1px solid #EDE9DF;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-    /* Rounded left & right edges per row */
-    .card td:first-child {
-        border-left: 1px solid rgba(255, 255, 255, 0.7);
-        border-radius: 10px 0 0 10px;
+    .card td:nth-child(4) {
+        color: #6B6459;
+        font-weight: 600;
+        letter-spacing: 0.02em;
     }
 
-    .card td:last-child {
-        border-right: 1px solid rgba(255, 255, 255, 0.7);
-        border-radius: 0 10px 10px 0;
+    .card td:nth-child(6) {
+        font-weight: 700;
     }
 
-/* Hover — lifts the card row */
+/* Hover — soft highlight, no lift */
 .card tbody tr:hover td {
-    background: #C9B8E8;
-    box-shadow: 0 4px 14px rgba(154, 133, 204, 0.35);
-    transform: translateY(-1px);
+    background: #F7F3EA;
+}
+
+.card tbody tr:last-child td {
+    border-bottom: none;
 }
 
 /* Total row pinned at bottom */
 .total-row {
-    text-align: right;
-    font-weight: bold;
-    font-size: 18px;
-    color: #3a2870;
-    padding-top: 6px;
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    text-align: left;
+    font-weight: 700;
+    font-size: 15px;
+    color: #211A10;
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: #F1EEE6;
+    border-radius: 10px;
     flex-shrink: 0;
 }

@@ -1,7 +1,6 @@
 /* ── Overlay ── */
 ::deep .modal.show {
     background-color: rgba(0, 0, 0, 0.5) !important;
-   
 }
 
 /* ── Modal header ── */
@@ -10,8 +9,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.4rem;
-    background: linear-gradient(135deg, #ede9fb 0%, #f3f0fd 100%);
-    border-bottom: 0.5px solid #e3dff5;
+    background: #1B1B1F;
+    border-bottom: none;
 }
 
 ::deep .mh-left {
@@ -24,30 +23,30 @@
     width: 36px;
     height: 36px;
     border-radius: 12px;
-    background: #d4c9f7;
+    background: #2A2A2E;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #5c3fa8;
+    color: #B08D57;
     font-size: 17px;
 }
 
 ::deep .mh-title {
     font-size: 14px;
     font-weight: 500;
-    color: #3a2870;
+    color: #FAFAF9;
 }
 
 ::deep .mh-sub {
     font-size: 11px;
-    color: #8b7ec8;
+    color: #9A968C;
     margin-top: 2px;
 }
 
 ::deep .mh-close {
-    background: #fff;
-    border: 0.5px solid #e3dff5;
-    color: #8b7ec8;
+    background: rgba(255, 255, 255, 0.06);
+    border: 0.5px solid rgba(255, 255, 255, 0.15);
+    color: #C9C5BA;
     font-size: 15px;
     cursor: pointer;
     padding: 6px;
@@ -58,7 +57,7 @@
 }
 
     ::deep .mh-close:hover {
-        color: #3a2870;
+        color: #FAFAF9;
     }
 
 /* ── Modal body ── */
@@ -69,7 +68,7 @@
     gap: 0.9rem;
     max-height: 65vh;
     overflow-y: auto;
-    background: #faf9fe;
+    background: #FAFAF9;
 }
 
 /* ── Stat bar ── */
@@ -83,12 +82,12 @@
     background: #fff;
     border-radius: 12px;
     padding: 0.75rem 0.9rem;
-    border: 0.5px solid #ede9fb;
+    border: 0.5px solid #E5E3DD;
 }
 
 ::deep .sc-label {
     font-size: 11px;
-    color: #a09abf;
+    color: #9A968C;
     margin-bottom: 3px;
     font-weight: 500;
 }
@@ -96,7 +95,7 @@
 ::deep .sc-val {
     font-size: 22px;
     font-weight: 500;
-    color: #2c235a;
+    color: #1B1B1F;
 }
 
     ::deep .sc-val.sc-ok {
@@ -191,8 +190,8 @@
 ::deep .tabs {
     display: flex;
     gap: 3px;
-    background: #f0edf9;
-    border: 0.5px solid #e3dff5;
+    background: #F7F6F4;
+    border: 0.5px solid #E5E3DD;
     border-radius: 30px;
     padding: 3px;
 }
@@ -206,7 +205,7 @@
     cursor: pointer;
     border: none;
     background: none;
-    color: #8b7ec8;
+    color: #9A968C;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -216,8 +215,8 @@
 
     ::deep .tab.act-all {
         background: #fff;
-        color: #3a2870;
-        border: 0.5px solid #e3dff5;
+        color: #1B1B1F;
+        border: 0.5px solid #E5E3DD;
     }
 
     ::deep .tab.act-ok {
@@ -254,7 +253,7 @@
     align-items: center;
     gap: 8px;
     background: #fff;
-    border: 0.5px solid #e3dff5;
+    border: 0.5px solid #E5E3DD;
     border-radius: 10px;
     padding: 6px 10px;
 }
@@ -271,10 +270,10 @@
 
 ::deep .err-filter-bar select {
     font-size: 12px;
-    border: 0.5px solid #e3dff5;
+    border: 0.5px solid #E5E3DD;
     border-radius: 6px;
-    background: #faf9fe;
-    color: #2c235a;
+    background: #FAFAF9;
+    color: #1B1B1F;
     padding: 3px 6px;
     flex: 1;
 }
@@ -283,7 +282,7 @@
     background: none;
     border: none;
     font-size: 11px;
-    color: #a09abf;
+    color: #9A968C;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -302,18 +301,18 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: #9890b8;
+    color: #8A867C;
 }
 
     ::deep .sel-all-bar input[type="checkbox"] {
-        accent-color: #7c5fc8;
+        accent-color: #B08D57;
         width: 13px;
         height: 13px;
     }
 
 /* ── Invoice card ── */
 ::deep .import-results .icard {
-    border: 0.5px solid #ede9fb;
+    border: 0.5px solid #E5E3DD;
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 0.5rem;
@@ -414,7 +413,7 @@
 /* ── Chevron ── */
 ::deep .chev {
     font-size: 13px;
-    color: #a09abf;
+    color: #9A968C;
     transition: transform 0.2s;
     flex-shrink: 0;
 }
@@ -440,8 +439,8 @@
 }
 
 ::deep .badge-ready {
-    background: #eae5f9;
-    color: #4a3590;
+    background: #F2E9DA;
+    color: #8A6A34;
 }
 
 ::deep .badge-err {
@@ -455,11 +454,11 @@
     align-items: center;
     gap: 5px;
     font-size: 12px;
-    color: #8b7ec8;
+    color: #8A867C;
 }
 
     ::deep .chk input[type="checkbox"] {
-        accent-color: #7c5fc8;
+        accent-color: #B08D57;
         width: 13px;
         height: 13px;
     }
@@ -468,7 +467,7 @@
 ::deep .icb {
     padding: 0.85rem 1rem;
     background: #fff;
-    border-top: 0.5px solid #ede9fb;
+    border-top: 0.5px solid #E5E3DD;
 }
 
 /* ── Customer meta grid ── */
@@ -477,18 +476,18 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px 1.5rem;
     font-size: 12px;
-    color: #9890b8;
+    color: #8A867C;
     margin-bottom: 0.75rem;
 }
 
 ::deep .cust-meta-label {
     font-size: 11px;
-    color: #a09abf;
+    color: #9A968C;
     display: block;
 }
 
 ::deep .cust-meta strong {
-    color: #2c235a;
+    color: #1B1B1F;
     font-weight: 500;
     display: block;
     margin-top: 1px;
@@ -509,17 +508,17 @@
     ::deep .itbl th {
         font-size: 11px;
         font-weight: 500;
-        color: #a09abf;
+        color: #9A968C;
         padding: 5px 7px;
-        border-bottom: 0.5px solid #ede9fb;
-        background: #f7f4fd;
+        border-bottom: 0.5px solid #E5E3DD;
+        background: #F7F6F4;
         text-align: left;
     }
 
     ::deep .itbl td {
         padding: 6px 7px;
-        border-bottom: 0.5px solid #f0edf9;
-        color: #2c235a;
+        border-bottom: 0.5px solid #E5E3DD;
+        color: #1B1B1F;
     }
 
     ::deep .itbl tr:last-child td {
@@ -597,7 +596,7 @@
 
 ::deep .hint-text {
     font-size: 12px;
-    color: #9890b8;
+    color: #8A867C;
 }
 
 /* ── Modal footer ── */
@@ -607,33 +606,33 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 0.85rem 1.4rem;
-    border-top: 0.5px solid #ede9fb;
-    background: #f5f2fd;
+    border-top: 0.5px solid #E5E3DD;
+    background: #F7F6F4;
 }
 
 ::deep .btn-close-modal {
     padding: 6px 15px;
     border-radius: 10px;
     font-size: 13px;
-    background: #fff;
-    border: 0.5px solid #ddd8f3;
-    color: #8b7ec8;
+    background: #F1F0EB;
+    border: 0.5px solid #E5E3DD;
+    color: #5F5E5A;
     cursor: pointer;
     transition: background 0.15s;
 }
 
     ::deep .btn-close-modal:hover {
-        background: #eeecf8;
+        background: #E5E3DD;
     }
 
 ::deep .btn-commit {
-    padding: 6px 16px;
-    border-radius: 10px;
+    padding: 8px 20px;
+    border-radius: 999px;
     font-size: 13px;
-    font-weight: 500;
-    background: #5c3fa8;
+    font-weight: 700;
+    background: #B08D57;
     border: none;
-    color: #fff;
+    color: #FAFAF9;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -642,7 +641,7 @@
 }
 
     ::deep .btn-commit:hover:not(:disabled) {
-        background: #3a2870;
+        background: #8A6A34;
     }
 
     ::deep .btn-commit:disabled {

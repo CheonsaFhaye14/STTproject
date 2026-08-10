@@ -27,26 +27,38 @@
 
 <div>
 
-    <div class="header-with-search">
-        <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
-        <select class="search-input" @ref="subdSelectRef" @bind="selectedSubdId" @bind:after="OnSubdChangedAsync"
-                @onkeydown="HandleSubdKeyDown">
-            <option value="0">-- Select Sub Distributor --</option>
-            @foreach (var subd in subdList)
-            {
-                <option value="@subd.SubDistributorId">@subd.SubdName</option>
-            }
-        </select>
-        <div class="location badge">
-            LOCATION: <span>@locationText</span>
+    <div class="top-header-row">
+        <div class="header-with-search">
+            <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>
+            <select class="search-input" @ref="subdSelectRef" @bind="selectedSubdId" @bind:after="OnSubdChangedAsync"
+                    @onkeydown="HandleSubdKeyDown">
+                <option value="0">-- Select Sub Distributor --</option>
+                @foreach (var subd in subdList)
+                {
+                    <option value="@subd.SubDistributorId">@subd.SubdName</option>
+                }
+            </select>
+            <div class="location badge">
+                LOCATION: <span>@locationText</span>
+            </div>
         </div>
-    </div>
 
-    <!-- DOWNLOAD TEMPLATE + IMPORT -->
-    <div class="top-buttons">
-        <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">Download Template</button>
-        <button class="btn-primary" @onclick="ShowImportConfirmModal">Import Excel</button>
-        <InputFile id="mapitem-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
+        <!-- DOWNLOAD TEMPLATE + IMPORT -->
+        <div class="top-buttons">
+            <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">
+                <span class="btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z"/></svg>
+                </span>
+                <span>Download Template</span>
+            </button>
+            <button class="btn-primary" @onclick="ShowImportConfirmModal">
+                <span class="btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z"/></svg>
+                </span>
+                <span>Import Excel</span>
+            </button>
+            <InputFile id="mapitem-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
+        </div>
     </div>
 
     <MapItemInputHeader @ref="mapItemInputHeader" IsSubDistributorSelected="@IsSubDistributorSelected"
@@ -86,8 +98,8 @@
                        SubdItems="@filteredSubDistributorItems" SelectedCompanyItemIdForFilter="@selectedCompanyItemIdForFilter"
                        SelectedCompanyItemIdForFilterChanged="@(value => selectedCompanyItemIdForFilter = value)"
                        OnEditItem="BeginEditItem" OnDeleteItem="DeleteItemAsync"
-                           OnClearCompanyItemFilter="ClearCompanyItemFilterAsync"
-                           OnMapCompanyItemRequested="HandleMapCompanyItemRequestedAsync" />
+                       OnClearCompanyItemFilter="ClearCompanyItemFilterAsync"
+                       OnMapCompanyItemRequested="HandleMapCompanyItemRequestedAsync" />
     </div>
 
     @if (showConfirmModal)

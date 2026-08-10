@@ -6,12 +6,32 @@
     <div class="modal-overlay confirm-modal-overlay" @onclick="OnOverlayClick">
         <div class="modal-box" @onclick:stopPropagation="true">
             <div class="modal-header">
-                <h4>@Title</h4>
+                <div class="modal-header-left">
+                    @if (!string.IsNullOrWhiteSpace(IconClass))
+                    {
+                        <div class="modal-icon-badge">
+                            <i class="@IconClass" aria-hidden="true"></i>
+                        </div>
+                    }
+                    <div class="modal-header-text">
+                        <h4>@Title</h4>
+                        @if (!string.IsNullOrWhiteSpace(Subtitle))
+                        {
+                            <span class="modal-subtitle">@Subtitle</span>
+                        }
+                    </div>
+                </div>
+                @if (ShowCloseButton)
+                {
+                    <button type="button" class="modal-close-btn" @onclick="OnCloseClick" aria-label="Close">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                }
             </div>
             <div class="modal-body">
                 @if (!string.IsNullOrWhiteSpace(Message))
                 {
-                    <p>@Message</p>
+                    <p class="modal-message">@Message</p>
                 }
                 @if (!string.IsNullOrWhiteSpace(ErrorMessage))
                 {
@@ -24,12 +44,15 @@
             <div class="modal-footer">
                 @if (ShowError)
                 {
-                    <button class="btn-secondary" @ref="OkButtonRef" @onclick="OnErrorConfirm">OK</button>
+                    <button class="btn-primary" @ref="OkButtonRef" @onclick="OnErrorConfirm">@OkLabel</button>
                 }
                 else
                 {
-                    <button class="btn-primary" @ref="YesButtonRef" @onclick="OnYes">Yes</button>
-                    <button class="btn-secondary" @onclick="OnNo">No</button>
+                    <button class="btn-secondary" @onclick="OnNo">@NoLabel</button>
+                    <button class="btn-primary" @ref="YesButtonRef" @onclick="OnYes">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                        <span>@YesLabel</span>
+                    </button>
                 }
             </div>
         </div>
@@ -48,6 +71,16 @@
     public string Title { get; set; } = "Confirm Action";
 
     [Parameter]
+    public string? Subtitle { get; set; }
+
+    // Font Awesome class for the header badge icon. Set to null/empty to hide the badge.
+    [Parameter]
+    public string? IconClass { get; set; } = "fas fa-upload";
+
+    [Parameter]
+    public bool ShowCloseButton { get; set; } = true;
+
+    [Parameter]
     public string? Message { get; set; }
 
     [Parameter]
@@ -55,6 +88,15 @@
 
     [Parameter]
     public bool ShowError { get; set; }
+
+    [Parameter]
+    public string YesLabel { get; set; } = "Yes";
+
+    [Parameter]
+    public string NoLabel { get; set; } = "No";
+
+    [Parameter]
+    public string OkLabel { get; set; } = "OK";
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
@@ -83,11 +125,11 @@
         return Task.CompletedTask;
     }
 
-    private Task OnErrorConfirmHandler()
+    private Task OnCloseClick()
     {
-        if (OnErrorConfirm.HasDelegate)
+        if (OnClose.HasValue && OnClose.Value.HasDelegate)
         {
-            return OnErrorConfirm.InvokeAsync();
+            return OnClose.Value.InvokeAsync();
         }
         return OnNo.InvokeAsync();
     }

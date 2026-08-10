@@ -15,8 +15,8 @@
 
     .profile-header h1 {
         font-size: 1.5rem;
-        font-weight: 500;
-        color: #3a2870;
+        font-weight: 800;
+        color: #1B1B1F;
         margin: 0;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -27,34 +27,36 @@
     align-items: center;
     gap: 6px;
     padding: 10px 18px;
-    background: linear-gradient(135deg, #9B85CC, #5c3fa8);
-    color: #fff;
+    background: #B08D57;
+    color: #2A1F0F;
     border: none;
     border-radius: 10px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, transform 0.2s;
 }
 
     .btn-edit-profile:hover {
-        opacity: 0.88;
+        opacity: 0.92;
+        transform: translateY(-1px);
     }
 
 /* ── Card ── */
 .profile-card {
-    background: rgba(255, 255, 255, 0.85);
+    background: #FFFFFF;
+    max-width : 600px;
     border-radius: 16px;
-    border: 1px solid #C9B8E8;
-    box-shadow: 2px 2px 10px rgba(154, 133, 204, 0.2);
+    border: 1px solid #E5E3DD;
+    box-shadow: 2px 2px 12px rgba(27, 27, 31, 0.08);
     overflow: hidden;
 }
 
 /* ── Avatar banner ── */
 .card-banner {
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    background: #E5E3DD;
     padding: 1.5rem;
     display: flex;
     align-items: center;
@@ -65,26 +67,26 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: #FFFFFF;
+    border: 2px solid #E5E3DD;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    font-weight: 500;
-    color: #3a2870;
+    font-weight: 600;
+    color: #1B1B1F;
     flex-shrink: 0;
 }
 
 .banner-name {
-    color: #3a2870;
+    color: #1B1B1F;
     font-size: 17px;
-    font-weight: 500;
+    font-weight: 600;
     margin: 0 0 4px;
 }
 
 .banner-sub {
-    color: #6b5499;
+    color: #5F5E5A;
     font-size: 13px;
     margin: 0;
     display: flex;
@@ -104,14 +106,14 @@
 }
 
 .pill-active {
-    background: rgba(255, 255, 255, 0.6);
-    color: #3a2870;
-    border: 1px solid #C9B8E8;
+    background: rgba(255, 255, 255, 0.8);
+    color: #1B1B1F;
+    border: 1px solid #E5E3DD;
 }
 
 .pill-inactive {
-    background: #fee2e2;
-    color: #991b1b;
+    background: #FDECEC;
+    color: #A33A3A;
 }
 
 .dot {
@@ -131,7 +133,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 14px 0;
-    border-bottom: 1px solid rgba(201, 184, 232, 0.4);
+    border-bottom: 1px solid rgba(229, 227, 221, 0.7);
     gap: 1rem;
 }
 
@@ -144,8 +146,8 @@
     align-items: center;
     gap: 8px;
     font-size: 11px;
-    font-weight: 500;
-    color: #9B85CC;
+    font-weight: 600;
+    color: #8A6A34;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     white-space: nowrap;
@@ -158,20 +160,20 @@
 .field-value {
     font-size: 14px;
     font-weight: 500;
-    color: #3a2870;
+    color: #1B1B1F;
     text-align: right;
 }
 
     .field-value.muted {
         font-weight: 400;
-        color: #9B85CC;
+        color: #5F5E5A;
         font-size: 13px;
     }
 
 /* ── Card footer ── */
 .card-footer {
     padding: 1rem 1.5rem;
-    border-top: 1px solid rgba(201, 184, 232, 0.4);
+    border-top: 1px solid rgba(229, 227, 221, 0.7);
     display: flex;
     justify-content: flex-end;
 }
@@ -189,27 +191,27 @@
 }
 
 .alert-danger {
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
+    background: #FDECEC;
+    color: #A33A3A;
+    border: 1px solid #EAC2C2;
 }
 
 .alert-success {
-    background: rgba(232, 223, 245, 0.5);
-    color: #3a2870;
-    border: 1px solid #C9B8E8;
+    background: #F7F6F4;
+    color: #1B1B1F;
+    border: 1px solid #E5E3DD;
 }
 
 .alert-warning {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fcd34d;
+    background: #FFF5D6;
+    color: #8A6A34;
+    border: 1px solid #E8D8B3;
 }
 
 .alert-info {
-    background: rgba(232, 223, 245, 0.5);
-    color: #5c3fa8;
-    border: 1px solid #C9B8E8;
+    background: #F7F6F4;
+    color: #5F5E5A;
+    border: 1px solid #E5E3DD;
 }
 
 /* ── Loading overlay ── */
@@ -220,14 +222,14 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(232, 223, 245, 0.72);
+    background: rgba(247, 246, 244, 0.9);
     z-index: 1100;
 }
 
 .loading-bar-track {
     width: 380px;
     height: 8px;
-    background: #C9B8E8;
+    background: #E5E3DD;
     border-radius: 99px;
     overflow: hidden;
     margin-bottom: 18px;
@@ -236,7 +238,7 @@
 .loading-bar-fill {
     height: 100%;
     width: 45%;
-    background: #7B5EBF;
+    background: #B08D57;
     border-radius: 99px;
     animation: barSlide 1.6s ease-in-out infinite;
 }
@@ -259,7 +261,7 @@
 
 .loading-overlay p {
     font-size: 15px;
-    color: #5c3fa8;
+    color: #1B1B1F;
     margin: 0;
     letter-spacing: 0.04em;
     font-weight: 500;
@@ -269,7 +271,7 @@
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(58, 40, 112, 0.35);
+    background: rgba(27, 27, 31, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -289,13 +291,13 @@
 }
 
 .modal-content {
-    background: rgba(255, 255, 255, 0.95);
+    background: #FFFFFF;
     border-radius: 16px;
     width: 90%;
     max-width: 420px;
     overflow: hidden;
-    border: 1px solid #C9B8E8;
-    box-shadow: 2px 2px 20px rgba(154, 133, 204, 0.25);
+    border: 1px solid #E5E3DD;
+    box-shadow: 2px 2px 20px rgba(27, 27, 31, 0.12);
     animation: slideUp 0.2s ease;
 }
 
@@ -312,23 +314,24 @@
 }
 
 .modal-header {
-    background: linear-gradient(135deg, #E8DFF5 0%, #C9B8E8 60%, #9B85CC 100%);
+    background: #F7F6F4;
     padding: 1.25rem 1.5rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid #E5E3DD;
 }
 
     .modal-header h4 {
         margin: 0;
-        color: #3a2870;
+        color: #1B1B1F;
         font-size: 16px;
-        font-weight: 500;
+        font-weight: 600;
     }
 
 .btn-close {
-    background: rgba(255, 255, 255, 0.35);
-    border: 1px solid rgba(201, 184, 232, 0.5);
+    background: #FFFFFF;
+    border: 1px solid #E5E3DD;
     border-radius: 50%;
     width: 28px;
     height: 28px;
@@ -336,13 +339,13 @@
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    color: #3a2870;
+    color: #5F5E5A;
     cursor: pointer;
     line-height: 1;
 }
 
     .btn-close:hover {
-        background: rgba(255, 255, 255, 0.55);
+        background: #F7F6F4;
     }
 
 .modal-body {
@@ -352,9 +355,9 @@
 /* ── Tag (reused from help page) ── */
 .tag {
     font-size: 11px;
-    background: rgba(232, 223, 245, 0.6);
-    color: #9B85CC;
+    background: #F7F6F4;
+    color: #8A6A34;
     border-radius: 8px;
     padding: 3px 10px;
-    border: 1px solid #C9B8E8;
+    border: 1px solid #E5E3DD;
 }

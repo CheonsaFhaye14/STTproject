@@ -1,15 +1,219 @@
-﻿.modal-footer {
-    padding-bottom: 15px;
-    padding-right:10px;
-    gap: 5px;
+﻿/* =========================
+   OVERLAY / BOX
+========================= */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
 }
-.btn-primary  {
-    padding: 5px 12px;
+
+.modal-box {
+    width: 460px;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* =========================
+   HEADER
+========================= */
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 18px 16px;
+    background: #1B1B1F;
+}
+
+.modal-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.modal-icon-badge {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #2A2A30;
+    border: 1px solid #3A3A40;
+    color: #E8D2AE;
+    font-size: 15px;
+}
+
+.modal-header-text h4 {
+    margin: 0 0 2px;
+    font-size: 17px;
+    font-weight: 500;
+    color: #FAFAF9;
+}
+
+.modal-subtitle {
+    font-size: 12.5px;
+    color: #9A9A9E;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: #8C8C91;
     font-size: 16px;
-   
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.2s ease;
 }
+
+    .modal-close-btn:hover {
+        color: #FAFAF9;
+    }
+
+/* =========================
+   BODY
+========================= */
+.modal-body {
+    padding: 20px 20px 4px;
+    overflow-y: auto;
+}
+
+.modal-message {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #2C2C30;
+    line-height: 1.45;
+}
+
+.error-display {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #FBEAE6;
+    color: #B3402A;
+    font-size: 13.5px;
+}
+
+/* Optional building blocks for ChildContent passed in from the calling page.
+   Blazor CSS isolation only scopes rules to markup written in THIS .razor file,
+   so if you build the "DETAILS" box / upload dropzone inside the page that
+   uses <ConfirmModal>...</ConfirmModal>, copy these two rule blocks into that
+   page's own .razor.css (or a shared/global stylesheet) so they take effect. */
+.confirm-details-box {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #F2F1EE;
+}
+
+    .confirm-details-box .confirm-details-label {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        color: #6B6B70;
+        text-transform: uppercase;
+    }
+
+    .confirm-details-box p {
+        margin: 0;
+        font-size: 13.5px;
+        color: #5A5A5F;
+        line-height: 1.5;
+    }
+
+.confirm-upload-box {
+    margin-bottom: 16px;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    border: 1.5px dashed #C9AE84;
+    border-radius: 12px;
+    background: #FBF9F5;
+}
+
+    .confirm-upload-box i {
+        font-size: 22px;
+        color: #B08D57;
+        margin-bottom: 6px;
+    }
+
+    .confirm-upload-box .confirm-upload-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #2C2C30;
+    }
+
+    .confirm-upload-box .confirm-upload-file {
+        font-size: 12.5px;
+        color: #8C8C91;
+    }
+
+/* =========================
+   FOOTER
+========================= */
+.modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 14px 20px 18px;
+    gap: 10px;
+}
+
 .btn-secondary {
-    padding: 5px 12px;
-    font-size: 16px;
-    
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    background: #EDECE9;
+    color: #4A4A4E;
+    cursor: pointer;
+    transition: background 0.2s ease;
 }
+
+    .btn-secondary:hover {
+        background: #E1E0DC;
+    }
+
+.btn-primary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #B08D57, #967649);
+    color: #FFFFFF;
+    cursor: pointer;
+    transition: filter 0.2s ease, transform 0.15s ease;
+}
+
+    .btn-primary:hover {
+        filter: brightness(1.08);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary i {
+        font-size: 14px;
+    }

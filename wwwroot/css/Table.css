@@ -1,16 +1,16 @@
 /* ============================================================
-   Table.css — Users list (ledger-style admin table)
+   Table.css — Admin list/table styling
 
    Palette:
-     --clt-ink:        #1F2933  (primary text)
-     --clt-muted:      #6B7785  (secondary text)
-     --clt-line:       #E3E7EB  (borders / dividers)
-     --clt-surface:    #FFFFFF  (cards / panels)
-     --clt-canvas:     #F6F7F9  (page background)
-     --clt-accent:     #2F6F4F  (active / primary actions — ledger green)
-     --clt-accent-soft:#E6F0EA
-     --clt-warn:       #B3461C  (inactive / deactivate — rust)
-     --clt-warn-soft:  #F8E9E2
+     --clt-ink:        #211A10  (primary text)
+     --clt-muted:      #8A8A92  (secondary text)
+     --clt-line:       #D8CBB8  (borders / dividers)
+     --clt-surface:    #FAFAF9  (cards / panels)
+     --clt-canvas:     #F6F0E8  (page background)
+     --clt-accent:     #B08D57  (active / primary actions)
+     --clt-accent-soft:#F3E8D6
+     --clt-warn:       #8A6A34  (inactive / deactivate)
+     --clt-warn-soft:  #F4E8D8
 
    Type:
      Display / labels: 'Inter', system sans
@@ -18,15 +18,15 @@
    ============================================================ */
 
 .clt-page {
-    --clt-ink: #1f2933;
-    --clt-muted: #6b7785;
-    --clt-line: #e3e7eb;
-    --clt-surface: #ffffff;
-    --clt-canvas: #f6f7f9;
-    --clt-accent: #2f6f4f;
-    --clt-accent-soft: #e6f0ea;
-    --clt-warn: #b3461c;
-    --clt-warn-soft: #f8e9e2;
+    --clt-ink: #211a10;
+    --clt-muted: #8a8a92;
+    --clt-line: #d8cbb8;
+    --clt-surface: #fafaf9;
+    --clt-canvas: #f6f0e8;
+    --clt-accent: #b08d57;
+    --clt-accent-soft: #f3e8d6;
+    --clt-warn: #8a6a34;
+    --clt-warn-soft: #f4e8d8;
 
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--clt-ink);
@@ -515,7 +515,7 @@
 }
 
 .clt-add-btn:hover {
-    background: #275c41;
+    background: #8a6a34;
 }
 
 .clt-add-icon {
@@ -543,7 +543,7 @@
     width: 220px;
     height: 4px;
     border-radius: 999px;
-    background: #e3e7eb;
+    background: #e7dccb;
     overflow: hidden;
 }
 
@@ -551,7 +551,7 @@
     height: 100%;
     width: 40%;
     border-radius: 999px;
-    background: #2f6f4f;
+    background: #b08d57;
     animation: clt-loading-slide 1.1s ease-in-out infinite;
 }
 

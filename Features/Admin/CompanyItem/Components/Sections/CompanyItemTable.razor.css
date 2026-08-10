@@ -1,0 +1,1076 @@
+﻿/* ── Page shell ────────────────────────────────────────────── */
+.clt-page {
+    padding: 1.5rem;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    height: 75vh;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* ── Layout: sidebar + main ────────────────────────────────── */
+.clt-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    align-items: start;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.clt-sidebar {
+    background: #fff;
+    border: 1px solid #E5E3DD;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+}
+
+/* Stat pills */
+.clt-sidebar-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.clt-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #F7F6F4;
+    border-radius: 8px;
+    padding: 7px 10px;
+}
+
+.clt-stat-label {
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+.clt-stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1B1B1F;
+}
+
+.clt-stat-active {
+    color: #16a34a;
+}
+
+.clt-stat-inactive {
+    color: #dc2626;
+}
+
+.clt-divider {
+    height: 1px;
+    background: #E5E3DD;
+    margin: 0 0 14px;
+}
+
+/* Filter groups */
+.clt-filter-group {
+    margin-bottom: 16px;
+}
+
+.clt-filter-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9A968C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+/* Search */
+.clt-search-wrap {
+    position: relative;
+}
+
+.clt-search-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9A968C;
+    pointer-events: none;
+}
+
+.clt-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px 7px 30px;
+    font-size: 13px;
+    border: 1px solid #E5E3DD;
+    border-radius: 8px;
+    outline: none;
+    color: #1B1B1F;
+    transition: border-color 0.15s;
+}
+
+    .clt-search-input:focus {
+        border-color: #B08D57;
+    }
+
+/* Status radios */
+.clt-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clt-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: #5F5E5A;
+    padding: 5px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+    .clt-radio-option:hover {
+        background: #F7F6F4;
+    }
+
+    .clt-radio-option.selected {
+        background: #F2E9DA;
+        color: #8A6A34;
+        font-weight: 500;
+    }
+
+    .clt-radio-option input[type="radio"] {
+        accent-color: #B08D57;
+        margin: 0;
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+    }
+
+.clt-radio-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: #9A968C;
+    background: #F1F0EB;
+    border-radius: 99px;
+    padding: 1px 7px;
+}
+
+.clt-radio-option.selected .clt-radio-count {
+    background: #E8D9BE;
+    color: #8A6A34;
+}
+
+/* Dropdown selects */
+.clt-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1px solid #E5E3DD;
+    border-radius: 8px;
+    outline: none;
+    color: #1B1B1F;
+    background: #fff;
+    cursor: pointer;
+    appearance: auto;
+    transition: border-color 0.15s;
+}
+
+    .clt-select:focus {
+        border-color: #B08D57;
+    }
+
+/* Clear filters */
+.clt-clear-btn {
+    margin-top: 4px;
+    width: 100%;
+    padding: 7px;
+    font-size: 12px;
+    color: #8A6A34;
+    background: transparent;
+    border: 1px dashed #D9C9A8;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+    .clt-clear-btn:hover {
+        background: #F7F6F4;
+    }
+
+/* ── Main table area ───────────────────────────────────────── */
+.clt-main {
+    display: flex;
+    font-weight: 300;
+    gap: 10px;
+    min-height: 0;
+    height: 100%;
+}
+
+.clt-table-card {
+    background: #fff;
+    border: 1px solid #E5E3DD;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Scrollable tbody wrapper — thead stays pinned */
+.clt-table-scroll {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.clt-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+    .clt-table thead tr {
+        background: #d6d2c9;
+    }
+
+    .clt-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .clt-table th {
+        font-size: 11px;
+        font-weight: 700;
+        color: #1B1B1F;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid #E5E3DD;
+        white-space: nowrap;
+    }
+
+    .clt-table td {
+        font-size: 13px;
+        color: #1B1B1F;
+        padding: 11px 14px;
+        border-bottom: 1px solid #E5E3DD;
+        vertical-align: middle;
+        overflow: hidden;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    .clt-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .clt-table tbody tr:hover td {
+        background: #F7F6F4;
+    }
+
+.clt-row-inactive td {
+    opacity: 0.6;
+}
+
+/* Column widths (7-column layout: code / name / meta / badge / date / status / actions) */
+.clt-table th:nth-child(1), .clt-table td:nth-child(1) {
+    width: 12%;
+}
+
+.clt-table th:nth-child(2), .clt-table td:nth-child(2) {
+    width: 22%;
+}
+
+.clt-table th:nth-child(3), .clt-table td:nth-child(3) {
+    width: 11%;
+}
+
+.clt-table th:nth-child(4), .clt-table td:nth-child(4) {
+    width: 16%;
+}
+
+.clt-table th:nth-child(5), .clt-table td:nth-child(5) {
+    width: 12%;
+}
+
+.clt-table th:nth-child(6), .clt-table td:nth-child(6) {
+    width: 9%;
+}
+
+.clt-table th:nth-child(7), .clt-table td:nth-child(7) {
+    width: 18%;
+}
+
+/* Cell helpers */
+.clt-code {
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 12px;
+    color: #8A6A34;
+}
+
+.clt-name {
+    font-weight: 500;
+}
+
+.clt-muted {
+    color: #5F5E5A;
+}
+
+/* Type / category badge */
+.clt-type-badge {
+    display: inline-block;
+    background: #F2E9DA;
+    color: #8A6A34;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 9px;
+    white-space: nowrap;
+}
+
+/* Status badges */
+.clt-status {
+    display: inline-block;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    white-space: nowrap;
+}
+
+.clt-status-active {
+    background: rgba(34, 197, 94, 0.08);
+    color: #16a34a;
+}
+
+.clt-status-inactive {
+    background: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+}
+
+/* Action buttons */
+.clt-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.clt-btn-edit,
+.clt-btn-toggle {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+    white-space: nowrap;
+}
+
+.clt-btn-edit {
+    background: transparent;
+    border: 1px solid #E5E3DD;
+    color: #5F5E5A;
+}
+
+    .clt-btn-edit:hover {
+        background: #F7F6F4;
+    }
+
+.clt-btn-deactivate {
+    background: transparent;
+    border: 1px solid #D9C9A8;
+    color: #8A6A34;
+}
+
+    .clt-btn-deactivate:hover {
+        background: #F7F6F4;
+    }
+
+.clt-btn-activate {
+    background: transparent;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    color: #16a34a;
+}
+
+    .clt-btn-activate:hover {
+        background: rgba(34, 197, 94, 0.08);
+    }
+
+/* Empty state */
+.clt-empty {
+    text-align: center;
+}
+
+.clt-empty-inner {
+    padding: 2.5rem 1rem;
+    color: #9A968C;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+    .clt-empty-inner p {
+        font-size: 14px;
+        margin: 0;
+    }
+
+    .clt-empty-inner .clt-clear-btn {
+        width: auto;
+        padding: 6px 16px;
+    }
+
+/* ── Footer / pagination ──────────────────────────────────────
+   NOTE: CompanyItemTable.razor renders .clt-pagination /
+   .clt-page-btn — these weren't in the original Customers CSS,
+   added here so both pages share the same look. */
+.clt-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.clt-footer-count {
+    font-size: 12px;
+    color: #9A968C;
+}
+
+.clt-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+.clt-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid #E5E3DD;
+    border-radius: 7px;
+    background: #fff;
+    color: #8A6A34;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+}
+
+    .clt-page-btn:hover:not(:disabled) {
+        background: #F7F6F4;
+        border-color: #D9C9A8;
+    }
+
+    .clt-page-btn:disabled {
+        color: #C9C5BA;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+/* ── Loading overlay ───────────────────────────────────────── */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(27, 27, 31, 0.6);
+    z-index: 1100;
+}
+
+.loading-bar-track {
+    width: 380px;
+    height: 8px;
+    background: #E5E3DD;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-bottom: 18px;
+}
+
+.loading-bar-fill {
+    height: 100%;
+    width: 45%;
+    background: #B08D57;
+    border-radius: 99px;
+    animation: barSlide 1.6s ease-in-out infinite;
+}
+
+@keyframes barSlide {
+    0% {
+        transform: translateX(-380px);
+        width: 45%;
+    }
+
+    50% {
+        width: 65%;
+    }
+
+    100% {
+        transform: translateX(380px);
+        width: 45%;
+    }
+}
+
+.loading-overlay p {
+    font-size: 15px;
+    color: #FAFAF9;
+    margin: 0;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+}
+/* ── Page shell ────────────────────────────────────────────── */
+.clt-page {
+    padding: 1.5rem;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    height: 75vh;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* ── Layout: sidebar + main ────────────────────────────────── */
+.clt-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    align-items: start;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.clt-sidebar {
+    background: #fff;
+    border: 1px solid #E5E3DD;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+}
+
+/* Stat pills */
+.clt-sidebar-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.clt-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #F7F6F4;
+    border-radius: 8px;
+    padding: 7px 10px;
+}
+
+.clt-stat-label {
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+.clt-stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1B1B1F;
+}
+
+.clt-stat-active {
+    color: #16a34a;
+}
+
+.clt-stat-inactive {
+    color: #dc2626;
+}
+
+.clt-divider {
+    height: 1px;
+    background: #E5E3DD;
+    margin: 0 0 14px;
+}
+
+/* Filter groups */
+.clt-filter-group {
+    margin-bottom: 16px;
+}
+
+.clt-filter-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9A968C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+/* Search */
+.clt-search-wrap {
+    position: relative;
+}
+
+.clt-search-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9A968C;
+    pointer-events: none;
+}
+
+.clt-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px 7px 30px;
+    font-size: 13px;
+    border: 1px solid #E5E3DD;
+    border-radius: 8px;
+    outline: none;
+    color: #1B1B1F;
+    transition: border-color 0.15s;
+}
+
+    .clt-search-input:focus {
+        border-color: #B08D57;
+    }
+
+/* Status radios */
+.clt-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clt-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: #5F5E5A;
+    padding: 5px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+    .clt-radio-option:hover {
+        background: #F7F6F4;
+    }
+
+    .clt-radio-option.selected {
+        background: #F2E9DA;
+        color: #8A6A34;
+        font-weight: 500;
+    }
+
+    .clt-radio-option input[type="radio"] {
+        accent-color: #B08D57;
+        margin: 0;
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+    }
+
+.clt-radio-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: #9A968C;
+    background: #F1F0EB;
+    border-radius: 99px;
+    padding: 1px 7px;
+}
+
+.clt-radio-option.selected .clt-radio-count {
+    background: #E8D9BE;
+    color: #8A6A34;
+}
+
+/* Dropdown selects */
+.clt-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1px solid #E5E3DD;
+    border-radius: 8px;
+    outline: none;
+    color: #1B1B1F;
+    background: #fff;
+    cursor: pointer;
+    appearance: auto;
+    transition: border-color 0.15s;
+}
+
+    .clt-select:focus {
+        border-color: #B08D57;
+    }
+
+/* Clear filters */
+.clt-clear-btn {
+    margin-top: 4px;
+    width: 100%;
+    padding: 7px;
+    font-size: 12px;
+    color: #8A6A34;
+    background: transparent;
+    border: 1px dashed #D9C9A8;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+    .clt-clear-btn:hover {
+        background: #F7F6F4;
+    }
+
+/* ── Main table area ───────────────────────────────────────── */
+.clt-main {
+    display: flex;
+    font-weight: 300;
+    gap: 10px;
+    min-height: 0;
+    height: 100%;
+}
+
+.clt-table-card {
+    background: #fff;
+    border: 1px solid #E5E3DD;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Scrollable tbody wrapper — thead stays pinned */
+.clt-table-scroll {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.clt-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+    .clt-table thead tr {
+        background: #d6d2c9;
+    }
+
+    .clt-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .clt-table th {
+        font-size: 11px;
+        font-weight: 700;
+        color: #1B1B1F;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid #E5E3DD;
+        white-space: nowrap;
+    }
+
+    .clt-table td {
+        font-size: 13px;
+        color: #1B1B1F;
+        padding: 11px 14px;
+        border-bottom: 1px solid #E5E3DD;
+        vertical-align: middle;
+        overflow: hidden;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    .clt-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .clt-table tbody tr:hover td {
+        background: #F7F6F4;
+    }
+
+.clt-row-inactive td {
+    opacity: 0.6;
+}
+
+/* Column widths (7-column layout: code / name / meta / badge / date / status / actions) */
+.clt-table th:nth-child(1), .clt-table td:nth-child(1) {
+    width: 12%;
+}
+
+.clt-table th:nth-child(2), .clt-table td:nth-child(2) {
+    width: 22%;
+}
+
+.clt-table th:nth-child(3), .clt-table td:nth-child(3) {
+    width: 11%;
+}
+
+.clt-table th:nth-child(4), .clt-table td:nth-child(4) {
+    width: 16%;
+}
+
+.clt-table th:nth-child(5), .clt-table td:nth-child(5) {
+    width: 12%;
+}
+
+.clt-table th:nth-child(6), .clt-table td:nth-child(6) {
+    width: 9%;
+}
+
+.clt-table th:nth-child(7), .clt-table td:nth-child(7) {
+    width: 18%;
+}
+
+/* Cell helpers */
+.clt-code {
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 12px;
+    color: #8A6A34;
+}
+
+.clt-name {
+    font-weight: 500;
+}
+
+.clt-muted {
+    color: #5F5E5A;
+}
+
+/* Type / category badge */
+.clt-type-badge {
+    display: inline-block;
+    background: #F2E9DA;
+    color: #8A6A34;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 9px;
+    white-space: nowrap;
+}
+
+/* Status badges */
+.clt-status {
+    display: inline-block;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    white-space: nowrap;
+}
+
+.clt-status-active {
+    background: rgba(34, 197, 94, 0.08);
+    color: #16a34a;
+}
+
+.clt-status-inactive {
+    background: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+}
+
+/* Action buttons */
+.clt-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.clt-btn-edit,
+.clt-btn-toggle {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+    white-space: nowrap;
+}
+
+.clt-btn-edit {
+    background: transparent;
+    border: 1px solid #E5E3DD;
+    color: #5F5E5A;
+}
+
+    .clt-btn-edit:hover {
+        background: #F7F6F4;
+    }
+
+.clt-btn-deactivate {
+    background: transparent;
+    border: 1px solid #D9C9A8;
+    color: #8A6A34;
+}
+
+    .clt-btn-deactivate:hover {
+        background: #F7F6F4;
+    }
+
+.clt-btn-activate {
+    background: transparent;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    color: #16a34a;
+}
+
+    .clt-btn-activate:hover {
+        background: rgba(34, 197, 94, 0.08);
+    }
+
+/* Empty state */
+.clt-empty {
+    text-align: center;
+}
+
+.clt-empty-inner {
+    padding: 2.5rem 1rem;
+    color: #9A968C;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+    .clt-empty-inner p {
+        font-size: 14px;
+        margin: 0;
+    }
+
+    .clt-empty-inner .clt-clear-btn {
+        width: auto;
+        padding: 6px 16px;
+    }
+
+/* ── Footer / pagination ──────────────────────────────────────
+   NOTE: CompanyItemTable.razor renders .clt-pagination /
+   .clt-page-btn — these weren't in the original Customers CSS,
+   added here so both pages share the same look. */
+.clt-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.clt-footer-count {
+    font-size: 12px;
+    color: #9A968C;
+}
+
+.clt-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+.clt-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid #E5E3DD;
+    border-radius: 7px;
+    background: #fff;
+    color: #8A6A34;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+}
+
+    .clt-page-btn:hover:not(:disabled) {
+        background: #F7F6F4;
+        border-color: #D9C9A8;
+    }
+
+    .clt-page-btn:disabled {
+        color: #C9C5BA;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+/* ── Loading overlay ───────────────────────────────────────── */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(27, 27, 31, 0.6);
+    z-index: 1100;
+}
+
+.loading-bar-track {
+    width: 380px;
+    height: 8px;
+    background: #E5E3DD;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-bottom: 18px;
+}
+
+.loading-bar-fill {
+    height: 100%;
+    width: 45%;
+    background: #B08D57;
+    border-radius: 99px;
+    animation: barSlide 1.6s ease-in-out infinite;
+}
+
+@keyframes barSlide {
+    0% {
+        transform: translateX(-380px);
+        width: 45%;
+    }
+
+    50% {
+        width: 65%;
+    }
+
+    100% {
+        transform: translateX(380px);
+        width: 45%;
+    }
+}
+
+.loading-overlay p {
+    font-size: 15px;
+    color: #FAFAF9;
+    margin: 0;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+}

@@ -1,0 +1,51 @@
+﻿
+
+.clt-table th:nth-child(1),
+.clt-table td:nth-child(1) {
+    width: 3%;
+    text-align: center;
+}
+
+.clt-table th:nth-child(2),
+.clt-table td:nth-child(2) {
+    width: 11%;
+}
+
+.clt-table th:nth-child(3),
+.clt-table td:nth-child(3) {
+    width: 10%;
+}
+
+.clt-table th:nth-child(4),
+.clt-table td:nth-child(4) {
+    width: 20%;
+}
+
+.clt-table th:nth-child(5),
+.clt-table td:nth-child(5) {
+    width: 10%;
+}
+
+.clt-table th:nth-child(6),
+.clt-table td:nth-child(6) {
+    width: 15%;
+}
+
+.clt-table th:nth-child(7),
+.clt-table td:nth-child(7) {
+    width: 11%;
+}
+
+.clt-table th:nth-child(8),
+.clt-table td:nth-child(8) {
+    width: 19%;
+}
+
+/* Checkbox column alignment */
+.clt-table th:nth-child(1) input[type="checkbox"],
+.clt-table td:nth-child(1) input[type="checkbox"] {
+    accent-color: #534AB7;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
