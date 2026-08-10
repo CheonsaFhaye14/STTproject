@@ -275,11 +275,13 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
 
                 var uomRows = await db.ItemsUomPriceHistories
                     .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId && u.AppliedDate == null)
+                    .Include(u => u.ItemsUom)
                     .ToListAsync();
 
                 foreach (var uom in uomRows)
                 {
-                    uom.NewPrice = uom.OldPrice + priceIncreaseAmount; // see ConversionToBase note below
+                    var conversion = uom.ItemsUom?.ConversionToBase ?? 1m;
+                    uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion);
                     uom.EffectivityDate = effectivityDate;
                 }
 
