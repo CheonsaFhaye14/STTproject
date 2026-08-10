@@ -184,7 +184,15 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
                         ItemName = item.SubdItem.ItemName,
                         ItemsUomId = item.ItemsUomId,
                         UomName = item.ItemsUom.UomName,
-                        UomPrice = item.ItemsUom.Price,
+                        UomPrice = context.ItemsUomPriceHistories
+                        .Where(h =>
+                            h.ItemsUomId == item.ItemsUomId &&
+                            h.AppliedDate != null &&
+                            h.AppliedDate <= si.SalesInvoiceDate.ToDateTime(TimeOnly.MaxValue))
+                        .OrderByDescending(h => h.AppliedDate)
+                        .Select(h => (decimal?)h.NewPrice)
+                        .FirstOrDefault()
+                        ?? item.ItemsUom.Price,
                         Quantity = item.Quantity,
                         Amount = item.Amount
                     })
@@ -251,36 +259,55 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
         .ToListAsync(cancellationToken);
 }
 
-    public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
-        int subDistributorId,
-        CancellationToken cancellationToken = default)
-    {
-        await using var context = _contextFactory.CreateDbContext();
+public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
+    int subDistributorId,
+    DateOnly salesInvoiceDate,
+    CancellationToken cancellationToken = default)
+{
+    await using var context = _contextFactory.CreateDbContext();
 
-        return await context.SubdItems
-            .AsNoTracking()
-            .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
-            .OrderBy(si => si.SubdItemCode)
-            .Select(si => new SalesInvoiceSubdItemDropdownItem
-            {
-                SubdItemId = si.SubdItemId,
-                SubdItemCode = si.SubdItemCode,
-                ItemName = si.ItemName,
-                Uoms = context.ItemsUoms
-    .Where(u => u.SubdItemId == si.SubdItemId && u.IsActive)
-    .Select(u => new SalesInvoiceUomOption
-    {
-        ItemsUomId = u.ItemsUomId,
-        UomName = u.UomName,
-        Price = u.Price,
-        ConversionToBase = u.ConversionToBase
-    })
-    .OrderBy(u => u.UomName)
-    .ToList()
-            })
-            .ToListAsync(cancellationToken);
-    }
+    var invoiceDate = salesInvoiceDate.ToDateTime(TimeOnly.MinValue);
 
+    return await context.SubdItems
+        .AsNoTracking()
+        .Where(si =>
+            si.SubDistributorId == subDistributorId &&
+            si.IsActive)
+        .OrderBy(si => si.SubdItemCode)
+        .Select(si => new SalesInvoiceSubdItemDropdownItem
+        {
+            SubdItemId = si.SubdItemId,
+            SubdItemCode = si.SubdItemCode,
+            ItemName = si.ItemName,
+
+            Uoms = context.ItemsUoms
+                .Where(u =>
+                    u.SubdItemId == si.SubdItemId &&
+                    u.IsActive)
+                .Select(u => new SalesInvoiceUomOption
+                {
+                    ItemsUomId = u.ItemsUomId,
+                    UomName = u.UomName,
+
+                    Price = context.ItemsUomPriceHistories
+                        .Where(h =>
+                            h.ItemsUomId == u.ItemsUomId &&
+                            h.AppliedDate != null &&
+                            h.EffectivityDate <= invoiceDate &&
+                            h.AppliedDate <= invoiceDate)
+                        .OrderByDescending(h => h.EffectivityDate)
+                        .ThenByDescending(h => h.ItemsUomPriceHistoryId)
+                        .Select(h => (decimal?)h.NewPrice)
+                        .FirstOrDefault()
+                        ?? u.Price,
+
+                    ConversionToBase = u.ConversionToBase
+                })
+                .OrderBy(u => u.UomName)
+                .ToList()
+        })
+        .ToListAsync(cancellationToken);
+}
     
 
     // In AdminSalesInvoiceService:

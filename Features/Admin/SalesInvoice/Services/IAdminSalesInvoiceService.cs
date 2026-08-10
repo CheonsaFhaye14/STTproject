@@ -36,7 +36,8 @@ public interface IAdminSalesInvoiceService
         CancellationToken cancellationToken = default);
 
     Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
-        int subDistributorId,
+        int subDistributorId, 
+        DateOnly salesInvoiceDate,
         CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceItemDropdownItem>> GetItemsForDropdownAsync(CancellationToken cancellationToken = default);

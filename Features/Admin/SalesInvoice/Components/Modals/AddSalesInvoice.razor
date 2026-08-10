@@ -296,15 +296,16 @@
                 SubDistributorId = detail.SubDistributorId;
                 SelectedSubDistributorName = detail.SubdName;
 
-                // Load customers and items scoped to this subdistributor
-                await LoadDropdownsForSubdistributor(SubDistributorId);
-
                 SalesInvoiceCode = detail.SalesInvoiceCode;
                 SalesInvoiceDate = detail.SalesInvoiceDate;
                 CustomerId = detail.CustomerId;
                 SelectedCustomerName = detail.CustomerName;
                 OrderType = detail.OrderType;
                 SalesMan = detail.SalesMan;
+
+                await LoadDropdownsForSubdistributor(
+                    SubDistributorId,
+                    SalesInvoiceDate);
                 CreatedDate = detail.CreatedDate;
                 UpdatedDate = detail.UpdatedDate;
                 CreatedByName = detail.CreatedByName;
@@ -328,12 +329,16 @@
         }
     }
 
-    private async Task LoadDropdownsForSubdistributor(int subdId)
+    private async Task LoadDropdownsForSubdistributor(
+        int subdId,
+        DateOnly invoiceDate)
     {
-        Customers = await SalesInvoiceService.GetCustomersForDropdownAsync(subdId);
-        SubdItems = await SalesInvoiceService.GetSubdItemsForDropdownAsync(subdId);
-    }
+        Customers = await SalesInvoiceService
+            .GetCustomersForDropdownAsync(subdId);
 
+        SubdItems = await SalesInvoiceService
+            .GetSubdItemsForDropdownAsync(subdId, invoiceDate);
+    }
     // ── Selection handlers ────────────────────────────────────────────────────
     private async Task OnSubDistributorSelected(SalesInvoiceSubDistributorDropdownItem? sd)
     {
@@ -345,7 +350,7 @@
         CustomerId = 0;
         SelectedCustomerName = null;
         LineItems.Clear();
-        await LoadDropdownsForSubdistributor(SubDistributorId);
+        await LoadDropdownsForSubdistributor( SubDistributorId, SalesInvoiceDate);        
         await InvokeAsync(StateHasChanged);
     }
 
