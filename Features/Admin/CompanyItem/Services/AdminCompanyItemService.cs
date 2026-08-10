@@ -208,5 +208,23 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             return await db.CompanyItems
                  .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId);
         }
+
+        public async Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItemPriceHistories
+                .Where(h => h.CompanyItemId == companyItemId)
+                .OrderByDescending(h => h.EffectivityDate)
+                .Select(h => new CompanyItemPriceHistoryDto
+                {
+                    CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
+                    CompanyItemId = h.CompanyItemId,
+                    NewPrice = h.NewPrice,
+                    EffectivityDate = h.EffectivityDate,
+                    CreatedDate = h.CreatedDate,
+                    CreatedBy = h.CreatedBy,
+                })
+                .ToListAsync();
+        }
     }
 }

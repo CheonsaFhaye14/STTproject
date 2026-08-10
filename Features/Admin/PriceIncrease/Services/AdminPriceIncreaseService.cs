@@ -295,5 +295,28 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 return (false, $"Unable to update the price increase: {ex.GetBaseException().Message}");
             }
         }
+
+        public async Task<IReadOnlyList<CompanyItemUomPriceDto>> GetUomPricesByCompanyItemIdAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.ItemsUoms
+                .AsNoTracking()
+                .Where(u => u.SubdItem.CompanyItemId == companyItemId
+                    && u.IsActive
+                    && u.SubdItem.IsActive)
+                .Select(u => new CompanyItemUomPriceDto
+                {
+                    SubdItemId = u.SubdItemId,
+                    SubdItemCode = u.SubdItem.SubdItemCode,
+                    SubdItemName = u.SubdItem.ItemName,
+                    ItemsUomId = u.ItemsUomId,
+                    UomName = u.UomName,
+                    ConversionToBase = u.ConversionToBase,
+                    Price = u.Price
+                })
+                .OrderBy(x => x.SubdItemCode)
+                .ThenBy(x => x.UomName)
+                .ToListAsync();
+        }
     }
 }

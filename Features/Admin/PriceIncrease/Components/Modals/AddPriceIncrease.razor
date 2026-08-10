@@ -51,18 +51,53 @@
                 }
             }
 
-            @if (SelectedStockPrice.HasValue)
-            {
-                <div class="form-group">
-                    <label>Stock Price</label>
-                    <input value="@SelectedStockPrice.Value.ToString("N2")" disabled />
-                </div>
-            }
+@if (SelectedStockPrice.HasValue)
+{
+    <div class="form-group">
+        <label>Stock Price</label>
+        <input value="@SelectedStockPrice.Value.ToString("N2")" disabled />
+    </div>
+}
+
+@if (SelectedCompanyItemId.HasValue && UomPrices.Any())
+{
+    <div class="form-group">
+        <label>Sub-Item / UOM Prices</label>
+        <table class="uom-price-table">
+            <thead>
+                <tr>
+                    <th>Sub-Item Code</th>
+                    <th>Sub-Item Name</th>
+                    <th>UOM</th>
+                    <th>Old Price</th>
+                    <th>New Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var uom in UomPrices)
+                {
+                    <tr>
+                        <td>@uom.SubdItemCode</td>
+                        <td>@uom.SubdItemName</td>
+                        <td>@uom.UomName</td>
+                        <td>@uom.Price?.ToString("N2")</td>
+                        <td>@GetProjectedUomPrice(uom)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (SelectedCompanyItemId.HasValue)
+{
+    <div class="form-group">
+        <p><em>No active UOMs found for this item.</em></p>
+    </div>
+}
 
             <div class="form-group">
                 <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)</label>
-                <input type="number" step="0.01" @bind="PriceIncreaseAmount" disabled="@isReadOnly" />
-                @if (ShowValidationErrors &&
+<input type="number" step="0.01" @bind="PriceIncreaseAmount" @bind:event="oninput" disabled="@isReadOnly" />                @if (ShowValidationErrors &&
                 !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)))
                 {
                     <span
@@ -131,7 +166,7 @@
     private bool isReadOnly;
     private string? readOnlyReason;
     private int? CurrentUserId => UserContextService.UserId;
-
+private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List<CompanyItemUomPriceDto>();
     // Company item
     private GenericAutocomplete<CompanyItemDropdownItem>? CompanyItemAutocomplete;
     private string? SelectedCompanyItemLabel { get; set; }
@@ -164,14 +199,18 @@
     private string GetFieldError(string key) =>
         Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
 
-    private Task OnCompanyItemSelected(CompanyItemDropdownItem? item)
+    private async Task OnCompanyItemSelected(CompanyItemDropdownItem? item)
     {
-        if (item == null) return Task.CompletedTask;
+        if (item == null)
+        {
+            UomPrices = new List<CompanyItemUomPriceDto>();
+            return;
+        }
         SelectedCompanyItemId = item.CompanyItemId;
         SelectedStockPrice = item.StockPrice;
         Principal = item.Principal;
         SelectedCompanyItemLabel = $"{item.CompanyItemCode} - {item.CompanyItemName}";
-        return Task.CompletedTask;
+        UomPrices = await AdminPriceIncreaseService.GetUomPricesByCompanyItemIdAsync(item.CompanyItemId);
     }
 
     private void OnPrincipalChanged()
@@ -187,6 +226,7 @@
                 SelectedCompanyItemId = null;
                 SelectedStockPrice = null;
                 SelectedCompanyItemLabel = null;
+                UomPrices = new List<CompanyItemUomPriceDto>();
             }
         }
     }
@@ -201,12 +241,16 @@
             {
                 ViewCompanyItemCode = history.CompanyItemCode;
                 ViewCompanyItemName = history.CompanyItemName;
+                SelectedCompanyItemId = history.CompanyItemId;
                 SelectedStockPrice = history.StockPrice;
                 PriceIncreaseAmount = history.PriceIncreaseAmount;
                 EffectivityDate = history.EffectivityDate;
                 ViewStatus = history.Status;
                 CreatedDate = history.CreatedDate;
                 CreatedByName = await AdminPriceIncreaseService.GetUserNameByIdAsync(history.CreatedBy);
+
+                if (history.CompanyItemId.HasValue)
+                    UomPrices = await AdminPriceIncreaseService.GetUomPricesByCompanyItemIdAsync(history.CompanyItemId.Value);
 
                 if (string.Equals(history.Status, "Applied", StringComparison.OrdinalIgnoreCase))
                 {
@@ -220,6 +264,13 @@
             CompanyItems = await AdminPriceIncreaseService.GetCompanyItemsForDropdownAsync();
         }
     }
+    private string GetProjectedUomPrice(CompanyItemUomPriceDto uom)
+{
+    if (!PriceIncreaseAmount.HasValue || uom.Price == null)
+        return "-";
+    var projected = uom.Price.Value + (PriceIncreaseAmount.Value * (uom.ConversionToBase ?? 1m));
+    return projected.ToString("N2");
+}
 
     private async Task RequestConfirm()
     {

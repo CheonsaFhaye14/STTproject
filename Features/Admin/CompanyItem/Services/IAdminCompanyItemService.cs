@@ -18,5 +18,6 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         Task<IReadOnlyList<string?>> GetAllPrincipalsAsync();
         Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null);
         Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null);
+        Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId);
     }
 }

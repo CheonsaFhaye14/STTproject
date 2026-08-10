@@ -35,4 +35,13 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public int? UpdatedBy { get; set; }
     }
 
+    public class CompanyItemPriceHistoryDto
+    {
+        public int CompanyItemPriceHistoryId { get; set; }
+        public int CompanyItemId { get; set; }
+        public decimal NewPrice { get; set; }
+        public DateTime EffectivityDate { get; set; }
+        public DateTime CreatedDate { get; set; }      
+        public int? CreatedBy { get; set; }
+    }
 }

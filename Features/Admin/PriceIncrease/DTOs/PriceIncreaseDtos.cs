@@ -45,4 +45,14 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public decimal? StockPrice { get; set; }
         public string Principal { get; set; } = string.Empty;
     }
+    public class CompanyItemUomPriceDto
+    {
+        public int SubdItemId { get; set; }
+        public string? SubdItemCode { get; set; }
+        public string? SubdItemName { get; set; }
+        public int ItemsUomId { get; set; }
+        public string? UomName { get; set; }
+        public decimal? ConversionToBase { get; set; }
+        public decimal? Price { get; set; }
+    }
 }
