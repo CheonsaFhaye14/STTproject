@@ -121,6 +121,17 @@
     margin: 15px 0 0;
 }
 
+
+
+
+@media (max-width: 1000px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+        padding: 14px;
+    }
+}
+
+
 .card-section {
     background-color: #F9DFDF;
     padding: 16px;

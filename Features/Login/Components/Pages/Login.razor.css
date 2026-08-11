@@ -50,10 +50,10 @@
     position: relative;
     z-index: 2;
     text-align: center;
-    padding: 5px;
+    padding: clamp(4px, 1vw, 8px);
     background: #1B1B1F;
     border-bottom: 1px solid #B08D57; /*color ng border*/
-    font-size: 20px;
+    font-size: clamp(15px, 2.8vw, 20px);
     font-weight: 700;
     letter-spacing: 1px;
     color: #E8D2AE;
@@ -70,18 +70,23 @@
     align-items: center;
     position: relative;
     z-index: 2;
+    /* keep the card fully in view on short viewports (landscape phones, small laptops) */
+    padding: clamp(10px, 3vh, 24px) 12px;
+    overflow-y: auto;
 }
 
 /* =========================
    LOGIN CONTAINER
+   Fluid sizing: scales with viewport width/height instead of
+   jumping between fixed breakpoints. clamp(min, preferred, max)
 ========================= */
 .login-container {
-    width: 400px;
-    max-width: 90vw;
-    margin-bottom: 50px;
-    margin-top: 50px;
-    padding: 36px 30px 28px;
-    border-radius: 20px;
+    width: clamp(280px, 90vw, 400px);
+    max-width: 95vw;
+    margin-bottom: clamp(12px, 4vh, 50px);
+    margin-top: clamp(12px, 4vh, 50px);
+    padding: clamp(18px, 5vw, 36px) clamp(14px, 4.5vw, 30px) clamp(14px, 4vw, 28px);
+    border-radius: clamp(12px, 3vw, 20px);
     background: rgba(20, 20, 24, 0.78);
     border: 1px solid rgba(176, 141, 87, 0.35);
     backdrop-filter: blur(16px);
@@ -106,13 +111,13 @@
    CARD HEADER
 ========================= */
 .card-header {
-    margin-bottom: 22px;
+    margin-bottom: clamp(14px, 3.5vw, 22px);
 }
 
 .card-badge {
-    width: 46px;
-    height: 46px;
-    margin: 0 auto 14px;
+    width: clamp(36px, 9vw, 46px);
+    height: clamp(36px, 9vw, 46px);
+    margin: 0 auto clamp(10px, 2.5vw, 14px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -120,13 +125,13 @@
     background: radial-gradient(circle at 30% 30%, #26262B, #0F0F11);
     border: 1px solid rgba(176, 141, 87, 0.5);
     color: #D9BE8F;
-    font-size: 16px;
+    font-size: clamp(13px, 3vw, 16px);
     box-shadow: 0 0 0 4px rgba(176, 141, 87, 0.08);
 }
 
 .card-title {
     margin: 0 0 6px;
-    font-size: 22px;
+    font-size: clamp(18px, 4.8vw, 22px);
     font-weight: 700;
     letter-spacing: 0.5px;
     color: #F4EBDA;
@@ -134,7 +139,7 @@
 
 .card-subtitle {
     margin: 0;
-    font-size: 12.5px;
+    font-size: clamp(11px, 2.6vw, 12.5px);
     color: #9A9A9E;
     letter-spacing: 0.2px;
 }
@@ -143,7 +148,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 22px;
+    margin-bottom: clamp(16px, 4vw, 22px);
 }
 
     .card-divider::before,
@@ -172,7 +177,7 @@
    INPUT GROUP
 ========================= */
 .input-group {
-    margin-bottom: 25px;
+    margin-bottom: clamp(16px, 4vw, 25px);
     margin-top: 10px;
     text-align: left;
 }
@@ -183,7 +188,7 @@
     .input-group label {
         display: block;
         margin-bottom: 10px;
-        font-size: 11px;
+        font-size: clamp(10px, 2.2vw, 11px);
         color: #D9BE8F;
         font-weight: 700;
         letter-spacing: 1.2px;
@@ -199,11 +204,14 @@
     display: flex;
     align-items: center;
     position: relative;
+    margin-bottom: 10px;
 }
 
 .input-icon {
     position: absolute;
     left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     color: #8C8C91;
     font-size: 14px;
     pointer-events: none;
@@ -215,13 +223,12 @@
 .input-group input,
 .password-input {
     width: 100%;
-    padding: 12px 15px 12px 42px;
+    padding: clamp(10px, 2.6vw, 12px) clamp(12px, 3vw, 15px) clamp(10px, 2.6vw, 12px) clamp(36px, 9vw, 42px);
     border: 1px solid #3A3A40;
-    margin-bottom: 10px;
     border-radius: 12px;
     background: #26262B;
     color: #FAFAF9;
-    font-size: 14px;
+    font-size: clamp(13px, 3vw, 14px);
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
@@ -251,7 +258,11 @@
     cursor: pointer;
     color: #6B6B70;
     right: 10px;
-    bottom: 17px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
     .password-toggle-icon:hover {
@@ -276,34 +287,39 @@
 .role-options {
     display: flex;
     justify-content: center;
-    gap: 4px;
-    margin: 20px 0;
-    font-size: 13px;
-    color: #C9C9CC;
-    background: #19191D;
-    border: 1px solid #302f36;
+    gap: 2px;
+    margin: clamp(14px, 4vw, 20px) 0;
+    font-size: clamp(12px, 2.8vw, 13px);
     border-radius: 12px;
     padding: 2px;
 }
 
     .role-options label {
         flex: 1;
+        box-sizing: border-box;
+        min-height: 32px;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 5px;
         padding: 5px 5px;
+        border: 1px solid transparent;
         border-radius: 9px;
         cursor: pointer;
         color: #9A9A9E;
         font-weight: 600;
         letter-spacing: 0.3px;
-        transition: background 0.2s ease, color 0.2s ease;
+        transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
 
         .role-options label:has(input:checked) {
             background: linear-gradient(135deg, #B08D57, #8C6D3F);
+            border-color: transparent;
             color: #1B1B1F;
+        }
+
+        .role-options label:not(:has(input:checked)):hover {
+            border-color: rgba(176, 141, 87, 0.3);
         }
 
     .role-options input[type="radio"] {
@@ -317,7 +333,7 @@
    REMEMBER ME
 ========================= */
 .remember {
-    margin: 20px 0;
+    margin: clamp(14px, 4vw, 20px) 0;
     text-align: center;
 }
 
@@ -326,7 +342,7 @@
         justify-content: center;
         align-items: center;
         gap: 8px;
-        font-size: 13.5px;
+        font-size: clamp(12.5px, 2.8vw, 13.5px);
         color: #C9C9CC;
         cursor: pointer;
     }
@@ -343,12 +359,12 @@
 ========================= */
 .login-btn {
     width: 100%;
-    padding: 10px;
+    padding: clamp(9px, 2.2vw, 10px);
     border: 1px solid #B08D57;
     border-radius: 12px;
     background: #0F0F11;
     color: #E8D2AE;
-    font-size: 18px;
+    font-size: clamp(15px, 3.6vw, 18px);
     font-weight: 600;
     cursor: pointer;
     transition: 0.3s ease;
@@ -365,10 +381,10 @@
    LINKS
 ========================= */
 .links {
-    margin-top: 20px;
+    margin-top: clamp(14px, 3.5vw, 20px);
     display: flex;
     justify-content: center;
-    font-size: 14px;
+    font-size: clamp(12px, 2.8vw, 14px);
     font-weight: 600;
 }
 
@@ -419,79 +435,32 @@
    @keyframes out of scoped .razor.css files. See the snippet below. */
 
 /* =========================
-   RESPONSIVE
+   RESPONSIVE — layout changes that clamp() can't do
+   (fluid sizing above already scales the card continuously;
+   these two rules only handle structural changes)
 ========================= */
-@media (max-width: 768px) {
-    .login-container {
-        width: 90%;
-        max-width: 450px;
-        margin-bottom: 30px;
-        margin-top: 30px;
-        padding: 25px 20px;
-    }
 
-    .login-title {
-        font-size: 24px;
-    }
-
-    .top-bar {
-        font-size: 18px;
-        padding: 8px;
-    }
-}
-
-@media (max-width: 500px) {
-    .login-container {
-        width: 90%;
-        max-width: 100%;
-        margin-bottom: 20px;
-        margin-top: 20px;
-        padding: 20px 15px;
-    }
-
-    .login-title {
-        font-size: 20px;
-    }
-
-    .top-bar {
-        font-size: 16px;
-        padding: 6px;
-    }
-
-    .input-group label {
-        font-size: 12px;
-    }
-
-    .input-group input,
-    .password-input {
-        font-size: 13px;
-        padding: 10px 12px;
-    }
-
+/* Stack role options vertically once the card gets narrow */
+@media (max-width: 420px) {
     .role-options {
         flex-direction: column;
-        gap: 12px;
-        font-size: 14px;
-    }
-
-    .login-btn {
-        padding: 10px;
-        font-size: 16px;
-    }
-
-    .links {
-        font-size: 12px;
+        gap: 10px;
     }
 }
 
+/* On short viewports (landscape phones, small laptop windows),
+   tighten vertical spacing so the card doesn't get clipped */
 @media (max-height: 600px) {
     .login-container {
-        margin-bottom: 20px;
-        margin-top: 20px;
-        padding: 15px 15px;
+        margin-top: clamp(10px, 2.5vh, 20px);
+        margin-bottom: clamp(10px, 2.5vh, 20px);
     }
 
     .input-group {
-        margin-bottom: 15px;
+        margin-bottom: clamp(10px, 2.5vh, 15px);
+    }
+
+    .card-header {
+        margin-bottom: 12px;
     }
 }

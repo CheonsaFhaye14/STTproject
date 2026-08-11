@@ -1,6 +1,4 @@
-﻿/* =========================
-   OVERLAY / BOX
-========================= */
+﻿/*OVERLAY / BOX*/
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -23,9 +21,7 @@
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
-/* =========================
-   HEADER
-========================= */
+/* HEADER*/
 .modal-header {
     display: flex;
     align-items: flex-start;
@@ -82,9 +78,7 @@
         color: #FAFAF9;
     }
 
-/* =========================
-   BODY
-========================= */
+/*BODY*/
 .modal-body {
     padding: 20px 20px 4px;
     overflow-y: auto;
@@ -165,9 +159,7 @@
         color: #8C8C91;
     }
 
-/* =========================
-   FOOTER
-========================= */
+/*FOOTER*/
 .modal-footer {
     display: flex;
     align-items: center;
