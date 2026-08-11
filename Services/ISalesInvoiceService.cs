@@ -397,18 +397,37 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var invoiceCutoff = invoiceDate.ToDateTime(TimeOnly.MaxValue);
 
+        // Latest applied change on or before the invoice date — what was actually
+        // charged on that date, if a change had already taken effect by then.
         var historicalPrice = await context.ItemsUomPriceHistories
             .AsNoTracking()
-            .Where(h => h.ItemsUomId == itemsUomId && h.EffectivityDate <= invoiceCutoff)
-            .OrderByDescending(h => h.EffectivityDate)
-            .ThenByDescending(h => h.AppliedDate)
+            .Where(h => h.ItemsUomId == itemsUomId
+                && h.AppliedDate != null
+                && h.AppliedDate <= invoiceCutoff)
+            .OrderByDescending(h => h.AppliedDate)
             .ThenByDescending(h => h.ItemsUomPriceHistoryId)
             .Select(h => (decimal?)h.NewPrice)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return historicalPrice ?? currentPrice.Value;
-    }
+        if (historicalPrice.HasValue)
+        {
+            return historicalPrice.Value;
+        }
 
+        // No applied change on or before the invoice date. If this UOM has any
+        // applied history at all, the invoice predates it — use the OldPrice of
+        // the earliest applied row (the price before any recorded change), not
+        // today's live price, which may have moved since.
+        var earliestKnownPrice = await context.ItemsUomPriceHistories
+            .AsNoTracking()
+            .Where(h => h.ItemsUomId == itemsUomId && h.AppliedDate != null)
+            .OrderBy(h => h.AppliedDate)
+            .ThenBy(h => h.ItemsUomPriceHistoryId)
+            .Select(h => (decimal?)h.OldPrice)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return earliestKnownPrice ?? currentPrice.Value;
+    }
     public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();

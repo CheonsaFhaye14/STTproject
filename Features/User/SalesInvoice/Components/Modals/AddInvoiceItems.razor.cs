@@ -650,7 +650,7 @@ SelectedSubdistributorId);
             ? string.Empty
             : FormatHelper.FormatPrice(CurrentUnitPrice ?? CurrentUom.Price);
     }
-
+    
     private async Task UpdateCurrentUnitPriceAsync()
     {
         if (CurrentUom is null)
