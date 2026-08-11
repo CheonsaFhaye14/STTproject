@@ -97,12 +97,7 @@ else if (SelectedCompanyItemId.HasValue)
 
             <div class="form-group">
                 <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)</label>
-<input type="number" step="0.01" @bind="PriceIncreaseAmount" @bind:event="oninput" disabled="@isReadOnly" />                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)))
-                {
-                    <span
-                    class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)</span>
-                }
+<input type="number" step="0.01" @bind="PriceIncreaseAmount" @bind:event="onchange" disabled="@isReadOnly" />             
             </div>
 
             <div class="form-group">

@@ -8,7 +8,7 @@ public static class PriceIncreaseValidations
     public static class AddPriceIncrease
     {
         public static readonly PriceIncreaseField CompanyItem = new(nameof(CompanyItem), "Company Item", true, "Company item is required.");
-        public static readonly PriceIncreaseField PriceIncreaseAmount = new(nameof(PriceIncreaseAmount), "Price Increase Amount", true, "Price increase amount is required.");
+        public static readonly PriceIncreaseField PriceIncreaseAmount = new(nameof(PriceIncreaseAmount), "Price Adjustment Amount", true, "Price adjustment amount is required.");
         public static readonly PriceIncreaseField EffectivityDate = new(nameof(EffectivityDate), "Effectivity Date", true, "Effectivity date is required.");
     }
 
@@ -77,9 +77,9 @@ public static class PriceIncreaseValidations
         {
             errors[AddPriceIncrease.PriceIncreaseAmount.Key] = AddPriceIncrease.PriceIncreaseAmount.ErrorMessage;
         }
-        else if (priceIncreaseAmount.Value <= 0)
+        else if (priceIncreaseAmount.Value == 0)
         {
-            errors[AddPriceIncrease.PriceIncreaseAmount.Key] = "Price increase amount must be greater than zero.";
+            errors[AddPriceIncrease.PriceIncreaseAmount.Key] = "Amount cannot be zero.";
         }
 
         if (!effectivityDate.HasValue)
