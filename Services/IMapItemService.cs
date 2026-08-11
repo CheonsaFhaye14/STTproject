@@ -386,9 +386,6 @@ public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<st
                             CompanyItemId = companyItemId,
                             OldPrice = oldPrice,
                             NewPrice = newPrice,
-                            PriceIncreasePercent = oldPrice != 0
-                                ? Math.Round((newPrice - oldPrice) / oldPrice * 100m, 2)
-                                : (decimal?)null,
                             EffectivityDate = now,
                             AppliedDate = now,
                             CreatedDate = now,

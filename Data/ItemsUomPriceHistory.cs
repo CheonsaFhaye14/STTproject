@@ -15,8 +15,6 @@ public partial class ItemsUomPriceHistory
 
     public decimal NewPrice { get; set; }
 
-    public decimal? PriceIncreasePercent { get; set; }
-
     public DateTime EffectivityDate { get; set; }
 
     public DateTime? AppliedDate { get; set; }

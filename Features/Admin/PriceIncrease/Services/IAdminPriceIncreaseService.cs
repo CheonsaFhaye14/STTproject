@@ -18,7 +18,9 @@ using STTproject.Features.Admin.PriceIncrease.DTOs;
         Task<(bool success, string? error)> UpdatePendingIncreaseAsync(int companyItemPriceHistoryId, decimal priceIncreaseAmount, DateTime effectivityDate, int? updatedBy);
         Task<bool> HasPendingIncreaseAsync(int companyItemId, int? excludeId = null);    
         Task<IReadOnlyList<CompanyItemUomPriceDto>> GetUomPricesByCompanyItemIdAsync(int companyItemId);
-     }
+        Task<IReadOnlyList<PriceIncreaseViewDto>> GetCascadedUomDetailsAsync(int companyItemPriceHistoryId);
+    }         
+    
 }
 
 

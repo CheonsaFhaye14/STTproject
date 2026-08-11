@@ -47,12 +47,14 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
     }
     public class CompanyItemUomPriceDto
     {
-        public int SubdItemId { get; set; }
+        public int? SubdItemId { get; set; }
         public string? SubdItemCode { get; set; }
         public string? SubdItemName { get; set; }
         public int ItemsUomId { get; set; }
         public string? UomName { get; set; }
         public decimal? ConversionToBase { get; set; }
-        public decimal? Price { get; set; }
+        public decimal? OldPrice { get; set; }
+        public decimal? NewPrice { get; set; }
+
     }
 }

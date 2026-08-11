@@ -73,18 +73,18 @@
                     <th>New Price</th>
                 </tr>
             </thead>
-            <tbody>
-                @foreach (var uom in UomPrices)
-                {
-                    <tr>
-                        <td>@uom.SubdItemCode</td>
-                        <td>@uom.SubdItemName</td>
-                        <td>@uom.UomName</td>
-                        <td>@uom.Price?.ToString("N2")</td>
-                        <td>@GetProjectedUomPrice(uom)</td>
-                    </tr>
-                }
-            </tbody>
+                <tbody>
+                    @foreach (var uom in UomPrices)
+                    {
+                        <tr>
+                            <td>@uom.SubdItemCode</td>
+                            <td>@uom.SubdItemName</td>
+                            <td>@uom.UomName</td>
+                            <td>@uom.OldPrice?.ToString("N2")</td>
+                            <td>@(uom.NewPrice?.ToString("N2") ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
         </table>
     </div>
 }
@@ -231,7 +231,7 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
         }
     }
 
-    protected override async Task OnInitializedAsync()
+   protected override async Task OnInitializedAsync()
     {
         Principals = await AdminPriceIncreaseService.GetAllPrincipalsAsync();
         if (isEdit)
@@ -249,8 +249,20 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
                 CreatedDate = history.CreatedDate;
                 CreatedByName = await AdminPriceIncreaseService.GetUserNameByIdAsync(history.CreatedBy);
 
-                if (history.CompanyItemId.HasValue)
-                    UomPrices = await AdminPriceIncreaseService.GetUomPricesByCompanyItemIdAsync(history.CompanyItemId.Value);
+                // Scoped to this exact increase event (via CompanyItemPriceHistoryId) —
+                // works whether the event is pending, overdue, or already applied.
+                // GetUomPricesByCompanyItemIdAsync only sees *currently pending* rows,
+                // so it goes blank once this event has been applied — this doesn't.
+                var details = await AdminPriceIncreaseService.GetCascadedUomDetailsAsync(PriceIncreaseId!.Value);
+                UomPrices = details.Select(d => new CompanyItemUomPriceDto
+                {
+                    SubdItemId = d.SubdItemId,
+                    SubdItemCode = d.SubdItemCode,
+                    SubdItemName = d.SubdItemName,
+                    UomName = d.UomName,
+                    OldPrice = d.OldPrice,
+                    NewPrice = d.NewPrice
+                }).ToList();
 
                 if (string.Equals(history.Status, "Applied", StringComparison.OrdinalIgnoreCase))
                 {
@@ -264,13 +276,6 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
             CompanyItems = await AdminPriceIncreaseService.GetCompanyItemsForDropdownAsync();
         }
     }
-    private string GetProjectedUomPrice(CompanyItemUomPriceDto uom)
-{
-    if (!PriceIncreaseAmount.HasValue || uom.Price == null)
-        return "-";
-    var projected = uom.Price.Value + (PriceIncreaseAmount.Value * (uom.ConversionToBase ?? 1m));
-    return projected.ToString("N2");
-}
 
     private async Task RequestConfirm()
     {

@@ -299,24 +299,57 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
         public async Task<IReadOnlyList<CompanyItemUomPriceDto>> GetUomPricesByCompanyItemIdAsync(int companyItemId)
         {
             await using var db = _dbFactory.CreateDbContext();
-            return await db.ItemsUoms
+
+            var uoms = await db.ItemsUoms
                 .AsNoTracking()
                 .Where(u => u.SubdItem.CompanyItemId == companyItemId
                     && u.IsActive
                     && u.SubdItem.IsActive)
-                .Select(u => new CompanyItemUomPriceDto
+                .Select(u => new
                 {
-                    SubdItemId = u.SubdItemId,
+                    u.ItemsUomId,
+                    u.SubdItemId,
                     SubdItemCode = u.SubdItem.SubdItemCode,
                     SubdItemName = u.SubdItem.ItemName,
-                    ItemsUomId = u.ItemsUomId,
-                    UomName = u.UomName,
-                    ConversionToBase = u.ConversionToBase,
-                    Price = u.Price
+                    u.UomName,
+                    u.ConversionToBase,
+                    CurrentPrice = u.Price
+                })
+                .ToListAsync();
+
+            var uomIds = uoms.Select(u => u.ItemsUomId).ToList();
+
+            // latest pending history row per UOM, if any
+            var pendingHistory = await db.ItemsUomPriceHistories
+                .AsNoTracking()
+                .Where(h => uomIds.Contains(h.ItemsUomId) && h.AppliedDate == null)
+                .GroupBy(h => h.ItemsUomId)
+                .Select(g => g.OrderByDescending(h => h.EffectivityDate)
+                            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
+                            .First())
+                .ToListAsync();
+
+            var historyByUomId = pendingHistory.ToDictionary(h => h.ItemsUomId);
+
+            return uoms
+                .Select(u =>
+                {
+                    historyByUomId.TryGetValue(u.ItemsUomId, out var history);
+                    return new CompanyItemUomPriceDto
+                    {
+                        SubdItemId = u.SubdItemId,
+                        SubdItemCode = u.SubdItemCode,
+                        SubdItemName = u.SubdItemName,
+                        ItemsUomId = u.ItemsUomId,
+                        UomName = u.UomName,
+                        ConversionToBase = u.ConversionToBase,
+                        OldPrice = history?.OldPrice,
+                        NewPrice = history?.NewPrice
+                    };
                 })
                 .OrderBy(x => x.SubdItemCode)
                 .ThenBy(x => x.UomName)
-                .ToListAsync();
+                .ToList();
         }
     }
 }

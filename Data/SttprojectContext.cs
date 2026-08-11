@@ -182,7 +182,6 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
             entity.Property(e => e.NewPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.OldPrice).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.PriceIncreasePercent).HasColumnType("decimal(5, 2)");
 
             entity.HasOne(d => d.CompanyItem).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.CompanyItemId)
