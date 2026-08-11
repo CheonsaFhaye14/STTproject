@@ -111,8 +111,9 @@
                                 else
                                 {
                                     <GenericAutocomplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
-                                                         @bind-Value="line.ItemSearchText" ItemLabel="@(i => i.ItemName)"
-                                                         OnSelected="item => OnItemSelected(line, item)" Placeholder="Search item..." />
+                                                        @bind-Value="line.ItemSearchText"
+                                                        ItemLabel="@(i => $"{i.SubdItemCode} - {i.ItemName}")"
+                                                        OnSelected="item => OnItemSelected(line, item)" Placeholder="Search item..." />
                                 }
                             </td>
                             <td>
@@ -366,7 +367,7 @@
     {
         if (item is null) return;
         line.SubdItemId = item.SubdItemId;
-        line.ItemSearchText = item.ItemName;
+        line.ItemSearchText = $"{item.SubdItemCode} - {item.ItemName}";  
         line.ItemName = item.ItemName;
         line.AvailableUoms = item.Uoms;
         line.SelectedUomId = item.Uoms.FirstOrDefault()?.ItemsUomId ?? 0;
