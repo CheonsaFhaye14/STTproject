@@ -185,14 +185,19 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
                         ItemsUomId = item.ItemsUomId,
                         UomName = item.ItemsUom.UomName,
                         UomPrice = context.ItemsUomPriceHistories
-                        .Where(h =>
-                            h.ItemsUomId == item.ItemsUomId &&
-                            h.AppliedDate != null &&
-                            h.AppliedDate <= si.SalesInvoiceDate.ToDateTime(TimeOnly.MaxValue))
-                        .OrderByDescending(h => h.AppliedDate)
-                        .Select(h => (decimal?)h.NewPrice)
-                        .FirstOrDefault()
-                        ?? item.ItemsUom.Price,
+                                .Where(h =>
+                                    h.ItemsUomId == item.ItemsUomId &&
+                                    h.AppliedDate != null &&
+                                    h.AppliedDate <= si.SalesInvoiceDate.ToDateTime(TimeOnly.MaxValue))
+                                .OrderByDescending(h => h.AppliedDate)
+                                .Select(h => (decimal?)h.NewPrice)
+                                .FirstOrDefault()
+                            ?? context.ItemsUomPriceHistories
+                                .Where(h => h.ItemsUomId == item.ItemsUomId && h.AppliedDate != null)
+                                .OrderBy(h => h.AppliedDate)
+                                .Select(h => (decimal?)h.OldPrice)
+                                .FirstOrDefault()
+                            ?? item.ItemsUom.Price,
                         Quantity = item.Quantity,
                         Amount = item.Amount
                     })
@@ -290,15 +295,19 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                     UomName = u.UomName,
 
                     Price = context.ItemsUomPriceHistories
-                        .Where(h =>
-                            h.ItemsUomId == u.ItemsUomId &&
-                            h.AppliedDate != null &&
-                            h.EffectivityDate <= invoiceDate &&
-                            h.AppliedDate <= invoiceDate)
-                        .OrderByDescending(h => h.EffectivityDate)
-                        .ThenByDescending(h => h.ItemsUomPriceHistoryId)
-                        .Select(h => (decimal?)h.NewPrice)
-                        .FirstOrDefault()
+                            .Where(h =>
+                                h.ItemsUomId == u.ItemsUomId &&
+                                h.AppliedDate != null &&
+                                h.AppliedDate <= invoiceDate)
+                            .OrderByDescending(h => h.AppliedDate)
+                            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
+                            .Select(h => (decimal?)h.NewPrice)
+                            .FirstOrDefault()
+                        ?? context.ItemsUomPriceHistories
+                            .Where(h => h.ItemsUomId == u.ItemsUomId && h.AppliedDate != null)
+                            .OrderBy(h => h.AppliedDate)
+                            .Select(h => (decimal?)h.OldPrice)
+                            .FirstOrDefault()
                         ?? u.Price,
 
                     ConversionToBase = u.ConversionToBase
