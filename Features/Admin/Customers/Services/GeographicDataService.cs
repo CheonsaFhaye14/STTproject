@@ -29,12 +29,10 @@ namespace STTproject.Features.Admin.Customers.Services
 
                 if (string.IsNullOrWhiteSpace(city) ||
                     string.IsNullOrWhiteSpace(province) ||
-                    string.IsNullOrWhiteSpace(island) ||
-                    string.IsNullOrWhiteSpace(zipText))
+                    string.IsNullOrWhiteSpace(island))
                     continue;
 
-                if (!int.TryParse(zipText, out var zipCode))
-                    continue;
+                int? zipCode = int.TryParse(zipText, out var parsedZip) ? parsedZip : null;
 
                 geographicData.Add(new GeographicDataDto
                 {
@@ -158,12 +156,26 @@ namespace STTproject.Features.Admin.Customers.Services
                 (string.IsNullOrEmpty(island) || g.Island == island));
         }
 
-        public async Task<int> GetZipCodeAsync(string? province, string? cityMunicipality)
+        public async Task<int?> GetZipCodeAsync(string? province, string? cityMunicipality)
         {
             await InitializeAsync();
             return geographicData
                 .FirstOrDefault(g => g.Province == province && g.CityMunicipality == cityMunicipality)
-                ?.ZipCode ?? 0;
+                ?.ZipCode;
+        }
+        public async Task<GeographicDataDto?> FindLocationAsync(string? province, string? city)
+        {
+            await InitializeAsync();
+            return geographicData.FirstOrDefault(g =>
+                string.Equals(g.Province?.Trim(), province?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(g.CityMunicipality?.Trim(), city?.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        public async Task<bool> ProvinceExistsAsync(string? province)
+        {
+            await InitializeAsync();
+            return geographicData.Any(g =>
+                string.Equals(g.Province?.Trim(), province?.Trim(), StringComparison.OrdinalIgnoreCase));
         }
     }
 }

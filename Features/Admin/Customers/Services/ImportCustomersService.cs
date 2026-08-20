@@ -11,6 +11,7 @@ public sealed class ImportCustomersService
     private const int MaxHeaderScanRows = 10;
 
     private readonly IAdminCustomerService _customerService;
+    private readonly IGeographicDataService _geoDataService;
 
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -29,12 +30,12 @@ public sealed class ImportCustomersService
             ["Zip Code"] = new[] { "ZipCode", "Zip Code", "zip" },
         };
 
-    // Normalized alias -> canonical key, built once.
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
 
-    public ImportCustomersService(IAdminCustomerService customerService)
+    public ImportCustomersService(IAdminCustomerService customerService, IGeographicDataService geoDataService)
     {
         _customerService = customerService;
+        _geoDataService = geoDataService;
     }
 
     private static IReadOnlyDictionary<string, string> BuildAliasLookup()
@@ -159,9 +160,38 @@ public sealed class ImportCustomersService
             foreach (var msg in (await CustomerValidations.ValidateAddCustomerAsync(entity, _customerService)).Values)
                 rowResult.Issues.Add(msg);
 
+            // Cross-check the location against the geographic reference data.
+            if (!string.IsNullOrWhiteSpace(rowResult.Province) || !string.IsNullOrWhiteSpace(rowResult.City))
+            {
+                var match = await _geoDataService.FindLocationAsync(rowResult.Province, rowResult.City);
+
+                if (match is null)
+                {
+                    if (!string.IsNullOrWhiteSpace(rowResult.Province) &&
+                        !await _geoDataService.ProvinceExistsAsync(rowResult.Province))
+                    {
+                        rowResult.Issues.Add($"Province '{rowResult.Province}' was not found in the geographic reference data.");
+                    }
+                    else if (string.IsNullOrWhiteSpace(rowResult.City))
+                    {
+                        rowResult.Issues.Add($"City is required to validate the location for Province '{rowResult.Province}'.");
+                    }
+                    else
+                    {
+                        rowResult.Issues.Add(
+                            $"City '{rowResult.City}' does not match Province '{rowResult.Province}' in the geographic reference data.");
+                    }
+                }
+                else if (rowResult.ZipCode is null && match.ZipCode.HasValue)
+                {
+                    // The sheet left Zip blank but the reference data has one for this exact city/province — fill it in.
+                    rowResult.ZipCode = match.ZipCode;
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !seenInFile.Add(rowResult.CustomerCode))
                 rowResult.Issues.Add($"Customer Code '{rowResult.CustomerCode}' is duplicated within the uploaded file.");
-
+                
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
 
@@ -254,7 +284,6 @@ public sealed class ImportCustomersService
         return cell.GetString().Trim();
     }
 
-    // Same normalization the other importers use: lowercase, collapse whitespace/punctuation into a single space.
     private static string NormalizeHeader(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -333,6 +362,39 @@ public sealed class ImportCustomersService
         }
 
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+        sheet.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return ms.ToArray();
+    }
+    private static readonly string[] TemplateHeaders =
+    {
+        "Customer Code", "Customer Name", "Customer Type", "City", "Province", "Address Line", "Zip Code"
+    };
+
+    public byte[] GenerateTemplateExcel()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Customers");
+
+        for (int i = 0; i < TemplateHeaders.Length; i++)
+            sheet.Cell(1, i + 1).Value = TemplateHeaders[i];
+
+        sheet.Row(1).Style.Font.Bold = true;
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FB");
+
+        // One example row so the expected format/values are obvious — not real data.
+        sheet.Cell(2, 1).Value = "CUST-0001";
+        sheet.Cell(2, 2).Value = "Juan Dela Cruz";
+        sheet.Cell(2, 3).Value = "Retail";
+        sheet.Cell(2, 4).Value = "Quezon City";
+        sheet.Cell(2, 5).Value = "Metro Manila";
+        sheet.Cell(2, 6).Value = "123 Sample St.";
+        sheet.Cell(2, 7).Value = "1100";
+        sheet.Row(2).Style.Font.Italic = true;
+        sheet.Row(2).Style.Font.FontColor = XLColor.FromHtml("#A09ABF");
+
         sheet.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();

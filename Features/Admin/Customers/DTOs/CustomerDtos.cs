@@ -63,7 +63,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? Province { get; set; }
         public string? CityMunicipality { get; set; }
         public string? Island { get; set; }
-        public int ZipCode { get; set; }
+        public int? ZipCode { get; set; }
     }
     public class CustomerImportResultDto
     {

@@ -17,8 +17,10 @@ namespace STTproject.Features.Admin.Customers.Services
         Task<IReadOnlyList<string?>> GetAllIslandsAsync();
         Task<IReadOnlyList<string?>> GetProvinceCitiesMunicipalitiesAsync(string? province);
         Task<IReadOnlyList<string?>> GetAllLocationsAsync(string? cityMunicipality, string? province, string? island);
-        Task<int> GetZipCodeAsync(string? province, string? cityMunicipality);
+        Task<int?> GetZipCodeAsync(string? province, string? cityMunicipality);        
         Task<string?> GetProvinceByCityAsync(string cityMunicipality);
         Task<GeographicDataDto?> GetGeographicDataAsync(string ? province, string ? cityMunicipality, string ? island);
+        Task<GeographicDataDto?> FindLocationAsync(string? province, string? city);
+        Task<bool> ProvinceExistsAsync(string? province);
     }
 }
