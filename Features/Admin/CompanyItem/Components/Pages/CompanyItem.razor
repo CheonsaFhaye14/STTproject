@@ -2,6 +2,7 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.CompanyItem.Components.Modals
 @using STTproject.Features.Admin.CompanyItem.Components.Sections
+@using STTproject.Shared.Components.Buttons
 
 @if (isLoading)
 {
@@ -22,9 +23,8 @@
                 <h1 class="clt-page-title">Company Items</h1>
                 <p class="clt-page-sub">@totalCount total company items</p>
             </div>
-            <button class="clt-add-btn" @onclick="OpenAddCompanyItemModal">
-                <span class="clt-add-icon">+</span> Add company item
-            </button>
+            <Button Variant="ButtonVariant.Primary" Title="Add Company Item" Icon="fa-plus" OnClick="OpenAddCompanyItemModal">
+            </Button>
         </div>
 
         @* ------------- Company Item List Table ----------------- *@

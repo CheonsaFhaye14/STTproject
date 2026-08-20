@@ -1,6 +1,8 @@
 @using STTproject.Features.Admin.CompanyItem.Validators
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
+@using STTproject.Shared.Components.Buttons
+
 <link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
 
 <div class="modal-overlay">
@@ -82,10 +84,9 @@
                             }
 
                             <div class="action-buttons">
-                                <button type="button" @onclick="CreateCompanyItem" disabled="@isSubmitting">
-                                    @(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))
-                                </button>
-                                <button type="button" @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
+                                <Button Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" disabled="@isSubmitting" Title="@(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))">
+                                </Button>
+                                <Button Variant="ButtonVariant.Secondary" OnClick="Cancel" disabled="@isSubmitting" Title="Cancel"></Button>
                                 @if (isEdit && PriceHistory.Any())
                                 {
                                     <h4>Price History</h4>
