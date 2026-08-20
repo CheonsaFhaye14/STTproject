@@ -94,7 +94,7 @@
                   OnYes="ConfirmImport" OnNo="CancelImport" />
 
     <ImportSalesInvoice Show="showImportResultsModal" ImportResult="lastImportResult" OnClose="CloseImportResultsModal"
-                        OnCommit="CommitSelectedImportedInvoices" />
+                        OnCommit="CommitSelectedImportedInvoices" OnDownloadErrorReport="HandleDownloadErrorReport"/>
 
     <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                    OnDraftChanged="PersistDraftAsync" Customers="customers"

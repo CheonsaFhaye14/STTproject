@@ -988,6 +988,18 @@ public partial class SalesInvoice
         }
     }
 
+    private async Task HandleDownloadErrorReport()
+    {
+        if (lastImportResult == null) return;
 
+        var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult);
+        var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBytes",
+            fileName,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
 }
 

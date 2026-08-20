@@ -117,6 +117,10 @@ public sealed class ImportSalesInvoiceService
 		var worksheet = worksheetWithHeader.Worksheet;
 		var headerRowNumber = worksheetWithHeader.HeaderRowNumber;
 		var headers = BuildHeaderMap(worksheet, headerRowNumber, subDistributor);
+		result.OriginalHeaders = headers
+			.OrderBy(kvp => kvp.Value)
+			.Select(kvp => kvp.Key)
+			.ToList();		
 
 		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
 		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
@@ -537,6 +541,13 @@ public sealed class ImportSalesInvoiceService
 			{
 				continue;
 			}
+
+			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+			foreach (var kvp in headers)
+			{
+				rawValues[kvp.Key] = GetString(row, kvp.Value);
+			}
+			result.RawValuesByRow[rowNumber] = rawValues;
 
 			DateOnly invoiceDate = default;
 			var emittedRows = new List<ImportedInvoiceRow>();

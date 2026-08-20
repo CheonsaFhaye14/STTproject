@@ -1,5 +1,6 @@
 ﻿using ClosedXML.Excel;
 using Microsoft.JSInterop;
+using STTproject.Features.User.SalesInvoice.DTOs;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Services;
 
@@ -146,6 +147,62 @@ namespace STTproject.Features.User.SalesInvoice.Services
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
                 }
             }
+        }
+        public byte[] GenerateErrorReportExcel(ImportSalesInvoiceResult result)
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var sheet = workbook.Worksheets.Add("Errors");
+
+            var headers = result.OriginalHeaders.Count > 0 ? result.OriginalHeaders : new List<string>
+            {
+                "InvoiceCode",
+                "InvoiceDate",
+                "CustomerCode",
+                "OrderType",
+                "SalesManName",
+                "SkuCode",
+                "UOM",
+                "Quantity"
+            };
+
+            for (int i = 0; i < headers.Count; i++)
+                sheet.Cell(1, i + 1).Value = headers[i];
+
+            var errorColumn = headers.Count + 1;
+            sheet.Cell(1, errorColumn).Value = "Error";
+            sheet.Row(1).Style.Font.Bold = true;
+            sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+
+            // Multiple issues can point at the same row (e.g. bad customer + bad SKU) — combine them into one line per row.
+            var issuesByRow = result.Issues
+                .GroupBy(issue => issue.RowNumber)
+                .OrderBy(group => group.Key);
+
+            int excelRow = 2;
+            foreach (var group in issuesByRow)
+            {
+                result.RawValuesByRow.TryGetValue(group.Key, out var rawValues);
+
+                for (int i = 0; i < headers.Count; i++)
+                {
+                    string? value = null;
+                    rawValues?.TryGetValue(headers[i], out value);
+                    sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
+                }
+
+                var errorCell = sheet.Cell(excelRow, errorColumn);
+                errorCell.Value = string.Join("; ", group.Select(issue => issue.Message).Distinct());
+                errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D");
+                errorCell.Style.Font.Bold = true;
+
+                excelRow++;
+            }
+
+            sheet.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            workbook.SaveAs(ms);
+            return ms.ToArray();
         }
     }
 }

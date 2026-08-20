@@ -15,10 +15,12 @@ public sealed class PreparedInvoice
 
 public sealed class ImportSalesInvoiceResult
 {
+    public List<string> OriginalHeaders { get; set; } = new();
     public List<PreparedInvoice> PreparedInvoices { get; } = new();
     public int ImportedInvoiceCount { get; set; }
     public int ImportedRowCount { get; set; }
     public List<ImportSalesInvoiceIssue> Issues { get; } = new();
+     public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
 
     public bool HasIssues => Issues.Count > 0;
 
