@@ -60,7 +60,7 @@
                                 {
                                     var isOverdue = item.EffectivityDate!.Value <= DateTime.Now;
                                     <span class="badge @(isOverdue ? "bg-danger text-white" : "bg-warning text-dark")" style="align-self: flex-start;">
-                                        @(isOverdue ? "Price increase due" : "Price increase scheduled") on @item.EffectivityDate?.ToString("MMM dd, yyyy")
+                                        @(isOverdue ? "Price change due" : "Price change scheduled") on @item.EffectivityDate?.ToString("MMM dd, yyyy")
                                         @if (item.PriceIncreaseAmount.HasValue)
                                         {
                                             <span>@($" (+{item.PriceIncreaseAmount.Value:N2})")</span>

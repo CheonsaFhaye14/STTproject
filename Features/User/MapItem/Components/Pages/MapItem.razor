@@ -15,6 +15,9 @@
 @inject STTproject.Features.User.MapItem.Services.ImportMapItemService importMapItemService
 @inject STTproject.Features.User.MapItem.Services.MapItemDraftService draftService
 
+@using STTproject.Shared.Components.Buttons
+@inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
+
 @if (isLoading)
 {
     <div class="loading-overlay">
@@ -45,18 +48,16 @@
 
         <!-- DOWNLOAD TEMPLATE + IMPORT -->
         <div class="top-buttons">
-            <button class="btn-primary" @onclick="() => showDownloadTemplateModal = true">
-                <span class="btn-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z"/></svg>
-                </span>
-                <span>Download Template</span>
-            </button>
-            <button class="btn-primary" @onclick="ShowImportConfirmModal">
-                <span class="btn-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z"/></svg>
-                </span>
-                <span>Import Excel</span>
-            </button>
+            <Button Variant="ButtonVariant.Primary" Title="Download Template" OnClick="@(() => showDownloadTemplateModal = true)">
+                <IconContent>
+                    <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z" /></svg>
+                </IconContent>
+            </Button>
+            <Button Variant="ButtonVariant.Primary" Title="Import Excel" OnClick="ShowImportConfirmModal">
+                <IconContent>
+                    <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z" /></svg>
+                </IconContent>
+            </Button>
             <InputFile id="mapitem-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
         </div>
     </div>
@@ -135,7 +136,7 @@
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
     <ImportDetails Show="showImportDetailsModal" ImportResult="lastImportResult"
                    SelectedGroupKeys="selectedImportItemGroupKeys" OnCommit="HandleCommitImportAsync"
-                   OnClose="CloseImportDetailsModal" />
+                   OnClose="CloseImportDetailsModal" OnDownloadErrorReport="HandleDownloadErrorReport" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName"

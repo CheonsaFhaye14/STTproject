@@ -17,14 +17,14 @@
 						var isOverdue = selectedItem.EffectivityDate.Value <= DateTime.Now;
 						<span class="@(isOverdue ? "price-due-badge" : "price-scheduled-badge")">
 							@(isOverdue
-								? $"Price increase due since {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})"
-								: $"Price increase scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})")
+								? $"Price change due since {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})"
+								: $"Price change scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})")
 						</span>
 					}
 					else if (selectedItem.HasRecentIncrease)
 					{
 						<span class="price-increased-badge">
-							@($"Price increased on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")}")
+							@($"Price change applied on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")}")
 						</span>
 					}
 				}
