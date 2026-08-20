@@ -9,7 +9,7 @@
         <div class="loading-bar-track">
             <div class="loading-bar-fill"></div>
         </div>
-        <p>Loading price increases…</p>
+        <p>Loading price changes…</p>
     </div>
 }
 
@@ -19,22 +19,22 @@
         @* ------------- Header ----------------- *@
         <div class="clt-page-header">
             <div>
-                <h1 class="clt-page-title">Price Increases</h1>
-                <p class="clt-page-sub">@totalCount total price increases</p>
+                <h1 class="clt-page-title">Price Changes</h1>
+                <p class="clt-page-sub">@totalCount total price changes</p>
             </div>
             <button class="clt-add-btn" @onclick="OpenAddPriceIncreaseModal">
-                <span class="clt-add-icon">+</span> Add price increase
+                <span class="clt-add-icon">+</span> Add price change
             </button>
         </div>
 
-        @* ------------- Price Increase List Table ----------------- *@
+        @* ------------- Price List Table ----------------- *@
         <PriceIncreaseTable @ref="priceIncreaseTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                             OnEditPriceIncrease="OpenEditModal"
                              />
 
         <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
-                    Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Increase" : "Confirm Creation of Price Increase")"
-                    Message="@(editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price increase?" : "Are you sure you want to create this price increase?")"
+                    Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Change" : "Confirm Creation of Price Change")"
+                    Message="@(editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?")"
                     OnYes="ConfirmAddPriceIncrease"
                     OnNo="CancelConfirm" />
 
@@ -67,7 +67,7 @@
 
     private void OpenAddPriceIncreaseModal()
     {
-        editPriceIncreaseId = null; // new price increase
+        editPriceIncreaseId = null; 
         showAddModal = true;
     }
 
@@ -103,7 +103,7 @@
         else
         {
             // surface the error somewhere visible — e.g. a toast, or re-show the modal with the message
-            Console.WriteLine($"Price increase save failed: {error}");
+            Console.WriteLine($"Price change save failed: {error}");
         }
     }
 }

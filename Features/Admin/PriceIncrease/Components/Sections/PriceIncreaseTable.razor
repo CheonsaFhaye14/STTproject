@@ -112,7 +112,7 @@
                                     Company Item Name @SortIndicator("CompanyItemName")
                                 </th>
                                 <th @onclick='() => SortBy("PriceIncreaseAmount")' style="cursor:pointer">
-                                    Price Increase Amount @SortIndicator("PriceIncreaseAmount")
+                                    Price Change Amount @SortIndicator("PriceIncreaseAmount")
                                 </th>
                                 <th @onclick='() => SortBy("EffectivityDate")' style="cursor:pointer">
                                     Effectivity Date @SortIndicator("EffectivityDate")
@@ -266,7 +266,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading price increases: {ex.Message}");
+            Console.WriteLine($"Error loading price changes: {ex.Message}");
             isLoading = false;
             await InvokeAsync(StateHasChanged);
         }
@@ -323,7 +323,7 @@
     private async Task RequestCancel( int companyItemPriceHistoryId)
     {
         pendingToggleId = companyItemPriceHistoryId;
-        toggleConfirmMessage = "Are you sure you want to cancel this price increase?";
+        toggleConfirmMessage = "Are you sure you want to cancel this price change?";
         showToggleConfirmModal = true;
     }
 

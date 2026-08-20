@@ -8,7 +8,7 @@
 <div class="modal-overlay">
     <div class="modal-box">
         <div class="modal-header">
-            <h3>@(isEdit ? "Edit Price Increase" : "Schedule Price Increase")</h3>
+            <h3>@(isEdit ? "Edit Price Change" : "Schedule Price Change")</h3>
         </div>
 
         <div class="modal-body">
@@ -140,11 +140,11 @@ else if (SelectedCompanyItemId.HasValue)
             <div class="action-buttons">
                 @if (!isReadOnly)
                 {
-                    <button type="button" @onclick="RequestConfirm" disabled="@isSubmitting">
+                    <button class="btn btn-primary" type="button" @onclick="RequestConfirm" disabled="@isSubmitting">
                         @(isEdit ? "Save Changes" : "Schedule Increase")
                     </button>
                 }
-                <button type="button" @onclick="Cancel" disabled="@isSubmitting">
+                <button class="btn btn-secondary" type="button" @onclick="Cancel" disabled="@isSubmitting">
                     @(isReadOnly ? "Close" : "Cancel")
                 </button>
             </div>

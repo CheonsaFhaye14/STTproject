@@ -28,7 +28,7 @@ public class PriceIncreaseWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to apply due price increases via stored procedure.");
+                _logger.LogError(ex, "Failed to apply due price changes via stored procedure.");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

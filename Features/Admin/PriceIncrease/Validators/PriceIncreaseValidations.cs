@@ -48,7 +48,7 @@ public static class PriceIncreaseValidations
             if (hasDuplicatePending)
             {
                 errors[AddPriceIncrease.EffectivityDate.Key] =
-                    "This company item already has a pending price increase scheduled.";
+                    "This company item already has a pending price change scheduled.";
             }
         }
 

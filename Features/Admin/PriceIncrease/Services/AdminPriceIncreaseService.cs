@@ -237,7 +237,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             }
             catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 50001)
             {
-                return (false, "This company item already has a pending price increase scheduled.");
+                return (false, "This company item already has a pending price change scheduled.");
             }
         }
 
@@ -257,10 +257,10 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     .FirstOrDefaultAsync(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId);
 
                 if (history == null)
-                    return (false, "Price increase not found.");
+                    return (false, "Price change not found.");
 
                 if (history.AppliedDate != null)
-                    return (false, "This increase has already been applied and can no longer be edited.");
+                    return (false, "This change has already been applied and can no longer be edited.");
 
                 var duplicateExists = await db.CompanyItemPriceHistories
                     .AnyAsync(h => h.CompanyItemId == history.CompanyItemId
@@ -268,7 +268,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                         && h.CompanyItemPriceHistoryId != companyItemPriceHistoryId);
 
                 if (duplicateExists)
-                    return (false, "This company item already has another pending price increase.");
+                    return (false, "This company item already has another pending price change.");
 
                 history.PriceIncreaseAmount = priceIncreaseAmount;
                 history.NewPrice = history.OldPrice + priceIncreaseAmount;
@@ -293,7 +293,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return (false, $"Unable to update the price increase: {ex.GetBaseException().Message}");
+                return (false, $"Unable to update the price change: {ex.GetBaseException().Message}");
             }
         }
 
@@ -363,10 +363,10 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     .FirstOrDefaultAsync(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId);
 
                 if (history == null)
-                    return (false, "Price increase not found.");
+                    return (false, "Price change not found.");
 
                 if (history.AppliedDate != null)
-                    return (false, "This increase has already been applied and can no longer be canceled.");
+                    return (false, "This change has already been applied and can no longer be canceled.");
 
                 // Remove the company-level history row
                 db.CompanyItemPriceHistories.Remove(history);
@@ -385,7 +385,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return (false, $"Unable to cancel the price increase: {ex.GetBaseException().Message}");
+                return (false, $"Unable to cancel the price change: {ex.GetBaseException().Message}");
             }
         }
     }
