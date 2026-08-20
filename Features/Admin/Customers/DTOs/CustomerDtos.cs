@@ -106,7 +106,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
     {
         public int SubDistributorId { get; set; }
         public string? SubDistributorName { get; set; }
-
+        public List<string> OriginalHeaders { get; set; } = new();
         public List<CustomerImportRowResult> Rows { get; } = new();
         public List<PreparedCustomerGroup> PreparedGroups { get; } = new();
         public List<CustomerImportIssue> Issues { get; } = new(); // header/global-level problems
@@ -133,6 +133,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public bool IsSuccess { get; set; }
         public int? CustomerId { get; set; }
         public List<string> Issues { get; } = new();
+        public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     public sealed class PreparedCustomerGroup

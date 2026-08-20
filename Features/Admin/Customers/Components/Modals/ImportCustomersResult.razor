@@ -23,9 +23,7 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="mh-close" @onclick="HandleClose" aria-label="Close">
-                    <i class="ti ti-x" aria-hidden="true"></i>
-                </button>
+                <Button Icon="ti ti-x" Variant="ButtonVariant.Secondary" OnClick="HandleClose"></Button> 
             </div>
 
             @* ── Modal body ── *@
@@ -53,6 +51,34 @@
                     var filteredCards = GetFilteredCards(cards);
                     var selectableCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved);
                     var selectedCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));
+                    
+                    @if (hasCommitted)
+                    {
+                        if (ImportResult.ErrorCount == 0)
+                        {
+                            <div class="success-banner">
+                                <div class="success-banner-icon"><i class="ti ti-circle-check" aria-hidden="true"></i></div>
+                                <div>
+                                    <div class="success-banner-title">✅ @ImportResult.SuccessCount customer(s) imported successfully.</div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="global-alert">
+                                <i class="ti ti-alert-triangle global-alert-icon" aria-hidden="true"></i>
+                                <div>
+                                    <div class="global-alert-title">
+                                        ⚠️ @ImportResult.SuccessCount customer(s) imported successfully. @ImportResult.ErrorCount row(s) could not be imported.
+                                    </div>
+                                    <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                                        <i class="ti ti-download" aria-hidden="true"></i>
+                                        Download Error Report
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
 
                     @* ── Summary stat bar ── *@
                     <div class="stat-bar">
@@ -362,7 +388,9 @@
     [Parameter] public EventCallback OnCommit { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
 
+    private bool hasCommitted;
     private bool showCommitConfirmModal;
     private bool wasShown;
     private GroupFilter groupFilter = GroupFilter.All;
@@ -378,10 +406,9 @@
 
     protected override void OnParametersSet()
     {
-        if (Show && !wasShown) { groupFilter = GroupFilter.SuccessOnly; wasShown = true; }
+        if (Show && !wasShown) { groupFilter = GroupFilter.SuccessOnly; wasShown = true; hasCommitted = false; }
         else if (!Show) { wasShown = false; }
     }
-
     private static string GroupKey(PreparedCustomerGroup g) => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
 
     private List<GroupCardViewModel> GetGroupCards()
@@ -494,6 +521,12 @@
     {
         showCommitConfirmModal = false;
         if (OnCommit.HasDelegate) await OnCommit.InvokeAsync();
+        hasCommitted = true;
+    }
+
+    private async Task HandleDownloadErrorReport()
+    {
+        if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
     }
 
     private async Task HandleClose()

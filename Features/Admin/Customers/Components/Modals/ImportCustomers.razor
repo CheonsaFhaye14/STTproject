@@ -2,6 +2,7 @@
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 @inject STTproject.Features.Admin.Customers.Services.ImportCustomersService ImportCustomersService
 @inject IUserContextService UserContext
+@inject IJSRuntime JS
 
 @if (isPreparing)
 {
@@ -44,12 +45,14 @@
                         ImportResult="importResult"
                         SelectedGroupKeys="selectedGroupKeys"
                         OnCommit="HandleCommitAsync"
-                        OnClose="CloseResults" />
+                        OnClose="CloseResults"
+                        OnDownloadErrorReport="HandleDownloadErrorReport" />
 
 @code {
     [Parameter] public bool Show { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnImportCompleted { get; set; }
+    
 
     private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new();
     private string? selectedSubdistributorId;
@@ -128,14 +131,31 @@
         if (selectedRows.Count == 0) return;
 
         var committedCount = await ImportCustomersService.CommitPreparedRowsAsync(selectedRows, subdistributorId, userId);
-
-        if (committedCount > 0)
+        
+        foreach (var g in selectedGroups)
         {
-            foreach (var g in selectedGroups) g.IsSaved = true;
-            await OnImportCompleted.InvokeAsync();
+            if (g.Rows.All(r => r.IsSuccess))
+                g.IsSaved = true;
         }
 
+        if (committedCount > 0)
+            await OnImportCompleted.InvokeAsync();
+
         StateHasChanged();
+    }
+
+    private async Task HandleDownloadErrorReport()
+    {
+        if (importResult == null) return;
+
+        var bytes = ImportCustomersService.GenerateErrorReportExcel(importResult);
+        var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBytes",
+            fileName,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
     }
 
     private async Task CloseResults()

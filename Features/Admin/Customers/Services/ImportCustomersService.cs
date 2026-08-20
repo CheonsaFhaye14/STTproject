@@ -102,6 +102,8 @@ public sealed class ImportCustomersService
         var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? detection.HeaderRowNumber;
         var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        result.OriginalHeaders = detection.AllHeaderColumns.Select(h => h.Header).ToList(); 
+
         for (int rowNumber = detection.HeaderRowNumber + 1; rowNumber <= lastRow; rowNumber++)
         {
             var row = worksheet.Row(rowNumber);
@@ -128,7 +130,11 @@ public sealed class ImportCustomersService
                 ZipCode = zip
             };
 
-            // Skip fully-blank data rows (all required fields empty).
+            foreach (var (col, header) in detection.AllHeaderColumns)
+            {
+                rowResult.RawValues[header] = GetString(row, col);
+            }
+
             if (string.IsNullOrWhiteSpace(rowResult.CustomerCode) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerName) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerType) &&
@@ -182,7 +188,8 @@ public sealed class ImportCustomersService
         Dictionary<string, int> ColumnIndex,
         int BestCandidateRowNumber,
         string[] BestCandidateHeaders,
-        List<string> BestCandidateMissing);
+        List<string> BestCandidateMissing,
+        List<(int Column, string Header)> AllHeaderColumns); 
 
     private static HeaderDetectionResult DetectHeaderRow(IXLWorksheet worksheet)
     {
@@ -204,6 +211,11 @@ public sealed class ImportCustomersService
             var columnIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var foundCanonicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            var allHeaderColumns = usedCells
+                .Select(c => (Column: c.Address.ColumnNumber, Header: c.GetString().Trim()))
+                .Where(h => !string.IsNullOrWhiteSpace(h.Header))
+                .ToList();
+
             foreach (var cell in usedCells)
             {
                 var normalized = NormalizeHeader(cell.GetString());
@@ -219,7 +231,7 @@ public sealed class ImportCustomersService
 
             if (missing.Count == 0)
             {
-                return new HeaderDetectionResult(rowNumber, columnIndex, -1, Array.Empty<string>(), new List<string>());
+                return new HeaderDetectionResult(rowNumber, columnIndex, -1, Array.Empty<string>(), new List<string>(), allHeaderColumns);
             }
 
             if (missing.Count < bestMissingCount)
@@ -232,9 +244,8 @@ public sealed class ImportCustomersService
         }
 
         return new HeaderDetectionResult(-1, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
-            bestCandidateRowNumber, bestCandidateHeaders, bestCandidateMissing);
-    }
-
+            bestCandidateRowNumber, bestCandidateHeaders, bestCandidateMissing, new List<(int, string)>());
+    }    
     private static string GetString(IXLRow row, int columnNumber)
     {
         var cell = row.Cell(columnNumber);
@@ -290,5 +301,42 @@ public sealed class ImportCustomersService
         }
 
         return committed;
+    }
+
+    // PHASE 3 — build a downloadable Excel report: original columns + an "Error" column, failed rows only.
+    public byte[] GenerateErrorReportExcel(CustomerImportResult result)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Errors");
+
+        var headers = result.OriginalHeaders.Count > 0
+            ? result.OriginalHeaders
+            : new List<string> { "Customer Code", "Customer Name", "Customer Type", "City", "Province", "Address Line", "Zip Code" };
+
+        for (int i = 0; i < headers.Count; i++)
+            sheet.Cell(1, i + 1).Value = headers[i];
+        sheet.Cell(1, headers.Count + 1).Value = "Error";
+        sheet.Row(1).Style.Font.Bold = true;
+
+        var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
+
+        int excelRow = 2;
+        foreach (var row in failedRows)
+        {
+            for (int i = 0; i < headers.Count; i++)
+            {
+                row.RawValues.TryGetValue(headers[i], out var value);
+                sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
+            }
+            sheet.Cell(excelRow, headers.Count + 1).Value = string.Join("; ", row.Issues);
+            excelRow++;
+        }
+
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+        sheet.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return ms.ToArray();
     }
 }

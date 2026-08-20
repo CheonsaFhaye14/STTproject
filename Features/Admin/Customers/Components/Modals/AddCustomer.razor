@@ -130,15 +130,13 @@
                             <div class="action-buttons">
                                 @if (isEdit && isViewMode)
                                 {
-                                    <button @onclick="EnableEdit">Edit</button>
-                                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
+                                    <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
+                                    <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
                                 }
                                 else
                                 {
-                                    <button @onclick="CreateCustomer" disabled="@isSubmitting">
-                                        @(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Customer"))
-                                    </button>
-                                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
+                                    <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Customer"))" Variant="ButtonVariant.Primary" OnClick="CreateCustomer" Disabled="@isSubmitting"></Button>
+                                    <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
                                 }
                             </div>
                         </div>

@@ -649,3 +649,22 @@
         opacity: 0.4;
         cursor: not-allowed;
     }
+::deep .btn-download-errors {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #fff;
+    border: 0.5px solid #E24B4A;
+    color: #A32D2D;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+    ::deep .btn-download-errors:hover {
+        background: #FCEBEB;
+    }
