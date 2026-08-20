@@ -104,7 +104,10 @@ public sealed class ImportMapItemService
 			"Conversion",
 			"Price"
 		};
-
+		result.OriginalHeaders = headers
+			.OrderBy(kvp => kvp.Value)
+			.Select(kvp => kvp.Key)
+			.ToList();
 		var missingHeaders = requiredHeaders
 			.Where(header => !headers.ContainsKey(header))
 			.ToList();
@@ -211,6 +214,7 @@ public sealed class ImportMapItemService
 						IsSuccess = false,
 						Message = $"SubDistributor '{firstRow.SubDistributorCode}' not found."
 					};
+					ApplyRawValues(rowResult, row.RawValues);
 					rowResult.Issues.Add($"SubDistributor '{firstRow.SubDistributorCode}' not found.");
 					result.Rows.Add(rowResult);
 					createdRows.Add(rowResult);
@@ -249,6 +253,7 @@ public sealed class ImportMapItemService
 						IsSuccess = false,
 						Message = $"Company Item '{firstRow.CompanyItemCode}' not found."
 					};
+					ApplyRawValues(rowResult, row.RawValues);
 					rowResult.Issues.Add($"Company Item '{firstRow.CompanyItemCode}' not found.");
 					result.Rows.Add(rowResult);
 					createdRows.Add(rowResult);
@@ -309,6 +314,7 @@ public sealed class ImportMapItemService
 						Price = row.Price ?? computedPrice,
 						IsSuccess = rowIssues.Count == 0
 					};
+					ApplyRawValues(rowResult, row.RawValues);
 					rowResult.Issues.AddRange(rowIssues);
 					result.Rows.Add(rowResult);
 					createdRows.Add(rowResult);
@@ -352,7 +358,7 @@ public sealed class ImportMapItemService
 					Price = effectivePrice,
 					IsSuccess = true
 				};
-
+				ApplyRawValues(rowResult, row.RawValues);
 				// Validate conversion
 				if (row.Conversion <= 0)
 				{
@@ -567,6 +573,11 @@ public sealed class ImportMapItemService
 				continue; // Skip rows with invalid price
 			}
 
+			var rawValues = headers.ToDictionary(
+				kvp => kvp.Key,
+				kvp => (string?)GetString(row, kvp.Value),
+				StringComparer.OrdinalIgnoreCase);
+
 			rows.Add(new ImportedMapItemRow(
 				rowNumber,
 				subdDistributorCode,
@@ -577,7 +588,8 @@ public sealed class ImportMapItemService
 				subdItemName,
 				uom,
 				conversion,
-				price));
+				price,
+				rawValues));
 		}
 
 		return rows;
@@ -953,18 +965,27 @@ public sealed class ImportMapItemService
 	{
 		return value?.Trim().ToLowerInvariant() ?? string.Empty;
 	}
+	private static void ApplyRawValues(ImportMapItemRowResult target, IReadOnlyDictionary<string, string?> source)
+	{
+		foreach (var kvp in source)
+		{
+			target.RawValues[kvp.Key] = kvp.Value;
+		}
+	}
 
-	private sealed record ImportedMapItemRow(
-		int RowNumber,
-		string SubDistributorCode,
-		string Principal,
-		string CompanyItemCode,
-		string CompanyItemName,
-		string SubdItemCode,
-		string SubdItemName,
-		string UOM,
-		decimal Conversion,
-		decimal? Price);
+private sealed record ImportedMapItemRow(
+    int RowNumber,
+    string SubDistributorCode,
+    string Principal,
+    string CompanyItemCode,
+    string CompanyItemName,
+    string SubdItemCode,
+    string SubdItemName,
+    string UOM,
+    decimal Conversion,
+    decimal? Price,
+    IReadOnlyDictionary<string, string?> RawValues);
+	
 }
 
 

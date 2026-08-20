@@ -196,4 +196,55 @@ public class DownloadTemplateService
         worksheet.Cell(row, 9).Value = item.Price;
         worksheet.Cell(row, 9).Style.Protection.Locked = false;
     }
+
+    public byte[] GenerateErrorReportExcel(ImportMapItemResult result)
+    {
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Errors");
+
+        var headers =  result.OriginalHeaders.Count > 0 ? result.OriginalHeaders : new List<string>
+        {
+            "SubDistributorCode",
+            "Principal",
+            "CompanyItemCode",
+            "CompanyItemName",
+            "SubdItemCode",
+            "SubdItemName",
+            "UOM",
+            "Conversion",
+            "Price"
+        };
+
+        for (int i = 0; i < headers.Count; i++)
+            sheet.Cell(1, i + 1).Value = headers[i];
+        
+        var errorColumn = headers.Count + 1;
+        sheet.Cell(1, errorColumn).Value = "Error";
+        sheet.Row(1).Style.Font.Bold = true;
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+
+        var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
+
+        int excelRow = 2;
+        foreach (var row in failedRows)
+        {
+            for (int i = 0; i < headers.Count; i++)
+            {
+                row.RawValues.TryGetValue(headers[i], out var value);
+                sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
+            }
+
+            var errorCell = sheet.Cell(excelRow, errorColumn);
+            errorCell.Value = string.Join("; ", row.Issues);
+            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D"); 
+            errorCell.Style.Font.Bold = true;
+
+            excelRow++;
+        }
+        sheet.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return ms.ToArray();
+    }
 }

@@ -5,6 +5,7 @@ public sealed class ImportMapItemResult
 	public List<ImportMapItemRowResult> Rows { get; } = new();
 	public List<PreparedItemGroup> PreparedGroups { get; } = new();
 	public List<ImportMapItemIssue> Issues { get; } = new();
+    public List<string> OriginalHeaders { get; set; } = new();
 
 	public int SuccessCount => Rows.Count(row => row.IsSuccess);
 
@@ -38,6 +39,7 @@ public sealed class ImportMapItemRowResult
 	public int? SubdItemId { get; set; }
 	public int? ItemsUomId { get; set; }
 	public List<string> Issues { get; } = new();
+	public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class PreparedItemGroup

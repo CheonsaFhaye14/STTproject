@@ -159,6 +159,10 @@
                                     </button>
                                 }
                             </div>
+                            <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                                <i class="ti ti-download" aria-hidden="true"></i>
+                                Download Error Report
+                            </button>
                         }
 
                         @* ── Select all (only on valid / all tab) ── *@
@@ -394,6 +398,7 @@
               OnYes="ConfirmCommit" OnNo="CancelCommit" CloseOnOverlayClick="true" />
 
 @code {
+    [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
     [Parameter] public bool Show { get; set; }
     [Parameter] public ImportMapItemResult? ImportResult { get; set; }
     [Parameter] public EventCallback OnCommit { get; set; }
@@ -638,5 +643,9 @@
         }
 
         return affectedRows.Count;
+    }
+    private async Task HandleDownloadErrorReport()
+    {
+        if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
     }
 }

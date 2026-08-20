@@ -10,6 +10,7 @@ using STTproject.Models;
 using STTproject.Services;
 using STTproject.Shared.Helper;
 
+
 namespace STTproject.Features.User.MapItem.Components.Pages
 {
     public partial class MapItem
@@ -777,6 +778,19 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                     return;
                 }
             }
+        }
+        private async Task HandleDownloadErrorReport()
+        {
+            if (lastImportResult == null) return;
+
+            var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult);
+            var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBytes",
+                fileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
         }
 
         private async Task OnSubdChangedAsync()
