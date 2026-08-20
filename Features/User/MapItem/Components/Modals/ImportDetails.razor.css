@@ -1,6 +1,7 @@
 /* ── Overlay ── */
 ::deep .modal.show {
     background-color: rgba(0, 0, 0, 0.5) !important;
+   
 }
 
 /* ── Modal header ── */
@@ -9,8 +10,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.4rem;
-    background: #1B1B1F;
-    border-bottom: none;
+    background: linear-gradient(135deg, #ede9fb 0%, #f3f0fd 100%);
+    border-bottom: 0.5px solid #e3dff5;
 }
 
 ::deep .mh-left {
@@ -23,30 +24,30 @@
     width: 36px;
     height: 36px;
     border-radius: 12px;
-    background: #2A2A2E;
+    background: #d4c9f7;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #B08D57;
+    color: #5c3fa8;
     font-size: 17px;
 }
 
 ::deep .mh-title {
     font-size: 14px;
     font-weight: 500;
-    color: #FAFAF9;
+    color: #3a2870;
 }
 
 ::deep .mh-sub {
     font-size: 11px;
-    color: #9A968C;
+    color: #8b7ec8;
     margin-top: 2px;
 }
 
 ::deep .mh-close {
-    background: rgba(255, 255, 255, 0.06);
-    border: 0.5px solid rgba(255, 255, 255, 0.15);
-    color: #C9C5BA;
+    background: #fff;
+    border: 0.5px solid #e3dff5;
+    color: #8b7ec8;
     font-size: 15px;
     cursor: pointer;
     padding: 6px;
@@ -57,7 +58,7 @@
 }
 
     ::deep .mh-close:hover {
-        color: #FAFAF9;
+        color: #3a2870;
     }
 
 /* ── Modal body ── */
@@ -68,7 +69,7 @@
     gap: 0.9rem;
     max-height: 65vh;
     overflow-y: auto;
-    background: #FAFAF9;
+    background: #faf9fe;
 }
 
 /* ── Stat bar ── */
@@ -82,12 +83,12 @@
     background: #fff;
     border-radius: 12px;
     padding: 0.75rem 0.9rem;
-    border: 0.5px solid #E5E3DD;
+    border: 0.5px solid #ede9fb;
 }
 
 ::deep .sc-label {
     font-size: 11px;
-    color: #9A968C;
+    color: #a09abf;
     margin-bottom: 3px;
     font-weight: 500;
 }
@@ -95,7 +96,7 @@
 ::deep .sc-val {
     font-size: 22px;
     font-weight: 500;
-    color: #1B1B1F;
+    color: #2c235a;
 }
 
     ::deep .sc-val.sc-ok {
@@ -190,8 +191,8 @@
 ::deep .tabs {
     display: flex;
     gap: 3px;
-    background: #F7F6F4;
-    border: 0.5px solid #E5E3DD;
+    background: #f0edf9;
+    border: 0.5px solid #e3dff5;
     border-radius: 30px;
     padding: 3px;
 }
@@ -205,7 +206,7 @@
     cursor: pointer;
     border: none;
     background: none;
-    color: #9A968C;
+    color: #8b7ec8;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -215,8 +216,8 @@
 
     ::deep .tab.act-all {
         background: #fff;
-        color: #1B1B1F;
-        border: 0.5px solid #E5E3DD;
+        color: #3a2870;
+        border: 0.5px solid #e3dff5;
     }
 
     ::deep .tab.act-ok {
@@ -253,7 +254,7 @@
     align-items: center;
     gap: 8px;
     background: #fff;
-    border: 0.5px solid #E5E3DD;
+    border: 0.5px solid #e3dff5;
     border-radius: 10px;
     padding: 6px 10px;
 }
@@ -270,10 +271,10 @@
 
 ::deep .err-filter-bar select {
     font-size: 12px;
-    border: 0.5px solid #E5E3DD;
+    border: 0.5px solid #e3dff5;
     border-radius: 6px;
-    background: #FAFAF9;
-    color: #1B1B1F;
+    background: #faf9fe;
+    color: #2c235a;
     padding: 3px 6px;
     flex: 1;
 }
@@ -282,7 +283,7 @@
     background: none;
     border: none;
     font-size: 11px;
-    color: #9A968C;
+    color: #a09abf;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -301,18 +302,18 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: #8A867C;
+    color: #9890b8;
 }
 
     ::deep .sel-all-bar input[type="checkbox"] {
-        accent-color: #B08D57;
+        accent-color: #7c5fc8;
         width: 13px;
         height: 13px;
     }
 
 /* ── Invoice card ── */
 ::deep .import-results .icard {
-    border: 0.5px solid #E5E3DD;
+    border: 0.5px solid #ede9fb;
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 0.5rem;
@@ -413,7 +414,7 @@
 /* ── Chevron ── */
 ::deep .chev {
     font-size: 13px;
-    color: #9A968C;
+    color: #a09abf;
     transition: transform 0.2s;
     flex-shrink: 0;
 }
@@ -439,8 +440,8 @@
 }
 
 ::deep .badge-ready {
-    background: #F2E9DA;
-    color: #8A6A34;
+    background: #eae5f9;
+    color: #4a3590;
 }
 
 ::deep .badge-err {
@@ -454,11 +455,11 @@
     align-items: center;
     gap: 5px;
     font-size: 12px;
-    color: #8A867C;
+    color: #8b7ec8;
 }
 
     ::deep .chk input[type="checkbox"] {
-        accent-color: #B08D57;
+        accent-color: #7c5fc8;
         width: 13px;
         height: 13px;
     }
@@ -467,7 +468,7 @@
 ::deep .icb {
     padding: 0.85rem 1rem;
     background: #fff;
-    border-top: 0.5px solid #E5E3DD;
+    border-top: 0.5px solid #ede9fb;
 }
 
 /* ── Customer meta grid ── */
@@ -476,18 +477,18 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px 1.5rem;
     font-size: 12px;
-    color: #8A867C;
+    color: #9890b8;
     margin-bottom: 0.75rem;
 }
 
 ::deep .cust-meta-label {
     font-size: 11px;
-    color: #9A968C;
+    color: #a09abf;
     display: block;
 }
 
 ::deep .cust-meta strong {
-    color: #1B1B1F;
+    color: #2c235a;
     font-weight: 500;
     display: block;
     margin-top: 1px;
@@ -508,17 +509,17 @@
     ::deep .itbl th {
         font-size: 11px;
         font-weight: 500;
-        color: #9A968C;
+        color: #a09abf;
         padding: 5px 7px;
-        border-bottom: 0.5px solid #E5E3DD;
-        background: #F7F6F4;
+        border-bottom: 0.5px solid #ede9fb;
+        background: #f7f4fd;
         text-align: left;
     }
 
     ::deep .itbl td {
         padding: 6px 7px;
-        border-bottom: 0.5px solid #E5E3DD;
-        color: #1B1B1F;
+        border-bottom: 0.5px solid #f0edf9;
+        color: #2c235a;
     }
 
     ::deep .itbl tr:last-child td {
@@ -596,7 +597,7 @@
 
 ::deep .hint-text {
     font-size: 12px;
-    color: #8A867C;
+    color: #9890b8;
 }
 
 /* ── Modal footer ── */
@@ -606,33 +607,33 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 0.85rem 1.4rem;
-    border-top: 0.5px solid #E5E3DD;
-    background: #F7F6F4;
+    border-top: 0.5px solid #ede9fb;
+    background: #f5f2fd;
 }
 
 ::deep .btn-close-modal {
     padding: 6px 15px;
     border-radius: 10px;
     font-size: 13px;
-    background: #F1F0EB;
-    border: 0.5px solid #E5E3DD;
-    color: #5F5E5A;
+    background: #fff;
+    border: 0.5px solid #ddd8f3;
+    color: #8b7ec8;
     cursor: pointer;
     transition: background 0.15s;
 }
 
     ::deep .btn-close-modal:hover {
-        background: #E5E3DD;
+        background: #eeecf8;
     }
 
 ::deep .btn-commit {
-    padding: 8px 20px;
-    border-radius: 999px;
+    padding: 6px 16px;
+    border-radius: 10px;
     font-size: 13px;
-    font-weight: 700;
-    background: #B08D57;
+    font-weight: 500;
+    background: #5c3fa8;
     border: none;
-    color: #FAFAF9;
+    color: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -641,10 +642,30 @@
 }
 
     ::deep .btn-commit:hover:not(:disabled) {
-        background: #8A6A34;
+        background: #3a2870;
     }
 
     ::deep .btn-commit:disabled {
         opacity: 0.4;
         cursor: not-allowed;
     }
+::deep .btn-download-errors {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #fff;
+    border: 0.5px solid #E24B4A;
+    color: #A32D2D;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+    ::deep .btn-download-errors:hover {
+        background: #FCEBEB;
+    }
+    
