@@ -2,59 +2,133 @@
 @using Microsoft.AspNetCore.Components.Web
 
 <button class="btn @VariantClass" @onclick="OnClick" disabled="@Disabled" type="@Type">
-    @if (Icon != null)
+    @if (IconContent != null)
+    {
+        <span class="btn-icon" aria-hidden="true">@IconContent</span>
+    }
+    else if (Icon != null)
     {
         <i class="@Icon"></i>
     }
-    @Title
+    @if (Title != null)
+    {
+        <span>@Title</span>
+    }
 </button>
 
 <style>
     .btn
     {
         border: none;
-        border-radius: 7px;
-        padding: 9px 18px;
-        font-weight: 600;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-weight: 700;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font-size: 14px;
+        font-size: 13px;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
     }
-    .btn-secondary
-    {
-        background: #f0eee9;
-        color: #4a4a4a;
-    }
-    .btn-secondary:hover
-    {
-        background: #e5e2dc;
-    }
+
     .btn-primary
     {
-        background: #a27332;
-        color: white;
+        background-color: var(--app-accent-strong) !important;
+        color: var(--app-dark-deep) !important;
+        border-radius: 10px;
+        border: none !important;
+        box-shadow: 0 2px 6px rgba(33, 26, 16, 0.16) !important;
     }
+
     .btn-primary:hover
     {
-        background: #a97f45;
+        background-color: var(--app-accent) !important;
+        color: var(--app-dark-deep) !important;
+        transform: translateY(-1px);
     }
+
+    .btn-secondary
+    {
+        background-color: var(--app-surface) !important;
+        color: var(--app-accent-dark) !important;
+        border-radius: 10px;
+        border: 1px solid var(--app-border) !important;
+        box-shadow: 0 2px 6px rgba(33, 26, 16, 0.08) !important;
+    }
+
+    .btn-secondary:hover
+    {
+        background-color: var(--app-accent) !important;
+        color: var(--app-dark-deep) !important;
+        border-color: var(--app-accent-strong) !important;
+    }
+
+    .btn-Cancel
+    {
+        background-color: var(--app-surface) !important;
+        color: var(--app-accent-dark) !important;
+        border-radius: 10px;
+        border: 1px solid var(--app-border) !important;
+        box-shadow: 0 2px 6px rgba(33, 26, 16, 0.08) !important;
+    }
+    .btn-Cancel:hover
+    {
+        background-color: var(--app-accent) !important;
+        color: var(--app-dark-deep) !important;
+        border-color: var(--app-accent-strong) !important;
+    }
+
     .btn:disabled
     {
         background: #d8cbb0;
         color: #ffffff;
         cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* Stays applied as long as the button has focus — including right
+       after a click, since clicking also focuses the button. */
+    .btn:focus,
+    .btn:active,
+    .btn:active:focus
+    {
+        outline: 2px solid var(--app-accent-strong);
+        box-shadow: 0 2px 6px rgba(33, 26, 16, 0.16);
+    }
+
+    .btn-icon
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
+    .btn-icon ::deep svg
+    {
+        width: 100%;
+        height: 100%;
+        fill: currentColor;
     }
 </style>
 
 @code {
-    [Parameter] public string Title { get; set; } = "Button";
+    [Parameter] public string? Title { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public string? Icon { get; set; }
+    [Parameter] public RenderFragment? IconContent { get; set; }
     [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Secondary;
     [Parameter] public string Type { get; set; } = "button";
 
-    private string VariantClass => Variant == ButtonVariant.Primary ? "btn-primary" : "btn-secondary";
+private string VariantClass => Variant switch
+{
+    ButtonVariant.Primary => "btn-primary",
+    ButtonVariant.Cancel => "btn-Cancel",
+    _ => "btn-secondary"
+};
 }

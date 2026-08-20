@@ -1,6 +1,7 @@
 using STTproject.Features.Admin.PriceIncrease.DTOs;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
+using System.Security.Cryptography.X509Certificates;
 
 namespace STTproject.Features.Admin.PriceIncrease.Services
 {
@@ -350,6 +351,42 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 .OrderBy(x => x.SubdItemCode)
                 .ThenBy(x => x.UomName)
                 .ToList();
+        }
+
+        public async Task<(bool success, string? error)> CancelPendingIncreaseAsync(int companyItemPriceHistoryId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            try
+            {
+                var history = await db.CompanyItemPriceHistories
+                    .FirstOrDefaultAsync(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId);
+
+                if (history == null)
+                    return (false, "Price increase not found.");
+
+                if (history.AppliedDate != null)
+                    return (false, "This increase has already been applied and can no longer be canceled.");
+
+                // Remove the company-level history row
+                db.CompanyItemPriceHistories.Remove(history);
+
+                // Remove all linked UOM-level history rows
+                var uomRows = await db.ItemsUomPriceHistories
+                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId && u.AppliedDate == null)
+                    .ToListAsync();
+
+                db.ItemsUomPriceHistories.RemoveRange(uomRows);
+
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return (false, $"Unable to cancel the price increase: {ex.GetBaseException().Message}");
+            }
         }
     }
 }

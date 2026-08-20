@@ -1,5 +1,6 @@
 
 @using STTproject.Features.Admin.PriceIncrease.DTOs
+@using STTproject.Shared.Components.Buttons
 @inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 <div class="clt-page">
@@ -164,16 +165,10 @@
                                         </td>
                                         <td>
                                             <div class="clt-actions">
-                                                <button class="clt-btn-edit"
-                                                        @onclick="() => OnEditPriceIncrease.InvokeAsync(priceIncrease.CompanyItemPriceHistoryId)">
-                                                    View
-                                                </button>
+                                                <Button Variant="ButtonVariant.Primary" Title="View" Onclick="@(() => OnEditPriceIncrease.InvokeAsync(priceIncrease.CompanyItemPriceHistoryId))" />
                                                 @if (priceIncrease.Status != "Applied")
                                                 {
-                                                    <button class="clt-btn-delete">
-                                                            @* @onclick="() => RequestCancel(priceIncrease)" *@
-                                                        Cancel
-                                                    </button>
+                                                    <Button Variant="ButtonVariant.Secondary" Title="Cancel" Onclick="@(() => RequestCancel(priceIncrease.CompanyItemPriceHistoryId))" />
                                                 }
                                             </div>
                                         </td>
@@ -203,6 +198,8 @@
         </main>
 
     </div>
+        <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Cancellation of price change" Message="@toggleConfirmMessage"
+                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
 
 </div>
 
@@ -274,6 +271,14 @@
             await InvokeAsync(StateHasChanged);
         }
     }
+    private async Task ConfirmToggle()
+    {
+        showToggleConfirmModal = false;
+        await AdminPriceIncreaseService.CancelPendingIncreaseAsync(companyItemPriceHistoryId: pendingToggleId);
+        var priceIncrease = PagedPriceIncrease.FirstOrDefault(x => x.CompanyItemPriceHistoryId == pendingToggleId);
+        await LoadPageAsync();
+
+    }
     public async Task LoadPageAsync()
     {
         isLoading = true;
@@ -313,6 +318,13 @@
             if (OnLoaded.HasDelegate)
                 await OnLoaded.InvokeAsync();
         }
+    }
+
+    private async Task RequestCancel( int companyItemPriceHistoryId)
+    {
+        pendingToggleId = companyItemPriceHistoryId;
+        toggleConfirmMessage = "Are you sure you want to cancel this price increase?";
+        showToggleConfirmModal = true;
     }
 
     private async Task OnFilterChanged(string? status = null, string? principal = null)
