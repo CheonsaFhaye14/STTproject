@@ -3,6 +3,9 @@
 @using STTproject.Features.Admin.Customers.Components.Modals
 @using STTproject.Features.Admin.Customers.Components.Sections
 @using STTproject.Shared.Components
+@using STTproject.Shared.Components.Buttons
+@inject STTproject.Features.Admin.Customers.Services.ImportCustomersService ImportCustomersService
+@inject IJSRuntime JS
 
 @if (isLoading)
 {
@@ -22,10 +25,10 @@
                 <h1 class="clt-page-title">Customers</h1>
                 <p class="clt-page-sub">@totalCount total customers</p>
             </div>
-            <button class="clt-add-btn" type="button" @onclick="OpenImportModal">Import Excel</button>
-            <button class="clt-add-btn" @onclick="OpenAddCustomerModal">
-                <span class="clt-add-icon">+</span> Add customer
-            </button>
+        <Button Title="Download Excel Template" Variant="ButtonVariant.Secondary" OnClick="DownloadTemplate" 
+         Disabled="isDownloadingTemplate"></Button>            
+        <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
+            <Button Title="Add Customer" Variant="ButtonVariant.Primary" Icon="fa-plus" OnClick="OpenAddCustomerModal"></Button>
         </div>
 
         @* ------------- Customer List Table ----------------- *@
@@ -110,5 +113,25 @@
     private void CloseImportModal()
     {
         showImportModal = false;
+    }
+    private bool isDownloadingTemplate;
+    private async Task DownloadTemplate()
+    {
+        if (isDownloadingTemplate) return;
+        isDownloadingTemplate = true;
+
+        try
+        {
+            var bytes = ImportCustomersService.GenerateTemplateExcel();
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBytes",
+                "customer-import-template.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        finally
+        {
+            isDownloadingTemplate = false;
+        }
     }
 }

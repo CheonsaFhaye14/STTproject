@@ -83,20 +83,25 @@
         if (selectedFile == null || string.IsNullOrEmpty(selectedSubdistributorId))
             return;
 
-        Show = false;
         isPreparing = true;
         importResult = null;
         StateHasChanged();
 
         try
         {
-            await using var stream = selectedFile.OpenReadStream(MaxFileSizeBytes);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            ms.Position = 0;
+            byte[] fileBytes;
+            await using (var stream = selectedFile.OpenReadStream(MaxFileSizeBytes))
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+            }
+
+            Show = false;
 
             var subdistributorId = int.Parse(selectedSubdistributorId);
-            importResult = await ImportCustomersService.PrepareFromExcelAsync(ms, subdistributorId);
+            using var importStream = new MemoryStream(fileBytes);
+            importResult = await ImportCustomersService.PrepareFromExcelAsync(importStream, subdistributorId);
 
             selectedGroupKeys = importResult.PreparedGroups
                 .Where(g => g.Selected && !g.IsSaved)
@@ -105,6 +110,8 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine(ex.ToString()); // full type, message, stack trace, AND inner exception
+            Show = false;
             importResult = new STTproject.Features.Admin.Customers.DTOs.CustomerImportResult();
             importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
         }
@@ -163,7 +170,7 @@
         showResults = false;
         importResult = null;
         selectedGroupKeys.Clear();
-        await OnClose.InvokeAsync(); // now safe to unmount — nothing left to show
+        await OnClose.InvokeAsync(); 
     }
 
     private static string GroupKey(STTproject.Features.Admin.Customers.DTOs.PreparedCustomerGroup g)

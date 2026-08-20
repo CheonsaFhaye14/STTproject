@@ -52,7 +52,7 @@
                     var selectableCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved);
                     var selectedCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));
                     
-                    @if (hasCommitted)
+                   @if (hasCommitted)
                     {
                         if (ImportResult.ErrorCount == 0)
                         {
@@ -71,10 +71,6 @@
                                     <div class="global-alert-title">
                                         ⚠️ @ImportResult.SuccessCount customer(s) imported successfully. @ImportResult.ErrorCount row(s) could not be imported.
                                     </div>
-                                    <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
-                                        <i class="ti ti-download" aria-hidden="true"></i>
-                                        Download Error Report
-                                    </button>
                                 </div>
                             </div>
                         }
@@ -191,6 +187,10 @@
                                     </button>
                                 }
                             </div>
+                             <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                                <i class="ti ti-download" aria-hidden="true"></i>
+                                Download Error Report
+                            </button>
                         }
 
                         @* ── Select all (only on valid / all tab) ── *@

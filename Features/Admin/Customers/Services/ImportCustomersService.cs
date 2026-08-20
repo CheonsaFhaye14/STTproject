@@ -344,8 +344,11 @@ public sealed class ImportCustomersService
 
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
-        sheet.Cell(1, headers.Count + 1).Value = "Error";
+
+        var errorColumn = headers.Count + 1;
+        sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
 
         var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
 
@@ -357,17 +360,22 @@ public sealed class ImportCustomersService
                 row.RawValues.TryGetValue(headers[i], out var value);
                 sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
             }
-            sheet.Cell(excelRow, headers.Count + 1).Value = string.Join("; ", row.Issues);
+
+            var errorCell = sheet.Cell(excelRow, errorColumn);
+            errorCell.Value = string.Join("; ", row.Issues);
+            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D"); 
+            errorCell.Style.Font.Bold = true;
+
             excelRow++;
         }
 
-        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
         sheet.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
+
     private static readonly string[] TemplateHeaders =
     {
         "Customer Code", "Customer Name", "Customer Type", "City", "Province", "Address Line", "Zip Code"
