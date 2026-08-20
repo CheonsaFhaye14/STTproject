@@ -1,4 +1,400 @@
-.modal-footer {
-    padding: 20px 25px;
+/* =========================
+   RESET (guards against outside global styles
+   like Bootstrap's default label/heading margins
+   stacking on top of the spacing below)
+========================= */
+#add-uom-modal-overlay .modal-box h4,
+#add-uom-modal-overlay .modal-box h5,
+#add-uom-modal-overlay .modal-box p,
+#add-uom-modal-overlay .modal-box label {
+    margin: 0;
+    padding: 0;
+}
+
+/* =========================
+   OVERLAY + MODAL BOX
+========================= */
+#add-uom-modal-overlay.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 15, 17, 0.55);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#add-uom-modal-overlay .modal-box {
+    width: 650px;
+    max-width: 100%;
+    max-height: 80vh;
+    background: #FFFFFF;
+    border-radius: 14px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* =========================
+   HEADER
+========================= */
+#add-uom-modal-overlay .modal-header {
+    margin-bottom: 0;
+    background: #1B1B1F;
+    padding: 22px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+#add-uom-modal-overlay .header-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #26262B;
+    border: 1px solid rgba(176, 141, 87, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #D9BE8F;
+    font-size: 17px;
+    flex-shrink: 0;
+}
+
+#add-uom-modal-overlay .uom-header h4 {
+    margin: 0 0 3px;
+    font-size: 17px;
+    font-weight: 700;
+    color: #F4EBDA;
+}
+
+#add-uom-modal-overlay .modal-subtitle {
+    margin: 0;
+    font-size: 12.5px;
+    color: #9A9A9E;
+}
+
+/* =========================
+   BODY
+========================= */
+#add-uom-modal-overlay .modal-body {
+    padding: 22px 26px 24px;
+    overflow-y: auto;
+}
+
+#add-uom-modal-overlay .modal-body > h5 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #8C6D3F;
+    margin-bottom: 16px !important;
+    padding-bottom: 10px !important;
+    border-bottom: 1px solid #EFEBE2;
+}
+
+#add-uom-modal-overlay .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+#add-uom-modal-overlay .form-group label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1B1B1F;
+}
+
+#add-uom-modal-overlay .required-asterisk {
+    color: #C0392B;
+}
+
+#add-uom-modal-overlay select,
+#add-uom-modal-overlay input {
+    width: 100%;
+    min-height: 40px;
+    border-radius: 10px;
+    padding: 9px 14px;
+    line-height: 1.4;
+    border: 1px solid #E5E3DD;
+    box-shadow: 0 2px 8px rgba(27, 27, 31, 0.06);
+    background: #FFFFFF;
+    color: #1B1B1F;
+    font-size: 14px;
+    font-weight: 500;
+    outline: none;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    box-sizing: border-box;
+    appearance: none;
+}
+
+#add-uom-modal-overlay select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%236B6B70' d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#add-uom-modal-overlay input[disabled],
+#add-uom-modal-overlay input[readonly],
+#add-uom-modal-overlay select[disabled] {
+    background: #F7F6F4;
+    color: #9A9A9E;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+#add-uom-modal-overlay select:focus,
+#add-uom-modal-overlay input:focus {
+    border-color: #B08D57;
+    box-shadow: 0 2px 8px rgba(27, 27, 31, 0.08), 0 0 0 3px rgba(176, 141, 87, 0.2);
+    transform: translateY(-1px);
+}
+
+#add-uom-modal-overlay .error-text {
+    font-size: 12px;
+    color: #C0392B;
+    font-weight: 500;
+}
+
+#add-uom-modal-overlay .hint-text {
+    font-size: 12px;
+    color: #9A9A9E;
+    margin-top: -2px;
+}
+
+/* =========================
+   ACTIONS
+========================= */
+#add-uom-modal-overlay .modal-actions {
+    display: flex;
+    align-items: center;
     gap: 10px;
+    margin-top: 4px;
+}
+
+#add-uom-modal-overlay .btn-primary,
+#add-uom-modal-overlay .btn-secondary {
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+#add-uom-modal-overlay .btn-primary {
+    background: #B08D57;
+    color: #1B1B1F;
+}
+
+#add-uom-modal-overlay .btn-primary:hover {
+    filter: brightness(1.05);
+}
+
+#add-uom-modal-overlay .btn-primary:disabled {
+    background: #E5E3DD;
+    color: #9A9A9E;
+    cursor: not-allowed;
+    filter: none;
+}
+
+#add-uom-modal-overlay .btn-secondary {
+    background: #FFFFFF;
+    border-color: #D8D3C7;
+    color: #4A4A4A;
+}
+
+#add-uom-modal-overlay .btn-secondary:hover {
+    border-color: #B08D57;
+    color: #B08D57;
+}
+
+/* =========================
+   QUEUED / ALL UNITS TABLE
+========================= */
+#add-uom-modal-overlay .modal-queue {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #EFEBE2;
+}
+
+#add-uom-modal-overlay .queue-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+#add-uom-modal-overlay .queue-heading h5 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #1B1B1F;
+    border-bottom: none;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+#add-uom-modal-overlay .queue-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: rgba(176, 141, 87, 0.16);
+    color: #8C6D3F;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+#add-uom-modal-overlay .queue-table-wrap {
+    border: 1px solid #EFEBE2;
+    border-radius: 12px;
+    overflow: hidden;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+#add-uom-modal-overlay .modal-queue table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+#add-uom-modal-overlay .modal-queue thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #9A9A9E;
+    background: #FAF9F7;
+    padding: 10px 10px;
+    border-bottom: 1px solid #EFEBE2;
+}
+
+#add-uom-modal-overlay .modal-queue thead th.num {
+    text-align: right;
+}
+
+#add-uom-modal-overlay .modal-queue thead th.col-remove {
+    width: 90px;
+}
+
+#add-uom-modal-overlay .modal-queue tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #F3F1EC;
+    color: #1B1B1F;
+    font-weight: 500;
+    vertical-align: middle;
+}
+
+#add-uom-modal-overlay .modal-queue tbody td.num {
+    text-align: right;
+}
+
+#add-uom-modal-overlay .modal-queue tbody td.col-remove {
+    text-align: right;
+}
+
+#add-uom-modal-overlay .modal-queue tbody tr:nth-child(even) {
+    background: #FBFAF8;
+}
+
+#add-uom-modal-overlay .modal-queue tbody tr:hover {
+    background: #FBF7EF;
+}
+
+#add-uom-modal-overlay .modal-queue tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* compact inputs for inline table editing */
+#add-uom-modal-overlay .modal-queue input {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 13px;
+    border-radius: 8px;
+    text-align: right;
+    box-shadow: none;
+}
+
+#add-uom-modal-overlay .modal-queue input:focus {
+    transform: none;
+}
+
+#add-uom-modal-overlay .btn-table-action {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid #D8D3C7;
+    color: #8C6D3F;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+#add-uom-modal-overlay .btn-table-action:hover {
+    border-color: #B08D57;
+    background: rgba(176, 141, 87, 0.1);
+}
+
+#add-uom-modal-overlay .btn-table-action.danger {
+    color: #C0392B;
+    border-color: rgba(192, 57, 43, 0.3);
+}
+
+#add-uom-modal-overlay .btn-table-action.danger:hover {
+    background: rgba(192, 57, 43, 0.08);
+    border-color: #C0392B;
+}
+
+/* =========================
+   FOOTER
+========================= */
+#add-uom-modal-overlay .modal-footer {
+    flex-shrink: 0;
+    background: #FAF9F7;
+    border-top: 1px solid #EFEBE2;
+    padding: 18px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#add-uom-modal-overlay .modal-footer .modal-actions {
+    margin-top: 0;
+}
+
+#add-uom-modal-overlay .modal-footer .btn-primary:last-child {
+    background: #8C6D3F;
+    color: #FFF8EC;
+    margin-left: auto;
+}
+
+#add-uom-modal-overlay .modal-footer .btn-primary:last-child:hover {
+    filter: brightness(1.06);
 }

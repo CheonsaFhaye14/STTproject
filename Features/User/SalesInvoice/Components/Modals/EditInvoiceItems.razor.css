@@ -1,54 +1,291 @@
-.empty-state {
-    padding: 18px 0;
-    text-align: center;
-    color: #8A6A34;
+
+.modal-box h4,
+.modal-box h5,
+.modal-box p,
+.modal-box label {
+    margin: 0;
+    padding: 0;
 }
 
-.edit-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+/* =========================
+   OVERLAY + MODAL BOX
+========================= */
+#add-items-modal-overlay.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 15, 17, 0.55);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
+#add-items-modal-overlay .modal-box {
+    width: 400px;
+    max-width: 100%;
+    max-height: 90vh;
+    background: #FFFFFF;
+    border-radius: 14px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* =========================
+   HEADER
+========================= */
 .modal-header {
-    margin-bottom: 16px;
-    background: #F7F6F4;
+    margin-bottom: 0;
+    background: #1B1B1F;
+    padding: 22px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    flex-shrink: 0;
 }
 
-.modal-body {
-    padding-top: 4px;
+.header-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #26262B;
+    border: 1px solid rgba(176, 141, 87, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #D9BE8F;
+    font-size: 17px;
+    flex-shrink: 0;
 }
+
+.invoice-header h4 {
+    margin: 0 0 3px;
+    font-size: 17px;
+    font-weight: 700;
+    color: #F4EBDA;
+}
+
+.modal-subtitle {
+    margin: 0;
+    font-size: 12.5px;
+    color: #9A9A9E;
+}
+
+/* =========================
+   BODY
+========================= */
+.modal-body {
+    padding: 22px 26px 24px;
+    overflow-y: auto;
+}
+
+.form-row {
+    display: flex;
+    gap: 14px;
+}
+
+    .form-row .form-group {
+        flex: 1;
+        min-width: 0;
+    }
 
 .form-group {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    margin-bottom: 16px;
 }
 
 .form-group-full {
     grid-column: 1 / -1;
 }
 
-.actions-row {
-    align-items: flex-start;
+.form-group label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1B1B1F;
+}
+
+.required-asterisk {
+    color: #C0392B;
 }
 
 select,
 input {
     width: 100%;
+    min-height: 40px;
     border-radius: 10px;
-    padding: 3px 5px;
+    padding: 9px 14px;
+    line-height: 1.4;
     border: 1px solid #E5E3DD;
     box-shadow: 0 2px 8px rgba(27, 27, 31, 0.06);
     background: #FFFFFF;
     color: #1B1B1F;
+    font-size: 14px;
     font-weight: 500;
     outline: none;
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    box-sizing: border-box;
+    appearance: none;
 }
+
+select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%236B6B70' d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+    input[disabled],
+    select[disabled] {
+        background: #F7F6F4;
+        color: #9A9A9E;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
 
     select:focus,
     input:focus {
+        border-color: #B08D57;
         box-shadow: 0 2px 8px rgba(27, 27, 31, 0.08), 0 0 0 3px rgba(176, 141, 87, 0.2);
         transform: translateY(-1px);
+    }
+
+.error-text {
+    font-size: 12px;
+    color: #C0392B;
+    font-weight: 500;
+}
+
+/* =========================
+   ACTIONS
+========================= */
+.modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.btn-primary,
+.btn-secondary {
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary {
+    background: #B08D57;
+    color: #1B1B1F;
+}
+
+    .btn-primary:hover {
+        filter: brightness(1.05);
+    }
+
+    .btn-primary:disabled {
+        background: #E5E3DD;
+        color: #9A9A9E;
+        cursor: not-allowed;
+        filter: none;
+    }
+
+.btn-secondary {
+    background: #FFFFFF;
+    border-color: #D8D3C7;
+    color: #4A4A4A;
+}
+
+    .btn-secondary:hover {
+        border-color: #B08D57;
+        color: #B08D57;
+    }
+
+.modal-actions .btn-primary:last-child {
+    background: #8C6D3F;
+    color: #FFF8EC;
+    margin-left: auto;
+}
+
+    .modal-actions .btn-primary:last-child:hover {
+        filter: brightness(1.06);
+    }
+
+/* =========================
+   HELP TEXT
+========================= */
+.modal-help {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #9A9A9E;
+    margin: 14px 0 4px;
+}
+
+    .modal-help i {
+        color: #B08D57;
+        font-size: 13px;
+    }
+
+/* =========================
+   QUEUED ITEMS
+========================= */
+.modal-queue {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #EFEBE2;
+}
+
+    .modal-queue h5 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: #1B1B1F;
+    }
+
+    .modal-queue table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .modal-queue thead th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #9A9A9E;
+        padding: 0 8px 10px;
+        border-bottom: 1px solid #E5E3DD;
+    }
+
+    .modal-queue tbody td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #F0EEE8;
+        color: #1B1B1F;
+        font-weight: 500;
+    }
+
+    .modal-queue tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .modal-queue .btn-secondary {
+        padding: 5px 12px;
+        font-size: 12px;
     }

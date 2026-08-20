@@ -235,33 +235,45 @@
     }
 }
 
+/* Backdrop behind the floating mobile sidebar (rendered only when sidebar is open) */
+.sidebar-backdrop {
+    display: none;
+}
+
 @media (max-width: 600px) {
     .layout-container {
         flex-direction: column;
-    }
-
-    .sidebar.sidebar-open {
-        width: 100%;
-        min-height: unset;
-        padding: 16px 14px;
+        position: relative;
     }
 
     .sidebar.sidebar-closed {
         display: none;
     }
 
-    .sidebar-menu {
-        flex-direction: row;
-        flex-wrap: wrap;
+    /* Floating, centered sidebar card instead of a full-width strip pushed under the topbar */
+    .sidebar.sidebar-open {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(280px, 85vw);
+        max-height: 80vh;
+        min-height: unset;
+        padding: 20px 16px;
+        border-radius: 16px;
+        border-right: none;
+        border: 2px solid var(--app-accent);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        overflow-y: auto;
+        z-index: 1000;
     }
 
-    .sidebar.sidebar-closed .sidebar-label {
-        display: inline;
-    }
-
-    .sidebar.sidebar-closed .sidebar-link {
-        justify-content: flex-start;
-        padding: 10px 14px;
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 900;
     }
 
     .user-topbar {
@@ -276,4 +288,3 @@
         font-size: 14px;
     }
 }
-

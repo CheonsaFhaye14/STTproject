@@ -13,35 +13,38 @@
     <div class="modal-overlay" id="add-items-modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
+                <div class="header-icon"><i class="fa-solid fa-box-open"></i></div>
                 <div class="invoice-header">
                     <h4>Add Invoice Items</h4>
+                    <p class="modal-subtitle">Add products to this invoice</p>
                 </div>
-
             </div>
 
             <div class="modal-body">
-                <div class="form-group">
-                    <label>Principal</label>
-                    <select @ref="PrincipalSelect" value="@SelectedPrincipal" @onchange="OnPrincipalChanged"
-                            @onkeydown="HandlePrincipalKeyDown" @onblur="HandlePrincipalBlur">
-                        <option value="">-- All Principals --</option>
-                        @foreach (var principal in AvailablePrincipals)
-                        {
-                            <option value="@principal">@principal</option>
-                        }
-                    </select>
-                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Principal</label>
+                        <select @ref="PrincipalSelect" value="@SelectedPrincipal" @onchange="OnPrincipalChanged"
+                                @onkeydown="HandlePrincipalKeyDown" @onblur="HandlePrincipalBlur">
+                            <option value="">-- All Principals --</option>
+                            @foreach (var principal in AvailablePrincipals)
+                            {
+                                <option value="@principal">@principal</option>
+                            }
+                        </select>
+                    </div>
 
-                <div class="form-group">
-                    <label>Category</label>
-                    <select @ref="CategorySelect" @onchange="OnCategoryChanged" value="@SelectedCategory"
-                            @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
-                        <option value="">-- All Categories --</option>
-                        @foreach (var cat in AvailableCategories)
-                        {
-                            <option value="@cat">@cat</option>
-                        }
-                    </select>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select @ref="CategorySelect" @onchange="OnCategoryChanged" value="@SelectedCategory"
+                                @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
+                            <option value="">-- All Categories --</option>
+                            @foreach (var cat in AvailableCategories)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -69,38 +72,40 @@
                     }
                 </div>
 
-                <div class="form-group">
-                    <label>@SalesInvoiceValidation.AddItem.Uom.Label<span class="required-asterisk"> *</span></label>
-                    <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
-                            disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleDraftFieldBlur">
-                        <option value="0">-- Select --</option>
-                        @if (CurrentSubdItem != null)
-                        {
-                            @foreach (ItemsUom uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
-                                                u.IsActive))
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>@SalesInvoiceValidation.AddItem.Uom.Label<span class="required-asterisk"> *</span></label>
+                        <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
+                                disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleDraftFieldBlur">
+                            <option value="0">-- Select --</option>
+                            @if (CurrentSubdItem != null)
                             {
-                                <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                @foreach (ItemsUom uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
+                                                    u.IsActive))
+                                {
+                                    <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                }
                             }
+                        </select>
+                        @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                    !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
+                        {
+                            <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
                         }
-                    </select>
-                    @if (ShowValidationErrors &&
-                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)))
-                    {
-                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Uom.Key)</span>
-                    }
-                </div>
+                    </div>
 
-                <div class="form-group">
-                    <label>@SalesInvoiceValidation.AddItem.Quantity.Label<span class="required-asterisk"> *</span></label>
-                    <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
-                           disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
-                    )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
-                           @onblur="HandleDraftFieldBlur" />
-                    @if (ShowValidationErrors &&
-                                                                                                                                                                                                                                                                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
-                    {
-                        <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
-                    }
+                    <div class="form-group">
+                        <label>@SalesInvoiceValidation.AddItem.Quantity.Label<span class="required-asterisk"> *</span></label>
+                        <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
+                               disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
+                        )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
+                               @onblur="HandleDraftFieldBlur" />
+                        @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                    !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                        {
+                            <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
+                        }
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -120,41 +125,50 @@
                     <div class="error-text" style="margin-top: 8px;">@SaveErrorMessage</div>
                 }
 
-                <div class="modal-help">Press Enter after typing quantity to add the item quickly.</div>
+                <div class="modal-help"><i class="fa-regular fa-lightbulb"></i>Press Enter after typing quantity to add the item quickly.</div>
 
                 @if (modalItems.Any())
                 {
                     <div class="modal-queue">
-                        <h5>Queued items</h5>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>SKU</th>
-                                    <th>Name</th>
-                                    <th>UOM</th>
-                                    <th>Qty</th>
-                                    <th>Line Amount</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var queuedItem in modalItems)
-                                {
+                        <div class="queue-heading">
+                            <h5>Queued items<span class="queue-count">@modalItems.Count</span></h5>
+                            <span class="queue-subtotal">@FormatHelper.FormatPrice(@modalItems.Sum(i => i.Amount))</span>
+                        </div>
+                        <div class="queue-table-wrap">
+                            <table>
+                                <thead>
                                     <tr>
-                                        <td>@queuedItem.ItemCode</td>
-                                        <td>@queuedItem.ItemName</td>
-                                        <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
-                                        </td>
-                                        <td>@queuedItem.Quantity</td>
-                                        <td>@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
-                                        <td><button type="button" class="btn-secondary"
-                                                        @onclick="() => RemoveQueuedItem(queuedItem)">Remove</button></td>
+                                        <th>SKU</th>
+                                        <th>Name</th>
+                                        <th>UOM</th>
+                                        <th class="num">Qty</th>
+                                        <th class="num">Line Amount</th>
+                                        <th class="col-remove"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var queuedItem in modalItems)
+                                    {
+                                        <tr>
+                                            <td class="mono">@queuedItem.ItemCode</td>
+                                            <td>@queuedItem.ItemName</td>
+                                            <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
+                                            </td>
+                                            <td class="num">@queuedItem.Quantity</td>
+                                            <td class="num">@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
+                                            <td class="col-remove">
+                                                <button type="button" class="btn-icon-remove" title="Remove"
+                                                        @onclick="() => RemoveQueuedItem(queuedItem)">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
-                    }
+                    </div>
+                }
                 </div>
             </div>
         </div>

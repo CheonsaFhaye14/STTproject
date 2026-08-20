@@ -9,7 +9,11 @@
     <div class="modal-overlay" id="edit-items-modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
-                <h4>Edit Invoice Items</h4>
+                <div class="header-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+                <div class="invoice-header">
+                    <h4>Edit Invoice Items</h4>
+                    <p class="modal-subtitle">Update quantities or unit of measure</p>
+                </div>
             </div>
 
             <div class="modal-body">
@@ -90,7 +94,7 @@
                                     @onkeydown="HandleSaveKeyDown">
                                 Save Changes (Ctrl+S)
                             </button>
-                            <button type="button" class="btn-secondary" @onclick="RemoveSelectedItem"
+                            <button type="button" class="btn-secondary btn-remove" @onclick="RemoveSelectedItem"
                                     @onkeydown="HandleRemoveKeyDown">
                                 Remove Selected Item
                             </button>
