@@ -122,7 +122,7 @@
 
         try
         {
-            var bytes = ImportCustomersService.GenerateTemplateExcel();
+            var bytes = await ImportCustomersService.GenerateTemplateExcelAsync();
             await JS.InvokeVoidAsync(
                 "downloadFileFromBytes",
                 "customer-import-template.xlsx",

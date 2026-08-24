@@ -194,7 +194,7 @@ public sealed class ImportMapItemService
 			CompanyItemName = Normalize(row.CompanyItemName)
 		}))
 		{
-			var groupRows = rowGroup.OrderBy(row => row.RowNumber).ToList();
+			var groupRows = ResolveConversionsForGroup(rowGroup.OrderBy(row => row.RowNumber).ToList());
 			var firstRow = groupRows[0];
 			if (!subdDistributors.TryGetValue(Normalize(firstRow.SubDistributorCode), out var subdDistributor) || subdDistributor is null)
 			{
@@ -533,6 +533,9 @@ public sealed class ImportMapItemService
 			var subdItemCode = GetString(row, headers["SubdItemCode"]);
 			var subdItemName = GetString(row, headers["SubdItemName"]);
 			var uom = GetString(row, headers["UOM"]);
+			string? conversionBasedOn = headers.TryGetValue("ConversionBasedOn", out var conversionBasedOnCol)
+				? GetString(row, conversionBasedOnCol)
+				: null;
 
 			var blankRequiredColumns = new List<string>();
 
@@ -588,6 +591,7 @@ public sealed class ImportMapItemService
 				subdItemName,
 				uom,
 				conversion,
+				conversionBasedOn,
 				price,
 				rawValues));
 		}
@@ -653,6 +657,12 @@ public sealed class ImportMapItemService
 			if (header is "conversion")
 			{
 				headers.TryAdd("Conversion", cell.Address.ColumnNumber);
+				continue;
+			}
+
+			if (header is "conversionbasedon" or "basedon" or "conversionbase")
+			{
+				headers.TryAdd("ConversionBasedOn", cell.Address.ColumnNumber);
 				continue;
 			}
 
@@ -883,7 +893,56 @@ public sealed class ImportMapItemService
 			IsAutoCalculated = true
 		};
 	}
+	private static List<ImportedMapItemRow> ResolveConversionsForGroup(List<ImportedMapItemRow> groupRows)
+	{
+		var result = new List<ImportedMapItemRow>(groupRows.Count);
 
+		foreach (var subdItemRows in groupRows.GroupBy(r => Normalize(r.SubdItemCode)))
+		{
+			var rowsList = subdItemRows.ToList();
+			var byUom = new Dictionary<string, ImportedMapItemRow>(StringComparer.OrdinalIgnoreCase);
+			foreach (var row in rowsList)
+			{
+				byUom[NormalizeUomKey(row.UOM)] = row;
+			}
+
+			decimal Resolve(string uomKey, HashSet<string> visiting)
+			{
+				if (IsPieceUom(uomKey) || !byUom.TryGetValue(uomKey, out var row))
+				{
+					return 1m;
+				}
+
+				var basisKey = string.IsNullOrWhiteSpace(row.ConversionBasedOn)
+					? Normalize(BaseUomName)
+					: NormalizeUomKey(row.ConversionBasedOn);
+
+				if (IsPieceUom(basisKey) || !visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
+				{
+					// direct-to-PC, a circular reference, or a basis that isn't
+					// among this SubdItem's own rows -> treat the entered number
+					// as already PC-based (this is also the "no column" fallback)
+					return row.Conversion;
+				}
+
+				return row.Conversion * Resolve(basisKey, visiting);
+			}
+
+			foreach (var row in rowsList)
+			{
+				if (IsPieceUom(row.UOM))
+				{
+					result.Add(row with { Conversion = 1m });
+					continue;
+				}
+
+				var resolved = Resolve(NormalizeUomKey(row.UOM), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+				result.Add(row with { Conversion = resolved });
+			}
+		}
+
+		return result;
+	}
 	private static IReadOnlyDictionary<int, List<string>> BuildSubdItemIdentityConflictsByRow(List<ImportedMapItemRow> rows)
 	{
 		return new Dictionary<int, List<string>>();
@@ -983,6 +1042,7 @@ private sealed record ImportedMapItemRow(
     string SubdItemName,
     string UOM,
     decimal Conversion,
+	string? ConversionBasedOn,
     decimal? Price,
     IReadOnlyDictionary<string, string?> RawValues);
 	
