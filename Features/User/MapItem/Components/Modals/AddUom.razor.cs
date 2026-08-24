@@ -69,6 +69,7 @@ public partial class AddUom
         }
     }
     private string conversionInput = string.Empty;
+    private string ConversionBasedOnInput = string.Empty;
     private string ConversionInput
     {
         get => conversionInput;
@@ -97,6 +98,7 @@ public partial class AddUom
     private AddUomModalDraftState? loadedDraft;
     private IJSObjectReference? jsModule;
     private ElementReference uomSelectRef;
+    private ElementReference conversionBasedOnInputRef;
     private ElementReference conversionInputRef;
     private ElementReference priceInputRef;
     private ElementReference addUomButtonRef;
@@ -150,7 +152,7 @@ public partial class AddUom
             return (CustomUom ?? string.Empty).Trim();
         return selectedUomOption;
     }
-
+        
     private async Task AddUomEntryAsync(bool autoCalc = false)
     {
         var uomName = selectedUomOption == "__custom"
@@ -170,9 +172,31 @@ public partial class AddUom
             price = decimal.Parse(priceInput);
         }
 
+        var enteredCount = decimal.Parse(conversionInput);
+        var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
+
+        decimal pcConversion;
+        if (IsBaseUom(uomName))
+        {
+            pcConversion = 1m;
+            basisName = BaseUomName;
+        }
+        else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
+        {
+            // e.g. "1 Case = 5 Box" and Box already resolves to 12 PC
+            // => Case's PC-equivalent = 5 * 12 = 60
+            pcConversion = enteredCount * basisEntry.Conversion;
+        }
+        else
+        {
+            pcConversion = enteredCount;
+            basisName = BaseUomName;
+        }
+
         workingUomEntries[uomName] = new UomEntry
         {
-            Conversion = int.Parse(conversionInput),
+            Conversion = pcConversion,
+            ConversionBasedOn = basisName,
             Price = price,
             IsActive = true,
             IsAutoCalculated = autoCalc || !price.HasValue
@@ -189,7 +213,13 @@ public partial class AddUom
         await InvokeAsync(StateHasChanged);
         await FocusUomSelectAsync();
     }
-
+    
+    private async Task HandleConversionBasedOnChanged(string uomName)
+    {
+        await RecalculatePricesAsync(uomName);
+        await PersistDraftAsync();
+    }
+    
     private async Task FocusUomSelectAsync()
     {
         await Task.Yield();
@@ -199,7 +229,7 @@ public partial class AddUom
         }
         catch
         {
-            // Ignore focus errors when element is not ready
+
         }
     }
 
@@ -368,6 +398,33 @@ public partial class AddUom
     }
 
     private async Task HandleConversionKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
+        {
+            // If piece-like UOM, conversion is fixed to 1 so skip validation and move to price
+            if (IsBaseUom(GetSelectedUomName()))
+            {
+                conversionInput = "1";
+                await priceInputRef.FocusAsync();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(conversionInput))
+            {
+                validationErrors["conversion"] = "Conversion must be entered.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            await priceInputRef.FocusAsync();
+        }
+        else if (e.Key == "Tab" && e.ShiftKey)
+        {
+            await conversionBasedOnInputRef.FocusAsync();
+        }
+    }
+
+    private async Task HandleConversionBasedOnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
         {

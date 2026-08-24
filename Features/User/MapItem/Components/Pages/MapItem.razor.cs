@@ -1213,7 +1213,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 return;
             }
 
-            // If there are no UOM entries or no priced UOMs, show an error on the confirmation modal when adding
             if (!uomEntries.Any() || !uomEntries.Any(x => x.Value.Price.HasValue))
             {
                 if (!IsEditingItem)

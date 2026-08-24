@@ -62,7 +62,7 @@
                 }
 
                 <div class="form-group">
-                    <label>Conversion (How many PC per @(GetSelectedUomName() ?? "unit")?):</label>
+                    <label>Conversion (How many @ConversionBasedOnInput per @(GetSelectedUomName() ?? "unit")?):</label>
                     <input @ref="conversionInputRef" type="number" min="1" step="1" @bind="ConversionInput"
                            @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
                            @onkeydown="HandleConversionKeyDown" disabled="@IsBaseUom(GetSelectedUomName())" />
@@ -74,6 +74,13 @@
                     {
                         <div class="hint-text">Piece-like units require conversion = 1.</div>
                     }
+                    <select ref="conversionBasedOnInputRef" @bind="ConversionBasedOnInput" @bind:event="onchange" @bind:after="PersistDraftAsync"
+                            @onkeydown="HandleConversionBasedOnKeyDown" disabled="@IsBaseUom(GetSelectedUomName())">
+                        @foreach (var uom in workingUomEntries.Keys.Where(k => k != GetSelectedUomName() && workingUomEntries[k].IsActive).OrderBy(k => k))
+                        {
+                            <option value="@uom">@uom</option>
+                        }
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -98,14 +105,14 @@
                 {
                     <div class="modal-queue">
                         <div class="queue-heading">
-                            <h5>All Units<span class="queue-count">@workingUomEntries.Count</span></h5>
+                            <h5>All Unit of Measures<span class="queue-count">@workingUomEntries.Count</span></h5>
                         </div>
                         <div class="queue-table-wrap">
                             <table>
                                 <thead>
                                     <tr>
                                         <th>Unit of Measure</th>
-                                        <th class="num">Conversion (PC)</th>
+                                        <th class="num">Conversion per (PC)</th>
                                         <th class="num">Price</th>
                                         <th class="col-remove"></th>
                                     </tr>
