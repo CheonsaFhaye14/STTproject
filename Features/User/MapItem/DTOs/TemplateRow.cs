@@ -10,5 +10,6 @@ public sealed class TemplateRow
     public string SubdItemCode { get; set; } = string.Empty;
     public string UOM { get; set; } = string.Empty;
     public decimal? Conversion { get; set; }
+    public string? ConversionBasedOn { get; set; }
     public decimal? Price { get; set; }
 }

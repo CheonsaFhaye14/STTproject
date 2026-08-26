@@ -46,16 +46,18 @@ public class DownloadTemplateService
             worksheet.Cell(1, 5).Value = "SubdItemCode";
             worksheet.Cell(1, 6).Value = "SubdItemName";
             worksheet.Cell(1, 7).Value = "UOM";
-            worksheet.Cell(1, 8).Value = "Conversion";
-            worksheet.Cell(1, 9).Value = "Price";
+            worksheet.Cell(1, 8).Value = "ConversionBasedOn";
+            worksheet.Cell(1, 9).Value = "Conversion";
+            worksheet.Cell(1, 10).Value = "Price";
             worksheet.SheetView.FreezeRows(1);
             worksheet.Columns().AdjustToContents();
 
             // Extra unlocked cells for user scratch space; the import parser ignores these columns.
-            worksheet.Range("J2:Z1000").Style.Protection.Locked = false;
+            // Moved past column J now that ConversionBasedOn occupies H.
+            worksheet.Range("K2:AA1000").Style.Protection.Locked = false;
 
-            // change number format to text for code columns to preserve formatting (e.g. leading zeros)
-            worksheet.Range("E2:G1000").Style.NumberFormat.Format = "@";
+            // change number format to text for code/name columns, now including ConversionBasedOn (a UOM name)
+            worksheet.Range("E2:H1000").Style.NumberFormat.Format = "@";
 
             // Style headers
             var headerRow = worksheet.Row(1);
@@ -77,7 +79,6 @@ public class DownloadTemplateService
                 // Add empty rows for duplicating multiple UOMs for this item
                 for (int j = 0; j < emptyRowsPerItem; j++)
                 {
-                    // Pre-fill locked columns with same item data, leave UOM fields empty
                     worksheet.Cell(currentRow, 1).Value = item.SubDistributorCode;
                     worksheet.Cell(currentRow, 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
@@ -90,8 +91,8 @@ public class DownloadTemplateService
                     worksheet.Cell(currentRow, 4).Value = item.CompanyItemName;
                     worksheet.Cell(currentRow, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
-                    // Empty unlocked columns for user to fill in
-                    for (int col = 5; col <= 9; col++)
+                    // Empty unlocked columns for user to fill in (now includes ConversionBasedOn, col 8)
+                    for (int col = 5; col <= 10; col++)
                     {
                         worksheet.Cell(currentRow, col);
                         worksheet.Cell(currentRow, col).Style.Protection.Locked = false;
@@ -104,21 +105,21 @@ public class DownloadTemplateService
             // Add data validations
             int lastDataRow = currentRow - 1;
 
-            // Conversion validation: Decimal > 0
-            var conversionRange = worksheet.Range($"H2:H{lastDataRow}");
+            // Conversion validation: whole number > 0 (col I)
+            var conversionRange = worksheet.Range($"I2:I{lastDataRow}");
             var conversionValidation = conversionRange.CreateDataValidation();
             conversionValidation.WholeNumber.GreaterThan(0);
             conversionValidation.IgnoreBlanks = true;
             conversionValidation.ShowInputMessage = true;
             conversionValidation.InputTitle = "Conversion";
-            conversionValidation.InputMessage = "Must be a whole number greater than 0.";
+            conversionValidation.InputMessage = "How many of this UOM per 1 of 'Conversion Based On' (or per 1 PC if left blank).";
             conversionValidation.ShowErrorMessage = true;
             conversionValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
             conversionValidation.ErrorTitle = "Invalid Conversion Value";
             conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0. Note: if UOM is PC/PCS/PIECE, Conversion must be 1.";
 
-            // Price validation: Decimal > 0
-            var priceRange = worksheet.Range($"I2:I{lastDataRow}");
+            // Price validation: decimal > 0 (col J)
+            var priceRange = worksheet.Range($"J2:J{lastDataRow}");
             var priceValidation = priceRange.CreateDataValidation();
             priceValidation.Decimal.GreaterThan(0);
             priceValidation.IgnoreBlanks = true;
@@ -141,12 +142,20 @@ public class DownloadTemplateService
                 uomValidation.InputTitle = "Unit of Measure (UOM)";
                 uomValidation.InputMessage = "Select from dropdown or type a new UOM code.";
                 uomValidation.ShowErrorMessage = false; // Allow custom entries
+
+                // Conversion Based On validation: same dropdown list, optional
+                var basedOnRange = worksheet.Range($"H2:H{lastDataRow}");
+                var basedOnValidation = basedOnRange.CreateDataValidation();
+                basedOnValidation.List(uomSourceRange);
+                basedOnValidation.IgnoreBlanks = true;
+                basedOnValidation.ShowInputMessage = true;
+                basedOnValidation.InputTitle = "Conversion Based On";
+                basedOnValidation.InputMessage = "Optional. Which UOM the Conversion count refers to. Leave blank to base directly on PC.";
+                basedOnValidation.ShowErrorMessage = false; // Allow custom entries
             }
 
             // Auto-fit column widths
             worksheet.Columns().AdjustToContents();
-
-            // Note: some ClosedXML versions don't support cell comments; instructions are in the header/error message.
 
             // Download
             using (var stream = new MemoryStream())
@@ -156,7 +165,7 @@ public class DownloadTemplateService
 
                 var fileName = $"MapItemTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await _jsRuntime.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             }
         }
     }
@@ -180,7 +189,7 @@ public class DownloadTemplateService
         worksheet.Cell(row, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
         worksheet.Cell(row, 4).Style.Protection.Locked = true;
 
-        // Unlocked columns: SubdItemCode, SubdItemName, UOM, Conversion, Price
+        // Unlocked columns: SubdItemCode, SubdItemName, UOM, ConversionBasedOn, Conversion, Price
         worksheet.Cell(row, 5).Value = item.SubdItemCode;
         worksheet.Cell(row, 5).Style.Protection.Locked = false;
 
@@ -190,13 +199,15 @@ public class DownloadTemplateService
         worksheet.Cell(row, 7).Value = item.UOM;
         worksheet.Cell(row, 7).Style.Protection.Locked = false;
 
-        worksheet.Cell(row, 8).Value = item.Conversion;
+        worksheet.Cell(row, 8).Value = item.ConversionBasedOn;
         worksheet.Cell(row, 8).Style.Protection.Locked = false;
 
-        worksheet.Cell(row, 9).Value = item.Price;
+        worksheet.Cell(row, 9).Value = item.Conversion;
         worksheet.Cell(row, 9).Style.Protection.Locked = false;
-    }
 
+        worksheet.Cell(row, 10).Value = item.Price;
+        worksheet.Cell(row, 10).Style.Protection.Locked = false;
+    }
     public byte[] GenerateErrorReportExcel(ImportMapItemResult result)
     {
         using var workbook = new ClosedXML.Excel.XLWorkbook();

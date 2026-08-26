@@ -19,8 +19,9 @@ public sealed class ImportCustomersService
             ["Customer Code"] = new[] { "CustomerCode", "Customer Code", "code" },
             ["Customer Name"] = new[] { "CustomerName", "Customer Name", "name" },
             ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type" },
-            ["City"] = new[] { "City", "CITY/MUNICIPALITY", "municipality" },
             ["Province"] = new[] { "Province" },
+            ["City"] = new[] { "City", "CITY/MUNICIPALITY", "municipality" },
+
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
@@ -126,8 +127,8 @@ public sealed class ImportCustomersService
                 CustomerName = Get("CustomerName") ?? string.Empty,
                 CustomerType = Get("CustomerType") ?? string.Empty,
                 AddressLine = Get("AddressLine"),
-                City = Get("City"),
                 Province = Get("Province"),
+                City = Get("City"),
                 ZipCode = zip
             };
 
@@ -139,8 +140,8 @@ public sealed class ImportCustomersService
             if (string.IsNullOrWhiteSpace(rowResult.CustomerCode) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerName) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerType) &&
-                string.IsNullOrWhiteSpace(rowResult.City) &&
-                string.IsNullOrWhiteSpace(rowResult.Province))
+                string.IsNullOrWhiteSpace(rowResult.Province) && 
+                string.IsNullOrWhiteSpace(rowResult.City) )
             {
                 continue;
             }
@@ -153,8 +154,8 @@ public sealed class ImportCustomersService
                 SubDistributorId = subdistributorId,
                 IsActive = true,
                 AddressLine = rowResult.AddressLine,
-                City = rowResult.City,
                 Province = rowResult.Province,
+                City = rowResult.City,
                 ZipCode = rowResult.ZipCode
             };
             foreach (var msg in (await CustomerValidations.ValidateAddCustomerAsync(entity, _customerService)).Values)
@@ -314,8 +315,8 @@ public sealed class ImportCustomersService
                     SubDistributorId = subdistributorId,
                     IsActive = true,
                     AddressLine = row.AddressLine,
-                    City = row.City,
                     Province = row.Province,
+                    City = row.City,
                     ZipCode = row.ZipCode,
                     CreatedBy = userId
                 });
@@ -340,7 +341,7 @@ public sealed class ImportCustomersService
 
         var headers = result.OriginalHeaders.Count > 0
             ? result.OriginalHeaders
-            : new List<string> { "Customer Code", "Customer Name", "Customer Type", "City", "Province", "Address Line", "Zip Code" };
+            : new List<string> { "Customer Code", "Customer Name", "Customer Type","Province", "City",  "Address Line", "Zip Code" };
 
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
@@ -378,10 +379,10 @@ public sealed class ImportCustomersService
 
     private static readonly string[] TemplateHeaders =
     {
-        "Customer Code", "Customer Name", "Customer Type", "City", "Province", "Address Line", "Zip Code"
+        "Customer Code", "Customer Name", "Customer Type", "Province", "City", "Address Line", "Zip Code"
     };
 
-    public byte[] GenerateTemplateExcel()
+    public async Task<byte[]> GenerateTemplateExcelAsync()
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Customers");
@@ -396,17 +397,93 @@ public sealed class ImportCustomersService
         sheet.Cell(2, 1).Value = "CUST-0001";
         sheet.Cell(2, 2).Value = "Juan Dela Cruz";
         sheet.Cell(2, 3).Value = "Retail";
-        sheet.Cell(2, 4).Value = "Quezon City";
-        sheet.Cell(2, 5).Value = "Metro Manila";
+        sheet.Cell(2, 4).Value = "Metro Manila";
+        sheet.Cell(2, 5).Value = "Quezon City";
         sheet.Cell(2, 6).Value = "123 Sample St.";
         sheet.Cell(2, 7).Value = "1100";
         sheet.Row(2).Style.Font.Italic = true;
         sheet.Row(2).Style.Font.FontColor = XLColor.FromHtml("#A09ABF");
+
+        const int lastDataRow = 500; // room for typed/pasted rows
+
+        var provinces = (await _geoDataService.GetAllProvincesAsync())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p)
+            .ToList();
+
+        if (provinces.Count > 0)
+        {
+            var geoSheet = workbook.Worksheets.Add("GeoData");
+            geoSheet.Visibility = XLWorksheetVisibility.Hidden;
+
+            // Column A: full province list — feeds the Province dropdown.
+            for (int i = 0; i < provinces.Count; i++)
+            {
+                geoSheet.Cell(i + 1, 1).Value = provinces[i];
+            }
+            var provinceRange = geoSheet.Range(1, 1, provinces.Count, 1);
+            workbook.NamedRanges.Add("ProvinceList", provinceRange);
+
+            var provinceValidation = sheet.Range($"D2:D{lastDataRow}").CreateDataValidation();
+            provinceValidation.List(provinceRange);
+            provinceValidation.IgnoreBlanks = true;
+            provinceValidation.ShowInputMessage = true;
+            provinceValidation.InputTitle = "Province";
+            provinceValidation.InputMessage = "Select a province — pick this before City.";
+            provinceValidation.ShowErrorMessage = false; // allow custom entries not in the reference list
+
+            // One named range of cities per province, so the City dropdown can filter via INDIRECT.
+            int col = 2;
+            foreach (var province in provinces)
+            {
+                var cities = (await _geoDataService.GetCitiesMunicipalitiesByProvinceAsync(province))
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c!.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(c => c)
+                    .ToList();
+
+                if (cities.Count == 0)
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < cities.Count; i++)
+                {
+                    geoSheet.Cell(i + 1, col).Value = cities[i];
+                }
+
+                var cityRange = geoSheet.Range(1, col, cities.Count, col);
+                workbook.NamedRanges.Add(BuildProvinceDefinedName(province), cityRange);
+                col++;
+            }
+
+            // City (col E) looks up the named range matching whatever Province (col D) says.
+            var cityValidation = sheet.Range($"E2:E{lastDataRow}").CreateDataValidation();
+            cityValidation.List("INDIRECT(\"Prov_\"&SUBSTITUTE(SUBSTITUTE(D2,\" \",\"_\"),\"-\",\"_\"))");
+            cityValidation.IgnoreBlanks = true;
+            cityValidation.ShowInputMessage = true;
+            cityValidation.InputTitle = "City / Municipality";
+            cityValidation.InputMessage = "Select Province first (column D) — this list filters to match it.";
+            cityValidation.ShowErrorMessage = false; // allow custom entries not in the reference list
+        }
 
         sheet.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
         return ms.ToArray();
+    }
+
+    private static string BuildProvinceDefinedName(string province)
+    {
+        var sanitized = Regex.Replace(province, @"[^A-Za-z0-9]+", "_").Trim('_');
+        if (sanitized.Length == 0 || char.IsDigit(sanitized[0]))
+        {
+            sanitized = "P_" + sanitized;
+        }
+        return $"Prov_{sanitized}";
     }
 }
