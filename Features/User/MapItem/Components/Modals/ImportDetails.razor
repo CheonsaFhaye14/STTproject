@@ -65,7 +65,7 @@
                             <div class="sc-val">@totalRows</div>
                         </div>
                         <div class="sc">
-                            <div class="sc-label">Items</div>
+                            <div class="sc-label">Subd Items</div>
                             <div class="sc-val">@groups.Count</div>
                         </div>
                         <div class="sc">
@@ -151,7 +151,7 @@
                             <div class="err-filter-bar">
                                 <span class="err-filter-label">
                                     <i class="ti ti-filter" aria-hidden="true"></i>
-                                    Errors: @GetTotalErrorCount()
+                                    Rows with Errors: @GetTotalErrorCount()
                                 </span>
                                 <select @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
                                     <option value="">All errors</option>
@@ -485,19 +485,32 @@
         if (ImportResult?.PreparedGroups == null)
             return Enumerable.Empty<(string, int)>();
 
-        var all = new List<string>();
-        foreach (var g in ImportResult.PreparedGroups)
+        var groups = ImportResult.PreparedGroups;
+        var messageTypes = new HashSet<string>();
+
+        foreach (var g in groups)
         {
             if (g.Issues != null)
-                all.AddRange(g.Issues.Select(i => NormalizeMessageType(i.Message)));
+            {
+                foreach (var i in g.Issues)
+                {
+                    var t = NormalizeMessageType(i.Message);
+                    if (!string.IsNullOrWhiteSpace(t)) messageTypes.Add(t);
+                }
+            }
             if (g.Rows != null)
-                all.AddRange(g.Rows.SelectMany(r => r.Issues.Select(i => NormalizeMessageType(i))));
+            {
+                foreach (var r in g.Rows)
+                foreach (var i in r.Issues)
+                {
+                    var t = NormalizeMessageType(i);
+                    if (!string.IsNullOrWhiteSpace(t)) messageTypes.Add(t);
+                }
+            }
         }
 
-        return all
-            .Where(m => !string.IsNullOrWhiteSpace(m))
-            .GroupBy(m => m)
-            .Select(g => (Message: g.Key, Count: g.Count()))
+        return messageTypes
+            .Select(type => (Message: type, Count: groups.Sum(g => GetGroupErrorRowCount(g, type))))
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Message)
             .ToList();
@@ -543,7 +556,7 @@
     {
         if (ImportResult == null) return 0;
         var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
-        return groups.Sum(group => (group.Issues?.Count ?? 0) + group.Rows.Sum(row => row.Issues.Count));
+        return groups.Sum(g => GetGroupErrorRowCount(g, null));
     }
 
     private void ToggleSelectAllCards(object? checkedValue)
@@ -636,14 +649,16 @@
         return row.Issues.Count(i => NormalizeMessageType(i) == selectedErrorFilter);
     }
 
-    private int GetGroupErrorRowCount(PreparedItemGroup group)
+    private int GetGroupErrorRowCount(PreparedItemGroup group) => GetGroupErrorRowCount(group, selectedErrorFilter);
+
+    private static int GetGroupErrorRowCount(PreparedItemGroup group, string? filterMessageType)
     {
         var affectedRows = new HashSet<int>();
 
         foreach (var row in group.Rows.Where(r => r.Issues.Count > 0))
         {
-            if (string.IsNullOrWhiteSpace(selectedErrorFilter)) affectedRows.Add(row.RowNumber);
-            else if (row.Issues.Any(i => NormalizeMessageType(i) == selectedErrorFilter)) affectedRows.Add(row.RowNumber);
+            if (string.IsNullOrWhiteSpace(filterMessageType)) affectedRows.Add(row.RowNumber);
+            else if (row.Issues.Any(i => NormalizeMessageType(i) == filterMessageType)) affectedRows.Add(row.RowNumber);
         }
 
         if (group.Issues != null)
@@ -652,12 +667,12 @@
             {
                 if (issue.RowNumber > 0)
                 {
-                    if (string.IsNullOrWhiteSpace(selectedErrorFilter) || NormalizeMessageType(issue.Message) == selectedErrorFilter)
+                    if (string.IsNullOrWhiteSpace(filterMessageType) || NormalizeMessageType(issue.Message) == filterMessageType)
                         affectedRows.Add(issue.RowNumber);
                 }
             }
 
-            if (group.Issues.Any(issue => issue.RowNumber == 0 && (string.IsNullOrWhiteSpace(selectedErrorFilter) || NormalizeMessageType(issue.Message) == selectedErrorFilter)))
+            if (group.Issues.Any(issue => issue.RowNumber == 0 && (string.IsNullOrWhiteSpace(filterMessageType) || NormalizeMessageType(issue.Message) == filterMessageType)))
                 return affectedRows.Count + 1;
         }
 
