@@ -44,7 +44,7 @@ public sealed class ImportMapItemService
 			return errorResult;
 		}
 
-		return await PrepareFromExcelAsync(excelStream,currentUserId, cancellationToken);
+		return await PrepareFromExcelAsync(excelStream, currentUserId, cancellationToken);
 	}
 
 	public async Task<int> CommitPreparedRowsAsync(
@@ -182,7 +182,10 @@ public sealed class ImportMapItemService
 				.ToListAsync(cancellationToken);
 		}
 
-		var existingBySubdCodeCompanyAndItem = new HashSet<(string, string, string)>();
+		// Identity now includes ItemName (description) so two rows that share
+		// SubDistributor/Code/CompanyItem but differ in description are treated
+		// as distinct items rather than a duplicate.
+		var existingBySubdCodeCompanyAndItem = new HashSet<(string, string, string, string)>();
 		var companyItemCodesById = companyItems.Values.ToDictionary(ci => ci.CompanyItemId, ci => Normalize(ci.ItemCode));
 		foreach (var si in existingSubdItems)
 		{
@@ -192,7 +195,7 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			var key = (Normalize(subdCode), Normalize(si.SubdItemCode), companyItemCode);
+			var key = (Normalize(subdCode), Normalize(si.SubdItemCode), companyItemCode, Normalize(si.ItemName));
 			existingBySubdCodeCompanyAndItem.Add(key);
 		}
 
@@ -274,11 +277,14 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			// Check if any rows conflict with an existing exact SubdItem mapping in the database
+			// Check if any rows conflict with an existing exact SubdItem mapping in the database.
+			// Includes description (ItemName) — a matching code/company with a different
+			// description is treated as a new/distinct item, not a conflict.
 			var subdDistributorKey = (
 				Normalize(firstRow.SubDistributorCode),
 				Normalize(firstRow.SubdItemCode),
-				Normalize(firstRow.CompanyItemCode));
+				Normalize(firstRow.CompanyItemCode),
+				Normalize(firstRow.SubdItemName));
 			var alreadyExistsByCode = existingBySubdCodeCompanyAndItem.Contains(subdDistributorKey);
 
 			if (alreadyExistsByCode)
@@ -290,7 +296,7 @@ public sealed class ImportMapItemService
 						issues = new List<string>();
 						rowErrors[row.RowNumber] = issues;
 					}
-					issues.Add($"SubdItem code '{firstRow.SubdItemCode}' is already mapped in the database for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'.");
+					issues.Add($"SubdItem code '{firstRow.SubdItemCode}' is already mapped in the database for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}' and description '{firstRow.SubdItemName}'.");
 				}
 			}
 
@@ -442,13 +448,17 @@ public sealed class ImportMapItemService
 			.Where(ci => ci.IsActive)
 			.ToDictionaryAsync(ci => Normalize(ci.ItemCode), cancellationToken);
 
-		// Group by SubDistributor + SubdItemCode + CompanyItemCode to create SubdItems with their UOMs
+		// Group by SubDistributor + SubdItemCode + CompanyItemCode + ItemName (description)
+		// to create SubdItems with their UOMs. Including ItemName here is what keeps two
+		// rows with the same code/company but a different description as separate SubdItems
+		// — each gets its own SubdItemId, so their UOM rows never collide or get merged.
 		var groupedBySubdItem = rows
 			.GroupBy(r => new
 			{
 				SubDistributorCode = Normalize(r.SubDistributorCode),
 				SubdItemCode = Normalize(r.SubdItemCode),
-				CompanyItemCode = Normalize(r.CompanyItemCode)
+				CompanyItemCode = Normalize(r.CompanyItemCode),
+				ItemName = Normalize(r.SubdItemName)
 			})
 			.ToList();
 
@@ -476,12 +486,13 @@ public sealed class ImportMapItemService
 				.FirstOrDefaultAsync(
 					si => si.SubDistributorId == subdDistributor.SubDistributorId
 						&& si.SubdItemCode == subdItemCode
-						&& si.CompanyItemId == companyItem.CompanyItemId,
+						&& si.CompanyItemId == companyItem.CompanyItemId
+						&& si.ItemName == firstRow.SubdItemName,
 					cancellationToken);
 
 			if (existingByCode != null)
 			{
-				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'. Please review the import and try again.");
+				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' with description '{firstRow.SubdItemName}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'. Please review the import and try again.");
 			}
 
 			var subdItem = new SubdItem
@@ -542,6 +553,7 @@ public sealed class ImportMapItemService
 			.Select(u => u.Role == "Admin")
 			.FirstOrDefaultAsync(cancellationToken);
 	}
+
 	private static List<ImportedMapItemRow> ReadMapItemRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
@@ -707,86 +719,88 @@ public sealed class ImportMapItemService
 		return headers;
 	}
 
-	private static Dictionary<int, List<string>> ValidateGroupConsistency(List<ImportedMapItemRow> rows)
+private static Dictionary<int, List<string>> ValidateGroupConsistency(List<ImportedMapItemRow> rows)
+{
+	var errors = new Dictionary<int, List<string>>();
+
+	void AddError(int rowNumber, string message)
 	{
-		var errors = new Dictionary<int, List<string>>();
-
-		void AddError(int rowNumber, string message)
+		if (!errors.TryGetValue(rowNumber, out var list))
 		{
-			if (!errors.TryGetValue(rowNumber, out var list))
-			{
-				list = new List<string>();
-				errors[rowNumber] = list;
-			}
-
-			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
-			{
-				list.Add(message);
-			}
+			list = new List<string>();
+			errors[rowNumber] = list;
 		}
 
-		var firstRow = rows[0];
-
-		foreach (var row in rows)
+		if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
 		{
-			if (!string.Equals(Normalize(row.SubDistributorCode), Normalize(firstRow.SubDistributorCode), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "SubDistributor code must match the first row in the item group.");
-			}
-
-			if (!string.Equals(Normalize(row.Principal), Normalize(firstRow.Principal), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "Principal must match the first row in the item group.");
-			}
-
-			if (!string.Equals(Normalize(row.CompanyItemCode), Normalize(firstRow.CompanyItemCode), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "Company Item code must match the first row in the item group.");
-			}
-
-			if (!string.Equals(Normalize(row.CompanyItemName), Normalize(firstRow.CompanyItemName), StringComparison.OrdinalIgnoreCase))
-			{
-				AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
-			}
-
-			if (IsPieceUom(row.UOM) && row.Conversion != 1)
-			{
-				AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
-			}
-
-			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
-			{
-				AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
-			}
+			list.Add(message);
 		}
-
-		// Duplicate UOM and conversion checks should be scoped per SubdItemCode.
-		// Allow the same UOM or conversion to appear in the group when they belong to different SubdItem codes.
-		// Only treat rows as duplicates when both UOM and Conversion match for the same SubdItemCode.
-		var duplicateUomConvGroups = rows
-			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
-			.GroupBy(row => new
-			{
-				Company = Normalize(row.CompanyItemCode),
-				Subd = Normalize(row.SubdItemCode),
-				Uom = NormalizeUomKey(row.UOM),
-				Conv = row.Conversion
-			})
-			.Where(group => group.Count() > 1)
-			.ToList();
-
-		foreach (var group in duplicateUomConvGroups)
-		{
-			var duplicateRows = group.OrderBy(row => row.RowNumber).Skip(1).ToList();
-			foreach (var row in duplicateRows)
-			{
-				AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}' with conversion '{row.Conversion}' for Company Item '{row.CompanyItemCode}' and SubdItem '{row.SubdItemCode}'.");
-			}
-		}
-
-		return errors;
 	}
 
+	var firstRow = rows[0];
+
+	foreach (var row in rows)
+	{
+		if (!string.Equals(Normalize(row.SubDistributorCode), Normalize(firstRow.SubDistributorCode), StringComparison.OrdinalIgnoreCase))
+		{
+			AddError(row.RowNumber, "SubDistributor code must match the first row in the item group.");
+		}
+
+		if (!string.Equals(Normalize(row.Principal), Normalize(firstRow.Principal), StringComparison.OrdinalIgnoreCase))
+		{
+			AddError(row.RowNumber, "Principal must match the first row in the item group.");
+		}
+
+		if (!string.Equals(Normalize(row.CompanyItemCode), Normalize(firstRow.CompanyItemCode), StringComparison.OrdinalIgnoreCase))
+		{
+			AddError(row.RowNumber, "Company Item code must match the first row in the item group.");
+		}
+
+		if (!string.Equals(Normalize(row.CompanyItemName), Normalize(firstRow.CompanyItemName), StringComparison.OrdinalIgnoreCase))
+		{
+			AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
+		}
+
+		if (IsPieceUom(row.UOM) && row.Conversion != 1)
+		{
+			AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
+		}
+
+		if (!IsPieceUom(row.UOM) && row.Conversion == 1)
+		{
+			AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
+		}
+	}
+
+	// Duplicate UOM and conversion checks should be scoped per SubdItem identity
+	// (SubdItemCode + description). Two rows sharing a code/blank-code but a
+	// different description represent different items, so the same UOM/conversion
+	// pair is allowed to repeat across them — it's only a real duplicate when it
+	// repeats within the SAME SubdItemCode + description.
+	var duplicateUomConvGroups = rows
+		.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
+		.GroupBy(row => new
+		{
+			Company = Normalize(row.CompanyItemCode),
+			Subd = Normalize(row.SubdItemCode),
+			ItemName = Normalize(row.SubdItemName),
+			Uom = NormalizeUomKey(row.UOM),
+			Conv = row.Conversion
+		})
+		.Where(group => group.Count() > 1)
+		.ToList();
+
+	foreach (var group in duplicateUomConvGroups)
+	{
+		var duplicateRows = group.OrderBy(row => row.RowNumber).Skip(1).ToList();
+		foreach (var row in duplicateRows)
+		{
+			AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}' with conversion '{row.Conversion}' for Company Item '{row.CompanyItemCode}', SubdItem '{row.SubdItemCode}', description '{row.SubdItemName}'.");
+		}
+	}
+
+	return errors;
+}
 	private static bool IsPieceUom(string? uom)
 	{
 		var normalized = Normalize(uom ?? string.Empty);
@@ -1079,5 +1093,3 @@ private sealed record ImportedMapItemRow(
     IReadOnlyDictionary<string, string?> RawValues);
 	
 }
-
-
