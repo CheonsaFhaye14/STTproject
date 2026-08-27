@@ -20,8 +20,8 @@
     {
         <!-- Search + Sort controls -->
         <div class="cpsd-controls">
-            <input class="cpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="searchTerm" />
-            <select class="cpsd-sort" @bind="sortBy">
+            <input class="cpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="SearchTerm" />
+            <select class="cpsd-sort" @bind="SortBy">
                 <option value="name">Sort by Name</option>
                 <option value="total">Sort by Total ↓</option>
                 <option value="active">Sort by Active ↓</option>
@@ -97,7 +97,7 @@
     private int maxTotal;
     private bool isLoading = true;
     private string searchTerm = "";
-    private string sortBy = "name";
+    private string sortBy = "total";
     private int currentPage = 1;
     private const int pageSize = 10;
 
@@ -105,17 +105,14 @@
         .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
                     x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
                     x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-        .OrderBy(_ => sortBy switch
+        .OrderBy(x => sortBy == "name" ? x.SubdName : null)
+        .ThenByDescending(x => sortBy switch
         {
-            "total" => 0,
-            "active" => 0,
-            "inactive" => 0,
+            "total" => x.TotalCount,
+            "active" => x.ActiveCount,
+            "inactive" => x.InactiveCount,
             _ => 0
-        })
-        .ThenBy(x => sortBy == "name" ? x.SubdName : "")
-        .ThenByDescending(x => sortBy == "total" ? x.TotalCount :
-                               sortBy == "active" ? x.ActiveCount :
-                               sortBy == "inactive" ? x.InactiveCount : 0);
+        });
 
     private int totalPages => (int)Math.Ceiling(FilteredData.Count() / (double)pageSize);
 
@@ -130,12 +127,15 @@
         maxTotal = data.Any() ? data.Max(x => x.TotalCount) : 1;
         isLoading = false;
     }
-
-    // Reset to page 1 when search or sort changes
-    private string _searchTerm = "";
     private string SearchTerm
     {
-        get => _searchTerm;
-        set { _searchTerm = value; searchTerm = value; currentPage = 1; }
+        get => searchTerm;
+        set { searchTerm = value; currentPage = 1; }
+    }
+
+    private string SortBy
+    {
+        get => sortBy;
+        set { sortBy = value; currentPage = 1; }
     }
 }

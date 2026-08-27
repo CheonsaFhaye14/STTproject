@@ -35,5 +35,61 @@ namespace STTproject.Features.Admin.Dashboard.Services
             await using var db = _dbContextFactory.CreateDbContext();
             return await db.Customers.CountAsync();
         }
+
+        public async Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdMonthlyAsync(int year, int month)
+        {
+            await using var db = _dbContextFactory.CreateDbContext();
+
+            var startDate = new DateOnly(year, month, 1);
+            var endDate = startDate.AddMonths(1);
+
+            return await db.SalesInvoiceItems
+                .AsNoTracking()
+                .Where(sii => sii.SalesInvoice.SalesInvoiceDate >= startDate
+                        && sii.SalesInvoice.SalesInvoiceDate < endDate)
+                .GroupBy(sii => new
+                {
+                    sii.SalesInvoice.SubDistributorId,
+                    sii.SalesInvoice.SubDistributor.SubdCode,
+                    sii.SalesInvoice.SubDistributor.SubdName
+                })
+                .Select(g => new TotalPricesPerSubdMonthlyAnnualDto
+                {
+                    SubDistributorId = g.Key.SubDistributorId,
+                    SubdCode = g.Key.SubdCode,
+                    SubdName = g.Key.SubdName,
+                    TotalPrice = g.Sum(x => x.Amount)
+                })
+                .OrderByDescending(x => x.TotalPrice)
+                .ToListAsync();
+        }
+
+        public async Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdAnnualAsync(int year)
+        {
+            await using var db = _dbContextFactory.CreateDbContext();
+
+            var startDate = new DateOnly(year, 1, 1);
+            var endDate = startDate.AddYears(1);
+
+            return await db.SalesInvoiceItems
+                .AsNoTracking()
+                .Where(sii => sii.SalesInvoice.SalesInvoiceDate >= startDate
+                        && sii.SalesInvoice.SalesInvoiceDate < endDate)
+                .GroupBy(sii => new
+                {
+                    sii.SalesInvoice.SubDistributorId,
+                    sii.SalesInvoice.SubDistributor.SubdCode,
+                    sii.SalesInvoice.SubDistributor.SubdName
+                })
+                .Select(g => new TotalPricesPerSubdMonthlyAnnualDto
+                {
+                    SubDistributorId = g.Key.SubDistributorId,
+                    SubdCode = g.Key.SubdCode,
+                    SubdName = g.Key.SubdName,
+                    TotalPrice = g.Sum(x => x.Amount)
+                })
+                .OrderByDescending(x => x.TotalPrice)
+                .ToListAsync();
+        }
     }
 }

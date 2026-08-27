@@ -1,0 +1,138 @@
+@using STTproject.Features.Admin.Dashboard.DTOs
+@using STTproject.Features.Admin.Dashboard.Services
+@inject IAdminDashboardService DashboardService
+
+<div class="tpsd-card">
+    <div class="tpsd-header">
+        <div class="tpsd-title">Total Monthly &amp; Annual Prices per Sub Distributor</div>
+        <div class="tpsd-summary">
+            <span class="tpsd-summary-item">Total: <strong>@FormatCurrency(data.Sum(x => x.TotalPrice))</strong></span>
+            <span class="tpsd-summary-item">Sub Distributors: <strong>@data.Count</strong></span>
+        </div>
+    </div>
+
+    <!-- Period controls -->
+    <div class="tpsd-controls">
+        <div class="tpsd-period-toggle">
+            <button type="button" class="tpsd-period-btn @(periodMode == "monthly" ? "active" : "")" @onclick='() => SetPeriodMode("monthly")'>Monthly</button>
+            <button type="button" class="tpsd-period-btn @(periodMode == "annual" ? "active" : "")" @onclick='() => SetPeriodMode("annual")'>Annual</button>
+        </div>
+
+        @if (periodMode == "monthly")
+        {
+            <select class="tpsd-select" @bind="SelectedMonth">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                }
+            </select>
+        }
+
+        <select class="tpsd-select" @bind="SelectedYear">
+            @foreach (var y in AvailableYears)
+            {
+                <option value="@y">@y</option>
+            }
+        </select>
+
+        <input class="tpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="searchTerm" />
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="tpsd-loading">Loading...</p>
+    }
+    else if (!FilteredData.Any())
+    {
+        <div class="tpsd-empty">No sales recorded for this period.</div>
+    }
+    else
+    {
+        <div class="tpsd-chart">
+            @foreach (var item in FilteredData)
+            {
+                var widthPct = maxPrice == 0 ? 0.0 : (double)(item.TotalPrice / maxPrice) * 100.0;
+
+                <div class="tpsd-bar-row">
+                    <div class="tpsd-bar-label" title="@item.SubdName">
+                        <span class="tpsd-code">@item.SubdCode</span>
+                        <span class="tpsd-name">@item.SubdName</span>
+                    </div>
+                    <div class="tpsd-bar-track">
+                        <div class="tpsd-bar-fill" style="width:@(widthPct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+                    </div>
+                    <div class="tpsd-bar-value">@FormatCurrency(item.TotalPrice)</div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<TotalPricesPerSubdMonthlyAnnualDto> data = new();
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string periodMode = "monthly";
+    private decimal maxPrice;
+
+    private int selectedMonth = DateTime.Today.Month;
+    private int selectedYear = DateTime.Today.Year;
+
+    private int SelectedMonth
+    {
+        get => selectedMonth;
+        set { selectedMonth = value; _ = LoadDataAsync(); }
+    }
+
+    private int SelectedYear
+    {
+        get => selectedYear;
+        set { selectedYear = value; _ = LoadDataAsync(); }
+    }
+
+    private IEnumerable<int> AvailableYears
+    {
+        get
+        {
+            var currentYear = DateTime.Today.Year;
+            for (int y = currentYear; y >= currentYear - 5; y--)
+            {
+                yield return y;
+            }
+        }
+    }
+
+    private IEnumerable<TotalPricesPerSubdMonthlyAnnualDto> FilteredData => data
+        .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                    x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.TotalPrice);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private void SetPeriodMode(string mode)
+    {
+        if (periodMode == mode) return;
+        periodMode = mode;
+        _ = LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        data = periodMode == "monthly"
+            ? await DashboardService.GetTotalPricesPerSubdMonthlyAsync(selectedYear, selectedMonth)
+            : await DashboardService.GetTotalPricesPerSubdAnnualAsync(selectedYear);
+
+        maxPrice = data.Any() ? data.Max(x => x.TotalPrice) : 0;
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private static string FormatCurrency(decimal value) => value.ToString("C2", new System.Globalization.CultureInfo("en-PH"));
+}
