@@ -75,7 +75,7 @@
 /* ── Stat bar ── */
 ::deep .stat-bar {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
 }
 
@@ -669,3 +669,36 @@
         background: #FCEBEB;
     }
     
+    ::deep .dup-warning-banner {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0.5rem 0.8rem;
+    margin-bottom: 0.75rem;
+    background: #fef6e4;
+    border: 0.5px solid #f5c87a;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #633806;
+}
+
+::deep .dup-warning-banner i {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+::deep .dot-warn {
+    background: #E2A03F; /* or reuse #f5c87a border tone from err-msg-card for consistency */
+}
+
+::deep .tab.act-warn {
+    background: #fef6e4;
+    color: #633806;
+    border: 0.5px solid #f5c87a;
+}
+
+::deep .sc-val.sc-warn {
+    color: #633806;
+}
+

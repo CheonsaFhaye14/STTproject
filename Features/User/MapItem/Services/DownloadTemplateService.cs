@@ -208,12 +208,12 @@ public class DownloadTemplateService
         worksheet.Cell(row, 10).Value = item.Price;
         worksheet.Cell(row, 10).Style.Protection.Locked = false;
     }
-    public byte[] GenerateErrorReportExcel(ImportMapItemResult result)
+    public byte[] GenerateErrorReportExcel(ImportMapItemResult result, List<ImportMapItemRowResult> rowsToExport)
     {
         using var workbook = new ClosedXML.Excel.XLWorkbook();
         var sheet = workbook.Worksheets.Add("Errors");
 
-        var headers =  result.OriginalHeaders.Count > 0 ? result.OriginalHeaders : new List<string>
+        var headers = result.OriginalHeaders.Count > 0 ? result.OriginalHeaders : new List<string>
         {
             "SubDistributorCode",
             "Principal",
@@ -228,16 +228,14 @@ public class DownloadTemplateService
 
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
-        
+
         var errorColumn = headers.Count + 1;
         sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
 
-        var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
-
         int excelRow = 2;
-        foreach (var row in failedRows)
+        foreach (var row in rowsToExport)
         {
             for (int i = 0; i < headers.Count; i++)
             {
@@ -247,7 +245,7 @@ public class DownloadTemplateService
 
             var errorCell = sheet.Cell(excelRow, errorColumn);
             errorCell.Value = string.Join("; ", row.Issues);
-            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D"); 
+            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D");
             errorCell.Style.Font.Bold = true;
 
             excelRow++;
@@ -258,4 +256,5 @@ public class DownloadTemplateService
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
+
 }

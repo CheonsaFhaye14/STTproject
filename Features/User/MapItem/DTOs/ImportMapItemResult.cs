@@ -39,6 +39,7 @@ public sealed class ImportMapItemRowResult
 	public int? SubdItemId { get; set; }
 	public int? ItemsUomId { get; set; }
 	public List<string> Issues { get; } = new();
+	public List<string> Warnings { get; } = new(); // non-blocking — e.g. "duplicate map item, one will be committed"
 	public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

@@ -51,6 +51,7 @@
                         }
                     }
 
+                    var hasWarningGroups = groups.Any(GroupHasWarningOnly);                    
                     var hasSuccessGroups = groups.Any(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0));
                     var hasErrorGroups = groups.Any(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0));
                     var selectableCount = groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
@@ -70,6 +71,10 @@
                         <div class="sc">
                             <div class="sc-label">Valid</div>
                             <div class="sc-val sc-ok">@groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0))</div>
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">With warnings</div>
+                            <div class="sc-val sc-warn">@groups.Count(GroupHasWarningOnly)</div>
                         </div>
                         <div class="sc">
                             <div class="sc-label">With errors</div>
@@ -113,27 +118,32 @@
                     }
 
                     @* ── Tabs ── *@
-                    @if (groups.Any())
-                    {
-                        <div class="tabs">
-                            <button type="button" class="tab @GetTabClass(GroupFilter.All)" @onclick='() => SetTab(GroupFilter.All)'>
-                                All (@groups.Count)
+                    <div class="tabs">
+                        <button type="button" class="tab @GetTabClass(GroupFilter.All)" @onclick='() => SetTab(GroupFilter.All)'>
+                            All (@groups.Count)
+                        </button>
+                        @if (hasSuccessGroups)
+                        {
+                            <button type="button" class="tab @GetTabClass(GroupFilter.SuccessOnly)" @onclick='() => SetTab(GroupFilter.SuccessOnly)'>
+                                <span class="dot dot-ok"></span>
+                                Valid (@groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0)))
                             </button>
-                            @if (hasSuccessGroups)
-                            {
-                                <button type="button" class="tab @GetTabClass(GroupFilter.SuccessOnly)" @onclick='() => SetTab(GroupFilter.SuccessOnly)'>
-                                    <span class="dot dot-ok"></span>
-                                    Valid (@groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0)))
-                                </button>
-                            }
-                            @if (hasErrorGroups)
-                            {
-                                <button type="button" class="tab @GetTabClass(GroupFilter.ErrorOnly)" @onclick='() => SetTab(GroupFilter.ErrorOnly)'>
-                                    <span class="dot dot-er"></span>
-                                    Errors (@groups.Count(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0)))
-                                </button>
-                            }
-                        </div>
+                        }
+                        @if (hasWarningGroups)
+                        {
+                            <button type="button" class="tab @GetTabClass(GroupFilter.WarningOnly)" @onclick='() => SetTab(GroupFilter.WarningOnly)'>
+                                <span class="dot dot-warn"></span>
+                                Warnings (@groups.Count(GroupHasWarningOnly))
+                            </button>
+                        }
+                        @if (hasErrorGroups)
+                        {
+                            <button type="button" class="tab @GetTabClass(GroupFilter.ErrorOnly)" @onclick='() => SetTab(GroupFilter.ErrorOnly)'>
+                                <span class="dot dot-er"></span>
+                                Errors (@groups.Count(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0)))
+                            </button>
+                        }
+                    </div>
 
                         @* ── Error filter bar (only on error tab) ── *@
                         @if (groupFilter == GroupFilter.ErrorOnly && hasErrorGroups)
@@ -161,7 +171,7 @@
                             </div>
                             <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
                                 <i class="ti ti-download" aria-hidden="true"></i>
-                                Download Error Report
+                                Download @(!string.IsNullOrEmpty(selectedErrorFilter) ? $"'{selectedErrorFilter}'" : "all") errors
                             </button>
                         }
 
@@ -187,7 +197,7 @@
                                     ? "[Orphan]"
                                     : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} - {first.CompanyItemName}");
                                 var groupKey = first != null ? BuildGroupKey(first) : Guid.NewGuid().ToString();
-                                var isExpanded = expandedGroups.Contains(groupKey);
+                                var isExpanded = expandedGroups.Contains(groupKey) || groupFilter == GroupFilter.WarningOnly;
 
                                 @if (!hasErrors)
                                 {
@@ -251,6 +261,16 @@
                                                         <strong>@first.SubdItemCode - @first.SubdItemName</strong>
                                                     </div>
                                                 </div>
+                                                @{
+                                                    var groupWarnings2 = groupRows.SelectMany(r => r.Warnings).Distinct().ToList();
+                                                }
+                                                @if (groupWarnings2.Any())
+                                                {
+                                                    <div class="dup-warning-banner">
+                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                        @groupWarnings2.First()
+                                                    </div>
+                                                }
                                                 <div class="itbl-wrap">
                                                     <table class="itbl">
                                                         <thead>
@@ -313,12 +333,11 @@
                                         }
                                     }
 
-                                    var grouped = visibleIssues
-                                        .GroupBy(i => new { i.RowNumber, i.Message })
-                                        .Select(g => g.First())
-                                        .GroupBy(i => i.RowNumber)
-                                        .OrderBy(g => g.Key)
-                                        .ToList();
+                                var grouped = visibleIssues
+                                    .GroupBy(i => i.Message)
+                                    .Select(g => new { Message = g.Key, RowNumbers = g.Select(x => x.RowNumber).Where(r => r > 0).Distinct().OrderBy(r => r).ToList() })
+                                    .OrderBy(g => g.RowNumbers.FirstOrDefault())
+                                    .ToList();
 
                                     <div class="icard">
                                         <div class="ich ich-er">
@@ -345,27 +364,23 @@
                                         @if (grouped.Any())
                                         {
                                             <div class="icb-err-rows">
-                                                @foreach (var rowGroup in grouped)
+                                                @foreach (var issueGroup in grouped)
                                                 {
-                                                    var rowNum = rowGroup.Key;
-                                                    @foreach (var issue in rowGroup)
-                                                    {
-                                                        <div class="err-msg-card">
-                                                            <div class="err-msg-hdr">
-                                                                <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
-                                                                <div>
-                                                                    <div class="err-msg-text">@issue.Message</div>
-                                                                    @if (rowNum > 0)
-                                                                    {
-                                                                        <div class="err-rows-pill">
-                                                                            <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                            Row: @rowNum
-                                                                        </div>
-                                                                    }
-                                                                </div>
+                                                    <div class="err-msg-card">
+                                                        <div class="err-msg-hdr">
+                                                            <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                            <div>
+                                                                <div class="err-msg-text">@issueGroup.Message</div>
+                                                                @if (issueGroup.RowNumbers.Any())
+                                                                {
+                                                                    <div class="err-rows-pill">
+                                                                        <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                        Row: @string.Join(" & ", issueGroup.RowNumbers)
+                                                                    </div>
+                                                                }
                                                             </div>
                                                         </div>
-                                                    }
+                                                    </div>
                                                 }
                                             </div>
                                         }
@@ -373,7 +388,7 @@
                                 }
                             }
                         </div>
-                    }
+                
                 }
             </div>
 
@@ -398,7 +413,7 @@
               OnYes="ConfirmCommit" OnNo="CancelCommit" CloseOnOverlayClick="true" />
 
 @code {
-    [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
+    [Parameter] public EventCallback<List<ImportMapItemRowResult>> OnDownloadErrorReport { get; set; }
     [Parameter] public bool Show { get; set; }
     [Parameter] public ImportMapItemResult? ImportResult { get; set; }
     [Parameter] public EventCallback OnCommit { get; set; }
@@ -413,7 +428,7 @@
 
     protected override void OnParametersSet()
     {
-        if (Show && !wasShown) { groupFilter = GroupFilter.SuccessOnly; wasShown = true; }
+        if (Show && !wasShown) { groupFilter = GroupFilter.All; wasShown = true; }
         else if (!Show) { wasShown = false; }
     }
 
@@ -429,6 +444,7 @@
         ? filter switch
         {
             GroupFilter.SuccessOnly => "tab act-ok",
+            GroupFilter.WarningOnly => "tab act-warn",
             GroupFilter.ErrorOnly => "tab act-er",
             _ => "tab act-all"
         }
@@ -506,7 +522,9 @@
         if (msg.Contains("uom is required") || msg.Contains("uom is missing")) return "UOM Required";
         if (msg.Contains("price is required") || msg.Contains("price missing")) return "Price Required";
         if (msg.Contains("conversion is required")) return "Conversion Required";
-
+        if (msg.Contains("company item") && msg.Contains("not found")) return "Company Item Not Found";
+        if (msg.Contains("duplicate map item")) return "Duplicate Map Item";
+        if (msg.Contains("subdistributor") && msg.Contains("not found")) return "SubDistributor Not Found";
         return NormalizeMessage(m);
     }
 
@@ -543,7 +561,7 @@
         }
     }
 
-    private enum GroupFilter { All, SuccessOnly, ErrorOnly }
+    private enum GroupFilter { All, SuccessOnly, ErrorOnly, WarningOnly }
 
     private static string BuildGroupKey(ImportMapItemRowResult row)
     {
@@ -589,6 +607,7 @@
         return groupFilter switch
         {
             GroupFilter.SuccessOnly => !hasGroupIssues && !hasRowIssues,
+            GroupFilter.WarningOnly => GroupHasWarningOnly(group),
             GroupFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
                 ? GroupContainsError(group, selectedErrorFilter)
                 : (hasGroupIssues || hasRowIssues),
@@ -644,8 +663,36 @@
 
         return affectedRows.Count;
     }
+
     private async Task HandleDownloadErrorReport()
     {
-        if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
+        if (OnDownloadErrorReport.HasDelegate)
+        {
+            var rowsToExport = GetFilteredErrorReportRows();
+            await OnDownloadErrorReport.InvokeAsync(rowsToExport);
+        }
+    }
+
+    private List<ImportMapItemRowResult> GetFilteredErrorReportRows()
+    {
+        if (ImportResult == null) return new List<ImportMapItemRowResult>();
+
+        var errorRows = ImportResult.Rows.Where(r => r.Issues.Count > 0).ToList();
+
+        if (string.IsNullOrWhiteSpace(selectedErrorFilter))
+        {
+            return errorRows;
+        }
+
+        return errorRows
+            .Where(r => r.Issues.Any(i => NormalizeMessageType(i) == selectedErrorFilter))
+            .ToList();
+    }
+
+    private static bool GroupHasWarningOnly(PreparedItemGroup group)
+    {
+        var hasErrors = (group.Issues?.Count ?? 0) > 0 || group.Rows.Any(r => r.Issues.Count > 0);
+        if (hasErrors) return false;
+        return group.Rows.Any(r => r.Warnings.Count > 0);
     }
 }

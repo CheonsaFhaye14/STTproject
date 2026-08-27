@@ -242,7 +242,8 @@ public sealed class ImportMapItemService
 			}
 
 			// Validate row consistency against the first row in the code group.
-			var rowErrors = ValidateGroupConsistency(groupRows);
+			var groupWarnings = new Dictionary<int, List<string>>();
+			var rowErrors = ValidateGroupConsistency(groupRows, groupWarnings);
 			MergeRowErrors(rowErrors, groupRows, crossGroupIdentityErrors);
 
 			// Validate company item exists
@@ -373,6 +374,13 @@ public sealed class ImportMapItemService
 					IsSuccess = true
 				};
 				ApplyRawValues(rowResult, row.RawValues);
+
+				// NEW — carry over non-blocking duplicate-map warnings
+				if (groupWarnings.TryGetValue(row.RowNumber, out var rowWarnings))
+				{
+					rowResult.Warnings.AddRange(rowWarnings);
+				}
+
 				// Validate conversion
 				if (row.Conversion <= 0)
 				{
@@ -719,88 +727,131 @@ public sealed class ImportMapItemService
 		return headers;
 	}
 
-private static Dictionary<int, List<string>> ValidateGroupConsistency(List<ImportedMapItemRow> rows)
-{
-	var errors = new Dictionary<int, List<string>>();
-
-	void AddError(int rowNumber, string message)
+	private static Dictionary<int, List<string>> ValidateGroupConsistency(
+		List<ImportedMapItemRow> rows,
+		Dictionary<int, List<string>> warnings)
 	{
-		if (!errors.TryGetValue(rowNumber, out var list))
+		var errors = new Dictionary<int, List<string>>();
+
+		void AddError(int rowNumber, string message)
 		{
-			list = new List<string>();
-			errors[rowNumber] = list;
+			if (!errors.TryGetValue(rowNumber, out var list))
+			{
+				list = new List<string>();
+				errors[rowNumber] = list;
+			}
+
+			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
+			{
+				list.Add(message);
+			}
 		}
 
-		if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
+		void AddWarning(int rowNumber, string message)
 		{
-			list.Add(message);
+			if (!warnings.TryGetValue(rowNumber, out var list))
+			{
+				list = new List<string>();
+				warnings[rowNumber] = list;
+			}
+
+			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
+			{
+				list.Add(message);
+			}
 		}
+
+		var firstRow = rows[0];
+
+		foreach (var row in rows)
+		{
+			if (!string.Equals(Normalize(row.SubDistributorCode), Normalize(firstRow.SubDistributorCode), StringComparison.OrdinalIgnoreCase))
+			{
+				AddError(row.RowNumber, "SubDistributor code must match the first row in the item group.");
+			}
+
+			if (!string.Equals(Normalize(row.Principal), Normalize(firstRow.Principal), StringComparison.OrdinalIgnoreCase))
+			{
+				AddError(row.RowNumber, "Principal must match the first row in the item group.");
+			}
+
+			if (!string.Equals(Normalize(row.CompanyItemCode), Normalize(firstRow.CompanyItemCode), StringComparison.OrdinalIgnoreCase))
+			{
+				AddError(row.RowNumber, "Company Item code must match the first row in the item group.");
+			}
+
+			if (!string.Equals(Normalize(row.CompanyItemName), Normalize(firstRow.CompanyItemName), StringComparison.OrdinalIgnoreCase))
+			{
+				AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
+			}
+
+			if (IsPieceUom(row.UOM) && row.Conversion != 1)
+			{
+				AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
+			}
+
+			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
+			{
+				AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
+			}
+		}
+
+		// Duplicate UOM+conversion within the same SubdItemCode+description:
+		// if every other field also matches (price included), the rows describe
+		// the exact same mapping entered twice — that's a "duplicate map item"
+		// warning, not a blocking error, and only one copy gets committed.
+		// If fields differ (e.g. conflicting price), it stays a blocking error
+		// since we can't tell which value is correct.
+		var duplicateUomConvGroups = rows
+			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
+			.GroupBy(row => new
+			{
+				Company = Normalize(row.CompanyItemCode),
+				Subd = Normalize(row.SubdItemCode),
+				ItemName = Normalize(row.SubdItemName),
+				Uom = NormalizeUomKey(row.UOM),
+				Conv = row.Conversion
+			})
+			.Where(group => group.Count() > 1)
+			.ToList();
+
+		foreach (var group in duplicateUomConvGroups)
+		{
+			var groupRowsList = group.OrderBy(row => row.RowNumber).ToList();
+			var first = groupRowsList[0];
+
+			var isFullDuplicate = groupRowsList.Skip(1).All(row => row.Price == first.Price);
+
+			var rowNumbers = FormatRowNumbers(groupRowsList.Select(r => r.RowNumber));
+
+			if (isFullDuplicate)
+			{
+				var message = $"Duplicate map item — rows {rowNumbers} are identical mappings for SubdItem '{first.SubdItemCode}' (UOM '{first.UOM}', conversion '{first.Conversion}'). Only one will be committed.";
+				foreach (var row in groupRowsList)
+				{
+					AddWarning(row.RowNumber, message);
+				}
+			}
+			else
+			{
+				foreach (var row in groupRowsList.Skip(1))
+				{
+					AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}' with conversion '{row.Conversion}' but conflicting price for Company Item '{row.CompanyItemCode}', SubdItem '{row.SubdItemCode}', description '{row.SubdItemName}' (rows {rowNumbers}).");
+				}
+			}
+		}
+
+		return errors;
 	}
 
-	var firstRow = rows[0];
-
-	foreach (var row in rows)
+	private static string FormatRowNumbers(IEnumerable<int> rowNumbers)
 	{
-		if (!string.Equals(Normalize(row.SubDistributorCode), Normalize(firstRow.SubDistributorCode), StringComparison.OrdinalIgnoreCase))
-		{
-			AddError(row.RowNumber, "SubDistributor code must match the first row in the item group.");
-		}
-
-		if (!string.Equals(Normalize(row.Principal), Normalize(firstRow.Principal), StringComparison.OrdinalIgnoreCase))
-		{
-			AddError(row.RowNumber, "Principal must match the first row in the item group.");
-		}
-
-		if (!string.Equals(Normalize(row.CompanyItemCode), Normalize(firstRow.CompanyItemCode), StringComparison.OrdinalIgnoreCase))
-		{
-			AddError(row.RowNumber, "Company Item code must match the first row in the item group.");
-		}
-
-		if (!string.Equals(Normalize(row.CompanyItemName), Normalize(firstRow.CompanyItemName), StringComparison.OrdinalIgnoreCase))
-		{
-			AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
-		}
-
-		if (IsPieceUom(row.UOM) && row.Conversion != 1)
-		{
-			AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
-		}
-
-		if (!IsPieceUom(row.UOM) && row.Conversion == 1)
-		{
-			AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
-		}
+		var nums = rowNumbers.Distinct().OrderBy(n => n).ToList();
+		if (nums.Count == 0) return string.Empty;
+		if (nums.Count == 1) return nums[0].ToString();
+		return string.Join(", ", nums.Take(nums.Count - 1)) + " & " + nums[^1];
 	}
 
-	// Duplicate UOM and conversion checks should be scoped per SubdItem identity
-	// (SubdItemCode + description). Two rows sharing a code/blank-code but a
-	// different description represent different items, so the same UOM/conversion
-	// pair is allowed to repeat across them — it's only a real duplicate when it
-	// repeats within the SAME SubdItemCode + description.
-	var duplicateUomConvGroups = rows
-		.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
-		.GroupBy(row => new
-		{
-			Company = Normalize(row.CompanyItemCode),
-			Subd = Normalize(row.SubdItemCode),
-			ItemName = Normalize(row.SubdItemName),
-			Uom = NormalizeUomKey(row.UOM),
-			Conv = row.Conversion
-		})
-		.Where(group => group.Count() > 1)
-		.ToList();
-
-	foreach (var group in duplicateUomConvGroups)
-	{
-		var duplicateRows = group.OrderBy(row => row.RowNumber).Skip(1).ToList();
-		foreach (var row in duplicateRows)
-		{
-			AddError(row.RowNumber, $"Duplicate UOM '{row.UOM}' with conversion '{row.Conversion}' for Company Item '{row.CompanyItemCode}', SubdItem '{row.SubdItemCode}', description '{row.SubdItemName}'.");
-		}
-	}
-
-	return errors;
-}
 	private static bool IsPieceUom(string? uom)
 	{
 		var normalized = Normalize(uom ?? string.Empty);

@@ -779,11 +779,11 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 }
             }
         }
-        private async Task HandleDownloadErrorReport()
+        private async Task HandleDownloadErrorReport(List<ImportMapItemRowResult> filteredRows)
         {
-            if (lastImportResult == null) return;
+            if (lastImportResult == null || filteredRows.Count == 0) return;
 
-            var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult);
+            var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult, filteredRows);
             var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
 
             await JS.InvokeVoidAsync(
