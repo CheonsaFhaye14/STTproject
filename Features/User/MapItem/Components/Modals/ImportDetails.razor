@@ -56,6 +56,8 @@
                     var hasErrorGroups = groups.Any(g => (g.Issues?.Count ?? 0) > 0 || g.Rows.Any(r => r.Issues.Count > 0));
                     var selectableCount = groups.Count(g => (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
                     var selectedCount = groups.Count(g => g.Selected && !g.IsSaved && (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0));
+                    var warningSelectableCount = groups.Count(g => GroupHasWarningOnly(g) && !g.IsSaved);
+                    var warningSelectedCount = groups.Count(g => g.Selected && !g.IsSaved && GroupHasWarningOnly(g));
                     var totalRows = ImportResult.Rows.Count;
 
                     @* ── Summary stat bar ── *@
@@ -176,13 +178,22 @@
                         }
 
                         @* ── Select all (only on valid / all tab) ── *@
-                        @if (groupFilter != GroupFilter.ErrorOnly && selectableCount > 0)
+                        @if (groupFilter == GroupFilter.SuccessOnly && selectableCount > 0) 
                         {
                             <div class="sel-all-bar">
                                 <input type="checkbox" id="select-all-check"
                                        checked="@(selectedCount == selectableCount)"
                                        @onchange="(e) => ToggleSelectAllCards(e.Value)" />
                                 <label for="select-all-check">Select all valid (@selectedCount / @selectableCount ready)</label>
+                            </div>
+                        }
+                        else if (groupFilter == GroupFilter.WarningOnly && selectableCount > 0)
+                        {
+                            <div class="sel-all-bar">
+                                <input type="checkbox" id="select-all-warnings-check"
+                                    checked="@(warningSelectedCount == warningSelectableCount)"
+                                    @onchange="(e) => ToggleSelectAllWarningCards(e.Value)" />
+                                <label for="select-all-warnings-check">Select all with warnings (@warningSelectedCount / @warningSelectableCount ready)</label>
                             </div>
                         }
 
@@ -650,7 +661,21 @@
     }
 
     private int GetGroupErrorRowCount(PreparedItemGroup group) => GetGroupErrorRowCount(group, selectedErrorFilter);
+    private void ToggleSelectAllWarningCards(object? checkedValue)
+    {
+        if (checkedValue is not bool isChecked || ImportResult == null) return;
 
+        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        foreach (var g in groups)
+        {
+            if (g.Rows == null || g.Rows.Count == 0) continue;
+            if (!GroupHasWarningOnly(g)) continue;
+
+            var key = BuildGroupKey(g.Rows.First());
+            if (isChecked) { SelectedGroupKeys.Add(key); g.Selected = true; }
+            else { SelectedGroupKeys.Remove(key); g.Selected = false; }
+        }
+    }
     private static int GetGroupErrorRowCount(PreparedItemGroup group, string? filterMessageType)
     {
         var affectedRows = new HashSet<int>();
