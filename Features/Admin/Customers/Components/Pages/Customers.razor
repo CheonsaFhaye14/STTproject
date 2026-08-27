@@ -125,7 +125,7 @@
             var bytes = await ImportCustomersService.GenerateTemplateExcelAsync();
             await JS.InvokeVoidAsync(
                 "downloadFileFromBytes",
-                "customer-import-template.xlsx",
+                "customer-template.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 Convert.ToBase64String(bytes));
         }

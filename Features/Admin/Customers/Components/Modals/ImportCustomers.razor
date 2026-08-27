@@ -156,7 +156,7 @@
         if (importResult == null) return;
 
         var bytes = ImportCustomersService.GenerateErrorReportExcel(importResult);
-        var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+        var fileName = $"Customer-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
 
         await JS.InvokeVoidAsync(
             "downloadFileFromBytes",

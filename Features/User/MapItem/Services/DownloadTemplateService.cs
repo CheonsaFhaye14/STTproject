@@ -163,7 +163,7 @@ public class DownloadTemplateService
                 workbook.SaveAs(stream);
                 stream.Position = 0;
 
-                var fileName = $"MapItemTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                var fileName = $"MapItem-Template{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await _jsRuntime.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             }

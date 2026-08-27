@@ -993,7 +993,7 @@ public partial class SalesInvoice
         if (lastImportResult == null) return;
 
         var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult);
-        var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+        var fileName = $"SalesInvoice-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
 
         await JS.InvokeVoidAsync(
             "downloadFileFromBytes",

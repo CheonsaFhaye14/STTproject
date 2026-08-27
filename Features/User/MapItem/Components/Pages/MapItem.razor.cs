@@ -784,7 +784,7 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             if (lastImportResult == null || filteredRows.Count == 0) return;
 
             var bytes = downloadTemplateService.GenerateErrorReportExcel(lastImportResult, filteredRows);
-            var fileName = $"customer-import-errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+            var fileName = $"MapItem-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
 
             await JS.InvokeVoidAsync(
                 "downloadFileFromBytes",
