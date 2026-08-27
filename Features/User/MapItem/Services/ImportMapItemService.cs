@@ -44,7 +44,7 @@ public sealed class ImportMapItemService
 			return errorResult;
 		}
 
-		return await PrepareFromExcelAsync(excelStream, cancellationToken);
+		return await PrepareFromExcelAsync(excelStream,currentUserId, cancellationToken);
 	}
 
 	public async Task<int> CommitPreparedRowsAsync(
@@ -71,6 +71,7 @@ public sealed class ImportMapItemService
 
 	public async Task<ImportMapItemResult> PrepareFromExcelAsync(
 		Stream excelStream,
+		int currentUserId,
 		CancellationToken cancellationToken = default)
 	{
 		var result = new ImportMapItemResult();
@@ -144,10 +145,20 @@ public sealed class ImportMapItemService
 		// Load reference data from database
 		await using var context = _contextFactory.CreateDbContext();
 
-		// Get subdistributor mapping
-		var subdDistributors = await context.SubDistributors
+		var isAdmin = await IsAdminAsync(context, currentUserId, cancellationToken);
+
+		// Get subdistributor mapping — admins see all active subdistributors,
+		// non-admins only see the ones they encoded themselves.
+		var subdDistributorsQuery = context.SubDistributors
 			.AsNoTracking()
-			.Where(s => s.IsActive)
+			.Where(s => s.IsActive);
+
+		if (!isAdmin)
+		{
+			subdDistributorsQuery = subdDistributorsQuery.Where(s => s.EncoderId == currentUserId);
+		}
+
+		var subdDistributors = await subdDistributorsQuery
 			.ToDictionaryAsync(s => Normalize(s.SubdCode), cancellationToken);
 
 		var companyItems = await context.CompanyItems
@@ -232,9 +243,6 @@ public sealed class ImportMapItemService
 			MergeRowErrors(rowErrors, groupRows, crossGroupIdentityErrors);
 
 			// Validate company item exists
-			// TODO show only one on error dropdown Company Item Code not found onclick card is per Company Item code
-			// header Company Item Code/Name: 
-			// rows: 
 			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem))
 			{
 				var createdRows = new List<ImportMapItemRowResult>();
@@ -413,10 +421,20 @@ public sealed class ImportMapItemService
 
 		await using var context = _contextFactory.CreateDbContext();
 
-		// Get all subdistributors for mapping
-		var subdDistributors = await context.SubDistributors
+		var isAdmin = await IsAdminAsync(context, currentUserId, cancellationToken);
+
+		// Get all subdistributors for mapping — admins see all active subdistributors,
+		// non-admins only see the ones they encoded themselves.
+		var subdDistributorsQuery = context.SubDistributors
 			.AsNoTracking()
-			.Where(s => s.IsActive && s.EncoderId == currentUserId)
+			.Where(s => s.IsActive);
+
+		if (!isAdmin)
+		{
+			subdDistributorsQuery = subdDistributorsQuery.Where(s => s.EncoderId == currentUserId);
+		}
+
+		var subdDistributors = await subdDistributorsQuery
 			.ToDictionaryAsync(s => Normalize(s.SubdCode), cancellationToken);
 
 		var companyItems = await context.CompanyItems
@@ -510,6 +528,20 @@ public sealed class ImportMapItemService
 		return committedGroups;
 	}
 
+	private static async Task<bool> IsAdminAsync(
+		SttprojectContext context,
+		int currentUserId,
+		CancellationToken cancellationToken)
+	{
+		// TODO: adjust to your actual Users/role schema (e.g. RoleId FK, enum,
+		// or a claims-based role that's passed in from the controller instead
+		// of being looked up here).
+		return await context.Users
+			.AsNoTracking()
+			.Where(u => u.UserId == currentUserId)
+			.Select(u => u.Role == "Admin")
+			.FirstOrDefaultAsync(cancellationToken);
+	}
 	private static List<ImportedMapItemRow> ReadMapItemRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
