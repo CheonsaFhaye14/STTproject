@@ -20,6 +20,7 @@
            placeholder="@(Placeholder ?? "-- Search --")"
            disabled="@Disabled"
            value="@SearchText"
+           @ref="InputElement"
            @oninput="OnInputChanged"
            @onfocus="OnFocus"
            @onkeydown="OnKeyDown"
@@ -34,7 +35,8 @@
                 var index = i;
                 <li class="autocomplete-item @(index == HighlightedIndex ? "active" : "")"
                     @onmousedown:preventDefault="true"
-                    @onmousedown="() => SelectItem(item)">
+                    @onmousedown="() => SelectItem(item)"
+                    @onmouseover="() => HighlightedIndex = index">
                     @GetText(item)
                 </li>
             }
@@ -102,7 +104,6 @@
 
     [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
 
-    // Now optional. If not supplied, the item itself is used as both value and text.
     [Parameter] public Func<TItem, string>? ValueSelector { get; set; }
     [Parameter] public Func<TItem, string>? TextSelector { get; set; }
 
@@ -112,19 +113,26 @@
     [Parameter] public TItem? SelectedItem { get; set; }
     [Parameter] public EventCallback<TItem?> SelectedItemChanged { get; set; }
 
+    // NEW: fires on Enter, whether it just selected an item or accepted typed-as-is text
+    [Parameter] public EventCallback OnConfirmed { get; set; }
+
     [Parameter] public bool Disabled { get; set; }
-
     [Parameter] public int MinSearchLength { get; set; } = 0;
-
     [Parameter] public string NoResultsText { get; set; } = "No results found";
+
+    // NEW: if true, focusing/first-Enter shows the full list regardless of current text
+    [Parameter] public bool ShowAllOnOpen { get; set; } = false;
 
     private string SearchText { get; set; } = string.Empty;
     private bool ShowSuggestions { get; set; }
     private int HighlightedIndex { get; set; } = -1;
+    private bool ShowingAll { get; set; }
+    private bool HasSelectedItem { get; set; }
 
     private List<TItem> FilteredItems { get; set; } = new();
 
-    // Fallback selector: use the item itself (its ToString()) as value/text.
+    private ElementReference InputElement;
+
     private string GetValue(TItem item) => ValueSelector is not null
         ? ValueSelector(item)
         : item?.ToString() ?? string.Empty;
@@ -137,7 +145,9 @@
     {
         if (!string.IsNullOrEmpty(SelectedValue))
         {
-            var match = Items.FirstOrDefault(i => GetValue(i) == SelectedValue);
+            var match = Items.FirstOrDefault(i =>
+                GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
+
             if (match is not null && string.IsNullOrEmpty(SearchText))
             {
                 SearchText = GetText(match);
@@ -145,27 +155,29 @@
         }
     }
 
+    private void RefreshFilteredItems()
+    {
+        FilteredItems = ShowingAll
+            ? Items.ToList()
+            : (SearchText.Length >= MinSearchLength
+                ? Items.Where(i => GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase)).ToList()
+                : new List<TItem>());
+    }
+
     private void OnInputChanged(ChangeEventArgs e)
     {
         SearchText = e.Value?.ToString() ?? string.Empty;
         HighlightedIndex = -1;
-
-        if (SearchText.Length >= MinSearchLength)
-        {
-            FilteredItems = Items
-                .Where(i => GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            ShowSuggestions = true;
-        }
-        else
-        {
-            FilteredItems.Clear();
-            ShowSuggestions = false;
-        }
+        HasSelectedItem = false;
+        ShowingAll = false;
+        ShowSuggestions = SearchText.Length >= MinSearchLength;
+        RefreshFilteredItems();
 
         if (SelectedValue is not null)
         {
-            var current = Items.FirstOrDefault(i => GetValue(i) == SelectedValue);
+            var current = Items.FirstOrDefault(i =>
+                GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
+
             if (current is null || GetText(current) != SearchText)
             {
                 _ = ClearSelectionAsync();
@@ -175,37 +187,79 @@
 
     private void OnFocus()
     {
-        FilteredItems = Items
-            .Where(i => string.IsNullOrEmpty(SearchText) || GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        ShowingAll = ShowAllOnOpen;
         ShowSuggestions = true;
+        RefreshFilteredItems();
+        HighlightedIndex = FilteredItems.Any() ? 0 : -1;
     }
 
     private void HandleFocusOut()
     {
         ShowSuggestions = false;
+        HighlightedIndex = -1;
     }
 
+    // NEW: two-stage Enter (like doc2) + OnConfirmed
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (!ShowSuggestions || !FilteredItems.Any()) return;
-
         switch (e.Key)
         {
             case "ArrowDown":
-                HighlightedIndex = Math.Min(HighlightedIndex + 1, FilteredItems.Count - 1);
-                break;
-            case "ArrowUp":
-                HighlightedIndex = Math.Max(HighlightedIndex - 1, 0);
-                break;
-            case "Enter":
-                if (HighlightedIndex >= 0 && HighlightedIndex < FilteredItems.Count)
+                if (!ShowSuggestions)
                 {
-                    await SelectItem(FilteredItems[HighlightedIndex]);
+                    ShowingAll = ShowAllOnOpen;
+                    ShowSuggestions = true;
+                    RefreshFilteredItems();
+                }
+                if (FilteredItems.Any())
+                    HighlightedIndex = Math.Min(HighlightedIndex + 1, FilteredItems.Count - 1);
+                break;
+
+            case "ArrowUp":
+                if (FilteredItems.Any())
+                    HighlightedIndex = Math.Max(HighlightedIndex - 1, 0);
+                break;
+
+            case "Enter":
+                if (!ShowSuggestions && !HasSelectedItem)
+                {
+                    // First Enter: open the list instead of confirming
+                    ShowingAll = ShowAllOnOpen;
+                    ShowSuggestions = true;
+                    RefreshFilteredItems();
+                    HighlightedIndex = FilteredItems.Any() ? 0 : -1;
+                    return;
+                }
+
+                if (ShowSuggestions)
+                {
+                    var toSelect = HighlightedIndex >= 0 && HighlightedIndex < FilteredItems.Count
+                        ? FilteredItems[HighlightedIndex]
+                        : FilteredItems.FirstOrDefault();
+
+                    if (toSelect is not null)
+                    {
+                        await SelectItem(toSelect); // closes list, sets HasSelectedItem
+                    }
+                    else
+                    {
+                        ShowSuggestions = false; // nothing matched; accept typed text as-is
+                    }
+
+                    await OnConfirmed.InvokeAsync();
+                    return;
+                }
+
+                if (HasSelectedItem)
+                {
+                    await OnConfirmed.InvokeAsync();
                 }
                 break;
+
             case "Escape":
                 ShowSuggestions = false;
+                HighlightedIndex = -1;
+                ShowingAll = false;
                 break;
         }
     }
@@ -216,6 +270,8 @@
         SelectedValue = GetValue(item);
         ShowSuggestions = false;
         HighlightedIndex = -1;
+        HasSelectedItem = true;
+        ShowingAll = false;
 
         await SelectedValueChanged.InvokeAsync(SelectedValue);
         await SelectedItemChanged.InvokeAsync(item);
@@ -224,7 +280,21 @@
     private async Task ClearSelectionAsync()
     {
         SelectedValue = null;
+        HasSelectedItem = false;
         await SelectedValueChanged.InvokeAsync(SelectedValue);
         await SelectedItemChanged.InvokeAsync(default);
     }
+
+    // NEW: imperative API, like doc2's OpenPopupAsync/GetInputRef
+    public async Task OpenPopupAsync()
+    {
+        ShowingAll = ShowAllOnOpen;
+        ShowSuggestions = true;
+        RefreshFilteredItems();
+        HighlightedIndex = FilteredItems.Any() ? 0 : -1;
+        StateHasChanged();
+        await InputElement.FocusAsync();
+    }
+
+    public ElementReference GetInputRef() => InputElement;
 }

@@ -11,18 +11,22 @@
 
         <div class="modal-body">
             <div class="form-group">
-                <label>@CustomerValidations.AddCustomer.subdistributor.Label<span
-                    class="required-asterisk">*</span></label>
-                    <GenericAutocomplete TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
-                                         @ref="subdAutocomplete" Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
-                                         ItemLabel="@(sd => sd.SubDistributorName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
-                                         Placeholder="Search subdistributor..." IsDisabled=@isViewMode />
-                    @if (ShowValidationErrors &&
-                    !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
-                    {
-                        <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)</span>
-                    }
-                </div>
+                <AutoComplete
+                    Label="Subdistributor"
+                    Placeholder="Search subdistributor..."
+                    TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                    Required="true"
+                    Items="SubDistributors"
+                    ValueSelector="x => x.SubDistributorId.ToString()"
+                    TextSelector="x => x.SubDistributorName ?? string.Empty"
+                    SelectedValue="@(SubDistributorId.ToString())"
+                    SelectedItemChanged="OnSubDistributorSelected" 
+                    Disabled=@isViewMode/>
+                @if (ShowValidationErrors &&!string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
+                {
+                    <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)</span>
+                }
+            </div>
 
                 <div class="form-group">
                     <label>@CustomerValidations.AddCustomer.customercode.Label<span
@@ -45,20 +49,20 @@
                                 <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customername.Key)</span>
                             }
                         </div>
-
                         <div class="form-group">
-                            <label>@CustomerValidations.AddCustomer.customertype.Label<span
-                                class="required-asterisk">*</span></label>
-                                <GenericAutocomplete TItem="string" @ref="customerTypeAutocomplete" Items="ExistingCustomerTypes"
-                                                     @bind-Value="CustomerType" ItemLabel="@(t => t ?? string.Empty)" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type customer type..." OnSelected="OnCustomerTypeSelected"
-                                                     IsDisabled=@isViewMode />
-                                @if (ShowValidationErrors &&
-                                !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
-                                {
+                            <AutoComplete
+                                Label="Customer Type"
+                                Placeholder="Search or select customer type..."
+                                Required="true"
+                                Items="ExistingCustomerTypes"
+                                Disabled=@isViewMode 
+                                SelectedValue="@CustomerType" 
+                                SelectedValueChanged="OnCustomerTypeSelected"/>
+                            @if (ShowValidationErrors &&!string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
+                            {
                                     <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customertype.Key)</span>
-                                }
-                            </div>
+                            }
+                        </div>
 
                             <div class="form-group">
                                 <label>
@@ -69,23 +73,32 @@
 
                             <h4>Customer Address</h4>
                             <div class="form-group">
-                                <label>Island</label>
-                                <GenericAutocomplete @ref="IslandAutocomplete" Items="Islands" TItem="string" @bind-Value="Island"
-                                                     ItemLabel="@(p => p ?? string.Empty)" OnSelected="OnIslandSelected" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type island..." IsDisabled=@isViewMode />
+                                <AutoComplete
+                                    Label="Island"
+                                    Placeholder="Search or select island..."
+                                    Items="Islands"
+                                    SelectedValue="@Island"
+                                    SelectedValueChanged="OnIslandSelected"
+                                    Disabled=@isViewMode />
                             </div>
                             <div class="form-group">
-                                <label>Province</label>
-                                <GenericAutocomplete @ref="ProvinceAutocomplete" Items="Provinces" TItem="string" @bind-Value="Province"
-                                                     ItemLabel="@(p => p ?? string.Empty)" OnSelected="OnProvinceSelected" ShowAllOnOpen="true"
-                                                     Placeholder="Select or type province..." IsDisabled=@isViewMode />
+                                <AutoComplete
+                                    Label="Province"
+                                    Placeholder="Search or select province..."
+                                    Items="Provinces"
+                                    SelectedValue="@Province"
+                                    SelectedValueChanged="OnProvinceSelected"
+                                    Disabled=@isViewMode />
                             </div>
 
                             <div class="form-group">
-                                <label>City / Municipality</label>
-                                <GenericAutocomplete TItem="string" @ref="CityAutocomplete" Items="CitiesMunicipalities"
-                                                     @bind-Value="City" ItemLabel="@(c => c ?? string.Empty)" OnSelected="OnCitySelected"
-                                                     ShowAllOnOpen="true" Placeholder="Select or type city..." IsDisabled=@isViewMode />
+                                <AutoComplete
+                                    Label="City / Municipality"
+                                    Placeholder="Search or select city / municipality..."
+                                    Items="CitiesMunicipalities"
+                                    SelectedValue="@City"
+                                    SelectedValueChanged="OnCitySelected"
+                                    Disabled=@isViewMode />
                             </div>
 
                             <div class="form-group">
@@ -150,11 +163,6 @@
     public CustomerUpdateDto? PendingUpdateDto { get; private set; }
 
     private bool isViewMode = false;
-    private GenericAutocomplete<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto>? subdAutocomplete;
-    private GenericAutocomplete<string>? customerTypeAutocomplete;
-    private GenericAutocomplete<string>? IslandAutocomplete;
-    private GenericAutocomplete<string>? ProvinceAutocomplete;
-    private GenericAutocomplete<string>? CityAutocomplete;
     private ElementReference customerCodeInput;
     private ElementReference customerNameInput;
     private ElementReference addressLineInput;
