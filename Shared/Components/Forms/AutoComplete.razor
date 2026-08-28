@@ -1,0 +1,230 @@
+@using Microsoft.JSInterop
+@typeparam TItem
+@using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrWhiteSpace(Label))
+{
+    <label class="form-label">
+        @Label
+        @if (Required)
+        {
+            <span class="required">*</span>
+        }
+    </label>
+}
+
+<div class="autocomplete-wrapper" @onfocusout="HandleFocusOut">
+    <input type="text"
+           class="form-control"
+           placeholder="@(Placeholder ?? "-- Search --")"
+           disabled="@Disabled"
+           value="@SearchText"
+           @oninput="OnInputChanged"
+           @onfocus="OnFocus"
+           @onkeydown="OnKeyDown"
+           autocomplete="off" />
+
+    @if (ShowSuggestions && FilteredItems.Any())
+    {
+        <ul class="autocomplete-list">
+            @for (int i = 0; i < FilteredItems.Count; i++)
+            {
+                var item = FilteredItems[i];
+                var index = i;
+                <li class="autocomplete-item @(index == HighlightedIndex ? "active" : "")"
+                    @onmousedown:preventDefault="true"
+                    @onmousedown="() => SelectItem(item)">
+                    @GetText(item)
+                </li>
+            }
+        </ul>
+    }
+    else if (ShowSuggestions && !FilteredItems.Any() && !string.IsNullOrEmpty(SearchText))
+    {
+        <ul class="autocomplete-list">
+            <li class="autocomplete-item disabled">@NoResultsText</li>
+        </ul>
+    }
+</div>
+
+<style>
+.autocomplete-wrapper {
+    position: relative;
+}
+
+.required {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.autocomplete-list {
+    position: absolute;
+    z-index: 1000;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 2px 0 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.autocomplete-item {
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background-color: #e9ecef;
+}
+
+.autocomplete-item.disabled {
+    color: #6c757d;
+    cursor: default;
+}
+
+.autocomplete-item.disabled:hover {
+    background-color: transparent;
+}
+</style>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool Required { get; set; }
+
+    [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
+
+    // Now optional. If not supplied, the item itself is used as both value and text.
+    [Parameter] public Func<TItem, string>? ValueSelector { get; set; }
+    [Parameter] public Func<TItem, string>? TextSelector { get; set; }
+
+    [Parameter] public string? SelectedValue { get; set; }
+    [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
+
+    [Parameter] public TItem? SelectedItem { get; set; }
+    [Parameter] public EventCallback<TItem?> SelectedItemChanged { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public int MinSearchLength { get; set; } = 0;
+
+    [Parameter] public string NoResultsText { get; set; } = "No results found";
+
+    private string SearchText { get; set; } = string.Empty;
+    private bool ShowSuggestions { get; set; }
+    private int HighlightedIndex { get; set; } = -1;
+
+    private List<TItem> FilteredItems { get; set; } = new();
+
+    // Fallback selector: use the item itself (its ToString()) as value/text.
+    private string GetValue(TItem item) => ValueSelector is not null
+        ? ValueSelector(item)
+        : item?.ToString() ?? string.Empty;
+
+    private string GetText(TItem item) => TextSelector is not null
+        ? TextSelector(item)
+        : item?.ToString() ?? string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(SelectedValue))
+        {
+            var match = Items.FirstOrDefault(i => GetValue(i) == SelectedValue);
+            if (match is not null && string.IsNullOrEmpty(SearchText))
+            {
+                SearchText = GetText(match);
+            }
+        }
+    }
+
+    private void OnInputChanged(ChangeEventArgs e)
+    {
+        SearchText = e.Value?.ToString() ?? string.Empty;
+        HighlightedIndex = -1;
+
+        if (SearchText.Length >= MinSearchLength)
+        {
+            FilteredItems = Items
+                .Where(i => GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            ShowSuggestions = true;
+        }
+        else
+        {
+            FilteredItems.Clear();
+            ShowSuggestions = false;
+        }
+
+        if (SelectedValue is not null)
+        {
+            var current = Items.FirstOrDefault(i => GetValue(i) == SelectedValue);
+            if (current is null || GetText(current) != SearchText)
+            {
+                _ = ClearSelectionAsync();
+            }
+        }
+    }
+
+    private void OnFocus()
+    {
+        FilteredItems = Items
+            .Where(i => string.IsNullOrEmpty(SearchText) || GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        ShowSuggestions = true;
+    }
+
+    private void HandleFocusOut()
+    {
+        ShowSuggestions = false;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (!ShowSuggestions || !FilteredItems.Any()) return;
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                HighlightedIndex = Math.Min(HighlightedIndex + 1, FilteredItems.Count - 1);
+                break;
+            case "ArrowUp":
+                HighlightedIndex = Math.Max(HighlightedIndex - 1, 0);
+                break;
+            case "Enter":
+                if (HighlightedIndex >= 0 && HighlightedIndex < FilteredItems.Count)
+                {
+                    await SelectItem(FilteredItems[HighlightedIndex]);
+                }
+                break;
+            case "Escape":
+                ShowSuggestions = false;
+                break;
+        }
+    }
+
+    private async Task SelectItem(TItem item)
+    {
+        SearchText = GetText(item);
+        SelectedValue = GetValue(item);
+        ShowSuggestions = false;
+        HighlightedIndex = -1;
+
+        await SelectedValueChanged.InvokeAsync(SelectedValue);
+        await SelectedItemChanged.InvokeAsync(item);
+    }
+
+    private async Task ClearSelectionAsync()
+    {
+        SelectedValue = null;
+        await SelectedValueChanged.InvokeAsync(SelectedValue);
+        await SelectedItemChanged.InvokeAsync(default);
+    }
+}
