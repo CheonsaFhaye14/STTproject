@@ -4,6 +4,9 @@ namespace STTproject.Shared.Components.Buttons
     {
         Cancel,
         Secondary,
-        Primary
+        Primary,
+        IconAction,
+        IconActionEdit,
+        IconActionDelete
     }
 }

@@ -124,6 +124,63 @@
         fill: currentColor;
     }
 
+    /* ── Icon-only action button ── */
+    .icon-action-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid #E5E3DD;
+        border-radius: 8px;
+        background: #FFFFFF;
+        color: #5F5E5A;
+        gap: 0;
+    }
+
+        .icon-action-btn:hover:not(:disabled)
+        {
+            background: #F7F6F4;
+            color: #1B1B1F;
+            border-color: #B08D57;
+        }
+
+        .icon-action-btn:disabled
+        {
+            background: #F7F6F4;
+            color: #B8B6B2;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .icon-action-btn i,
+        .icon-action-btn .btn-icon
+        {
+            width: 16px;
+            height: 16px;
+            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-action-btn .btn-icon ::deep svg
+        {
+            fill: currentColor;
+        }
+
+    .edit-btn:hover:not(:disabled)
+    {
+        color: #8A6A34;
+    }
+
+    .delete-btn:hover:not(:disabled)
+    {
+        color: #A33A3A;
+    }
+
     /* ── Tooltip ── */
     .btn-tooltip-wrap
     {
@@ -181,10 +238,13 @@
         isHovering = false;
     }
 
-private string VariantClass => Variant switch
-{
-    ButtonVariant.Primary => "btn-primary",
-    ButtonVariant.Cancel => "btn-Cancel",
-    _ => "btn-secondary"
-};
+    private string VariantClass => Variant switch
+    {
+        ButtonVariant.Primary => "btn-primary",
+        ButtonVariant.Cancel => "btn-Cancel",
+        ButtonVariant.IconAction => "icon-action-btn",
+        ButtonVariant.IconActionEdit => "icon-action-btn edit-btn",
+        ButtonVariant.IconActionDelete => "icon-action-btn delete-btn",
+        _ => "btn-secondary"
+    };
 }

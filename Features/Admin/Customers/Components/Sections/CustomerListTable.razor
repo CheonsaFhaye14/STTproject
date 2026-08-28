@@ -64,19 +64,6 @@
                 </div>
             </div>
 
-            <!-- Customer type filter -->
-            <div class="clt-filter-group">
-                <label class="clt-filter-label" for="typeFilter">Customer type</label>
-                <select id="typeFilter" class="clt-select"
-                        @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All types</option>
-                    @foreach (var type in AllCustomerTypes)
-                    {
-                        <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
-                    }
-                </select>
-            </div>
-
             <!-- Subdistributor filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
@@ -90,6 +77,21 @@
                         }
                     </select>
                 </div>
+
+            <!-- Customer type filter -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="typeFilter">Customer type</label>
+                <select id="typeFilter" class="clt-select"
+                        @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All types</option>
+                    @foreach (var type in AllCustomerTypes)
+                    {
+                        <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
+                    }
+                </select>
+            </div>
+
+
 
                 @if (HasActiveFilters)
                 {
