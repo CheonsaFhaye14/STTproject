@@ -1,0 +1,162 @@
+@using STTproject.Features.Admin.Dashboard.DTOs
+@using STTproject.Features.Admin.Dashboard.Services
+@inject IAdminDashboardService DashboardService
+
+<div class="cpsd-card">
+    <div class="cpsd-header">
+        <div class="cpsd-title">Mapped Items Per Sub Distributor</div>
+        <div class="cpsd-summary">
+            <span class="cpsd-summary-item total">Total: <strong>@totalSubdItems</strong></span>
+            <span class="cpsd-summary-item active">Active: <strong>@data.Sum(x => x.ActiveCount)</strong></span>
+            <span class="cpsd-summary-item inactive">Inactive: <strong>@data.Sum(x => x.InactiveCount)</strong></span>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="cpsd-loading">Loading...</p>
+    }
+    else
+    {
+        <!-- Search + Sort controls -->
+        <div class="cpsd-controls">
+            <input class="cpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="SearchTerm" />
+            <select class="cpsd-sort" @bind="SortBy">
+                <option value="name">Sort by Name</option>
+                <option value="total">Sort by Total ↓</option>
+                <option value="active">Sort by Active ↓</option>
+                <option value="inactive">Sort by Inactive ↓</option>
+            </select>
+            <select class="cpsd-principal-filter" @bind="selectedPrincipal">
+                <option value="">filter by principal</option>
+                @foreach (var principal in principals)
+                {
+                    <option value="@principal">@principal</option>
+                }
+            </select>
+        </div>
+
+        <!-- Legend -->
+        <div class="cpsd-legend">
+            <span><span class="dot dot-active"></span>Active</span>
+            <span><span class="dot dot-inactive"></span>Inactive</span>
+        </div>
+
+        <!-- Table -->
+        <div class="cpsd-table">
+            <div class="cpsd-table-header">
+                <div class="col-code">Code</div>
+                <div class="col-name">Name</div>
+                <div class="col-name">Principals</div>
+                <div class="col-bar">Mapped Items</div>
+                <div class="col-num">Active</div>
+                <div class="col-num">Inactive</div>
+                <div class="col-num">Total</div>
+            </div>
+
+            @foreach (var item in PagedData)
+            {
+                var activeW = item.TotalCount == 0 ? 0.0 : (item.ActiveCount * 100.0 / maxTotal);
+                var inactiveW = item.TotalCount == 0 ? 0.0 : (item.InactiveCount * 100.0 / maxTotal);
+
+                <div class="cpsd-table-row">
+                    <div class="col-code">
+                        <span class="cpsd-code">@item.SubdCode</span>
+                    </div>
+                    <div class="col-name" title="@item.SubdName">@item.SubdName</div>
+                    <div class="col-name" title="@string.Join(", ", item.Principals)">@string.Join(", ", item.Principals)</div>
+                    <div class="col-bar">
+                        <div class="mini-bar-track">
+                            <div class="mini-bar-active"
+                                 style="width:@(activeW.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
+                            </div>
+                            <div class="mini-bar-inactive"
+                                 style="width:@(inactiveW.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-num active-num">@item.ActiveCount</div>
+                    <div class="col-num inactive-num">@item.InactiveCount</div>
+                    <div class="col-num total-num">@item.TotalCount</div>
+                </div>
+            }
+
+            @if (!PagedData.Any())
+            {
+                <div class="cpsd-empty">No results found.</div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <div class="cpsd-pagination">
+                <button class="cpsd-page-btn" disabled="@(currentPage == 1)" @onclick="() => currentPage--">←</button>
+                <span>Page @currentPage of @totalPages</span>
+                <button class="cpsd-page-btn" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++">→</button>
+            </div>
+        }
+        <div class="cpsd-footer">Showing @PagedData.Count() of @FilteredData.Count() sub distributors</div>
+    }
+</div>
+
+@code {
+    private List<SubdItemPerSubdDto> data = new();
+    private int totalSubdItems;
+    private List<string> principals = new();
+    private int maxTotal;
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string sortBy = "total";
+    private int currentPage = 1;
+    private const int pageSize = 10;
+
+private IEnumerable<SubdItemPerSubdDto> FilteredData => data
+    .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+    .Where(x => string.IsNullOrWhiteSpace(selectedPrincipal) ||
+                x.Principals.Contains(selectedPrincipal, StringComparer.OrdinalIgnoreCase))
+    .OrderBy(x => sortBy == "name" ? x.SubdName : null)
+    .ThenByDescending(x => sortBy switch
+    {
+        "total" => x.TotalCount,
+        "active" => x.ActiveCount,
+        "inactive" => x.InactiveCount,
+        _ => 0
+    });
+
+    private int totalPages => (int)Math.Ceiling(FilteredData.Count() / (double)pageSize);
+
+    private IEnumerable<SubdItemPerSubdDto> PagedData => FilteredData
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        data = await DashboardService.GetTotalSubdItemsPerSubdAsync();
+        totalSubdItems = data.Sum(x => x.TotalCount);
+        maxTotal = data.Any() ? data.Max(x => x.TotalCount) : 1;
+        principals = data.SelectMany(x => x.Principals).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p).ToList();
+        isLoading = false;
+    }
+    private string SearchTerm
+    {
+        get => searchTerm;
+        set { searchTerm = value; currentPage = 1; }
+    }
+
+    private string SortBy
+    {
+        get => sortBy;
+        set { sortBy = value; currentPage = 1; }
+    }
+
+    private string _selectedPrincipal = string.Empty;
+    private string selectedPrincipal
+    {
+        get => _selectedPrincipal;
+        set { _selectedPrincipal = value; currentPage = 1; }
+    }
+
+}

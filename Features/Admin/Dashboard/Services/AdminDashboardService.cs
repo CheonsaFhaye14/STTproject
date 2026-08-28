@@ -91,5 +91,26 @@ namespace STTproject.Features.Admin.Dashboard.Services
                 .OrderByDescending(x => x.TotalPrice)
                 .ToListAsync();
         }
+
+        public async Task<List<SubdItemPerSubdDto>> GetTotalSubdItemsPerSubdAsync()
+        {
+            await using var db = _dbContextFactory.CreateDbContext();
+
+            return await db.SubDistributors
+                .AsNoTracking()
+                .Select(s => new SubdItemPerSubdDto
+                {
+                    SubDistributorId = s.SubDistributorId,
+                    SubdCode = s.SubdCode,
+                    SubdName = s.SubdName,
+                    SubdItemCount = s.SubdItems.Count(),
+                    Principals = s.SubdItems.Select(si => si.CompanyItem.Principal).Distinct().ToList(),
+                    ActiveCount = s.SubdItems.Count(si => si.IsActive),
+                    InactiveCount = s.SubdItems.Count(si => !si.IsActive),
+                })
+                .OrderBy(s => s.SubdName)
+                .ToListAsync();
+        }
+
     }
 }

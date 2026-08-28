@@ -1,0 +1,250 @@
+.cpsd-card {
+    background: #FFFFFF;
+    border: 1px solid #E5E3DD;
+    box-shadow: 0 4px 16px rgba(27, 27, 31, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    color: #1B1B1F;
+    font-family: Arial, sans-serif;
+}
+
+.cpsd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cpsd-title {
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #1B1B1F;
+}
+
+.cpsd-summary {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+.cpsd-summary-item {
+    opacity: 1;
+}
+
+    .cpsd-summary-item.active strong {
+        color: #16a34a;
+    }
+
+    .cpsd-summary-item.inactive strong {
+        color: #dc2626;
+    }
+
+.cpsd-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.cpsd-search {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #E5E3DD;
+    background: #FFFFFF;
+    color: #1B1B1F;
+    font-size: 12px;
+}
+
+    .cpsd-search::placeholder {
+        color: #9A968C;
+    }
+
+    .cpsd-search:focus {
+        outline: none;
+        border-color: #B08D57;
+        box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.2);
+    }
+
+.cpsd-sort {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #E5E3DD;
+    background: #FFFFFF;
+    color: #1B1B1F;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+    .cpsd-sort option {
+        background: #FFFFFF;
+        color: #1B1B1F;
+    }
+
+.cpsd-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+}
+
+.dot-active {
+    background: #16a34a;
+}
+
+.dot-inactive {
+    background: #dc2626;
+}
+
+.cpsd-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.cpsd-table-header,
+.cpsd-table-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 180px 55px 55px 55px;
+    align-items: center;
+    padding: 6px 8px;
+    font-size: 12px;
+    gap: 8px;
+}
+
+.cpsd-table-header {
+    background: #d6d2c9;
+    color: #1B1B1F;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.cpsd-table-row {
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+    .cpsd-table-row:hover {
+        background: #F7F6F4;
+    }
+
+.cpsd-code {
+    background: #F7F6F4;
+    border: 1px solid #E5E3DD;
+    color: #8A6A34;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.col-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: #1B1B1F;
+}
+
+.col-num {
+    text-align: center;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.active-num {
+    color: #16a34a;
+}
+
+.inactive-num {
+    color: #dc2626;
+}
+
+.total-num {
+    color: #1B1B1F;
+}
+
+.mini-bar-track {
+    height: 10px;
+    background: #E5E3DD;
+    border-radius: 4px;
+    display: flex;
+    overflow: hidden;
+    width: 100%;
+}
+
+.mini-bar-active {
+    height: 100%;
+    background: #16a34a;
+    transition: width 0.4s ease;
+}
+
+.mini-bar-inactive {
+    height: 100%;
+    background: #dc2626;
+    transition: width 0.4s ease;
+}
+
+.cpsd-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    font-size: 12px;
+}
+
+.cpsd-page-btn {
+    background: #F1F0EB;
+    border: 1px solid #E5E3DD;
+    border-radius: 6px;
+    color: #5F5E5A;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+    .cpsd-page-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .cpsd-page-btn:not(:disabled):hover {
+        background: #E5E3DD;
+    }
+
+.cpsd-footer {
+    text-align: center;
+    font-size: 11px;
+    color: #8A867C;
+    margin-top: 6px;
+}
+
+.cpsd-empty {
+    text-align: center;
+    padding: 24px;
+    color: #8A867C;
+    font-size: 13px;
+}
+
+.cpsd-loading {
+    text-align: center;
+    color: #8A867C;
+    padding: 40px;
+}
