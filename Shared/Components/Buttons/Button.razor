@@ -1,20 +1,29 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 
-<button class="btn @VariantClass" @onclick="OnClick" disabled="@Disabled" type="@Type">
-    @if (IconContent != null)
+<span class="btn-tooltip-wrap" @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
+    <button class="btn @VariantClass" @onclick="OnClick" disabled="@Disabled" type="@Type">
+        @if (IconContent != null)
+        {
+            <span class="btn-icon" aria-hidden="true">@IconContent</span>
+        }
+        else if (Icon != null)
+        {
+            <i class="@Icon"></i>
+        }
+        @if (Title != null)
+        {
+            <span>@Title</span>
+        }
+    </button>
+    @if (!string.IsNullOrWhiteSpace(Tooltip) && (isHovering || isFocused))
     {
-        <span class="btn-icon" aria-hidden="true">@IconContent</span>
+        <span class="btn-tooltip-bubble" role="tooltip"
+              style="left:@(mouseX + 14)px; top:@(mouseY + 18)px;">
+            @Tooltip
+        </span>
     }
-    else if (Icon != null)
-    {
-        <i class="@Icon"></i>
-    }
-    @if (Title != null)
-    {
-        <span>@Title</span>
-    }
-</button>
+</span>
 
 <style>
     .btn
@@ -114,6 +123,29 @@
         height: 100%;
         fill: currentColor;
     }
+
+    /* ── Tooltip ── */
+    .btn-tooltip-wrap
+    {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .btn-tooltip-bubble
+    {
+        position: fixed;
+        background: var(--app-dark-deep, #211a10);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+        padding: 6px 10px;
+        border-radius: 6px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+        pointer-events: none;
+        z-index: 2147483647;
+    }
 </style>
 
 @code {
@@ -124,6 +156,30 @@
     [Parameter] public RenderFragment? IconContent { get; set; }
     [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Secondary;
     [Parameter] public string Type { get; set; } = "button";
+    [Parameter] public string? Tooltip { get; set; }
+
+    private bool isHovering;
+    private bool isFocused;
+    private double mouseX;
+    private double mouseY;
+
+    private void OnMouseEnter(MouseEventArgs e)
+    {
+        isHovering = true;
+        mouseX = e.ClientX;
+        mouseY = e.ClientY;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        mouseX = e.ClientX;
+        mouseY = e.ClientY;
+    }
+
+    private void OnMouseLeave(MouseEventArgs e)
+    {
+        isHovering = false;
+    }
 
 private string VariantClass => Variant switch
 {
