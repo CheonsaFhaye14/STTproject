@@ -10,8 +10,6 @@ public sealed class ImportCompanyItemsService
 
     private readonly IAdminCompanyItemService _companyItemService;
 
-    // Category and Price are optional per the modal's instructions.
-    // Principal is only required in the file when the caller did NOT pre-select one.
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -93,10 +91,11 @@ public sealed class ImportCompanyItemsService
 
         var columnIndex = detection.ColumnIndex;
         var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? detection.HeaderRowNumber;
-        var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         result.OriginalHeaders = detection.AllHeaderColumns.Select(h => h.Header).ToList();
 
+        // PASS 1 — parse and validate each row on its own merits (required fields, price format,
+        // principal presence, and whether the code already exists in the database).
         for (int rowNumber = detection.HeaderRowNumber + 1; rowNumber <= lastRow; rowNumber++)
         {
             var row = worksheet.Row(rowNumber);
@@ -146,27 +145,34 @@ public sealed class ImportCompanyItemsService
             if (!string.IsNullOrWhiteSpace(priceText) && price is null)
                 rowResult.Issues.Add($"Price '{priceText}' is not a valid number.");
 
-            if (!string.IsNullOrWhiteSpace(rowResult.CompanyItemCode))
+            if (!string.IsNullOrWhiteSpace(rowResult.CompanyItemCode) &&
+                await _companyItemService.ItemCodeExistsAsync(rowResult.CompanyItemCode, cancellationToken: ct))
             {
-                if (!seenInFile.Add(rowResult.CompanyItemCode))
-                {
-                    rowResult.Issues.Add($"CompanyItem Code '{rowResult.CompanyItemCode}' is duplicated within the uploaded file.");
-                }
-                else if (await _companyItemService.ItemCodeExistsAsync(rowResult.CompanyItemCode, cancellationToken: ct))
-                {
-                    rowResult.Issues.Add($"CompanyItem Code '{rowResult.CompanyItemCode}' already exists.");
-                }
+                rowResult.Issues.Add($"CompanyItem Code '{rowResult.CompanyItemCode}' already exists.");
             }
 
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
+        }
 
+        // PASS 2 — cross-row duplicate detection within the file, now that every row's own
+        // validity is settled. Identical duplicates become a warning (only the first is kept
+        // selected); conflicting duplicates become a blocking error on the later rows.
+        FlagDuplicateCodesWithinFile(result.Rows);
+
+        // PASS 3 — build the prepared groups (one group per row for company items) using the
+        // final Issues/Warnings from both passes above.
+        foreach (var rowResult in result.Rows)
+        {
             var group = new PreparedCompanyItemGroup(new List<CompanyItemImportRowResult> { rowResult })
             {
-                Selected = rowResult.IsSuccess
+                // Warned duplicates stay valid (importable) but are not auto-selected,
+                // so the user has to explicitly opt in to committing more than one.
+                Selected = rowResult.IsSuccess && rowResult.Warnings.Count == 0
             };
+
             foreach (var issue in rowResult.Issues)
-                group.Issues.Add(new CompanyItemImportIssue(rowNumber, rowResult.CompanyItemCode, issue));
+                group.Issues.Add(new CompanyItemImportIssue(rowResult.RowNumber, rowResult.CompanyItemCode, issue));
 
             result.PreparedGroups.Add(group);
         }
@@ -177,6 +183,44 @@ public sealed class ImportCompanyItemsService
         }
 
         return result;
+    }
+
+    private static void FlagDuplicateCodesWithinFile(List<CompanyItemImportRowResult> rows)
+    {
+        var groupsByCode = rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.CompanyItemCode))
+            .GroupBy(r => r.CompanyItemCode.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1);
+
+        foreach (var codeGroup in groupsByCode)
+        {
+            var rowsForCode = codeGroup.OrderBy(r => r.RowNumber).ToList();
+            var first = rowsForCode[0];
+            var rowNumbers = string.Join(" & ", rowsForCode.Select(r => r.RowNumber));
+
+            var isFullDuplicate = rowsForCode.Skip(1).All(r =>
+                string.Equals(r.CompanyItemName, first.CompanyItemName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(r.Principal ?? string.Empty, first.Principal ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(r.Category ?? string.Empty, first.Category ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                r.StockPrice == first.StockPrice);
+
+            if (isFullDuplicate)
+            {
+                var message = $"CompanyItem Code '{first.CompanyItemCode}' is duplicated within the uploaded file with identical data (rows {rowNumbers}). Only one will be committed.";
+                foreach (var r in rowsForCode)
+                {
+                    r.Warnings.Add(message);
+                }
+            }
+            else
+            {
+                foreach (var r in rowsForCode.Skip(1))
+                {
+                    r.Issues.Add($"CompanyItem Code '{first.CompanyItemCode}' is duplicated within the uploaded file but with conflicting data (rows {rowNumbers}).");
+                    r.IsSuccess = false;
+                }
+            }
+        }
     }
 
     private sealed record HeaderDetectionResult(
@@ -271,9 +315,20 @@ public sealed class ImportCompanyItemsService
         var validRows = rows.Where(r => r.IsSuccess && r.Issues.Count == 0).ToList();
         if (validRows.Count == 0) return 0;
 
+        var committedCodesThisBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var committed = 0;
+
         foreach (var row in validRows)
         {
+            // Safety net: even if the user manually selected more than one row sharing a code
+            // (e.g. overriding a "duplicate" warning), only commit the code once per batch.
+            if (!string.IsNullOrWhiteSpace(row.CompanyItemCode) && !committedCodesThisBatch.Add(row.CompanyItemCode.Trim()))
+            {
+                row.Issues.Add($"CompanyItem Code '{row.CompanyItemCode}' was already committed earlier in this batch — skipped to avoid creating a duplicate.");
+                row.IsSuccess = false;
+                continue;
+            }
+
             try
             {
                 var effectivePrincipal = !string.IsNullOrWhiteSpace(principal) ? principal : row.Principal;
@@ -284,13 +339,13 @@ public sealed class ImportCompanyItemsService
                     ItemName = row.CompanyItemName,
                     Category = row.Category,
                     Principal = effectivePrincipal,
+                    StockPrice = row.StockPrice,
                     IsActive = true,
                     CreatedBy = userId
                 }, cancellationToken: ct);
 
                 row.CompanyItemId = created?.CompanyItemId;
 
-                // If a starting price was supplied in the sheet, record it as the initial price history entry.
                 if (created?.CompanyItemId is int newId && row.StockPrice is decimal initialPrice)
                 {
                     await _companyItemService.AddInitialPriceHistoryAsync(newId, initialPrice, userId, cancellationToken: ct);
@@ -368,7 +423,6 @@ public sealed class ImportCompanyItemsService
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FB");
 
-        // One example row so the expected format is obvious — not real data.
         sheet.Cell(2, 1).Value = "ITEM-0001";
         sheet.Cell(2, 2).Value = "Sample Item Name";
         sheet.Cell(2, 3).Value = "Sample Principal";
@@ -403,7 +457,7 @@ public sealed class ImportCompanyItemsService
             principalValidation.ShowInputMessage = true;
             principalValidation.InputTitle = "Principal";
             principalValidation.InputMessage = "Select a principal, or leave blank if one is pre-selected for this import.";
-            principalValidation.ShowErrorMessage = false; // allow custom entries not in the reference list
+            principalValidation.ShowErrorMessage = false;
         }
 
         sheet.Columns().AdjustToContents();
