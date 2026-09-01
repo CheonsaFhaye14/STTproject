@@ -1,4 +1,3 @@
-using System;
 using STTproject.Shared.Components.Filter;
 namespace STTproject.Features.Admin.Customers.DTOs
 {

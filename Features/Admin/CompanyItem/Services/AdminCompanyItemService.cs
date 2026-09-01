@@ -1,5 +1,3 @@
-using MailKit.Net.Smtp;
-using MimeKit;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.CompanyItem.DTOs;
@@ -17,12 +15,12 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         private static DateTime NowPh() =>
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
-
         public AdminCompanyItemService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
         {
             _dbFactory = dbFactory;
             _config = config;
         }
+
         public async Task<string?> GetUserNameByIdAsync(int? userId)
         {
             if (userId == null) return null;
@@ -30,6 +28,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             var user = await db.Users.FindAsync(userId.Value);
             return user?.FullName ?? user?.Username;
         }
+
         public async Task<string?> GetCompanyItemNameByIdAsync(int? companyItemId)
         {
             if (companyItemId == null) return null;
@@ -37,7 +36,8 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             var companyItem = await db.CompanyItems.FindAsync(companyItemId.Value);
             return companyItem?.ItemName;
         }
-        public async Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto)
+
+        public async Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto, CancellationToken cancellationToken = default)
         {
             await using var db = _dbFactory.CreateDbContext();
 
@@ -47,14 +47,16 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 ItemName = dto.ItemName ?? string.Empty,
                 Principal = dto.Principal ?? string.Empty,
                 Category = dto.Category ?? string.Empty,
+                StockPrice = dto.StockPrice,
                 IsActive = dto.IsActive,
                 CreatedDate = NowPh(),
-                // CreatedBy = dto.CreatedBy,
+                CreatedBy = dto.CreatedBy,
             };
             db.CompanyItems.Add(entity);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(cancellationToken);
             return await GetCompanyItemByIdAsync(entity.CompanyItemId);
         }
+
         public async Task<CompanyItemUpdateDto?> UpdateCompanyItemAsync(CompanyItemUpdateDto dto)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -65,12 +67,15 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             entity.ItemName = dto.ItemName ?? entity.ItemName;
             entity.Principal = dto.Principal ?? entity.Principal;
             entity.Category = dto.Category ?? entity.Category;
+            entity.StockPrice = dto.StockPrice ?? entity.StockPrice;
             entity.IsActive = dto.IsActive;
+            entity.UpdatedBy = dto.UpdatedBy;
             entity.UpdatedDate = NowPh();
 
             await db.SaveChangesAsync();
             return dto;
         }
+
         public async Task ToggleCompanyItemStatusAsync(int id, bool isActive)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -92,6 +97,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                     ItemName = u.ItemName,
                     Principal = u.Principal,
                     Category = u.Category,
+                    StockPrice = u.StockPrice,
                     IsActive = u.IsActive,
                     CreatedDate = u.CreatedDate,
                     UpdatedDate = u.UpdatedDate,
@@ -150,6 +156,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                     ItemName = u.ItemName,
                     Principal = u.Principal,
                     Category = u.Category,
+                    StockPrice = u.StockPrice,
                     IsActive = u.IsActive,
                     CreatedDate = u.CreatedDate,
                     UpdatedDate = u.UpdatedDate,
@@ -177,6 +184,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 ItemName = entity.ItemName,
                 Principal = entity.Principal,
                 Category = entity.Category,
+                StockPrice = entity.StockPrice,
                 IsActive = entity.IsActive,
                 CreatedDate = entity.CreatedDate,
                 UpdatedDate = entity.UpdatedDate,
@@ -185,14 +193,14 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             };
         }
 
-        public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
+        public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
                 .Select(c => c.Principal)
                 .Distinct()
                 .OrderBy(p => p)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
         public async Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null)
@@ -202,11 +210,11 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 .AnyAsync(c => c.ItemCode == itemCode && c.ItemName == itemName && c.CompanyItemId != excludeId);
         }
 
-        public async Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null)
+        public async Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null, CancellationToken cancellationToken = default)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItems
-                 .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId);
+                 .AnyAsync(c => c.ItemCode == itemCode && c.CompanyItemId != excludeId, cancellationToken);
         }
 
         public async Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId)
@@ -219,12 +227,31 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 {
                     CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
                     CompanyItemId = h.CompanyItemId,
+                    OldPrice = h.OldPrice,
                     NewPrice = h.NewPrice,
                     EffectivityDate = h.EffectivityDate,
                     CreatedDate = h.CreatedDate,
                     CreatedBy = h.CreatedBy,
                 })
                 .ToListAsync();
+        }
+
+        public async Task AddInitialPriceHistoryAsync(int companyItemId, decimal price, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+
+            var now = NowPh();
+            db.CompanyItemPriceHistories.Add(new Data.CompanyItemPriceHistory
+            {
+                CompanyItemId = companyItemId,
+                OldPrice = 0m,
+                NewPrice = price,
+                EffectivityDate = now,
+                CreatedDate = now,
+                CreatedBy = userId > 0 ? userId : null,
+            });
+
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 }

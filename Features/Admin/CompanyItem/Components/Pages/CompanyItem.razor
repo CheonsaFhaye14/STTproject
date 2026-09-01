@@ -1,8 +1,7 @@
 ﻿@page "/admin/companyitem"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.CompanyItem.Components.Modals
-@using STTproject.Features.Admin.CompanyItem.Components.Sections
-@using STTproject.Shared.Components.Buttons
+
 
 @if (isLoading)
 {
@@ -23,6 +22,7 @@
                 <h1 class="clt-page-title">Company Items</h1>
                 <p class="clt-page-sub">@totalCount total company items</p>
             </div>
+        <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
             <Button Variant="ButtonVariant.Primary" Title="Add Company Item" Icon="fa-plus" OnClick="OpenAddCompanyItemModal">
             </Button>
         </div>
@@ -40,6 +40,11 @@
         {
             <AddCompanyItem @ref="addCompanyItemModal" CompanyItemId="editCompanyItemId" onCancel="CancelAddCompanyItem"
                             OnRequestConfirm="OpenConfirmModal" />
+        }
+
+        @if (showImportModal)
+        {
+            <ImportCompanyItems Show="true" OnClose="CloseImportModal" />
         }
 
     </div>
@@ -97,5 +102,15 @@
             if (companyItemTable != null)
                 await companyItemTable.LoadPageAsync();
         }
+    }
+    private bool showImportModal;
+
+    private void OpenImportModal()
+    {
+        showImportModal = true;
+    }
+    private void CloseImportModal()
+    {
+        showImportModal = false;
     }
 }

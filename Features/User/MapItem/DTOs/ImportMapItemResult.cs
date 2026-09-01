@@ -11,7 +11,7 @@ public sealed class ImportMapItemResult
 
 	public int ErrorCount => Rows.Count(row => !row.IsSuccess);
 
-	public bool HasRows => Rows.Count > 0;
+	public bool HasRows => Rows.Count > 0; 
 
 	public bool HasIssues => Issues.Count > 0;
 

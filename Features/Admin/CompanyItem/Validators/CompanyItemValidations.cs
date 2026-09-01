@@ -1,4 +1,3 @@
-using STTproject.Data;
 using STTproject.Features.Admin.CompanyItem.Services;
 
 namespace STTproject.Features.Admin.CompanyItem.Validators;

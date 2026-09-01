@@ -4,7 +4,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
 {
     public interface IAdminCompanyItemService
     {
-        Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto);
+        Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto, CancellationToken cancellationToken = default);
         Task<CompanyItemUpdateDto?> UpdateCompanyItemAsync(CompanyItemUpdateDto dto);
         Task ToggleCompanyItemStatusAsync(int id, bool isActive);
         Task<IEnumerable<CompanyItemListDto>> GetAllAsync();
@@ -13,11 +13,12 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             string? principal,
             string? sortColumn = "ItemCode", bool sortAscending = true);
         Task<CompanyItemListDto?> GetCompanyItemByIdAsync(int id);
-        Task<string?> GetUserNameByIdAsync(int? userId);
         Task<string?> GetCompanyItemNameByIdAsync(int? companyItemId);
-        Task<IReadOnlyList<string?>> GetAllPrincipalsAsync();
+        Task<string?> GetUserNameByIdAsync(int? userId);
+        Task<IReadOnlyList<string?>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default);
         Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null);
-        Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null);
+        Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null, CancellationToken cancellationToken = default);
         Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId);
+        Task AddInitialPriceHistoryAsync(int companyItemId, decimal price, int userId, CancellationToken cancellationToken = default);
     }
 }

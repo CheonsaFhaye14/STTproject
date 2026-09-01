@@ -1,0 +1,168 @@
+@using STTproject.Services
+@inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
+@inject STTproject.Features.Admin.CompanyItem.Services.ImportCompanyItemsService ImportCompanyItemsService
+@inject IUserContextService UserContext
+@inject IJSRuntime JS
+
+@if (isPreparing)
+{
+    <div class="import-progress-toast">Checking file, please wait…</div>
+}
+
+@if (Show)
+{
+    <Modal ShowModal="Show"
+           Title="CompanyItem Batch Data Import"
+           Subtitle="Add new company items to your database by importing a CSV file."
+           IconType="ModalIconType.Upload"
+           Details="Excel should contain the following column headers: CompanyItem Code, CompanyItem Name (required); Principal (required in the file only if not assigned below); Category and Price (optional)."
+           OnClose="OnClose">
+        <ChildContent>
+            <AutoComplete
+                Label="Assign a Principal (optional — leave blank to use each row's Principal column instead)"
+                Items="Principals"
+                SelectedValue="selectedPrincipal"
+                SelectedValueChanged="OnPrincipalChanged" />
+            <FileInput OnFileSelected="HandleFileSelected" />
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Cancel" OnClick="OnClose" Variant="ButtonVariant.Secondary" />
+            <Button Title="Check File"
+                    OnClick="OnPrepare"
+                    Disabled="@(selectedFile == null || isPreparing)"
+                    Icon="fa-solid fa-check"
+                    Variant="ButtonVariant.Primary" />
+        </FooterContent>
+    </Modal>
+}
+
+<ImportCompanyItemsResult Show="showResults"
+                        ImportResult="importResult"
+                        SelectedGroupKeys="selectedGroupKeys"
+                        OnCommit="HandleCommitAsync"
+                        OnClose="CloseResults"
+                        OnDownloadErrorReport="HandleDownloadErrorReport" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnImportCompleted { get; set; }
+    private List<String?> Principals { get; set; } = new();
+    private string? selectedPrincipal;
+    private IBrowserFile? selectedFile;
+    private bool isPreparing;
+    private bool showResults;
+    private STTproject.Features.Admin.CompanyItem.DTOs.CompanyItemImportResult? importResult;
+    private HashSet<string> selectedGroupKeys = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Principals = (await AdminCompanyItemService.GetAllPrincipalsAsync()).ToList();
+    }
+
+    private void OnPrincipalChanged(string? value) => selectedPrincipal = value;
+
+    private void HandleFileSelected(IBrowserFile file)
+    {
+        selectedFile = file;
+        importResult = null;
+    }
+
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024;
+
+    private async Task OnPrepare()
+    {
+        if (selectedFile == null)
+            return;
+
+        isPreparing = true;
+        importResult = null;
+        StateHasChanged();
+
+        try
+        {
+            byte[] fileBytes;
+            await using (var stream = selectedFile.OpenReadStream(MaxFileSizeBytes))
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+            }
+
+            Show = false;
+
+            using var importStream = new MemoryStream(fileBytes);
+            importResult = await ImportCompanyItemsService.PrepareFromExcelAsync(importStream, selectedPrincipal);
+
+            selectedGroupKeys = importResult.PreparedGroups
+                .Where(g => g.Selected && !g.IsSaved)
+                .Select(GroupKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString()); // full type, message, stack trace, AND inner exception
+            Show = false;
+            importResult = new STTproject.Features.Admin.CompanyItem.DTOs.CompanyItemImportResult();
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
+        }
+        finally
+        {
+            isPreparing = false;
+            showResults = importResult != null;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task HandleCommitAsync()
+    {
+        if (importResult == null) return;
+
+        var userId = UserContext.UserId ?? 0;
+
+        var selectedGroups = importResult.PreparedGroups
+            .Where(g => g.Selected && !g.IsSaved && g.Issues.Count == 0 && selectedGroupKeys.Contains(GroupKey(g)))
+            .ToList();
+
+        var selectedRows = selectedGroups.SelectMany(g => g.Rows).ToList();
+        if (selectedRows.Count == 0) return;
+
+        var committedCount = await ImportCompanyItemsService.CommitPreparedRowsAsync(selectedRows, selectedPrincipal, userId);
+        
+        foreach (var g in selectedGroups)
+        {
+            if (g.Rows.All(r => r.IsSuccess))
+                g.IsSaved = true;
+        }
+
+        if (committedCount > 0)
+            await OnImportCompleted.InvokeAsync();
+
+        StateHasChanged();
+    }
+
+    private async Task HandleDownloadErrorReport()
+    {
+        if (importResult == null) return;
+
+        var bytes = ImportCompanyItemsService.GenerateErrorReportExcel(importResult);
+        var fileName = $"CompanyItem-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBytes",
+            fileName,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
+
+    private async Task CloseResults()
+    {
+        showResults = false;
+        importResult = null;
+        selectedGroupKeys.Clear();
+        await OnClose.InvokeAsync(); 
+    }
+
+    private static string GroupKey(STTproject.Features.Admin.CompanyItem.DTOs.PreparedCompanyItemGroup g)
+        => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
+}
