@@ -199,6 +199,32 @@
                                 Download Error Report
                             </button>
                         }
+                    
+                        @if (groupFilter == GroupFilter.WarningOnly && hasWarningCards)                        
+                        {
+                            <div class="err-filter-bar">
+                                <span class="err-filter-label">
+                                    <i class="ti ti-filter" aria-hidden="true"></i>
+                                    Filter warning by
+                                </span>
+                               <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
+                                   <option value="">All warning types</option>
+                                   @foreach (var entry in GetDistinctWarningMessages(cards))
+                                    {
+                                        var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
+                                        <option value="@entry.Message">@display (@entry.Count)</option>
+                                    }
+                                </select>
+                                @if (!string.IsNullOrEmpty(selectedWarningFilter))
+                                {
+                                  <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
+                                        <i class="ti ti-x" aria-hidden="true"></i>
+                                        Clear
+                                    </button>
+                                }
+                            </div>
+                        }
+
 
                         @if (groupFilter == GroupFilter.SuccessOnly && selectableCount > 0)
                         {
@@ -344,13 +370,6 @@
                                                         </div>
                                                     </div>
                                                 }
-
-                                                <div class="chk">
-                                                    <input type="checkbox" checked="@card.Group.Selected"
-                                                        @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)"
-                                                        id="chk-decision-@row.RowNumber" />
-                                                    <label for="chk-decision-@row.RowNumber">Apply this to the selected item</label>
-                                                </div>
                                             </div>
                                         }
                                         else
@@ -360,14 +379,20 @@
                                                     <span class="cust-meta-label">Principal</span>
                                                     <strong>@(row.Principal ?? "—")</strong>
                                                 </div>
-                                                <div>
-                                                    <span class="cust-meta-label">Category</span>
-                                                    <strong>@(row.Category ?? "—")</strong>
-                                                </div>
-                                                <div>
-                                                    <span class="cust-meta-label">Price</span>
-                                                    <strong>@(row.StockPrice?.ToString("N2") ?? "—")</strong>
-                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(row?.Category))
+                                                {
+                                                    <div>
+                                                        <span class="cust-meta-label">Category</span>
+                                                        <strong>@row.Category</strong>
+                                                    </div>
+                                                }
+                                                @if (row.StockPrice.HasValue)
+                                                {
+                                                    <div>
+                                                        <span class="cust-meta-label">Price</span>
+                                                        <strong>@row.StockPrice.Value.ToString("N2")</strong>
+                                                    </div>
+                                                }
                                             </div>
                                         }
                                     </div>
@@ -471,6 +496,7 @@
     private GroupFilter groupFilter = GroupFilter.All;
     private string? selectedErrorFilter;
     private HashSet<int> expandedCards = new();
+    private string? selectedWarningFilter;
 
     private enum GroupFilter { All, SuccessOnly, WarningOnly, ErrorOnly }
 
@@ -502,12 +528,45 @@
     private List<GroupCardViewModel> GetFilteredCards(List<GroupCardViewModel> cards) => groupFilter switch
     {
         GroupFilter.SuccessOnly => cards.Where(c => !c.HasErrors && !GroupHasWarningOnly(c)).ToList(),
-        GroupFilter.WarningOnly => cards.Where(GroupHasWarningOnly).ToList(),
+        GroupFilter.WarningOnly => !string.IsNullOrWhiteSpace(selectedWarningFilter)
+                ? cards.Where(c => GroupHasWarningOnly(c) && c.Row!.Warnings.Any(w => NormalizeWarningMessageType(w) == selectedWarningFilter)).ToList()
+                : cards.Where(GroupHasWarningOnly).ToList(),
         GroupFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
             ? cards.Where(c => c.HasErrors && c.Group.Issues.Any(i => NormalizeMessageType(i.Message) == selectedErrorFilter)).ToList()
             : cards.Where(c => c.HasErrors).ToList(),
         _ => cards
     };
+
+    private static string NormalizeWarningMessageType(string? m)
+    {
+        var msg = NormalizeMessage(m).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
+
+        if (msg.Contains("price") && msg.Contains("update") && msg.Contains("stock price directly"))
+            return "Price Change Detected";
+        if (msg.Contains("identical data")) return "Duplicate In File (Identical)";
+        if (msg.Contains("conflicting data")) return "Duplicate In File (Conflicting)";
+
+        return NormalizeMessage(m);
+    }
+
+    private IEnumerable<(string Message, int Count)> GetDistinctWarningMessages(List<GroupCardViewModel> cards)
+    {
+        var all = cards
+            .Where(GroupHasWarningOnly)
+            .SelectMany(c => c.Row!.Warnings.Select(NormalizeWarningMessageType));
+
+        return all
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .GroupBy(m => m)
+            .Select(g => (Message: g.Key, Count: g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Message)
+            .ToList();
+    }
+
+    private void OnWarningFilterChanged(ChangeEventArgs e) => selectedWarningFilter = e?.Value?.ToString();
+    private void ClearWarningFilter() => selectedWarningFilter = null;
 
     private string GetTabClass(GroupFilter filter) => groupFilter == filter
         ? filter switch
@@ -523,6 +582,7 @@
     {
         groupFilter = filter;
         selectedErrorFilter = null;
+        selectedWarningFilter = null;
     }
 
     private void ToggleExpand(int rowNumber)
