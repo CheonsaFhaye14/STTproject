@@ -253,5 +253,44 @@ namespace STTproject.Features.Admin.CompanyItem.Services
 
             await db.SaveChangesAsync(cancellationToken);
         }
+
+        public async Task<CompanyItemListDto?> GetByItemCodeAsync(string itemCode, CancellationToken cancellationToken = default)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var entity = await db.CompanyItems
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ItemCode == itemCode, cancellationToken);
+
+            if (entity == null) return null;
+
+            return new CompanyItemListDto
+            {
+                CompanyItemId = entity.CompanyItemId,
+                ItemCode = entity.ItemCode,
+                ItemName = entity.ItemName,
+                Principal = entity.Principal,
+                Category = entity.Category,
+                StockPrice = entity.StockPrice,
+                IsActive = entity.IsActive,
+                CreatedDate = entity.CreatedDate,
+                UpdatedDate = entity.UpdatedDate,
+                CreatedBy = entity.CreatedBy,
+                UpdatedBy = entity.UpdatedBy,
+            };
+        }
+
+        public async Task<bool> UpdateStockPriceOnlyAsync(int companyItemId, decimal newStockPrice, int? updatedBy, CancellationToken cancellationToken = default)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var entity = await db.CompanyItems.FindAsync(new object?[] { companyItemId }, cancellationToken);
+            if (entity == null) return false;
+
+            entity.StockPrice = newStockPrice;
+            entity.UpdatedBy = updatedBy;
+            entity.UpdatedDate = NowPh();
+
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
     }
 }

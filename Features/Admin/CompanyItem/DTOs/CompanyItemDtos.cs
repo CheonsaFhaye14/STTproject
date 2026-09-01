@@ -101,7 +101,11 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public void AddError(int rowNumber, string companyItemCode, string message)
             => Issues.Add(new CompanyItemImportIssue(rowNumber, companyItemCode, message));
     }
-
+    public enum CompanyItemPriceResolutionMode
+    {
+        DirectUpdate,
+        ScheduleIncrease
+    }
     public sealed class CompanyItemImportRowResult
     {
         public int RowNumber { get; set; }
@@ -114,6 +118,13 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public int? CompanyItemId { get; set; }
         public List<string> Issues { get; } = new();
         public List<string> Warnings { get; } = new();
+
+        public bool IsExistingItem { get; set; }
+        public int? ExistingCompanyItemId { get; set; }
+        public decimal? ExistingStockPrice { get; set; }
+        public CompanyItemPriceResolutionMode PriceResolution { get; set; } = CompanyItemPriceResolutionMode.DirectUpdate;
+        public DateTime? PriceChangeEffectivityDate { get; set; }
+
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 

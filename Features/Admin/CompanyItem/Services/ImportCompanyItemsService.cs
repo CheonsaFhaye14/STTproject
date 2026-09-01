@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using STTproject.Features.Admin.CompanyItem.DTOs;
+using STTproject.Features.Admin.PriceIncrease.DTOs;
+using STTproject.Features.Admin.PriceIncrease.Services;
 
 namespace STTproject.Features.Admin.CompanyItem.Services;
 
@@ -9,12 +11,13 @@ public sealed class ImportCompanyItemsService
     private const int MaxHeaderScanRows = 10;
 
     private readonly IAdminCompanyItemService _companyItemService;
+    private readonly IAdminPriceIncreaseService _priceIncreaseService;
 
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["CompanyItem Code"] = new[] { "SKU" ,"CompanyItemCode", "CompanyItem Code", "code", "Item Code", "ItemCode", "item code" },
-            ["CompanyItem Name"] = new[] { "SKU Description","CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
+            ["CompanyItem Code"] = new[] { "SKU", "CompanyItemCode", "CompanyItem Code", "code", "Item Code", "ItemCode", "item code" },
+            ["CompanyItem Name"] = new[] { "SKU Description", "CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
@@ -27,9 +30,10 @@ public sealed class ImportCompanyItemsService
 
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
 
-    public ImportCompanyItemsService(IAdminCompanyItemService companyItemService)
+    public ImportCompanyItemsService(IAdminCompanyItemService companyItemService, IAdminPriceIncreaseService priceIncreaseService)
     {
         _companyItemService = companyItemService;
+        _priceIncreaseService = priceIncreaseService;
     }
 
     private static IReadOnlyDictionary<string, string> BuildAliasLookup()
@@ -95,7 +99,9 @@ public sealed class ImportCompanyItemsService
         result.OriginalHeaders = detection.AllHeaderColumns.Select(h => h.Header).ToList();
 
         // PASS 1 — parse and validate each row on its own merits (required fields, price format,
-        // principal presence, and whether the code already exists in the database).
+        // principal presence). If the code already exists in the database, this checks whether
+        // the file's price differs and, if so, marks the row for a price-resolution decision
+        // instead of blocking it outright.
         for (int rowNumber = detection.HeaderRowNumber + 1; rowNumber <= lastRow; rowNumber++)
         {
             var row = worksheet.Row(rowNumber);
@@ -145,29 +151,48 @@ public sealed class ImportCompanyItemsService
             if (!string.IsNullOrWhiteSpace(priceText) && price is null)
                 rowResult.Issues.Add($"Price '{priceText}' is not a valid number.");
 
-            if (!string.IsNullOrWhiteSpace(rowResult.CompanyItemCode) &&
-                await _companyItemService.ItemCodeExistsAsync(rowResult.CompanyItemCode, cancellationToken: ct))
+            if (!string.IsNullOrWhiteSpace(rowResult.CompanyItemCode) && rowResult.Issues.Count == 0)
             {
-                rowResult.Issues.Add($"CompanyItem Code '{rowResult.CompanyItemCode}' already exists.");
+                var existing = await _companyItemService.GetByItemCodeAsync(rowResult.CompanyItemCode, ct);
+                if (existing != null)
+                {
+                    rowResult.IsExistingItem = true;
+                    rowResult.ExistingCompanyItemId = existing.CompanyItemId;
+                    rowResult.ExistingStockPrice = existing.StockPrice;
+
+                    var priceDiffers = rowResult.StockPrice.HasValue &&
+                        rowResult.StockPrice.Value != (existing.StockPrice ?? 0m);
+
+                    if (priceDiffers)
+                    {
+                        rowResult.Warnings.Add(
+                            $"CompanyItem Code '{rowResult.CompanyItemCode}' already exists with stock price " +
+                            $"{(existing.StockPrice ?? 0m):N2}. The file specifies {rowResult.StockPrice:N2} — " +
+                            "choose whether to update the stock price directly or schedule it as a formal price change.");
+                    }
+                    else
+                    {
+                        rowResult.Issues.Add($"CompanyItem Code '{rowResult.CompanyItemCode}' already exists and no price change was detected.");
+                    }
+                }
             }
 
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
         }
 
-        // PASS 2 — cross-row duplicate detection within the file, now that every row's own
-        // validity is settled. Identical duplicates become a warning (only the first is kept
-        // selected); conflicting duplicates become a blocking error on the later rows.
+        // PASS 2 — cross-row duplicate detection within the file. Duplicates (identical or
+        // conflicting) are always warnings, never blocking — the user selects which row(s) to
+        // actually commit.
         FlagDuplicateCodesWithinFile(result.Rows);
 
-        // PASS 3 — build the prepared groups (one group per row for company items) using the
-        // final Issues/Warnings from both passes above.
+        // PASS 3 — build the prepared groups (one group per row for company items).
         foreach (var rowResult in result.Rows)
         {
             var group = new PreparedCompanyItemGroup(new List<CompanyItemImportRowResult> { rowResult })
             {
-                // Warned duplicates stay valid (importable) but are not auto-selected,
-                // so the user has to explicitly opt in to committing more than one.
+                // Rows needing a decision (duplicates or existing-item price changes) are never
+                // auto-selected — the user must explicitly review and opt in.
                 Selected = rowResult.IsSuccess && rowResult.Warnings.Count == 0
             };
 
@@ -188,7 +213,7 @@ public sealed class ImportCompanyItemsService
     private static void FlagDuplicateCodesWithinFile(List<CompanyItemImportRowResult> rows)
     {
         var groupsByCode = rows
-            .Where(r => !string.IsNullOrWhiteSpace(r.CompanyItemCode))
+            .Where(r => r.IsSuccess && !string.IsNullOrWhiteSpace(r.CompanyItemCode))
             .GroupBy(r => r.CompanyItemCode.Trim(), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1);
 
@@ -204,21 +229,15 @@ public sealed class ImportCompanyItemsService
                 string.Equals(r.Category ?? string.Empty, first.Category ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
                 r.StockPrice == first.StockPrice);
 
-            if (isFullDuplicate)
+            // Both cases are non-blocking warnings now — conflicting duplicates just need the
+            // user to pick which row is correct, rather than being rejected outright.
+            var message = isFullDuplicate
+                ? $"CompanyItem Code '{first.CompanyItemCode}' is duplicated within the uploaded file with identical data (rows {rowNumbers}). Only one will be committed."
+                : $"CompanyItem Code '{first.CompanyItemCode}' appears multiple times in the uploaded file with conflicting data (rows {rowNumbers}). Review and select only the correct row to commit.";
+
+            foreach (var r in rowsForCode)
             {
-                var message = $"CompanyItem Code '{first.CompanyItemCode}' is duplicated within the uploaded file with identical data (rows {rowNumbers}). Only one will be committed.";
-                foreach (var r in rowsForCode)
-                {
-                    r.Warnings.Add(message);
-                }
-            }
-            else
-            {
-                foreach (var r in rowsForCode.Skip(1))
-                {
-                    r.Issues.Add($"CompanyItem Code '{first.CompanyItemCode}' is duplicated within the uploaded file but with conflicting data (rows {rowNumbers}).");
-                    r.IsSuccess = false;
-                }
+                r.Warnings.Add(message);
             }
         }
     }
@@ -320,17 +339,60 @@ public sealed class ImportCompanyItemsService
 
         foreach (var row in validRows)
         {
-            // Safety net: even if the user manually selected more than one row sharing a code
-            // (e.g. overriding a "duplicate" warning), only commit the code once per batch.
+            // Safety net: even if the user selected more than one row sharing a code (e.g.
+            // overriding a duplicate warning), only process the code once per batch.
             if (!string.IsNullOrWhiteSpace(row.CompanyItemCode) && !committedCodesThisBatch.Add(row.CompanyItemCode.Trim()))
             {
-                row.Issues.Add($"CompanyItem Code '{row.CompanyItemCode}' was already committed earlier in this batch — skipped to avoid creating a duplicate.");
+                row.Issues.Add($"CompanyItem Code '{row.CompanyItemCode}' was already committed earlier in this batch — skipped to avoid a duplicate item or double price change.");
                 row.IsSuccess = false;
                 continue;
             }
 
             try
             {
+                if (row.IsExistingItem && row.ExistingCompanyItemId is int existingId)
+                {
+                    if (!row.StockPrice.HasValue)
+                    {
+                        row.Issues.Add("A price is required to apply a price change to an existing company item.");
+                        row.IsSuccess = false;
+                        continue;
+                    }
+
+                    if (row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)
+                    {
+                        var increaseAmount = row.StockPrice.Value - (row.ExistingStockPrice ?? 0m);
+                        var (success, error) = await _priceIncreaseService.ScheduleIncreaseAsync(new AddPriceIncreaseDto
+                        {
+                            CompanyItemId = existingId,
+                            PriceIncreaseAmount = increaseAmount,
+                            EffectivityDate = row.PriceChangeEffectivityDate ?? DateTime.Today,
+                            CreatedBy = userId
+                        });
+
+                        if (!success)
+                        {
+                            row.Issues.Add(error ?? "Unable to schedule the price change.");
+                            row.IsSuccess = false;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        var updated = await _companyItemService.UpdateStockPriceOnlyAsync(existingId, row.StockPrice.Value, userId, ct);
+                        if (!updated)
+                        {
+                            row.Issues.Add("Unable to update the stock price for the existing company item.");
+                            row.IsSuccess = false;
+                            continue;
+                        }
+                    }
+
+                    row.CompanyItemId = existingId;
+                    committed++;
+                    continue;
+                }
+
                 var effectivePrincipal = !string.IsNullOrWhiteSpace(principal) ? principal : row.Principal;
 
                 var created = await _companyItemService.CreateCompanyItemAsync(new CompanyItemCreateDto

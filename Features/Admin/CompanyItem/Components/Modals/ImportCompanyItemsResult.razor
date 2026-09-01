@@ -272,6 +272,7 @@
                                                     <span class="badge badge-warn">
                                                         <i class="ti ti-alert-triangle" aria-hidden="true"></i>
                                                         Warning
+                                                        @(row?.IsExistingItem == true ? "Price Change" : "Duplicate")
                                                     </span>
                                                 }
                                                 else
@@ -292,16 +293,68 @@
                                         </div>
                                     </div>
 
-                                    @if (isExpanded && row != null)
-                                    {
-                                        <div class="icb">
-                                            @if (row.Warnings.Any())
-                                            {
-                                                <div class="dup-warning-banner">
-                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                    @row.Warnings.First()
+                                @if (isExpanded && row != null)
+                                {
+                                    <div class="icb">
+                                        @if (row.Warnings.Any())
+                                        {
+                                            <div class="dup-warning-banner">
+                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                @row.Warnings.First()
+                                            </div>
+                                        }
+
+                                        @if (row.IsExistingItem)
+                                        {
+                                            <div class="price-change-decision" @onclick:stopPropagation="true">
+                                                <div class="cust-meta">
+                                                    <div>
+                                                        <span class="cust-meta-label">Existing Stock Price</span>
+                                                        <strong>@(row.ExistingStockPrice?.ToString("N2") ?? "—")</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span class="cust-meta-label">New Price (from file)</span>
+                                                        <strong>@(row.StockPrice?.ToString("N2") ?? "—")</strong>
+                                                    </div>
                                                 </div>
-                                            }
+
+                                                <div class="price-change-choice">
+                                                    <label>
+                                                        <input type="radio" name="price-mode-@row.RowNumber"
+                                                            checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.DirectUpdate)"
+                                                            @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.DirectUpdate)" />
+                                                        Just update the stock price
+                                                    </label>
+                                                    <label>
+                                                        <input type="radio" name="price-mode-@row.RowNumber"
+                                                            checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)"
+                                                            @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.ScheduleIncrease)" />
+                                                        Schedule as a formal price change
+                                                    </label>
+                                                </div>
+
+                                                @if (row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)
+                                                {
+                                                    <div class="cust-meta">
+                                                        <div>
+                                                            <span class="cust-meta-label">Effectivity Date</span>
+                                                            <input type="date"
+                                                                value="@((row.PriceChangeEffectivityDate ?? DateTime.Today).ToString("yyyy-MM-dd"))"
+                                                                @onchange="(e) => SetEffectivityDate(row, e.Value?.ToString())" />
+                                                        </div>
+                                                    </div>
+                                                }
+
+                                                <div class="chk">
+                                                    <input type="checkbox" checked="@card.Group.Selected"
+                                                        @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)"
+                                                        id="chk-decision-@row.RowNumber" />
+                                                    <label for="chk-decision-@row.RowNumber">Apply this to the selected item</label>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
                                             <div class="cust-meta">
                                                 <div>
                                                     <span class="cust-meta-label">Principal</span>
@@ -316,8 +369,9 @@
                                                     <strong>@(row.StockPrice?.ToString("N2") ?? "—")</strong>
                                                 </div>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
+                                }
                                 </div>
                             }
 
@@ -495,7 +549,18 @@
             if (isChecked) SelectedGroupKeys.Add(key); else SelectedGroupKeys.Remove(key);
         }
     }
+    private void SetPriceResolution(CompanyItemImportRowResult row, CompanyItemPriceResolutionMode mode)
+    {
+        row.PriceResolution = mode;
+    }
 
+    private void SetEffectivityDate(CompanyItemImportRowResult row, string? value)
+    {
+        if (DateTime.TryParse(value, out var date))
+        {
+            row.PriceChangeEffectivityDate = date;
+        }
+    }
     private void ToggleSelectAllWarnings(object? checkedValue)
     {
         if (checkedValue is not bool isChecked || ImportResult == null) return;

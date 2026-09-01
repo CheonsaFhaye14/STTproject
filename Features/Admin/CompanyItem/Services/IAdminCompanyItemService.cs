@@ -18,6 +18,8 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         Task<IReadOnlyList<string?>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default);
         Task<bool> CompanyItemExistsAsync(string itemCode, string itemName, int? excludeId = null);
         Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null, CancellationToken cancellationToken = default);
+        Task<CompanyItemListDto?> GetByItemCodeAsync(string itemCode, CancellationToken cancellationToken = default);
+        Task<bool> UpdateStockPriceOnlyAsync(int companyItemId, decimal newStockPrice, int? updatedBy, CancellationToken cancellationToken = default);
         Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId);
         Task AddInitialPriceHistoryAsync(int companyItemId, decimal price, int userId, CancellationToken cancellationToken = default);
     }
