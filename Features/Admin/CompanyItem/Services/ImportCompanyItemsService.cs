@@ -14,7 +14,7 @@ public sealed class ImportCompanyItemsService
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["CompanyItem Code"] = new[] { "SKU" ,"CompanyItemCode", "CompanyItem Code", "code", "Item Code", "ItemCode", "item code" },
-            ["CompanyItem Name"] = new[] { "SKU NAME","CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
+            ["CompanyItem Name"] = new[] { "SKU Description","CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
