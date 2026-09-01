@@ -13,8 +13,8 @@ public sealed class ImportCompanyItemsService
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["CompanyItem Code"] = new[] { "CompanyItemCode", "CompanyItem Code", "code", "Item Code", "ItemCode", "item code" },
-            ["CompanyItem Name"] = new[] { "CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
+            ["CompanyItem Code"] = new[] { "SKU" ,"CompanyItemCode", "CompanyItem Code", "code", "Item Code", "ItemCode", "item code" },
+            ["CompanyItem Name"] = new[] { "SKU NAME","CompanyItemName", "CompanyItem Name", "name", "Item Name", "ItemName", "item name" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
@@ -22,7 +22,7 @@ public sealed class ImportCompanyItemsService
         {
             ["Category"] = new[] { "Category", "category", "ppg" },
             ["Principal"] = new[] { "Principal", "Principals", "principal" },
-            ["Price"] = new[] { "Price", "price" },
+            ["Price"] = new[] { "Price", "Stock Price" },
         };
 
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
