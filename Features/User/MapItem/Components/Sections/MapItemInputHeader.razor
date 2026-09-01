@@ -62,6 +62,10 @@
             <span class="error-text">@GetFieldError(MapItemValidation.Form.UnitOfMeasure.Key)</span>
         }
     </div> 
+    @if (!string.IsNullOrWhiteSpace(GetFieldError(MapItemValidation.Form.DuplicateMapping.Key)))
+        {
+            <span class="error-text">@GetFieldError(MapItemValidation.Form.DuplicateMapping.Key)</span>
+        }
     <div class="form-actions">
         <button class="btn-primary" type="button" @ref="addUomButton" @onclick="OnOpenAddUomModal"
                 disabled="@(!CanOpenAddUom)">Add UOM</button>

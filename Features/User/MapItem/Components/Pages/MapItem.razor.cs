@@ -930,27 +930,102 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             }
         }
 
-        private async Task ValidateFormAsync()
-        {
-            validationErrors = await MapItemValidation.ValidateFormAsync(
-                itemCode,
-                itemName,
-                selectedCompanyItemId,
-                uomEntries.Any(),
-                async () =>
-                {
-                    if (!IsSubDistributorSelected || string.IsNullOrWhiteSpace(itemCode))
-                    {
-                        return false;
-                    }
+    private Task ValidateFormAsync()
+    {
+        return ValidateFormInternalAsync();
+    }
 
-                    return await mapItemService.SubdItemCodeExistsAsync(
-                        selectedSubdId,
-                        itemCode!,
-                        editingSubdItemId);
-                });
+    private async Task ValidateFormInternalAsync()
+    {
+        validationErrors = await MapItemValidation.ValidateFormAsync(
+            editingSubdItemId,
+            itemCode,
+            itemName,
+            selectedCompanyItemId,
+            uomEntries.Any(),
+            async () => await IsExactDuplicateMappingAsync());
+    }
+
+    /// <summary>
+    /// Returns true only when an existing mapped item (excluding the one being edited)
+    /// matches on SKU code, item name, company item, AND every UOM entry (name/conversion/price).
+    /// If any of those differ, it is not considered a duplicate.
+    /// </summary>
+    private async Task<bool> IsExactDuplicateMappingAsync()
+    {
+        if (!IsSubDistributorSelected
+            || string.IsNullOrWhiteSpace(itemCode)
+            || string.IsNullOrWhiteSpace(itemName)
+            || !selectedCompanyItemId.HasValue)
+        {
+            return false;
         }
 
+        // Narrow down to same-SKU candidates in this subdistributor first (cheap), excluding self.
+        var candidates = subDistributorItems
+            .Where(x => x.SubdItemId != (editingSubdItemId ?? 0))
+            .Where(x => string.Equals(x.SubItemCode, itemCode, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.Equals(x.Description, itemName, StringComparison.OrdinalIgnoreCase))
+            .Where(x => x.CompanyItemId == selectedCompanyItemId.Value)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return false;
+        }
+
+        // Only now do the more expensive UOM comparison, and only for real candidates.
+        foreach (var candidate in candidates)
+        {
+            var existingUoms = await mapItemService.GetSubdItemUomsAsync(candidate.SubdItemId);
+            if (UomEntriesMatchExactly(existingUoms, uomEntries))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool UomEntriesMatchExactly(
+        IEnumerable<ItemsUom>? existingUoms,
+        Dictionary<string, UomEntry> currentEntries)
+    {
+        var existingList = existingUoms?.ToList() ?? new List<ItemsUom>();
+
+        var existingNormalized = existingList
+            .ToDictionary(
+                u => NormalizeBaseUomName(u.UomName),
+                u => (Conversion: u.ConversionToBase, Price: u.Price),
+                StringComparer.OrdinalIgnoreCase);
+
+        var currentNormalized = currentEntries
+            .Where(e => e.Value.Price.HasValue) // only priced entries count as "mapped"
+            .ToDictionary(
+                e => NormalizeBaseUomName(e.Key),
+                e => (Conversion: e.Value.Conversion, Price: e.Value.Price!.Value),
+                StringComparer.OrdinalIgnoreCase);
+
+        if (existingNormalized.Count != currentNormalized.Count)
+        {
+            return false;
+        }
+
+        foreach (var (uomName, existing) in existingNormalized)
+        {
+            if (!currentNormalized.TryGetValue(uomName, out var current))
+            {
+                return false;
+            }
+
+            if (existing.Conversion != current.Conversion || existing.Price != current.Price)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
         private Task HandleFormFieldBlur(FocusEventArgs _)
         {
             principalEnterPrimed = false;
@@ -1203,7 +1278,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
         }
 
 
-
         private async Task SaveItemAsync()
         {
             await ValidateFormAsync();
@@ -1243,7 +1317,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
 
         private async Task PersistItemAsync()
         {
-            // Acquire lock to ensure sequential DbContext access for all database operations
             await mapTablesLoadLock.WaitAsync();
             try
             {
@@ -1274,9 +1347,8 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                     var updateResult = await mapItemService.UpdateSubdItemAsync(item);
                     if (updateResult.IsUpdated)
                     {
-                        // persist all UOMs separately
                         var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
-    uomEntries, userContext.UserId ?? 0);
+                            uomEntries, userContext.UserId ?? 0);
                         if (!saved)
                         {
                             itemActionErrorMessage = "Unable to save UOM prices.";
@@ -1296,11 +1368,12 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                     return;
                 }
 
+                // Plain insert — same SKU/item name/company item as an existing row is fine here;
+                // IsExactDuplicateMappingAsync only blocks when the UOM entries also match exactly.
                 var success = await mapItemService.AddSubdItemAsync(item);
 
                 if (success)
                 {
-                    // item.SubdItemId is set by EF on save; use it directly to persist UOM rows
                     if (item.SubdItemId > 0)
                     {
                         var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0);
@@ -1325,7 +1398,7 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 mapTablesLoadLock.Release();
             }
         }
-
+            
         private async Task BeginEditItem(MapSubDistributorItemRow item)
         {
             editingSubdItemId = item.SubdItemId;

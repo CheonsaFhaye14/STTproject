@@ -170,13 +170,13 @@ public class MapItemService : IMapItemService
 
         // Group by SubItemCode and ItemName - show each UOM with its price
         return results
-            .GroupBy(x => new { x.SubdItemCode, x.ItemName })
+            .GroupBy(x => x.SubdItemId)
             .Select(group => new MapSubDistributorItemRow
             {
                 SubdItemId = group.First().SubdItemId,
                 SubDistributorId = group.First().SubDistributorId,
-                SubItemCode = group.Key.SubdItemCode,
-                Description = group.Key.ItemName,
+                SubItemCode = group.First().SubdItemCode,
+                Description = group.First().ItemName,
                 Price = group.First().Price,
                 Principal = group.First().Principal,
                 CompanyItemId = group.First().CompanyItemId,
