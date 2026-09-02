@@ -1,3 +1,4 @@
+@using STTproject.Features.Admin.Subdistributor.Components.Pages
 @using STTproject.Features.User.SalesInvoice.Services
 
 <div class="modal @(Show ? "show" : "")"
@@ -13,7 +14,7 @@
                     </div>
                     <div>
                         <div class="mh-title">Import results</div>
-                        <div class="mh-sub">Sales invoices</div>
+                        <div class="mh-sub">@ImportResult?.PreparedInvoices?.FirstOrDefault()?.SubDistributor</div>
                     </div>
                 </div>
                 <button type="button" class="mh-close" @onclick="OnClose" aria-label="Close">

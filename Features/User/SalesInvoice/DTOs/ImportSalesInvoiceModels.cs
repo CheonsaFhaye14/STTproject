@@ -5,6 +5,7 @@ namespace STTproject.Features.User.SalesInvoice.DTOs;
 public sealed class PreparedInvoice
 {
     public string InvoiceNumber { get; set; } = string.Empty;
+    public string SubDistributor {get; set; } = string.Empty;
     public InputInvoiceModel Invoice { get; set; } = null!;
     public List<InputItemModel> Items { get; set; } = new();
     public List<ImportSalesInvoiceIssue> Issues { get; set; } = new();

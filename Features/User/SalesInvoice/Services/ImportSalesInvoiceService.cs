@@ -191,6 +191,7 @@ public sealed class ImportSalesInvoiceService
 
 			var preparedInvoice = new PreparedInvoice
 			{
+				SubDistributor = subDistributor.SubdCode + " - " + subDistributor.SubdName,
 				InvoiceNumber = invoiceNumber,
 				Items = new List<InputItemModel>(),
 				Issues = new List<ImportSalesInvoiceIssue>(),
