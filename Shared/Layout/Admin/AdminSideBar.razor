@@ -1,14 +1,20 @@
 ﻿@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
 @using STTproject.Services
-
 @inherits LayoutComponentBase
 
 @inject IUserContextService userContext
-
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <div class="layout-container">
-        <nav class="@sidebarClass">
+
+    @if (sidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="ToggleSidebar"></div>
+    }
+
+    <nav class="@sidebarClass">
         <div class="sidebar-header">
             <h5 class="sidebar-label">Admin</h5>
         </div>
@@ -16,75 +22,63 @@
         <ul class="sidebar-menu">
             @if (IsBoss)
             {
-            <li>
-                <NavLink class="sidebar-link" href="/admin" Match="NavLinkMatch.All">
-                    <span class="nav-icon"><span class="ti ti-layout-dashboard" aria-hidden="true"></span></span>
-                    <span class="nav-label">Dashboard</span>
-                    <span aria-hidden="true"></span>
-                </NavLink>
-            </li>
+                <li>
+                    <NavLink class="sidebar-link" href="/admin" data-tooltip="Dashboard" Match="NavLinkMatch.All">
+                        <span class="nav-icon"><span class="ti ti-layout-dashboard" aria-hidden="true"></span></span>
+                        <span class="sidebar-label">Dashboard</span>
+                    </NavLink>
+                </li>
             }
             <li>
-                <NavLink class="sidebar-link" href="/admin/customer">
+                <NavLink class="sidebar-link" href="/admin/customer" data-tooltip="Customers">
                     <span class="nav-icon"><span class="ti ti-users" aria-hidden="true"></span></span>
-                    <span class="nav-label">Customers</span>
-                    <span aria-hidden="true"></span>
+                    <span class="sidebar-label">Customers</span>
                 </NavLink>
             </li>
-
             <li>
-                <NavLink class="sidebar-link" href="/admin/companyitem">
+                <NavLink class="sidebar-link" href="/admin/companyitem" data-tooltip="Company Items">
                     <span class="nav-icon"><span class="ti ti-box" aria-hidden="true"></span></span>
-                    <span class="nav-label">Company Items</span>
-                    <span aria-hidden="true"></span>
+                    <span class="sidebar-label">Company Items</span>
                 </NavLink>
             </li>
-
             <li>
-                <NavLink class="sidebar-link" href="/admin/mapitem">
+                <NavLink class="sidebar-link" href="/admin/mapitem" data-tooltip="Map Items">
                     <span class="nav-icon"><span class="ti ti-map-pin" aria-hidden="true"></span></span>
-                    <span class="nav-label">Map Items</span>
-                    <span aria-hidden="true"></span>
+                    <span class="sidebar-label">Map Items</span>
                 </NavLink>
             </li>
-
             @if (IsBoss)
             {
                 <li>
-                    <NavLink class="sidebar-link" href="/admin/users">
+                    <NavLink class="sidebar-link" href="/admin/users" data-tooltip="Users">
                         <span class="nav-icon"><span class="ti ti-user-shield" aria-hidden="true"></span></span>
-                        <span class="nav-label">Users</span>
-                        <span aria-hidden="true"></span>
+                        <span class="sidebar-label">Users</span>
                     </NavLink>
                 </li>
-            <li>
-                <NavLink class="sidebar-link" href="/admin/salesinvoice">
-                    <span class="nav-icon"><span class="ti ti-file-invoice" aria-hidden="true"></span></span>
-                    <span class="nav-label">Sales Invoices</span>
-                    <span aria-hidden="true"></span>
-                </NavLink>
-            </li>
-                        <li>
-                <NavLink class="sidebar-link" href="/admin/subdistributor">
-                    <span class="nav-icon"><span class="ti ti-building-store" aria-hidden="true"></span></span>
-                    <span class="nav-label">SubDistributors</span>
-                    <span aria-hidden="true"></span>
-                </NavLink>
-            </li>
+                <li>
+                    <NavLink class="sidebar-link" href="/admin/salesinvoice" data-tooltip="Sales Invoices">
+                        <span class="nav-icon"><span class="ti ti-file-invoice" aria-hidden="true"></span></span>
+                        <span class="sidebar-label">Sales Invoices</span>
+                    </NavLink>
+                </li>
+                <li>
+                    <NavLink class="sidebar-link" href="/admin/subdistributor" data-tooltip="SubDistributors">
+                        <span class="nav-icon"><span class="ti ti-building-store" aria-hidden="true"></span></span>
+                        <span class="sidebar-label">SubDistributors</span>
+                    </NavLink>
+                </li>
             }
             <li>
-                <NavLink class="sidebar-link" href="/admin/priceincrease">
+                <NavLink class="sidebar-link" href="/admin/priceincrease" data-tooltip="Price Increases">
                     <span class="nav-icon"><span class="ti ti-history" aria-hidden="true"></span></span>
-                    <span class="nav-label">Price Changes</span>
-                    <span aria-hidden="true"></span>
+                    <span class="sidebar-label">Price Changes</span>
                 </NavLink>
             </li>
         </ul>
-        </nav>
+    </nav>
 
     <div class="right-column">
         <AdminTopBar OnHamburgerClick="ToggleSidebar" />
-
         <main class="main-content">
             @Body
         </main>
@@ -98,6 +92,19 @@
         userContext.Username is not null &&
         BossUsernames.Contains(userContext.Username);
     private string sidebarClass => sidebarOpen ? "sidebar sidebar-open" : "sidebar sidebar-closed";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            bool isMobile = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(max-width: 600px)').matches");
+            if (isMobile)
+            {
+                sidebarOpen = false;
+                StateHasChanged();
+            }
+        }
+    }
 
     private Task ToggleSidebar()
     {

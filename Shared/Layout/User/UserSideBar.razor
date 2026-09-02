@@ -3,7 +3,7 @@
 @inject IUserContextService userContext
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
-
+<link rel="stylesheet" href="css/layout-shared.css" asp-append-version="true" />
 <div class="layout-container">
 
     <!-- Dim backdrop behind the floating mobile sidebar; click outside to close -->
@@ -23,7 +23,7 @@
         <ul class="sidebar-menu">
 
             <li>
-                <NavLink class="sidebar-link" href="home" Match="NavLinkMatch.All">
+                <NavLink class="sidebar-link" href="home" data-tooltip="Home" Match="NavLinkMatch.All">
                     <span class="nav-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M12 3 4 9v11h6v-5h4v5h6V9l-8-6Z" /></svg>
                     </span>
@@ -32,7 +32,7 @@
             </li>
 
             <li>
-                <NavLink class="sidebar-link" href="mapitem">
+                <NavLink class="sidebar-link" href="mapitem" data-tooltip="Map Items">
                     <span class="nav-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M20 10c0-4.42-3.58-8-8-8S4 5.58 4 10c0 3.13 1.8 5.87 4.47 7.2L12 22l3.53-4.8A8.01 8.01 0 0 0 20 10Zm-8 2.5A4.5 4.5 0 1 1 16.5 8 4.5 4.5 0 0 1 12 12.5Z" /></svg>
                     </span>
@@ -41,7 +41,7 @@
             </li>
 
             <li>
-                <NavLink class="sidebar-link" href="customer">
+                <NavLink class="sidebar-link" href="customer" data-tooltip="Customers">
                     <span class="nav-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M16 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 16 11Zm-8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11Zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.34-1.07-2.47-2.56-3.12A5.56 5.56 0 0 0 8 13Zm8 0c-.9 0-1.74.16-2.5.44A5.57 5.57 0 0 1 16 15v2h8v-2c0-2.66-5.33-4-8-4Z" /></svg>
                     </span>
@@ -50,7 +50,7 @@
             </li>
 
             <li>
-                <NavLink class="sidebar-link" href="profile">
+                <NavLink class="sidebar-link" href="profile" data-tooltip="Profile">
                     <span class="nav-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.67-6 4v2h12v-2c0-2.33-2.67-4-6-4Z" /></svg>
                     </span>
@@ -59,7 +59,7 @@
             </li>
 
             <li>
-                <NavLink class="sidebar-link" href="help">
+                <NavLink class="sidebar-link" href="help" data-tooltip="Help">
                     <span class="nav-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 16a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 18Zm1.5-5.8c-.4.4-.8.7-.8 1.8H11c0-1.7.6-2.4 1.2-3l.3-.3a1.6 1.6 0 0 0-1.1-2.8 1.6 1.6 0 0 0-1.6 1.4H8.8A3.2 3.2 0 0 1 12 5.8a3.2 3.2 0 0 1 2.2 5.4Z" /></svg>
                     </span>
