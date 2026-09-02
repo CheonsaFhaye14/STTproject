@@ -11,14 +11,15 @@
             <input type="text"
                    placeholder="Search"
                    @bind="searchTerm"
-                   @bind:event="oninput" />
+                   @bind:event="oninput"
+                   @bind:after="ResetPage" />
         </div>
 
         @* Status filter *@
         <div class="filter-group">
             <label>Status:</label>
 
-            <select @bind="statusFilter">
+            <select @bind="statusFilter" @bind:after="ResetPage">
                 <option value="All">All</option>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -29,7 +30,7 @@
         <div class="filter-group">
             <label>Customer Type:</label>
 
-            <select @bind="typeFilter">
+            <select @bind="typeFilter" @bind:after="ResetPage">
                 <option value="">All types</option>
 
                 @foreach (var t in Types)
@@ -74,7 +75,7 @@
 
             <tbody>
 
-                @foreach (var customer in FilteredCustomers)
+                @foreach (var customer in PagedCustomers)
                 {
                     <tr>
 
@@ -111,6 +112,29 @@
 
     </div>
 
+    <div class="pagination-bar">
+        <span class="pagination-info">
+            @if (TotalFilteredCount == 0)
+            {
+                @:No customers found
+            }
+            else
+            {
+                @($"Showing {(currentPage - 1) * pageSize + 1}–{Math.Min(currentPage * pageSize, TotalFilteredCount)} of {TotalFilteredCount}")
+            }
+        </span>
+
+        <div class="pagination-controls">
+            <button type="button" class="btn-page" disabled="@(currentPage <= 1)" @onclick="() => GoToPage(currentPage - 1)">
+                Prev
+            </button>
+            <span class="pagination-page-indicator">Page @currentPage of @TotalPages</span>
+            <button type="button" class="btn-page" disabled="@(currentPage >= TotalPages)" @onclick="() => GoToPage(currentPage + 1)">
+                Next
+            </button>
+        </div>
+    </div>
+
     @if (showCustomerDetails && selectedCustomer != null)
     {
         <CustomerDetails Customer="selectedCustomer"
@@ -136,6 +160,9 @@
 
     private string sortColumn = "CustomerCode";
     private bool sortAscending = true;
+
+    private const int pageSize = 25;
+    private int currentPage = 1;
 
     private IEnumerable<string> Types =>
         Model?.Customers?
@@ -207,6 +234,39 @@
         }
     }
 
+    private int TotalFilteredCount => FilteredCustomers.Count();
+
+    private int TotalPages
+    {
+        get
+        {
+            var pages = (int)Math.Ceiling(TotalFilteredCount / (double)pageSize);
+            return pages < 1 ? 1 : pages;
+        }
+    }
+
+    private IEnumerable<CustomerInfoDto> PagedCustomers =>
+        FilteredCustomers.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private void GoToPage(int page)
+    {
+        if (page < 1)
+        {
+            page = 1;
+        }
+        else if (page > TotalPages)
+        {
+            page = TotalPages;
+        }
+
+        currentPage = page;
+    }
+
+    private void ResetPage()
+    {
+        currentPage = 1;
+    }
+
     private void SortBy(string column)
     {
         if (sortColumn == column)
@@ -218,6 +278,8 @@
             sortColumn = column;
             sortAscending = true;
         }
+
+        ResetPage();
     }
 
     private void OpenCustomerDetails(CustomerInfoDto customer)

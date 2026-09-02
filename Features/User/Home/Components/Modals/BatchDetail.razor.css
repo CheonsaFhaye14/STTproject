@@ -24,18 +24,45 @@
 
 /* HEADER */
 .modal-header {
-    background: #d6d2c9;
-    padding: 22px 28px;
-    border-bottom: 1px solid #BDB7A8;
+    background: linear-gradient(135deg, #1B1B1F 0%, #26262B 100%);
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
 
-    .modal-header h4 {
-        margin: 0;
-        color: #1B1B1F;
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-    }
+.modal-header-icon {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #B08D57 0%, #8A6A34 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FAFAF9;
+}
+
+.modal-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.modal-header h4 {
+    margin: 0;
+    color: #FAFAF9;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.modal-subtitle {
+    margin: 0;
+    color: #D8BE94;
+    font-size: 13px;
+    font-weight: 500;
+}
 
 /* BODY */
 .modal-body {
@@ -49,6 +76,7 @@
 /* TABLE */
 .activity-table {
     width: 100%;
+    height:15vh;
     border-collapse: collapse;
     background: #FFFFFF;
     border-radius: 14px;
@@ -58,7 +86,7 @@
 }
 
     .activity-table thead {
-        background: #d6d2c9;
+        background: #F7F6F4;
     }
 
     .activity-table th {
@@ -67,7 +95,7 @@
         font-size: 15px;
         font-weight: 700;
         color: #1B1B1F;
-        border-bottom: 2px solid #BDB7A8;
+        border-bottom: 1px solid #E5E3DD;
         white-space: nowrap;
     }
 
@@ -93,8 +121,8 @@
     background: #B08D57;
     color: #2A1F0F;
     border: none;
-    padding: 10px 18px;
-    border-radius: 12px;
+    padding: 10px 20px;
+    border-radius: 999px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -111,10 +139,9 @@
 /* FOOTER */
 .modal-actions {
     padding: 20px 25px;
-    border-top: 1px solid #BDB7A8;
     display: flex;
     justify-content: flex-start;
-    background: #d6d2c9;
+    background: #FFFFFF;
 }
 
 /* CLOSE BUTTON */
@@ -122,8 +149,8 @@
     background: #FFFFFF;
     color: #5F5E5A;
     border: 1px solid #E5E3DD;
-    padding: 10px 20px;
-    border-radius: 14px;
+    padding: 10px 22px;
+    border-radius: 999px;
     font-weight: 600;
     cursor: pointer;
     transition: 0.2s ease;

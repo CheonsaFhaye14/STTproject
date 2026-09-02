@@ -5,8 +5,9 @@
     border: 1px solid #E8E3D8;
     box-shadow: 0 4px 16px rgba(27, 27, 31, 0.08);
     height: 60vh;
-    overflow-y: auto;
-    overflow-x: hidden;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
     .card-section h3 {
@@ -16,7 +17,21 @@
         color: #1B1B1F;
         text-transform: uppercase;
         letter-spacing: 0.04em;
+        flex: 0 0 auto;
     }
+
+    .card-section .filters {
+        flex: 0 0 auto;
+    }
+
+.mapping-table-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(27, 27, 31, 0.06);
+}
 
 .subd-items-title {
     display: flex;
@@ -45,11 +60,9 @@
 
 .mapping-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     background: #FFFFFF;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(27, 27, 31, 0.06);
 }
 
     .mapping-table th,
@@ -68,6 +81,9 @@
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.03em;
+        position: sticky;
+        top: 0;
+        z-index: 2;
     }
 
     .mapping-table tr:hover td {

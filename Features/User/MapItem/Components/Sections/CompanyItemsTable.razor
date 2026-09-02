@@ -33,52 +33,54 @@
                 <option value="Mapped">Already Mapped</option>
             </select>
         </div></div>
-    <table class="mapping-table">
-        <thead>
-            <tr>
-                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
-                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
-                <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
-            </tr>
-        </thead>
-        <tbody>
-                @if (FilteredCompanyItems.Any())
-            {
-                @foreach (var item in FilteredCompanyItems)
+    <div class="mapping-table-wrapper">
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
+                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
+                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
+                </tr>
+            </thead>
+            <tbody>
+                    @if (FilteredCompanyItems.Any())
                 {
-                    var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
-                    var isPriceIncreasePending = item.EffectivityDate.HasValue;
-                    var isMapped = item.IsMapped;
-                    <tr @onclick="() => HandleRowClicked(item)"
-                        class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
-                        <td>@item.CompanyItemCode</td>
-                        <td>@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
-                        <td>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <span>@item.ItemName</span>
-                                @if (isPriceIncreasePending)
-                                {
-                                    var isOverdue = item.EffectivityDate!.Value <= DateTime.Now;
-                                    <span class="badge @(isOverdue ? "bg-danger text-white" : "bg-warning text-dark")" style="align-self: flex-start;">
-                                        @(isOverdue ? "Price change due" : "Price change scheduled") on @item.EffectivityDate?.ToString("MMM dd, yyyy")
-                                        @if (item.PriceIncreaseAmount.HasValue)
-                                        {
-                                            <span>@($" (+{item.PriceIncreaseAmount.Value:N2})")</span>
-                                        }
-                                    </span>
-                                }
-                            </div>
-                        </td>
+                    @foreach (var item in FilteredCompanyItems)
+                    {
+                        var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
+                        var isPriceIncreasePending = item.EffectivityDate.HasValue;
+                        var isMapped = item.IsMapped;
+                        <tr @onclick="() => HandleRowClicked(item)"
+                            class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
+                            <td>@item.CompanyItemCode</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
+                            <td>
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <span>@item.ItemName</span>
+                                    @if (isPriceIncreasePending)
+                                    {
+                                        var isOverdue = item.EffectivityDate!.Value <= DateTime.Now;
+                                        <span class="badge @(isOverdue ? "bg-danger text-white" : "bg-warning text-dark")" style="align-self: flex-start;">
+                                            @(isOverdue ? "Price change due" : "Price change scheduled") on @item.EffectivityDate?.ToString("MMM dd, yyyy")
+                                            @if (item.PriceIncreaseAmount.HasValue)
+                                            {
+                                                <span>@($" (+{item.PriceIncreaseAmount.Value:N2})")</span>
+                                            }
+                                        </span>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+           
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="3">No company items match the current filters.</td>
                     </tr>
                 }
-           
-            }
-            else
-            {
-                <tr>
-                    <td colspan="3">No company items match the current filters.</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    </div>
 </div>

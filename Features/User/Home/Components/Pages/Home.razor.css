@@ -15,7 +15,7 @@
         display: flex;
         justify-content: center;
         gap: clamp(16px, 3vw, 50px);
-        margin: 30px auto 0;
+        margin: 25px auto 0;
         width: min(100%, 1400px);
         flex-wrap: wrap;
         box-sizing: border-box;

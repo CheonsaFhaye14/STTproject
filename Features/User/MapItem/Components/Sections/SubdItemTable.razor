@@ -2,35 +2,35 @@
 <div class="card-section">
 	<h3 class="subd-items-title">
 		SUB DISTRIBUTOR ITEMS
-			@if (SelectedCompanyItemIdForFilter.HasValue)
+		@if (SelectedCompanyItemIdForFilter.HasValue)
+		{
+			var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
+			if (selectedItem != null)
 			{
-				var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
-				if (selectedItem != null)
+				<span class="subd-items-selected-summary">
+					(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
+				</span>
+				<button class="btn-primary" type="button" @onclick="MapSelectedCompanyItemAsync">
+					MAP
+				</button>
+				@if (selectedItem.EffectivityDate.HasValue)
 				{
-					<span class="subd-items-selected-summary">
-						(Filtered to: @selectedItem.CompanyItemCode - @selectedItem.ItemName)
+					var isOverdue = selectedItem.EffectivityDate.Value <= DateTime.Now;
+					<span class="@(isOverdue ? "price-due-badge" : "price-scheduled-badge")">
+						@(isOverdue
+							? $"Price change due since {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})"
+							: $"Price change scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})")
 					</span>
-					<button class="btn-primary" type="button" @onclick="MapSelectedCompanyItemAsync">
-						MAP
-					</button>
-					@if (selectedItem.EffectivityDate.HasValue)
-					{
-						var isOverdue = selectedItem.EffectivityDate.Value <= DateTime.Now;
-						<span class="@(isOverdue ? "price-due-badge" : "price-scheduled-badge")">
-							@(isOverdue
-								? $"Price change due since {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})"
-								: $"Price change scheduled on {selectedItem.EffectivityDate.Value:MMM dd, yyyy} (+{selectedItem.PriceIncreaseAmount:N2})")
-						</span>
-					}
-					else if (selectedItem.HasRecentIncrease)
-					{
-						<span class="price-increased-badge">
-							@($"Price change applied on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")}")
-						</span>
-					}
 				}
-			
+				else if (selectedItem.HasRecentIncrease)
+				{
+					<span class="price-increased-badge">
+						@($"Price change applied on {selectedItem.RecentAppliedDate?.ToString("MMM dd, yyyy")}")
+					</span>
+				}
 			}
+
+		}
 	</h3>
 	<div class="filters">
 		<div class="filter-group">
@@ -44,66 +44,76 @@
 			</select>
 		</div>
 	</div>
-	<table class="mapping-table">
-		<thead>
-			<tr>
-				@if (!IsSubDistributorSelected)
-				{
-					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">SUB DISTRIBUTOR NAME
-						@GetSortIndicator(SubItemSortColumn.SubdName)</th>
+	<div class="mapping-table-wrapper">
+		<table class="mapping-table">
+			<thead>
+				<tr>
+					@if (!IsSubDistributorSelected)
+					{
+						<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">
+							SUB DISTRIBUTOR NAME
+							@GetSortIndicator(SubItemSortColumn.SubdName)
+						</th>
 					}
-					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">SUB ITEM CODE
-						@GetSortIndicator(SubItemSortColumn.SubItemCode)</th>
-						<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">ITEM NAME
-							@GetSortIndicator(SubItemSortColumn.Description)</th>
-							<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.UomName)">UNIT OF MEASURES
-								@GetSortIndicator(SubItemSortColumn.UomName)</th>
-								<th>ACTIONS</th>
-							</tr>
-						</thead>
-						<tbody>
-							@if (FilteredSubdItems.Any())
+					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">
+						SUB ITEM CODE
+						@GetSortIndicator(SubItemSortColumn.SubItemCode)
+					</th>
+					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">
+						ITEM NAME
+						@GetSortIndicator(SubItemSortColumn.Description)
+					</th>
+					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.UomName)">
+						UNIT OF MEASURES
+						@GetSortIndicator(SubItemSortColumn.UomName)
+					</th>
+					<th>ACTIONS</th>
+				</tr>
+			</thead>
+			<tbody>
+				@if (FilteredSubdItems.Any())
+				{
+					@foreach (MapSubDistributorItemRow item in FilteredSubdItems)
+					{
+						<tr>
+							@if (!IsSubDistributorSelected)
 							{
-								@foreach (MapSubDistributorItemRow item in FilteredSubdItems)
-								{
-									<tr>
-										@if (!IsSubDistributorSelected)
-										{
-											<td>@item.SubdName</td>
-										}
-										<td>@item.SubItemCode</td>
-										<td>@item.Description</td>
-										<td>@item.UomName</td>
-										<td>
-											<Button Variant="ButtonVariant.IconActionEdit" OnClick="() => HandleEditClicked(item)"
-													Tooltip="Edit"
-													Disabled="@(!IsSubDistributorSelected)">
-													<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 8.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></IconContent>
-											</Button>
-											<Button Variant="ButtonVariant.IconActionDelete" OnClick="() => HandleDeleteClicked(item)"
-													Tooltip="Delete"
-													Disabled="@(!IsSubDistributorSelected)">
-												<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm2 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2h4v2H4V7h4zm2 0h4V5h-4v2z"/></svg></IconContent>
-											</Button>
-										</td>
-									</tr>
-								}
+								<td>@item.SubdName</td>
 							}
-							else
-							{
-								<tr>
-									<td colspan="@GetEmptyStateColumnSpan()">
-										<div class="empty-state-inline">
-											<div>
-												No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
-											</div>
+							<td>@item.SubItemCode</td>
+							<td>@item.Description</td>
+							<td>@item.UomName</td>
+							<td>
+								<Button Variant="ButtonVariant.IconActionEdit" OnClick="() => HandleEditClicked(item)"
+										Tooltip="Edit"
+										Disabled="@(!IsSubDistributorSelected)">
+									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 8.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></svg></IconContent>
+								</Button>
+								<Button Variant="ButtonVariant.IconActionDelete" OnClick="() => HandleDeleteClicked(item)"
+										Tooltip="Delete"
+										Disabled="@(!IsSubDistributorSelected)">
+									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm2 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2h4v2H4V7h4zm2 0h4V5h-4v2z" /></svg></IconContent>
+								</Button>
+							</td>
+						</tr>
+					}
+				}
+				else
+				{
+					<tr>
+						<td colspan="@GetEmptyStateColumnSpan()">
+							<div class="empty-state-inline">
+								<div>
+									No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
+								</div>
 
-						
 							
-										</div>
-									</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
+								
+							</div>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+</div>
