@@ -3,15 +3,11 @@
 @using STTproject.Features.Admin.SalesInvoice.Components.Modals
 @using STTproject.Features.Admin.SalesInvoice.Components.Sections
 @using STTproject.Shared.Components
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading sales invoices…</p>
-    </div>
-}
+
+<LoadingOverlay Show="isLoading"
+                      Title="Loading sales invoices…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-file-invoice" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">

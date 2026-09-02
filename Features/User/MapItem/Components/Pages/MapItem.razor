@@ -18,10 +18,15 @@
 @using STTproject.Shared.Components.Buttons
 @inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
 
-<LoadingOverlay Show="isLoading" Title="@loadingMessage" IconClass="fa-solid fa-sitemap" />
+<LoadingOverlay Show="isPageLoading " Title="Loading all data..." Subtitle="Please wait while we load all the data."
+                      IconClass="fa-solid fa-sitemap" />
+
+<LoadingOverlay Show="isDownloadingTemplate"
+                      Title="Downloading Excel Template…"
+                      Subtitle="Please wait while we prepare the template for download."
+                      IconClass="fa-solid fa-upload" />
 
 <div>
-
     <div class="top-header-row">
         <div class="header-with-search">
             <h3 class="header-title"><b>SUB DISTRIBUTORS</b></h3>

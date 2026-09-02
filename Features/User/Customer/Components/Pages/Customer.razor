@@ -1,23 +1,37 @@
 @page "/customer"
+@using STTproject.Shared.Components
 
 @inject ICustomerService CustomerService
 @inject IUserContextService UserContextService
 
+<LoadingOverlay Show="isLoading"
+                Title="Loading customers..."
+                IconClass="fa-solid fa-users" />
 
+<div style="@(isLoading ? "display:none;" : "")">
 	<TitleHeader Model="Model" SelectedSubDistributorId="SelectedSubDistributorId" OnSubDistributorChanged="HandleSubdChanged" />
 	<SubdDetails Model="Model" />
 	<CustomerListTable Model="Model" />
+</div>
 
 @code {
 	private CustomerListResponseDto? Model;
 	private int? SelectedSubDistributorId;
+	private bool isLoading = true;
 
 	protected override async Task OnInitializedAsync()
 	{
-		if (UserContextService.UserId is int userId)
+		try
 		{
-			Model = await CustomerService.GetCustomersWithBranchesAsync(userId);
-			SelectedSubDistributorId = Model?.SubDistributor?.SubDistributorId;
+			if (UserContextService.UserId is int userId)
+			{
+				Model = await CustomerService.GetCustomersWithBranchesAsync(userId);
+				SelectedSubDistributorId = Model?.SubDistributor?.SubDistributorId;
+			}
+		}
+		finally
+		{
+			isLoading = false;
 		}
 	}
 
@@ -26,16 +40,26 @@
 		if (newSubdId == null || UserContextService.UserId is not int userId)
 			return;
 
-		var customers = await CustomerService.GetCustomersForSubDistributorAsync(userId, newSubdId.Value);
-		if (Model != null)
-		{
-			Model.Customers = customers;
-			var selected = Model.SubDistributors.FirstOrDefault(s => s.SubDistributorId == newSubdId.Value);
-			if (selected != null)
-				Model.SubDistributor = selected;
-		}
-
-		SelectedSubDistributorId = newSubdId;
+		isLoading = true;
 		StateHasChanged();
+
+		try
+		{
+			var customers = await CustomerService.GetCustomersForSubDistributorAsync(userId, newSubdId.Value);
+			if (Model != null)
+			{
+				Model.Customers = customers;
+				var selected = Model.SubDistributors.FirstOrDefault(s => s.SubDistributorId == newSubdId.Value);
+				if (selected != null)
+					Model.SubDistributor = selected;
+			}
+
+			SelectedSubDistributorId = newSubdId;
+		}
+		finally
+		{
+			isLoading = false;
+			StateHasChanged();
+		}
 	}
 }

@@ -2,17 +2,12 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.PriceIncrease.Components.Modals
 @using STTproject.Features.Admin.PriceIncrease.Components.Sections
+@using STTproject.Shared.Components.Loadings
 
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading price changes…</p>
-    </div>
-}
-
+<LoadingOverlay Show="isLoading"
+                      Title="Loading price changes…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-money-bill-trend-up" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">

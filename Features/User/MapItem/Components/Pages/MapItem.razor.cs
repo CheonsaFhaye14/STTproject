@@ -26,8 +26,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         }
         private HashSet<string> inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
         private const string BaseUomName = "PC";
-        private bool isLoading = false;
-        private string loadingMessage = "";
+        private bool isPageLoading = true;
+        private bool isDownloadingTemplate = false;
         private bool showAddUomModal = false;
         private string? modalCompanyItemCode;
         private string? modalCompanyItemName;
@@ -52,11 +52,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private string? confirmedCompanyItemSummary;
         private bool showErrorModal = false;
         private bool showDownloadTemplateModal = false;
-        private bool showImportConfirmModal = false;
-        private bool showImportDetailsModal = false;
         private bool showClearConfirmModal = false;
         private ImportMapItemResult? lastImportResult;
-        private HashSet<string> selectedImportItemGroupKeys = new(StringComparer.OrdinalIgnoreCase);
         private bool shouldHydrateClientStateAfterRender = false;
         private bool hasHydratedClientState = false;
         [Parameter] public bool IsAdminMode { get; set; }
@@ -67,8 +64,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             showDownloadTemplateModal = false;
             try
             {
-                isLoading = true;
-                loadingMessage = "Generating template...";
+                isDownloadingTemplate = true;
                     await InvokeAsync(StateHasChanged);
                     await Task.Yield();
                 var templateData = await mapItemService.GetTemplateDataAsync(filters.SubdistributorId, filters.Principal);
@@ -83,8 +79,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             }
             finally
              {
-                isLoading = false;
-                loadingMessage = "";
+                isDownloadingTemplate = false;
                 await InvokeAsync(StateHasChanged);
              }
         }
@@ -93,188 +88,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             showDownloadTemplateModal = false;
             return Task.CompletedTask;
-        }
-
-        private async Task OpenImportFilePicker()
-        {
-            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-            await jsModule.InvokeVoidAsync("clickElement", "#mapitem-import-file");
-        }
-
-        private void ShowImportConfirmModal()
-        {
-            showImportConfirmModal = true;
-        }
-
-        private async Task ConfirmImport()
-        {
-            showImportConfirmModal = false;
-            await OpenImportFilePicker();
-        }
-
-        private Task CancelImport()
-        {
-            showImportConfirmModal = false;
-            return Task.CompletedTask;
-        }
-
-        private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
-        {
-
-            try
-            {
-                isLoading = true;
-                loadingMessage = "Processing file...";
-                 await InvokeAsync(StateHasChanged);
-                await Task.Yield();
-
-                  var file = e.File;
-            if (file is null)
-            {
-                return;
-            }
-            var fileName = file.Name ?? string.Empty;
-            if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
-            {
-                itemActionErrorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
-                showErrorModal = true;
-                return;
-            }
-using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
-            using var ms = new MemoryStream();
-            await browserStream.CopyToAsync(ms);
-            ms.Position = 0;
-                lastImportResult = await importMapItemService.ImportFromExcelAsync(ms, userContext.UserId ?? 0);
-            selectedImportItemGroupKeys = BuildDefaultSelectedImportGroupKeys(lastImportResult);
-
-            showImportDetailsModal = true;
-            }
-            catch (Exception ex)
-            {
-                itemActionErrorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
-                showErrorModal = true;
-
-            }
-            finally
-             {
-                isLoading = false;
-                loadingMessage = "";
-                await InvokeAsync(StateHasChanged);
-             }
-        }
-
-        private async Task HandleCommitImportAsync()
-        {
-            if (lastImportResult is null || !userContext.UserId.HasValue)
-            {
-                return;
-            }
-
-            var selectedRows = lastImportResult.Rows
-                .Where(row => row.IsSuccess && row.Issues.Count == 0)
-                .Where(row => selectedImportItemGroupKeys.Contains(BuildImportItemGroupKey(row)))
-                .ToList();
-
-            if (selectedRows.Count == 0)
-            {
-                itemActionErrorMessage = "No valid mapping group selected for commit.";
-                showErrorModal = true;
-                StateHasChanged();
-                return;
-            }
-
-            try
-            {
-                isLoading = true;
-                loadingMessage = "Committing imported items...";
-                    await InvokeAsync(StateHasChanged);
-                    await Task.Yield();
-
-                var committedGroups = await importMapItemService.CommitPreparedRowsAsync(selectedRows, userContext.UserId.Value);
-                if (committedGroups <= 0)
-                {
-                    itemActionErrorMessage = "Commit did not save any item groups. Please re-check your selected rows.";
-                    showErrorModal = true;
-                    return;
-                }
-
-                var committedSubdCode = selectedRows
-                    .Select(row => row.SubDistributorCode)
-                    .FirstOrDefault(code => !string.IsNullOrWhiteSpace(code));
-                if (!string.IsNullOrWhiteSpace(committedSubdCode))
-                {
-                    var matchedSubd = subdList.FirstOrDefault(subd =>
-                        string.Equals(subd.SubdCode, committedSubdCode.Trim(), StringComparison.OrdinalIgnoreCase));
-                    if (matchedSubd != null && matchedSubd.SubDistributorId != selectedSubdId)
-                    {
-                        selectedSubdId = matchedSubd.SubDistributorId;
-                        UpdateSelectedSubdLocation();
-                        await PersistLastSelectedSubdAsync();
-                    }
-                }
-
-                // Reset filters so newly committed rows are immediately visible in the table.
-                selectedPrincipal = null;
-                selectedCompanyItemIdForFilter = null;
-                await LoadMapTablesAsync();
-
-                showImportDetailsModal = false;
-                lastImportResult = null;
-                selectedImportItemGroupKeys.Clear();
-            }
-            catch (Exception ex)
-            {
-                var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
-                itemActionErrorMessage = $"Commit failed: {baseMsg}";
-                showErrorModal = true;
-            }
-            finally
-             {
-                isLoading = false;
-                loadingMessage = "";
-                await InvokeAsync(StateHasChanged);
-             }
-        }
-
-        private void CloseImportDetailsModal()
-        {
-            showImportDetailsModal = false;
-            lastImportResult = null;
-            selectedImportItemGroupKeys.Clear();
-            StateHasChanged();
-        }
-
-        private static HashSet<string> BuildDefaultSelectedImportGroupKeys(ImportMapItemResult? result)
-        {
-            var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (result is null || result.Rows.Count == 0)
-            {
-                return selected;
-            }
-
-            var validGroups = result.Rows
-                .GroupBy(BuildImportItemGroupKey)
-                .Where(group => group.All(row => row.IsSuccess && row.Issues.Count == 0))
-                .Select(group => group.Key);
-
-            foreach (var key in validGroups)
-            {
-                selected.Add(key);
-            }
-
-            return selected;
-        }
-
-        private static string BuildImportItemGroupKey(ImportMapItemRowResult row)
-        {
-            static string NormalizePart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
-            return string.Join("|",
-                NormalizePart(row.SubDistributorCode),
-                NormalizePart(row.CompanyItemCode),
-                NormalizePart(row.CompanyItemName));
         }
 
     private async Task OpenAddUomModal()
@@ -345,9 +158,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             var userId = userContext.UserId ?? 0;
             return $"mapitem-last-selected-subd:{userId}";
         }
-
-        // Draft/state DTOs moved to Features/MapItem/DTOs
-
 
         private readonly SemaphoreSlim mapTablesLoadLock = new(1, 1);
         private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
@@ -636,25 +446,19 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                     mapItemJsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/mapitem.js");
                     await mapItemJsModule.InvokeVoidAsync("registerMapItemKeyHandler", objRef);
                 }
-                catch (TaskCanceledException)
-                {
-                    return;
-                }
-                catch (JSDisconnectedException)
-                {
-                    return;
-                }
-                catch (JSException)
-                {
-                    return;
-                }
+                catch (TaskCanceledException) { isPageLoading = false; return; }
+                catch (JSDisconnectedException) { isPageLoading = false; return; }
+                catch (JSException) { isPageLoading = false; return; }
+
                 await subdSelectRef.FocusAsync();
 
                 if (shouldHydrateClientStateAfterRender && !hasHydratedClientState && userContext.UserId.HasValue)
                 {
                     await HydrateClientStateAfterRenderAsync();
-                    StateHasChanged();
                 }
+
+                isPageLoading = false;
+                StateHasChanged();
             }
         }
 

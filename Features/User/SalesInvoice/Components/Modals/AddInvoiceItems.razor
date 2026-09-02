@@ -37,7 +37,7 @@
                     <div class="form-group">
                         <label>Category</label>
                         <select @ref="CategorySelect" @onchange="OnCategoryChanged" value="@SelectedCategory"
-                                @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
+                              @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
                             <option value="">-- All Categories --</option>
                             @foreach (var cat in AvailableCategories)
                             {

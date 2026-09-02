@@ -2,15 +2,11 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.Subdistributor.Components.Modals
 @using STTproject.Features.Admin.Subdistributor.Components.Sections
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading subdistributors…</p>
-    </div>
-}
+@using STTproject.Shared.Components.Loadings
+<LoadingOverlay Show="isLoading"
+                      Title="Loading subdistributors…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-warehouse" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">

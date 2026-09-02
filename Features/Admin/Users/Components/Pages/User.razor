@@ -2,15 +2,11 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.Users.Components.Modals
 @using STTproject.Features.Admin.Users.Components.Sections
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading users…</p>
-    </div>
-}
+
+<LoadingOverlay Show="isLoading"
+                      Title="Loading users…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-users" />
 
 
 <div style="@(isLoading ? "display:none;" : "")">
