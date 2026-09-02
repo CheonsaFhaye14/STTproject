@@ -40,14 +40,13 @@
             </span>
             <span>Download Template</span>
         </button>
-        <button class="btn-primary" type="button" @onclick="OpenImportFilePicker"
+        <button class="btn-primary" type="button" @onclick="@(() => showImportSalesInvoiceModal = true)"
                 disabled="@(invoice.SubdistributorId <= 0)">
             <span class="btn-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z"/></svg>
             </span>
             <span>Import</span>
         </button>
-        <InputFile id="salesinvoice-import-file" class="d-none" accept=".xls,.xlsx,.xlsm,.xlsb" OnChange="HandleImportFileSelected" />
     </div>
 </div>
 
@@ -89,13 +88,11 @@
     <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
                   Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
 
-    <ConfirmModal Show="showImportConfirmModal" Title="Import Sales Invoices"
-                  Message="@($"Import invoices from Excel file to [{subdList.FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId)?.SubdName ?? "Unknown"}]?")"
-                  OnYes="ConfirmImport" OnNo="CancelImport" />
-
-    <ImportSalesInvoice Show="showImportResultsModal" ImportResult="lastImportResult" OnClose="CloseImportResultsModal"
-                        OnCommit="CommitSelectedImportedInvoices" OnDownloadErrorReport="HandleDownloadErrorReport"/>
-
+    <ImportSalesInvoice Show="showImportSalesInvoiceModal"
+                     SubDistributorId="invoice.SubdistributorId"
+                     OnClose="@(() => showImportSalesInvoiceModal = false)"
+                     OnImportCompleted="HandleImportSalesInvoiceCompletedAsync" />
+                     
     <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
                    OnDraftChanged="PersistDraftAsync" Customers="customers"
                    SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />

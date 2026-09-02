@@ -17,6 +17,7 @@ public partial class SalesInvoice
     private bool showCommitConfirmModal = false;
     private bool showAddItemsConfirmModal = false;
     private bool showAddItemsErrorModal = false;
+    private bool showImportSalesInvoiceModal = false;
     private bool showEditItemsConfirmModal = false;
     private bool showClearConfirmModal = false;
     private int addItemsConfirmCount = 0;
@@ -101,6 +102,10 @@ public partial class SalesInvoice
     private void CancelImport()
     {
         showImportConfirmModal = false;
+    }
+    private async Task HandleImportSalesInvoiceCompletedAsync()
+    {
+        await Task.CompletedTask;
     }
 
     private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
@@ -608,6 +613,12 @@ public partial class SalesInvoice
         if (showEditItemsModal)
         {
             showEditItemsModal = false;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        if (showImportSalesInvoiceModal)
+        {
+            showImportSalesInvoiceModal = false;
             StateHasChanged();
             return Task.CompletedTask;
         }

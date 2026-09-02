@@ -1,21 +1,40 @@
+@using CustomerEntity = STTproject.Data.Customer
+
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using System.Threading.Tasks
+@using System.Net.Http
+@using System.Net.Http.Json
 @using System.Text.Json
+
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+
 @using Microsoft.JSInterop
-@using STTproject
-@using STTproject.Components
-@using STTproject.Shared.Helper
-@using STTproject.Shared.Layout
+
+@using STTproject.Features.User.SalesInvoice.Components
 @using STTproject.Features.User.SalesInvoice.Components.Modals
 @using STTproject.Features.User.SalesInvoice.Components.Sections
-@using STTproject.Components.Pages
-@using STTproject.Shared.Components
-@using STTproject.Features.User.SalesInvoice.Validators
-@using STTproject.Features.User.SalesInvoice.Services
 @using STTproject.Features.User.SalesInvoice.DTOs
+@using STTproject.Features.User.SalesInvoice.Services
+@using STTproject.Features.User.SalesInvoice.Validators
+
+@using STTproject.Shared.Components.Loadings
+@using STTproject.Shared.Components.Buttons
+@using STTproject.Shared.Components.Modals
+@using STTproject.Shared.Components.Forms
+@using STTproject.Shared.Components
+@using STTproject.Shared.Helper
+@using STTproject.Shared.Layout
 @using STTproject.Models
-@using STTproject.Data
 @using STTproject.Services
-@using static Microsoft.AspNetCore.Components.Web.RenderMode
-@using CustomerEntity = STTproject.Data.Customer
+@using STTproject.Data
+@using STTproject.Components.Pages
+@using STTproject.Components
+@using STTproject
 

@@ -1,0 +1,28 @@
+@if (Show)
+{
+    <div class="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-icon-wrap">
+                <div class="loading-spinner" aria-hidden="true"></div>
+                @if (!string.IsNullOrWhiteSpace(IconClass))
+                {
+                    <i class="@IconClass loading-icon" aria-hidden="true"></i>
+                }
+            </div>
+            <div class="loading-text">
+                <div class="loading-title">@Title</div>
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <div class="loading-subtitle">@Subtitle</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Title { get; set; } = "Loading…";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? IconClass { get; set; } = "fa-solid fa-spinner";
+}

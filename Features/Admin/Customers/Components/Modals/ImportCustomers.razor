@@ -4,10 +4,10 @@
 @inject IUserContextService UserContext
 @inject IJSRuntime JS
 
-@if (isPreparing)
-{
-    <div class="import-progress-toast">Checking file, please wait…</div>
-}
+<LoadingOverlay Show="isPreparing"
+                Title="Checking your file…"
+                Subtitle="Validating headers, rows, and data. This may take a moment."
+                IconClass="fa-solid fa-file-arrow-up" />
 
 @if (Show)
 {

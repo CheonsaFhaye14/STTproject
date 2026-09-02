@@ -2,16 +2,8 @@
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.CompanyItem.Components.Modals
 
-
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading company items…</p>
-    </div>
-}
+<LoadingOverlay Show="isLoading"
+                      Title="Loading company items…"/>
 
 
 <div style="@(isLoading ? "display:none;" : "")">
