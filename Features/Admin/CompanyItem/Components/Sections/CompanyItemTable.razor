@@ -115,17 +115,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @if (isLoading)
-                            {
-                                <tr>
-                                    <td colspan="7" class="clt-empty">
-                                        <div class="clt-empty-inner">
-                                            <p>Loading…</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                            else if (!PagedCompanyItems.Any())
+                            @if (!PagedCompanyItems.Any())
                             {
                                 <tr>
                                     <td colspan="7" class="clt-empty">
@@ -244,7 +234,6 @@
     private int inactiveCount = 0;
     private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
 
-    private bool isLoading = true;
     private System.Threading.Timer? _debounceTimer;
 
     private bool HasActiveFilters =>
@@ -270,16 +259,13 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading company items: {ex.Message}");
-            isLoading = false;
             await InvokeAsync(StateHasChanged);
         }
     }
 
     public async Task LoadPageAsync()
     {
-        isLoading = true;
         await InvokeAsync(StateHasChanged);
-
         try
         {
 
@@ -305,7 +291,6 @@
         }
         finally
         {
-            isLoading = false;
             await InvokeAsync(StateHasChanged);
             if (OnCountChanged.HasDelegate)
                 await OnCountChanged.InvokeAsync(totalCount);

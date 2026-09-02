@@ -18,15 +18,7 @@
 @using STTproject.Shared.Components.Buttons
 @inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
 
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>@loadingMessage</p>
-    </div>
-}
+<LoadingOverlay Show="isLoading" Title="@loadingMessage" IconClass="fa-solid fa-sitemap" />
 
 <div>
 
@@ -134,7 +126,7 @@
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName"
             InUseUomNames="@inUseUomNames" />
-            
+
     <ImportMapItems Show="showImportMapItemModal"
                OnClose="@(() => showImportMapItemModal = false)"
                OnImportCompleted="HandleImportMapItemCompletedAsync" />

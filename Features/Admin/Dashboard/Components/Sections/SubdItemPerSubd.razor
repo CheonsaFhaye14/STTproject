@@ -12,12 +12,6 @@
         </div>
     </div>
 
-    @if (isLoading)
-    {
-        <p class="cpsd-loading">Loading...</p>
-    }
-    else
-    {
         <!-- Search + Sort controls -->
         <div class="cpsd-controls">
             <input class="cpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="SearchTerm" />
@@ -97,15 +91,15 @@
             </div>
         }
         <div class="cpsd-footer">Showing @PagedData.Count() of @FilteredData.Count() sub distributors</div>
-    }
+    
 </div>
 
 @code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
     private List<SubdItemPerSubdDto> data = new();
     private int totalSubdItems;
     private List<string> principals = new();
     private int maxTotal;
-    private bool isLoading = true;
     private string searchTerm = "";
     private string sortBy = "total";
     private int currentPage = 1;
@@ -138,7 +132,7 @@ private IEnumerable<SubdItemPerSubdDto> FilteredData => data
         totalSubdItems = data.Sum(x => x.TotalCount);
         maxTotal = data.Any() ? data.Max(x => x.TotalCount) : 1;
         principals = data.SelectMany(x => x.Principals).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p).ToList();
-        isLoading = false;
+        await OnLoaded.InvokeAsync();
     }
     private string SearchTerm
     {

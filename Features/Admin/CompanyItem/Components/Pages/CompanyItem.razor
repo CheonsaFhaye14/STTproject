@@ -1,9 +1,12 @@
 ﻿@page "/admin/companyitem"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @using STTproject.Features.Admin.CompanyItem.Components.Modals
+@using STTproject.Shared.Components.Loadings
 
 <LoadingOverlay Show="isLoading"
-                      Title="Loading company items…"/>
+                      Title="Loading company items…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-dolly" />
 
 
 <div style="@(isLoading ? "display:none;" : "")">

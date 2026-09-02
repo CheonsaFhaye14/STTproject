@@ -1,3 +1,5 @@
+<LoadingOverlay Show="isCommitting" Title="Committing selected company items..." IconClass="fa-solid fa-upload" />
+
 <div class="modal @(Show ? "show" : "")"
      style="@(Show ? "display: block;" : "display: none;")">
     <div class="modal-dialog modal-lg">
@@ -490,6 +492,7 @@
     [Parameter] public HashSet<string> SelectedGroupKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
 
+    private bool isCommitting = false;
     private bool hasCommitted;
     private bool showCommitConfirmModal;
     private bool wasShown;
@@ -685,8 +688,11 @@
     private async Task ConfirmCommit()
     {
         showCommitConfirmModal = false;
+        isCommitting = true;
         if (OnCommit.HasDelegate) await OnCommit.InvokeAsync();
         hasCommitted = true;
+        isCommitting = false;
+        StateHasChanged();
     }
 
     private async Task HandleDownloadErrorReport()

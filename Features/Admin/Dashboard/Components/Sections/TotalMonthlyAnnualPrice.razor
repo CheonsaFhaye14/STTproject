@@ -38,11 +38,7 @@
         <input class="tpsd-search" type="text" placeholder="Search subd..." @bind:event="oninput" @bind="searchTerm" />
     </div>
 
-    @if (isLoading)
-    {
-        <p class="tpsd-loading">Loading...</p>
-    }
-    else if (!FilteredData.Any())
+    @if (!FilteredData.Any())
     {
         <div class="tpsd-empty">No sales recorded for this period.</div>
     }
@@ -69,8 +65,8 @@
 </div>
 
 @code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
     private List<TotalPricesPerSubdMonthlyAnnualDto> data = new();
-    private bool isLoading = true;
     private string searchTerm = "";
     private string periodMode = "monthly";
     private decimal maxPrice;
@@ -119,10 +115,10 @@
         periodMode = mode;
         _ = LoadDataAsync();
     }
+    private bool hasFiredInitialLoad;
 
     private async Task LoadDataAsync()
     {
-        isLoading = true;
         StateHasChanged();
 
         data = periodMode == "monthly"
@@ -130,8 +126,13 @@
             : await DashboardService.GetTotalPricesPerSubdAnnualAsync(selectedYear);
 
         maxPrice = data.Any() ? data.Max(x => x.TotalPrice) : 0;
-        isLoading = false;
         StateHasChanged();
+
+        if (!hasFiredInitialLoad)
+        {
+            hasFiredInitialLoad = true;
+            await OnLoaded.InvokeAsync();
+        }
     }
 
     private static string FormatCurrency(decimal value) => value.ToString("C2", new System.Globalization.CultureInfo("en-PH"));

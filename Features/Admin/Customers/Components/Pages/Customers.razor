@@ -7,15 +7,16 @@
 @inject STTproject.Features.Admin.Customers.Services.ImportCustomersService ImportCustomersService
 @inject IJSRuntime JS
 
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>Loading customers…</p>
-    </div>
-}
+<LoadingOverlay Show="isLoading"
+                      Title="Loading customers…"
+                      Subtitle="Please wait while we fetch the latest data."
+                      IconClass="fa-solid fa-users" />
+
+
+<LoadingOverlay Show="isDownloadingTemplate"
+                      Title="Downloading Excel Template…"
+                      Subtitle="Please wait while we prepare the template for download."
+                      IconClass="fa-solid fa-upload" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">
