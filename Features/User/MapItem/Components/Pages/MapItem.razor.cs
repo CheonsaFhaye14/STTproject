@@ -15,6 +15,15 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 {
     public partial class MapItem
     {
+        private bool showImportMapItemModal = false;
+
+        private async Task HandleImportMapItemCompletedAsync()
+        {
+            showImportMapItemModal = false;
+            selectedPrincipal = null;
+            selectedCompanyItemIdForFilter = null;
+            await LoadMapTablesAsync();
+        }
         private HashSet<string> inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
         private const string BaseUomName = "PC";
         private bool isLoading = false;
@@ -511,9 +520,9 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 return Task.CompletedTask;
             }
 
-            if (showImportConfirmModal)
+            if (showImportMapItemModal)
             {
-                showImportConfirmModal = false;
+                showImportMapItemModal = false;
                 StateHasChanged();
                 return Task.CompletedTask;
             }
@@ -528,8 +537,7 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             showClearConfirmModal ||
             showErrorModal ||
             showDownloadTemplateModal ||
-            showImportConfirmModal ||
-            showImportDetailsModal;
+            showImportMapItemModal;
 
         protected override async Task OnParametersSetAsync()
         {
@@ -767,18 +775,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             }
         }
 
-        private async Task HandleCompanyItemKeyDown(KeyboardEventArgs e)
-        {
-            // Handled by Autocomplete component; if needed, forward first-enter to open popup
-            if (e.Key == "Enter")
-            {
-                if (mapItemInputHeader is not null)
-                {
-                    await mapItemInputHeader.FocusCompanyItemAsync();
-                    return;
-                }
-            }
-        }
         private async Task HandleDownloadErrorReport(List<ImportMapItemRowResult> filteredRows)
         {
             if (lastImportResult == null || filteredRows.Count == 0) return;
@@ -1032,12 +1028,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             return ValidateFormAsync();
         }
 
-        private Task HandlePrincipalBlur(FocusEventArgs _)
-        {
-            principalEnterPrimed = false;
-            return Task.CompletedTask;
-        }
-
         private async Task OnCompanyItemsFilterStringChanged()
         {
             if (Enum.TryParse<CompanyItemFilterMode>(selectedCompanyItemsFilterString, out var filterMode))
@@ -1066,12 +1056,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             selectedCompanyItemIdForFilter = null;
             ApplyCompanyItemFilters();
             return PersistDraftAsync();
-        }
-
-        private async Task OnCompanyItemDataListChanged()
-        {
-            // legacy: not used when using Autocomplete
-            await Task.CompletedTask;
         }
 
         private async Task OnAutocompleteSelected(CompanyItemDropdownItem? item)
@@ -1208,75 +1192,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                     return $"{entry.Key}{conversionStr}{priceStr}";
                 }));
         }
-
-        private ItemsUom? BuildSelectedItemsUom()
-        {
-            // Prefer the base unit if it has a price
-            if (uomEntries.TryGetValue(BaseUomName, out var baseEntry) && baseEntry.Price.HasValue)
-            {
-                return new ItemsUom
-                {
-                    UomName = BaseUomName,
-                    ConversionToBase = 1,
-                    Price = baseEntry.Price.Value,
-                    IsBaseUnit = true,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow,
-                    CreatedBy = userContext.UserId,
-                    UpdatedBy = userContext.UserId
-                };
-            }
-
-            // Prefer a manually-edited / explicitly set price (IsAutoCalculated == false)
-            var manualEntry = uomEntries
-                .Where(entry => entry.Value.Price.HasValue && entry.Value.IsAutoCalculated == false)
-                .FirstOrDefault();
-
-            if (manualEntry.Value != null && manualEntry.Value.Price.HasValue)
-            {
-                return new ItemsUom
-                {
-                    UomName = manualEntry.Key,
-                    ConversionToBase = manualEntry.Value.Conversion,
-                    Price = manualEntry.Value.Price.Value,
-                    IsBaseUnit = IsBaseUom(manualEntry.Key),
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow,
-                    CreatedBy = userContext.UserId,
-                    UpdatedBy = userContext.UserId
-                };
-            }
-
-            // Fallback: pick the first priced entry (non-base preferred)
-            var selectedEntry = uomEntries
-                .Where(entry => entry.Value.Price.HasValue)
-                .OrderBy(entry => IsBaseUom(entry.Key))
-                .FirstOrDefault();
-
-            if (selectedEntry.Value == null || !selectedEntry.Value.Price.HasValue)
-            {
-                return null;
-            }
-
-            return new ItemsUom
-            {
-                UomName = selectedEntry.Key,
-                ConversionToBase = selectedEntry.Value.Conversion,
-                Price = selectedEntry.Value.Price.Value,
-                IsBaseUnit = IsBaseUom(selectedEntry.Key),
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow,
-                CreatedBy = userContext.UserId,
-                UpdatedBy = userContext.UserId
-            };
-        }
-
-        private async Task OpenDatalistAsync(ElementReference inputRef)
-        {
-            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-            await jsModule.InvokeVoidAsync("openDatalist", inputRef);
-        }
-
 
         private async Task SaveItemAsync()
         {
@@ -1493,12 +1408,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             showClearConfirmModal = false;
         }
 
-        private async Task ClearAllDraftsAsync()
-        {
-            ShowClearConfirmModal();
-            await Task.CompletedTask;
-        }
-
         private async Task ConfirmAction()
         {
             if (pendingConfirmAction == ConfirmActionKind.Add || pendingConfirmAction == ConfirmActionKind.Update)
@@ -1571,24 +1480,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             };
 
             await draftService.SaveDraftStoreAsync(GetDraftStorageKey(), draftStore);
-        }
-
-        private async Task RestoreDraftAsync()
-        {
-            if (userContext.UserId is null)
-            {
-                return;
-            }
-
-            var draftStore = await draftService.LoadDraftStoreAsync(GetDraftStorageKey());
-            if (!draftStore.Drafts.TryGetValue(selectedSubdId.ToString(), out _))
-            {
-                return;
-            }
-
-            // Restore state and reload tables
-            await RestoreDraftStateOnlyAsync();
-            await LoadMapTablesAsync();
         }
 
         private async Task RestoreDraftStateOnlyAsync()
@@ -1706,11 +1597,6 @@ using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
                 .OrderBy(item => item.CompanyItemCode)
                 .ToList();
             UpdateFilteredSubDistributorItems();
-        }
-
-        private void GoToCompanyItems()
-        {
-            Navigation.NavigateTo("/companyitems");
         }
 
         private void CloseErrorModal()

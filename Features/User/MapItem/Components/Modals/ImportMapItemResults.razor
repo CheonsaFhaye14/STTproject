@@ -120,6 +120,7 @@
                     }
 
                     @* ── Tabs ── *@
+                    @if(groups.Any()){
                     <div class="tabs">
                         <button type="button" class="tab @GetTabClass(GroupFilter.All)" @onclick='() => SetTab(GroupFilter.All)'>
                             All (@groups.Count)
@@ -146,6 +147,7 @@
                             </button>
                         }
                     </div>
+                    }
 
                         @* ── Error filter bar (only on error tab) ── *@
                         @if (groupFilter == GroupFilter.ErrorOnly && hasErrorGroups)

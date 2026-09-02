@@ -1,0 +1,171 @@
+@using STTproject.Services
+@using STTproject.Features.User.MapItem.DTOs
+@inject STTproject.Features.User.MapItem.Services.ImportMapItemService ImportMapItemService
+@inject STTproject.Features.User.MapItem.Services.DownloadTemplateService DownloadTemplateService
+@inject IUserContextService UserContext
+@inject IJSRuntime JS
+
+@if (isPreparing)
+{
+    <div class="import-progress-toast">Checking file, please wait…</div>
+}
+
+@if (Show && !showResults)
+{
+    <Modal ShowModal="Show"
+           Title="Import Map Items"
+           Subtitle="Map subdistributor items to your database by importing an Excel file."
+           IconType="ModalIconType.Upload"
+           Details="Excel should contain: SubDistributor Code, CompanyItem Code, CompanyItem Name (required); UOM, Conversion, Price (optional)."
+           OnClose="HandleClose">
+        <ChildContent>
+            <FileInput OnFileSelected="HandleFileSelected" />
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Cancel" OnClick="HandleClose" Variant="ButtonVariant.Secondary" />
+            <Button Title="Check File"
+                    OnClick="OnPrepare"
+                    Disabled="@(selectedFile == null || isPreparing)"
+                    Icon="fa-solid fa-check"
+                    Variant="ButtonVariant.Primary" />
+        </FooterContent>
+    </Modal>
+}
+
+<ImportMapItemResults Show="showResults"
+                      ImportResult="importResult"
+                      SelectedGroupKeys="selectedGroupKeys"
+                      OnCommit="HandleCommitAsync"
+                      OnClose="CloseResults"
+                      OnDownloadErrorReport="HandleDownloadErrorReport" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnImportCompleted { get; set; }
+
+    private IBrowserFile? selectedFile;
+    private bool isPreparing;
+    private bool showResults;
+    private ImportMapItemResult? importResult;
+    private HashSet<string> selectedGroupKeys = new(StringComparer.OrdinalIgnoreCase);
+
+    private const long MaxFileSizeBytes = 20 * 1024 * 1024;
+
+    private void HandleFileSelected(IBrowserFile file)
+    {
+        selectedFile = file;
+        importResult = null;
+    }
+
+    private async Task OnPrepare()
+    {
+        if (selectedFile == null) return;
+
+        isPreparing = true;
+        importResult = null;
+        StateHasChanged();
+
+        try
+        {
+            byte[] fileBytes;
+            await using (var stream = selectedFile.OpenReadStream(MaxFileSizeBytes))
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+            }
+
+            using var importStream = new MemoryStream(fileBytes);
+            importResult = await ImportMapItemService.ImportFromExcelAsync(importStream, UserContext.UserId ?? 0);
+            selectedGroupKeys = BuildDefaultSelectedGroupKeys(importResult);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            importResult = new ImportMapItemResult();
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
+        }
+        finally
+        {
+            isPreparing = false;
+            showResults = importResult != null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleCommitAsync()
+    {
+        if (importResult == null || !UserContext.UserId.HasValue) return;
+
+        var selectedRows = importResult.Rows
+            .Where(r => r.IsSuccess && r.Issues.Count == 0)
+            .Where(r => selectedGroupKeys.Contains(BuildGroupKey(r)))
+            .ToList();
+
+        if (selectedRows.Count == 0) return;
+
+        var committedGroups = await ImportMapItemService.CommitPreparedRowsAsync(selectedRows, UserContext.UserId.Value);
+
+        if (committedGroups > 0)
+        {
+            showResults = false;
+            selectedFile = null;
+            importResult = null;
+            selectedGroupKeys.Clear();
+            await OnImportCompleted.InvokeAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleDownloadErrorReport(List<ImportMapItemRowResult> filteredRows)
+    {
+        if (importResult == null || filteredRows.Count == 0) return;
+
+        var bytes = DownloadTemplateService.GenerateErrorReportExcel(importResult, filteredRows);
+        var fileName = $"MapItem-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBytes",
+            fileName,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
+
+    private async Task CloseResults()
+    {
+        showResults = false;
+        selectedFile = null;
+        importResult = null;
+        selectedGroupKeys.Clear();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleClose()
+    {
+        selectedFile = null;
+        importResult = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private static HashSet<string> BuildDefaultSelectedGroupKeys(ImportMapItemResult? result)
+    {
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (result is null || result.Rows.Count == 0) return selected;
+
+        var validGroups = result.Rows
+            .GroupBy(BuildGroupKey)
+            .Where(g => g.All(r => r.IsSuccess && r.Issues.Count == 0))
+            .Select(g => g.Key);
+
+        foreach (var key in validGroups) selected.Add(key);
+        return selected;
+    }
+
+    private static string BuildGroupKey(ImportMapItemRowResult row)
+    {
+        static string NormalizePart(string? v) => (v ?? string.Empty).Trim().ToUpperInvariant();
+        return string.Join("|", NormalizePart(row.SubDistributorCode), NormalizePart(row.CompanyItemCode), NormalizePart(row.CompanyItemName));
+    }
+}
