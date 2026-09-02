@@ -386,7 +386,7 @@
                                                         <strong>@row.Category</strong>
                                                     </div>
                                                 }
-                                                @if (row.StockPrice.HasValue)
+                                                @if (row?.StockPrice.HasValue == true)
                                                 {
                                                     <div>
                                                         <span class="cust-meta-label">Price</span>
