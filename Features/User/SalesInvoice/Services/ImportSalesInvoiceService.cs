@@ -845,7 +845,7 @@ public sealed class ImportSalesInvoiceService
 			new[] { "InvoiceDate" },
 			new[] { "SalesManName" },
 			new[] { "CustomerCode", "CustomerName" },
-			new[] { "SkuCode", "SkuName" }
+			new[] { "SkuCode", "ItemName" }
 		};
 
 		// Read the entire scan range in ONE call — avoids per-row ClosedXML overhead
@@ -933,9 +933,7 @@ public sealed class ImportSalesInvoiceService
 			// Priority 1: Check template aliases
 			foreach (var kvp in templateAliases)
 			{
-				if (assignedCanonicalKeys.Contains(kvp.Key))
-					continue;
-
+				if (assignedCanonicalKeys.Contains(kvp.Key)) continue;
 				foreach (var templateAlias in kvp.Value)
 				{
 					if (NormalizeHeader(templateAlias) == normalized)
@@ -950,9 +948,7 @@ public sealed class ImportSalesInvoiceService
 			// Priority 2: Check global aliases
 			foreach (var kvp in globalAliases)
 			{
-				if (assignedCanonicalKeys.Contains(kvp.Key))
-					continue;
-
+				if (assignedCanonicalKeys.Contains(kvp.Key)) continue;
 				foreach (var globalAlias in kvp.Value)
 				{
 					if (NormalizeHeader(globalAlias) == normalized)

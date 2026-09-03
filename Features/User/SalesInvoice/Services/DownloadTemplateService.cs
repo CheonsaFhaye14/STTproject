@@ -17,15 +17,16 @@ namespace STTproject.Features.User.SalesInvoice.Services
             List<(string Code, string Name)>? customers = null,
             List<(string Code, string Name)>? skus = null,
             List<string>? uoms = null,
-            List<(string SkuCode, string Uom, decimal Price)>? prices = null)
+            List<(string SkuCode, string Uom, decimal Price)>? prices = null,
+            string? SubDistributorName = null)
         {
             using (var workbook = new ClosedXML.Excel.XLWorkbook())
             {
                 var worksheet = workbook.Worksheets.Add("Template");
                 worksheet.Protect("!@#adhid");
 
-                var customerTable = BuildHiddenLookupSheet(workbook, "CustomerList", customers);
-                var skuTable = BuildHiddenLookupSheet(workbook, "SkuList", skus);
+                var customerTable = BuildHiddenPickerSheet(workbook, "CustomerList", customers);
+                var skuTable = BuildHiddenPickerSheet(workbook, "SkuList", skus);
                 var uomListRange = BuildHiddenListSheet(workbook, "UOMList", uoms);
                 var priceTable = BuildHiddenPriceSheet(workbook, "PriceList", prices);
 
@@ -34,13 +35,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     workbook.NamedRanges.Add("AllUomList", uomListRange);
                 }
 
-                // Per-SKU UOM named ranges — indexed by position in `skus` (SKU_1, SKU_2, ...),
-                // NOT by SKU text. Building names from SKU text requires sanitizing every possible
-                // punctuation character Excel disallows in a defined name; miss even one and Excel
-                // silently strips the name on open, which is exactly what caused the repair dialog.
                 BuildSkuUomNamedRanges(workbook, skus, prices);
 
-                // OrderType list (hidden sheet) to back the dropdown reliably
                 var orderTypes = new[] { "Invoice", "Credit" };
                 var orderTypeSheet = workbook.Worksheets.Add("OrderTypeList");
                 orderTypeSheet.Visibility = XLWorksheetVisibility.Hidden;
@@ -50,30 +46,26 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 }
                 var orderTypeSourceRange = orderTypeSheet.Range(1, 1, orderTypes.Length, 1);
 
-                // ── Headers (11 columns) ──
+                // ── Headers (9 columns) ──
+                // A InvoiceCode | B InvoiceDate | C Customer picker | D OrderType
+                // E Item picker | F UOM | G Quantity | H Amount (auto) | I SalesManName
                 worksheet.Cell(1, 1).Value = "InvoiceCode";
                 worksheet.Cell(1, 2).Value = "InvoiceDate";
-                worksheet.Cell(1, 3).Value = "CustomerCode";
-                worksheet.Cell(1, 4).Value = "CustomerName";
-                worksheet.Cell(1, 5).Value = "OrderType";
-                worksheet.Cell(1, 6).Value = "SalesManName";
-                worksheet.Cell(1, 7).Value = "SkuCode";
-                worksheet.Cell(1, 8).Value = "ItemName";
-                worksheet.Cell(1, 9).Value = "UOM";
-                worksheet.Cell(1, 10).Value = "Quantity";
-                worksheet.Cell(1, 11).Value = "Amount";
+                worksheet.Cell(1, 3).Value = "Customer (Code or Name)";
+                worksheet.Cell(1, 4).Value = "OrderType";
+                worksheet.Cell(1, 5).Value = "Item (SKU or Name)";
+                worksheet.Cell(1, 6).Value = "UOM";
+                worksheet.Cell(1, 7).Value = "Quantity";
+                worksheet.Cell(1, 8).Value = "Amount";
+                worksheet.Cell(1, 9).Value = "SalesManName";
                 worksheet.Row(1).Style.Protection.Locked = true;
 
-                worksheet.Columns(1, 11).Style.Protection.Locked = false;
-                worksheet.Columns(12, 30).Style.Protection.Locked = false;
-                worksheet.Range("A1:K1").Style.Protection.Locked = true;
+                worksheet.Columns(1, 9).Style.Protection.Locked = false;
+                worksheet.Columns(10, 30).Style.Protection.Locked = false;
+                worksheet.Range("A1:I1").Style.Protection.Locked = true;
                 worksheet.SheetView.FreezeRows(1);
 
-                worksheet.Column(1).Style.NumberFormat.Format = "@"; // InvoiceCode
-                worksheet.Column(3).Style.NumberFormat.Format = "@"; // CustomerCode
-                worksheet.Column(5).Style.NumberFormat.Format = "@"; // OrderType
-                worksheet.Column(7).Style.NumberFormat.Format = "@"; // SkuCode
-                worksheet.Column(9).Style.NumberFormat.Format = "@"; // UOM
+                worksheet.Column(1).Style.NumberFormat.Format = "@"; // InvoiceCode — avoid Excel stripping leading zeros
 
                 const int maxRow = 1048576;
                 const int formulaFillRows = 2000;
@@ -91,35 +83,24 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 dateValidation.ErrorTitle = "Invalid Date";
                 dateValidation.ErrorMessage = "Please enter a valid date.";
 
-                // ── CustomerCode dropdown (C) ──
+                // ── Customer picker dropdown (C) — "Code - Name" list ──
                 if (customerTable != null)
                 {
                     var customerValidation = worksheet.Range($"C2:C{maxRow}").CreateDataValidation();
-                    customerValidation.List(customerTable.Value.CodeColumn);
+                    customerValidation.List(customerTable.Value.PickerColumn);
                     customerValidation.InCellDropdown = true;
                     customerValidation.IgnoreBlanks = true;
                     customerValidation.ShowInputMessage = true;
-                    customerValidation.InputTitle = "Customer Code";
-                    customerValidation.InputMessage = "Select from dropdown.";
+                    customerValidation.InputTitle = "Customer";
+                    customerValidation.InputMessage = "Search/select by code or name.";
                     customerValidation.ShowErrorMessage = true;
                     customerValidation.ErrorStyle = XLErrorStyle.Stop;
-                    customerValidation.ErrorTitle = "Invalid Customer Code";
-                    customerValidation.ErrorMessage = "Please select a valid Customer Code from the dropdown.";
+                    customerValidation.ErrorTitle = "Invalid Customer";
+                    customerValidation.ErrorMessage = "Please select a valid customer from the dropdown.";
                 }
 
-                // ── CustomerName auto-fill (D) — locked formula ──
-                if (customerTable != null)
-                {
-                    for (int row = 2; row <= formulaFillRows; row++)
-                    {
-                        worksheet.Cell(row, 4).FormulaA1 =
-                            $"=IFERROR(VLOOKUP(C{row},CustomerList!A:B,2,FALSE),\"\")";
-                    }
-                }
-                worksheet.Column(4).Style.Protection.Locked = true;
-
-                // ── OrderType dropdown (E) ──
-                var orderTypeRange = worksheet.Range($"E2:E{maxRow}").CreateDataValidation();
+                // ── OrderType dropdown (D) ──
+                var orderTypeRange = worksheet.Range($"D2:D{maxRow}").CreateDataValidation();
                 orderTypeRange.List(orderTypeSourceRange);
                 orderTypeRange.InCellDropdown = true;
                 orderTypeRange.IgnoreBlanks = true;
@@ -131,47 +112,37 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 orderTypeRange.ErrorTitle = "Invalid Order Type";
                 orderTypeRange.ErrorMessage = "Please select either Invoice or Credit";
 
-                // ── SkuCode dropdown (G) ──
+                // ── Item picker dropdown (E) — "SkuCode - ItemName" list ──
                 if (skuTable != null)
                 {
-                    var skuValidation = worksheet.Range($"G2:G{maxRow}").CreateDataValidation();
-                    skuValidation.List(skuTable.Value.CodeColumn);
+                    var skuValidation = worksheet.Range($"E2:E{maxRow}").CreateDataValidation();
+                    skuValidation.List(skuTable.Value.PickerColumn);
                     skuValidation.InCellDropdown = true;
                     skuValidation.IgnoreBlanks = true;
                     skuValidation.ShowInputMessage = true;
-                    skuValidation.InputTitle = "SKU Code";
-                    skuValidation.InputMessage = "Select from dropdown.";
+                    skuValidation.InputTitle = "Item";
+                    skuValidation.InputMessage = "Search/select by SKU code or item name.";
                     skuValidation.ShowErrorMessage = true;
                     skuValidation.ErrorStyle = XLErrorStyle.Stop;
-                    skuValidation.ErrorTitle = "Invalid SKU Code";
-                    skuValidation.ErrorMessage = "Please select a valid SKU Code from the dropdown.";
+                    skuValidation.ErrorTitle = "Invalid Item";
+                    skuValidation.ErrorMessage = "Please select a valid item from the dropdown.";
                 }
 
-                // ── ItemName auto-fill (H) — locked formula ──
-                if (skuTable != null)
-                {
-                    for (int row = 2; row <= formulaFillRows; row++)
-                    {
-                        worksheet.Cell(row, 8).FormulaA1 =
-                            $"=IFERROR(VLOOKUP(G{row},SkuList!A:B,2,FALSE),\"\")";
-                    }
-                }
-                worksheet.Column(8).Style.Protection.Locked = true;
-
-                // ── UOM dropdown (I) — cascades off the SkuCode in column G ──
-                // Finds the SKU's position in SkuList via MATCH, then jumps to the named range
-                // SKU_<that position>. Numeric-suffix names sidestep every Excel defined-name
-                // character restriction entirely — no punctuation sanitizing needed anywhere.
+                // ── UOM dropdown (F) — cascades off the item picker in column E ──
+                // MATCH against SkuList!C:C (the picker-label column), NOT A:A — E holds the
+                // combined "Code - Name" string, which only exists in column C of SkuList.
+                // Row position still lines up with the SKU_<n> named ranges since C and A
+                // share the same row numbering.
                 if (uomListRange != null && skuTable != null)
                 {
-                    var uomValidation = worksheet.Range($"I2:I{maxRow}").CreateDataValidation();
-                    var uomFormula = "=INDIRECT(\"SKU_\"&MATCH(G2,SkuList!A:A,0))";
+                    var uomValidation = worksheet.Range($"F2:F{maxRow}").CreateDataValidation();
+                    var uomFormula = "=INDIRECT(\"SKU_\"&MATCH(E2,SkuList!C:C,0))";
                     uomValidation.List(uomFormula, true);
                     uomValidation.InCellDropdown = true;
                     uomValidation.IgnoreBlanks = true;
                     uomValidation.ShowInputMessage = true;
                     uomValidation.InputTitle = "Unit of Measure (UOM)";
-                    uomValidation.InputMessage = "Select the SKU first — the UOM list narrows to that item.";
+                    uomValidation.InputMessage = "Select the item first — the UOM list narrows to it.";
                     uomValidation.ShowErrorMessage = true;
                     uomValidation.ErrorStyle = XLErrorStyle.Stop;
                     uomValidation.ErrorTitle = "Invalid UOM";
@@ -179,8 +150,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 }
                 else if (uomListRange != null)
                 {
-                    // unchanged flat fallback for when there's no SKU list at all
-                    var uomValidation = worksheet.Range($"I2:I{maxRow}").CreateDataValidation();
+                    var uomValidation = worksheet.Range($"F2:F{maxRow}").CreateDataValidation();
                     uomValidation.List(uomListRange);
                     uomValidation.InCellDropdown = true;
                     uomValidation.IgnoreBlanks = true;
@@ -193,8 +163,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     uomValidation.ErrorMessage = "Please select a valid UOM from the dropdown.";
                 }
 
-                // ── Quantity validation (J) ──
-                var qtyValidation = worksheet.Range($"J2:J{maxRow}").CreateDataValidation();
+                // ── Quantity validation (G) ──
+                var qtyValidation = worksheet.Range($"G2:G{maxRow}").CreateDataValidation();
                 qtyValidation.WholeNumber.GreaterThan(0);
                 qtyValidation.IgnoreBlanks = true;
                 qtyValidation.ShowInputMessage = true;
@@ -204,16 +174,20 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 qtyValidation.ErrorTitle = "Invalid Quantity";
                 qtyValidation.ErrorMessage = "Quantity must be a whole number greater than 0";
 
-                // ── Amount auto-calc (K) — locked formula: Quantity * price looked up by SkuCode+UOM ──
+                // ── Amount auto-calc (H) — locked formula ──
+                // Quantity is G, UOM is F. Plain SkuCode isn't stored anywhere on this sheet
+                // directly (E holds the combined "Code - Name" picker text), so it's derived
+                // inline via VLOOKUP(E, SkuList!C:A, 2, FALSE) — reversed range C:A puts the
+                // picker label leftmost so VLOOKUP can look it up and return column A (the code).
                 if (priceTable != null)
                 {
                     for (int row = 2; row <= formulaFillRows; row++)
                     {
-                        worksheet.Cell(row, 11).FormulaA1 =
-                            $"=IFERROR(J{row}*VLOOKUP(G{row}&\"|\"&I{row},PriceList!A:B,2,FALSE),0)";
+                        worksheet.Cell(row, 8).FormulaA1 =
+                            $"=IFERROR(G{row}*VLOOKUP(INDEX(SkuList!A:A,MATCH(E{row},SkuList!C:C,0))&\"|\"&F{row},PriceList!A:B,2,FALSE),0)";
                     }
                 }
-                worksheet.Column(11).Style.Protection.Locked = true;
+                worksheet.Column(8).Style.Protection.Locked = true;
 
                 var headerRow = worksheet.Row(1);
                 headerRow.Style.Font.Bold = true;
@@ -221,21 +195,19 @@ namespace STTproject.Features.User.SalesInvoice.Services
 
                 worksheet.Column(1).Width = 16;  // InvoiceCode
                 worksheet.Column(2).Width = 14;  // InvoiceDate
-                worksheet.Column(3).Width = CalcColumnWidth(customers?.Select(c => c.Code), "CustomerCode");
-                worksheet.Column(4).Width = CalcColumnWidth(customers?.Select(c => c.Name), "CustomerName", 14, 45);
-                worksheet.Column(5).Width = 12;  // OrderType
-                worksheet.Column(6).Width = 20;  // SalesManName
-                worksheet.Column(7).Width = CalcColumnWidth(skus?.Select(s => s.Code), "SkuCode");
-                worksheet.Column(8).Width = CalcColumnWidth(skus?.Select(s => s.Name), "ItemName", 14, 45);
-                worksheet.Column(9).Width = CalcColumnWidth(uoms, "UOM", 10, 20);
-                worksheet.Column(10).Width = 12; // Quantity
-                worksheet.Column(11).Width = 14; // Amount
+                worksheet.Column(3).Width = CalcColumnWidth(customers?.Select(c => $"{c.Code} - {c.Name}"), "Customer (Code or Name)", 20, 55);
+                worksheet.Column(4).Width = 12;  // OrderType
+                worksheet.Column(5).Width = CalcColumnWidth(skus?.Select(s => $"{s.Code} - {s.Name}"), "Item (SKU or Name)", 20, 55);
+                worksheet.Column(6).Width = CalcColumnWidth(uoms, "UOM", 10, 20);
+                worksheet.Column(7).Width = 12; // Quantity
+                worksheet.Column(8).Width = 14; // Amount
+                worksheet.Column(9).Width = 20; // SalesManName
 
                 using (var stream = new MemoryStream())
                 {
                     workbook.SaveAs(stream);
                     stream.Position = 0;
-                    var fileName = $"SalesInvoiceTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                    var fileName = $"{SubDistributorName}_SalesInvoiceTemplate_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                     await _jsRuntime.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
                 }
@@ -259,7 +231,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
             return Math.Clamp(longest + 2, min, max);
         }
 
-        private static (IXLRange CodeColumn, IXLRange FullTable)? BuildHiddenLookupSheet(
+        private static (IXLRange PickerColumn, IXLRange FullTable)? BuildHiddenPickerSheet(
             XLWorkbook workbook, string sheetName, List<(string Code, string Name)>? rows)
         {
             if (rows == null || rows.Count == 0)
@@ -274,11 +246,14 @@ namespace STTproject.Features.User.SalesInvoice.Services
             {
                 sheet.Cell(i + 1, 1).Value = rows[i].Code;
                 sheet.Cell(i + 1, 2).Value = rows[i].Name;
+                sheet.Cell(i + 1, 3).Value = string.IsNullOrWhiteSpace(rows[i].Name)
+                    ? rows[i].Code
+                    : $"{rows[i].Code} - {rows[i].Name}";
             }
 
-            var codeColumn = sheet.Range(1, 1, rows.Count, 1);
-            var fullTable = sheet.Range(1, 1, rows.Count, 2);
-            return (codeColumn, fullTable);
+            var pickerColumn = sheet.Range(1, 3, rows.Count, 3);
+            var fullTable = sheet.Range(1, 1, rows.Count, 3);
+            return (pickerColumn, fullTable);
         }
 
         private static IXLRange? BuildHiddenPriceSheet(
@@ -319,12 +294,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
             return sheet.Range(1, 1, codes.Count, 1);
         }
 
-        /// <summary>
-        /// Writes one row per SKU (matching the SAME order as `skus`/SkuList, so MATCH position
-        /// lines up) into a hidden sheet, and defines a named range SKU_&lt;1-based position&gt;
-        /// for each SKU that has at least one UOM. SKUs with no UOM data get no named range —
-        /// their row's UOM dropdown falls back to the full list via the formula's IFERROR.
-        /// </summary>
         private static void BuildSkuUomNamedRanges(
             XLWorkbook workbook,
             List<(string Code, string Name)>? skus,
@@ -354,7 +323,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     continue;
                 }
 
-                int row = i + 1; // 1-based, matches this SKU's row in SkuList
+                int row = i + 1;
                 for (int col = 0; col < skuUoms.Count; col++)
                 {
                     sheet.Cell(row, col + 1).Value = skuUoms[col];

@@ -234,7 +234,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerName"] = new[] { "outlet name" };
 				map["CityMunicipality"] = new[] { "outlet add" };
 				map["SalesManName"] = new[] { "salesman" };
-				map["SkuName"] = new[] { "sku description" };
+				map["ItemName"] = new[] { "sku description" };
 				map["UnitofMeasure"] = new[] { "units" };
 				map["Quantity"] = new[] { "qty" };
 				return map;
@@ -271,7 +271,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				},
 				["CustomerName"] = new[]
 				{
-					"customername","customer name","custname","cust name","account name","outlet name","customer","name"
+					"customername","customer name","custname","cust name","account name","outlet name","customer","name", "customer (code or name)"
 				},
 				["AddressLine"] = new[]
 				{
@@ -325,9 +325,9 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				{
 					"ordertype","order type","trxtype","trx type","type"
 				},
-				["SkuName"] = new[]
+				["ItemName"] = new[]
 				{
-					"skuname", "sku name", "itemname", "item name", "product", "item description", "item name (spec)"
+					"skuname", "sku name", "itemname", "item name", "product", "item description", "item name (spec)", "item (sku or name)"
 				}
 			};
 

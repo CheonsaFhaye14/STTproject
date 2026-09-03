@@ -873,7 +873,9 @@ public partial class SalesInvoice
                 .Where(p => !string.IsNullOrWhiteSpace(p.SkuCode) && !string.IsNullOrWhiteSpace(p.Uom))
                 .ToList();
 
-            await downloadTemplateService.GenerateAndDownloadExcelAsync(customerRows, skuRows, uoms, priceRows);
+            var SubDistributorName = subdList.FirstOrDefault(s => s.SubDistributorId == invoice.SubdistributorId)?.SubdName ?? "UnknownSubDistributor";
+
+            await downloadTemplateService.GenerateAndDownloadExcelAsync(customerRows, skuRows, uoms, priceRows, SubDistributorName);
 
             downloadSuccessMessage = "Template downloaded successfully.";
             showDownloadSuccess = true;

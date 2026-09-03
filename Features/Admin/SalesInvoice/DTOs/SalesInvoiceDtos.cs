@@ -121,7 +121,7 @@ public sealed class SalesInvoiceUomOption
     public int ItemsUomId { get; init; }
     public string UomName { get; init; } = string.Empty;
     public decimal Price { get; init; }
-    public decimal ConversionToBase { get; init; }
+    public decimal? ConversionToBase { get; init; }
 }
 public sealed class SalesInvoiceItemDropdownItem
 {
