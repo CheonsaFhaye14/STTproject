@@ -538,8 +538,8 @@ public sealed class ImportSalesInvoiceService
 				(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
 				(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
 				(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
-				(netAmountCell is null || IsCellEffectivelyEmpty(netAmountCell)))
-			{
+				(netAmountCell is null || IsAmountCellEffectivelyEmptyForRowSkip(netAmountCell)))			
+				{
 				continue;
 			}
 
@@ -965,7 +965,27 @@ public sealed class ImportSalesInvoiceService
 
 		return headers;
 	}
+	private static bool IsAmountCellEffectivelyEmptyForRowSkip(IXLCell cell)
+	{
+		if (cell.HasFormula)
+		{
+			var cached = cell.CachedValue.ToString()?.Trim();
+			if (string.IsNullOrWhiteSpace(cached))
+				return true;
 
+			// GenerateAndDownloadExcelAsync fills every row up to 2000 with
+			// =IFERROR(...,0) regardless of whether the user entered anything, so a
+			// formula-derived 0 here means "nothing typed in this row yet", not a real
+			// zero-amount invoice line. Treat it as empty for blank-row detection only.
+			if (decimal.TryParse(cached, NumberStyles.Number | NumberStyles.AllowLeadingSign,
+					CultureInfo.InvariantCulture, out var d) && d == 0)
+				return true;
+
+			return false;
+		}
+
+		return cell.IsEmpty();
+	}
 	private static string GetString(IXLRow row, int columnNumber)
 	{
 		var cell = row.Cell(columnNumber);

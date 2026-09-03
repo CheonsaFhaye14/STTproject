@@ -342,12 +342,12 @@ public sealed class InvoiceDataValidator
     }
 
     public static bool TryResolveItem(
-    string? skuCode,
-    string? itemName,
-    IReadOnlyDictionary<string, Data.SubdItem> itemBySku,
-    IEnumerable<Data.SubdItem> allItems,
-    out Data.SubdItem? item,
-    out List<Data.SubdItem>? suggestions)
+        string? skuCode,
+        string? itemName,
+        IReadOnlyDictionary<string, Data.SubdItem> itemBySku,
+        IEnumerable<Data.SubdItem> allItems,
+        out Data.SubdItem? item,
+        out List<Data.SubdItem>? suggestions)
     {
         suggestions = null;
 
@@ -357,6 +357,20 @@ public sealed class InvoiceDataValidator
         {
             item = found;
             return true;
+        }
+
+        // STEP 1.5: The generated template's item picker (column E) stores the item as a
+        // combined "Code - Name" string with no separate SkuCode column, so when skuCode
+        // is empty, try pulling the leading code segment out of itemName and matching by SKU.
+        if (string.IsNullOrWhiteSpace(skuCode) && !string.IsNullOrWhiteSpace(itemName))
+        {
+            var extractedCode = ExtractLeadingCode(itemName);
+            if (!string.IsNullOrWhiteSpace(extractedCode) &&
+                itemBySku.TryGetValue(extractedCode!.Trim(), out var foundByCode))
+            {
+                item = foundByCode;
+                return true;
+            }
         }
 
         // STEP 2: Item name fallback
@@ -371,6 +385,19 @@ public sealed class InvoiceDataValidator
         var matches = allItems
             .Where(i => NormalizeItemName(i.ItemName) == normalized)
             .ToList();
+
+        // STEP 2.5: No raw match — strip a leading "Code - " prefix and retry against the name.
+        if (matches.Count == 0)
+        {
+            var strippedName = StripCodePrefix(itemName);
+            if (!string.Equals(strippedName, itemName.Trim(), StringComparison.Ordinal))
+            {
+                var normalizedStripped = NormalizeItemName(strippedName);
+                matches = allItems
+                    .Where(i => NormalizeItemName(i.ItemName) == normalizedStripped)
+                    .ToList();
+            }
+        }
 
         if (matches.Count == 1)
         {
@@ -389,6 +416,12 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
+    private static string? ExtractLeadingCode(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var dashIndex = value.IndexOf(" - ", StringComparison.Ordinal);
+        return dashIndex >= 0 ? value[..dashIndex].Trim() : null;
+    }
     public static bool IsMissingUomValue(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
