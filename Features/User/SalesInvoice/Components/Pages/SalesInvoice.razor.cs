@@ -33,7 +33,6 @@ public partial class SalesInvoice
     private bool hasAttemptedDraftRestore;
 
     private bool isLoading = false;
-    private string loadingMessage = "";
 
     async Task OnItemsChanged(List<InputItemModel> updatedItems)
     {
@@ -108,137 +107,6 @@ public partial class SalesInvoice
         await Task.CompletedTask;
     }
 
-    private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
-    {
-        if (invoice.SubdistributorId <= 0)
-        {
-            errorMessage = "Select a subdistributor before importing a file.";
-            showErrorModal = true;
-            StateHasChanged();
-            return;
-        }
-
-        var file = e.File;
-        if (file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            loadingMessage = "Importing Excel file...";
-            isLoading = true;
-            await InvokeAsync(StateHasChanged);
-            await Task.Yield();
-
-            var fileName = file.Name ?? string.Empty;
-            if (!(fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase)
-                || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)))
-            {
-                errorMessage = "Please select a valid Excel file (.xls, .xlsx, .xlsm, .xlsb).";
-                showErrorModal = true;
-                return;
-            }
-
-            using var browserStream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
-            using var ms = new System.IO.MemoryStream();
-            await browserStream.CopyToAsync(ms);
-            ms.Position = 0;
-
-            var importResult = await importSalesInvoiceService.PrepareFromExcelAsync(
-                ms,
-                invoice.SubdistributorId,
-                userContext.UserId ?? 0);
-
-            lastImportResult = importResult;
-            showImportResultsModal = true;
-        }
-
-        catch (Exception ex)
-        {
-            errorMessage = $"Failed to open/import Excel file: {ex.Message}. Supported formats: .xlsx, .xlsm. For legacy .xls files please save as .xlsx and try again.";
-            showErrorModal = true;
-        }
-        finally
-        {
-            isLoading = false;
-            loadingMessage = "";
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private void CloseImportResultsModal()
-    {
-        showImportResultsModal = false;
-        lastImportResult = null;
-        StateHasChanged();
-    }
-
-    private async Task CommitSelectedImportedInvoices()
-    {
-        try
-        {
-            loadingMessage = "Committing imported invoices...";
-            isLoading = true;
-            await InvokeAsync(StateHasChanged);
-            await Task.Yield();
-
-            if (lastImportResult == null || lastImportResult.PreparedInvoices.Count == 0)
-            {
-                errorMessage = "No prepared invoices to commit.";
-                showErrorModal = true;
-                return;
-            }
-
-            var toCommit = lastImportResult.PreparedInvoices
-                .Where(p => p.Selected && (p.Issues == null || p.Issues.Count == 0))
-                .ToList();
-            if (toCommit.Count == 0)
-            {
-                errorMessage = "No valid invoices selected for commit.";
-                showErrorModal = true;
-                return;
-            }
-
-            var commitResult = await importSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, userContext.UserId ?? 0);
-
-            // merge commit errors and saved flags back into lastImportResult
-            foreach (var prepared in toCommit)
-            {
-                var existing = lastImportResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
-                if (existing != null)
-                {
-                    existing.IsSaved = prepared.IsSaved;
-                    existing.SaveErrorMessage = prepared.SaveErrorMessage;
-                    existing.Selected = !existing.IsSaved; // unselect saved
-                }
-            }
-
-            // surface commit issues
-            if (commitResult.HasIssues)
-            {
-                foreach (var issue in commitResult.Issues)
-                {
-                    lastImportResult.Issues.Add(issue);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Failed to commit imported invoices: {ex.Message}";
-            showErrorModal = true;
-        }
-        finally
-        {
-            isLoading = false;
-            loadingMessage = "";
-            showImportResultsModal = true;
-
-            await InvokeAsync(StateHasChanged);
-        }
-    }
 
     async Task CloseAddItemsModal()
     {
@@ -964,18 +832,48 @@ public partial class SalesInvoice
         await PersistDraftAsync();
     }
 
+    private bool isDownloadingTemplate = false;
     private async Task DownloadTemplate()
     {
         try
         {
-            loadingMessage = "Generating template...";
-            isLoading = true;
-
+            isDownloadingTemplate = true;
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
-            var templateData = await mapItemService.GetTemplateDataAsync(invoice.SubdistributorId, null);
-            await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
+            var customerRows = customers
+                .Where(c => !string.IsNullOrWhiteSpace(c.CustomerCode) && c.SubDistributorId == invoice.SubdistributorId)
+                .Select(c => (Code: c.CustomerCode!, Name: c.CustomerName ?? string.Empty))
+                .GroupBy(c => c.Code, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(c => c.Code)
+                .ToList();
+
+            var skuRows = subdItems
+                .Where(i => !string.IsNullOrWhiteSpace(i.SubdItemCode) && i.SubDistributorId == invoice.SubdistributorId)
+                .Select(i => (Code: i.SubdItemCode!, Name: i.ItemName ?? string.Empty))  // adjust ItemName property if named differently
+                .GroupBy(i => i.Code, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(i => i.Code)
+                .ToList();
+
+            var uoms = availableUoms
+                .Select(u => u.UomName ?? string.Empty)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToList();
+
+            // Price keyed by SkuCode + UOM — needs the item code, not just SubdItemId, so join against subdItems.
+            var priceRows = availableUoms
+                .Join(subdItems,
+                    uom => uom.SubdItemId,
+                    item => item.SubdItemId,
+                    (uom, item) => (SkuCode: item.SubdItemCode ?? string.Empty, Uom: uom.UomName, Price: uom.Price))
+                .Where(p => !string.IsNullOrWhiteSpace(p.SkuCode) && !string.IsNullOrWhiteSpace(p.Uom))
+                .ToList();
+
+            await downloadTemplateService.GenerateAndDownloadExcelAsync(customerRows, skuRows, uoms, priceRows);
 
             downloadSuccessMessage = "Template downloaded successfully.";
             showDownloadSuccess = true;
@@ -992,9 +890,7 @@ public partial class SalesInvoice
         }
         finally
         {
-            isLoading = false;
-            loadingMessage = "";
-
+            isDownloadingTemplate = false;
             await InvokeAsync(StateHasChanged);
         }
     }

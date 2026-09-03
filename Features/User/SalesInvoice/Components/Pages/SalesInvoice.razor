@@ -4,7 +4,6 @@
 
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @using STTproject.Features.User.SalesInvoice.Components.Sections
 @using STTproject.Services
@@ -21,6 +20,15 @@
 @implements IAsyncDisposable
 
 @rendermode InteractiveServer
+
+<LoadingOverlay Show="isDownloadingTemplate"
+                Title="Downloading Excel Template…"
+                Subtitle="Please wait while we prepare the template for download."
+                IconClass="fa-solid fa-upload" />
+
+<LoadingOverlay Show="isLoading" Title="Loading Data…" Subtitle="Please wait while we load all the data."
+                IconClass="fa-solid fa-file-invoice" />
+
 <div class="sales-invoice-header">
     <div class="sales-invoice-title-area">
         <button class="btn-icon-only" @onclick="GoBackToHome" title="Press Esc to go back" aria-label="Go back">
@@ -50,15 +58,9 @@
     </div>
 </div>
 
-@if (isLoading)
-{
-    <div class="loading-overlay">
-        <div class="loading-bar-track">
-            <div class="loading-bar-fill"></div>
-        </div>
-        <p>@loadingMessage</p>
-    </div>
-}
+
+
+
 
 @if (showDownloadSuccess)
 {
