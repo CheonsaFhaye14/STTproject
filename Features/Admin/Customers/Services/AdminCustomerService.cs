@@ -37,7 +37,7 @@ namespace STTproject.Features.Admin.Customers.Services
             {
                 CustomerCode = dto.CustomerCode ?? string.Empty,
                 CustomerName = dto.CustomerName ?? string.Empty,
-                CustomerType = dto.CustomerType ?? string.Empty,
+                CustomerType = dto.CustomerType,
                 SubDistributorId = dto.SubDistributorId,
                 IsActive = dto.IsActive,
                 AddressLine = dto.AddressLine,
@@ -72,7 +72,7 @@ namespace STTproject.Features.Admin.Customers.Services
             if (entity == null) return null;
             entity.CustomerCode = dto.CustomerCode ?? entity.CustomerCode;
             entity.CustomerName = dto.CustomerName ?? entity.CustomerName;
-            entity.CustomerType = dto.CustomerType ?? entity.CustomerType;
+            entity.CustomerType = dto.CustomerType;
             entity.SubDistributorId = dto.SubDistributorId;
             entity.IsActive = dto.IsActive;
             entity.AddressLine = dto.AddressLine;

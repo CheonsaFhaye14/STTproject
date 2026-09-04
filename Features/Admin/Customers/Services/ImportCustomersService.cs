@@ -16,19 +16,20 @@ public sealed class ImportCustomersService
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Customer Code"] = new[] { "CustomerCode", "Customer Code", "code" },
-            ["Customer Name"] = new[] { "CustomerName", "Customer Name", "name" },
-            ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type" },
-            ["Province"] = new[] { "Province" },
-            ["City"] = new[] { "City", "CITY/MUNICIPALITY", "municipality" },
-
+            ["Customer Code"]  = new[] { "CustomerCode", "Customer Code", "code", "SHIPTOCODE", "Ship To Code" },
+            ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name" },
+            ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "SUBD CUSTOMER CODE", "Subd Customer Code" },
+            ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "SUBD STORE NAME", "Subd Store Name" },
+            ["Province"]       = new[] { "Province", "SUBD ADDRESS (PROVINCE)", "Subd Address (Province)" },
+            ["City"]           = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)", "Subd Address (City)" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay" },
-            ["Zip Code"] = new[] { "ZipCode", "Zip Code", "zip" },
+            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)" },
+            ["Zip Code"]     = new[] { "ZipCode", "Zip Code", "zip" },
+            ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type" }, 
         };
 
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
@@ -125,7 +126,9 @@ public sealed class ImportCustomersService
                 RowNumber = rowNumber,
                 CustomerCode = Get("CustomerCode") ?? string.Empty,
                 CustomerName = Get("CustomerName") ?? string.Empty,
-                CustomerType = Get("CustomerType") ?? string.Empty,
+                SubdCustCode = Get("SubdCustCode") ?? string.Empty,
+                SubdCustName = Get("SubdCustName") ?? string.Empty,
+                CustomerType = Get("CustomerType"),
                 AddressLine = Get("AddressLine"),
                 Province = Get("Province"),
                 City = Get("City"),
@@ -146,10 +149,12 @@ public sealed class ImportCustomersService
                 continue;
             }
 
-            var entity = new Customer 
+            var entity = new Customer
             {
                 CustomerCode = rowResult.CustomerCode,
                 CustomerName = rowResult.CustomerName,
+                SubdCustCode = rowResult.SubdCustCode,        // NEW
+                SubdCustName = rowResult.SubdCustName,        // NEW
                 CustomerType = rowResult.CustomerType,
                 SubDistributorId = subdistributorId,
                 IsActive = true,
@@ -189,9 +194,9 @@ public sealed class ImportCustomersService
                     rowResult.ZipCode = match.ZipCode;
                 }
             }
-
-            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !seenInFile.Add(rowResult.CustomerCode))
-                rowResult.Issues.Add($"Customer Code '{rowResult.CustomerCode}' is duplicated within the uploaded file.");
+            var dupKey = $"{rowResult.CustomerCode}|{rowResult.CustomerName}|{rowResult.SubdCustCode}|{rowResult.SubdCustName}";
+            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !seenInFile.Add(dupKey))
+                rowResult.Issues.Add($"Row is an exact duplicate of another row in this file: Customer Code '{rowResult.CustomerCode}', Subd Customer Code '{rowResult.SubdCustCode}', Subd Store Name '{rowResult.SubdCustName}' all match another row.");
                 
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
@@ -204,6 +209,30 @@ public sealed class ImportCustomersService
                 group.Issues.Add(new CustomerImportIssue(rowNumber, rowResult.CustomerCode, issue));
 
             result.PreparedGroups.Add(group);
+        }
+
+        foreach (var custGroup in result.Rows.GroupBy(r => new
+         {
+             Code = (r.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
+             Name = (r.CustomerName ?? string.Empty).Trim().ToUpperInvariant()
+         }))
+        {
+            var groupRows = custGroup.OrderBy(r => r.RowNumber).ToList();
+            var group = new PreparedCustomerGroup(groupRows)
+            {
+                Selected = groupRows.All(r => r.IsSuccess)
+            };
+
+            foreach (var r in groupRows)
+                foreach (var issue in r.Issues)
+                    group.Issues.Add(new CustomerImportIssue(r.RowNumber, r.CustomerCode, issue));
+
+            result.PreparedGroups.Add(group);
+        }
+
+        if (result.Rows.Count == 0 && !result.HasIssues)
+        {
+            result.AddError(0, string.Empty, "No customer rows were found in the file.");
         }
 
         if (result.Rows.Count == 0 && !result.HasIssues)
@@ -311,6 +340,8 @@ public sealed class ImportCustomersService
                 {
                     CustomerCode = row.CustomerCode,
                     CustomerName = row.CustomerName,
+                    SubdCustCode = row.SubdCustCode,
+                    SubdCustName = row.SubdCustName,
                     CustomerType = row.CustomerType,
                     SubDistributorId = subdistributorId,
                     IsActive = true,
@@ -341,7 +372,8 @@ public sealed class ImportCustomersService
 
         var headers = result.OriginalHeaders.Count > 0
             ? result.OriginalHeaders
-            : new List<string> { "Customer Code", "Customer Name", "Customer Type","Province", "City",  "Address Line", "Zip Code" };
+            : new List<string> { "SUBD CUSTOMER CODE", "SUBD STORE NAME", "SUBD ADDRESS (STREET/BRGY)",
+                                "SUBD ADDRESS (CITY)", "SUBD ADDRESS (PROVINCE)", "SHIPTOCODE", "SHIPTONAME" };
 
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
@@ -379,9 +411,9 @@ public sealed class ImportCustomersService
 
     private static readonly string[] TemplateHeaders =
     {
-        "Customer Code", "Customer Name", "Customer Type", "Province", "City", "Address Line", "Zip Code"
+        "SUBD CUSTOMER CODE", "SUBD STORE NAME", "SUBD ADDRESS (STREET/BRGY)",
+        "SUBD ADDRESS (CITY)", "SUBD ADDRESS (PROVINCE)", "SHIPTOCODE", "SHIPTONAME"
     };
-
     public async Task<byte[]> GenerateTemplateExcelAsync()
     {
         using var workbook = new XLWorkbook();
@@ -393,18 +425,18 @@ public sealed class ImportCustomersService
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FB");
 
-        // One example row so the expected format/values are obvious — not real data.
-        sheet.Cell(2, 1).Value = "CUST-0001";
-        sheet.Cell(2, 2).Value = "Juan Dela Cruz";
-        sheet.Cell(2, 3).Value = "Retail";
-        sheet.Cell(2, 4).Value = "Metro Manila";
-        sheet.Cell(2, 5).Value = "Quezon City";
-        sheet.Cell(2, 6).Value = "123 Sample St.";
-        sheet.Cell(2, 7).Value = "1100";
+        // A=SubdCustCode B=SubdCustName C=Address D=City E=Province F=ShipToCode G=ShipToName
+        sheet.Cell(2, 1).Value = "SUBD-0001";
+        sheet.Cell(2, 2).Value = "Green Breeze - Montalban Rizal";
+        sheet.Cell(2, 3).Value = "Brgy San Isidro";
+        sheet.Cell(2, 4).Value = "Montalban (Rodriguez)";
+        sheet.Cell(2, 5).Value = "Rizal";
+        sheet.Cell(2, 6).Value = "CUST-0001";
+        sheet.Cell(2, 7).Value = "Juan Dela Cruz";
         sheet.Row(2).Style.Font.Italic = true;
         sheet.Row(2).Style.Font.FontColor = XLColor.FromHtml("#A09ABF");
 
-        const int lastDataRow = 500; // room for typed/pasted rows
+        const int lastDataRow = 500;
 
         var provinces = (await _geoDataService.GetAllProvincesAsync())
             .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -418,23 +450,21 @@ public sealed class ImportCustomersService
             var geoSheet = workbook.Worksheets.Add("GeoData");
             geoSheet.Visibility = XLWorksheetVisibility.Hidden;
 
-            // Column A: full province list — feeds the Province dropdown.
             for (int i = 0; i < provinces.Count; i++)
-            {
                 geoSheet.Cell(i + 1, 1).Value = provinces[i];
-            }
+
             var provinceRange = geoSheet.Range(1, 1, provinces.Count, 1);
             workbook.NamedRanges.Add("ProvinceList", provinceRange);
 
-            var provinceValidation = sheet.Range($"D2:D{lastDataRow}").CreateDataValidation();
+            // Province is column E
+            var provinceValidation = sheet.Range($"E2:E{lastDataRow}").CreateDataValidation();
             provinceValidation.List(provinceRange);
             provinceValidation.IgnoreBlanks = true;
             provinceValidation.ShowInputMessage = true;
             provinceValidation.InputTitle = "Province";
-            provinceValidation.InputMessage = "Select a province — pick this before City.";
-            provinceValidation.ShowErrorMessage = false; // allow custom entries not in the reference list
+            provinceValidation.InputMessage = "Select a province.";
+            provinceValidation.ShowErrorMessage = false;
 
-            // One named range of cities per province, so the City dropdown can filter via INDIRECT.
             int col = 2;
             foreach (var province in provinces)
             {
@@ -445,29 +475,24 @@ public sealed class ImportCustomersService
                     .OrderBy(c => c)
                     .ToList();
 
-                if (cities.Count == 0)
-                {
-                    continue;
-                }
+                if (cities.Count == 0) continue;
 
                 for (int i = 0; i < cities.Count; i++)
-                {
                     geoSheet.Cell(i + 1, col).Value = cities[i];
-                }
 
                 var cityRange = geoSheet.Range(1, col, cities.Count, col);
                 workbook.NamedRanges.Add(BuildProvinceDefinedName(province), cityRange);
                 col++;
             }
 
-            // City (col E) looks up the named range matching whatever Province (col D) says.
-            var cityValidation = sheet.Range($"E2:E{lastDataRow}").CreateDataValidation();
-            cityValidation.List("INDIRECT(\"Prov_\"&SUBSTITUTE(SUBSTITUTE(D2,\" \",\"_\"),\"-\",\"_\"))");
+            // City is column D, referencing Province (E) on the same row
+            var cityValidation = sheet.Range($"D2:D{lastDataRow}").CreateDataValidation();
+            cityValidation.List("INDIRECT(\"Prov_\"&SUBSTITUTE(SUBSTITUTE(E2,\" \",\"_\"),\"-\",\"_\"))");
             cityValidation.IgnoreBlanks = true;
             cityValidation.ShowInputMessage = true;
             cityValidation.InputTitle = "City / Municipality";
-            cityValidation.InputMessage = "Select Province first (column D) — this list filters to match it.";
-            cityValidation.ShowErrorMessage = false; // allow custom entries not in the reference list
+            cityValidation.InputMessage = "Select Province (column E) first — this list filters to match it.";
+            cityValidation.ShowErrorMessage = false;
         }
 
         sheet.Columns().AdjustToContents();
@@ -476,7 +501,7 @@ public sealed class ImportCustomersService
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
-
+    
     private static string BuildProvinceDefinedName(string province)
     {
         var sanitized = Regex.Replace(province, @"[^A-Za-z0-9]+", "_").Trim('_');

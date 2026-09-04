@@ -10,7 +10,6 @@ public static class CustomerValidations
         public static readonly CustomerField subdistributor = new(nameof(subdistributor), "Subdistributor", true, "Subdistributor is required.");
         public static readonly CustomerField customercode = new(nameof(customercode), "Customer Code", true, "Customer code is required.");
         public static readonly CustomerField customername = new(nameof(customername), "Customer Name", true, "Customer name is required.");
-        public static readonly CustomerField customertype = new(nameof(customertype), "Customer Type", true, "Customer type is required.");
     }
 
     public static string Label(CustomerField field)
@@ -38,10 +37,6 @@ public static class CustomerValidations
             errors[AddCustomer.customername.Key] = AddCustomer.customername.ErrorMessage;
         }
 
-        if (string.IsNullOrWhiteSpace(customer.CustomerType))
-        {
-            errors[AddCustomer.customertype.Key] = AddCustomer.customertype.ErrorMessage;
-        }
         if (!string.IsNullOrWhiteSpace(customer.CustomerCode) && !string.IsNullOrWhiteSpace(customer.SubDistributorId.ToString()))
         {
             if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeId))

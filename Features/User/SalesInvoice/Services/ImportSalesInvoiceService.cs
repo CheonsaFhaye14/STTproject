@@ -255,7 +255,7 @@ public sealed class ImportSalesInvoiceService
 					CustomerId = customer.CustomerId,
 					CustomerCode = customer.CustomerCode,
 					CustomerName = customer.CustomerName,
-					CustomerType = customer.CustomerType,
+					CustomerType = customer.CustomerType ?? string.Empty,
 					SubdistributorId = subDistributorId,
 					SalesManName = firstRow.SalesManName,
 					CustomerAddress = string.Join(", ", new[]
@@ -306,10 +306,8 @@ public sealed class ImportSalesInvoiceService
 
 					if (row.Quantity <= 0)
 					{
-						if (row.Quantity == 0)
-						{
 							continue;
-						}
+						
 					}
 
 					var unitPrice = await GetUnitPriceAsync(uom.ItemsUomId, firstRow.InvoiceDate);

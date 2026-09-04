@@ -33,6 +33,7 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
+
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -40,7 +41,6 @@ public partial class SttprojectContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-
         modelBuilder.Entity<CompanyItem>(entity =>
         {
             entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E983839E2C7B0");
@@ -92,11 +92,9 @@ public partial class SttprojectContext : DbContext
         {
             entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8F7607638");
 
-            entity.ToTable("Customer", tb => tb.HasTrigger("trg_Customer_CascadeDeactivate"));
+            entity.ToTable("Customer");
 
-            entity.HasIndex(e => new { e.CustomerCode, e.SubDistributorId }, "UQ_Customer_Code").IsUnique();
-
-            entity.HasIndex(e => new { e.CustomerName, e.SubDistributorId }, "UQ_Customer_Name").IsUnique();
+            entity.HasIndex(e => new { e.CustomerCode, e.CustomerName, e.SubDistributorId, e.SubdCustCode, e.SubdCustName }, "UQ_Customer_Code_Name").IsUnique();
 
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.City).HasMaxLength(100);
@@ -114,6 +112,8 @@ public partial class SttprojectContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Province).HasMaxLength(100);
+            entity.Property(e => e.SubdCustCode).HasMaxLength(50);
+            entity.Property(e => e.SubdCustName).HasMaxLength(200);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CustomerCreatedByNavigations)
@@ -312,9 +312,6 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("SubdItem");
 
-            entity.HasIndex(e => new { e.SubDistributorId, e.SubdItemCode }, "UQ_SubdItem_SubdId_Code").IsUnique();
-
-            entity.HasIndex(e => new { e.SubDistributorId, e.CompanyItemId }, "UQ_SubdItem_Subd_CompanyItem").IsUnique();
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -343,7 +340,7 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
         });
-
+         
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4CD89976AC");

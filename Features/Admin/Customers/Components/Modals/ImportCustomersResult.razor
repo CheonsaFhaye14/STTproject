@@ -209,156 +209,206 @@
 
                         @* ── Customer cards ── *@
                         <div class="import-results">
-                            @foreach (var card in filteredCards.Where(c => !c.HasErrors))
-                            {
-                                var row = card.Row;
-                                var isExpanded = row != null && expandedCards.Contains(row.RowNumber);
-                                <div class="icard">
-                                    <div class="ich ich-ok @(isExpanded ? "open" : "")"
-                                         @onclick="() => ToggleExpand(row?.RowNumber ?? 0)">
-                                        <div class="ich-left">
-                                            <div class="iicon iicon-ok">
-                                                <i class="ti ti-user-check" aria-hidden="true"></i>
-                                            </div>
-                                            <div>
-                                                <div class="inv-num inv-ok">@row?.CustomerCode - @row?.CustomerName</div>
-                                                <div class="inv-sub inv-sub-ok">
-                                                    <span>Row @row?.RowNumber</span>
-                                                    @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
-                                                    {
-                                                        <span class="sep">·</span>
-                                                        <span>@ImportResult.SubDistributorName</span>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(row?.CustomerType))
-                                                    {
-                                                        <span class="sep">·</span>
-                                                        <span>@row.CustomerType</span>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(row?.City))
-                                                    {
-                                                        <span class="sep">·</span>
-                                                        <span>@row.City</span>
-                                                    }
-                                                </div>
-                                            </div>
+                        @foreach (var card in filteredCards.Where(c => !c.HasErrors))
+                        {
+                            var groupRows = card.Group.Rows;
+                            var first = groupRows.FirstOrDefault();
+                            var groupKey = GroupKey(card.Group);
+                            var isExpanded = expandedCards.Contains(groupKey);
+
+                            <div class="icard">
+                                <div class="ich ich-ok @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
+                                    <div class="ich-left">
+                                        <div class="iicon iicon-ok">
+                                            <i class="ti ti-user-check" aria-hidden="true"></i>
                                         </div>
-                                        <div class="ich-right">
-                                            @if (card.Group.IsSaved)
-                                            {
-                                                <span class="badge badge-saved">
-                                                    <i class="ti ti-circle-check" aria-hidden="true"></i>
-                                                    Saved
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge badge-ready">
-                                                    <i class="ti ti-check" aria-hidden="true"></i>
-                                                    Ready
-                                                </span>
-                                                <div class="chk" @onclick:stopPropagation="true">
-                                                    <input type="checkbox" checked="@card.Group.Selected"
-                                                           @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)"
-                                                           id="chk-@row?.RowNumber" />
-                                                    <label for="chk-@row?.RowNumber">Select</label>
-                                                </div>
-                                            }
-                                            <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                        <div>
+                                            <div class="inv-num inv-ok">@first?.CustomerCode - @first?.CustomerName</div>
+                                            <div class="inv-sub inv-sub-ok">
+                                                <span>@groupRows.Count subd store(s)</span>
+                                                @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
+                                                {
+                                                    <span class="sep">·</span>
+                                                    <span>@ImportResult.SubDistributorName</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(first?.CustomerType))
+                                                {
+                                                    <span class="sep">·</span>
+                                                    <span>@first.CustomerType</span>
+                                                }
+                                            </div>
                                         </div>
                                     </div>
-
-                                    @if (isExpanded && row != null)
-                                    {
-                                        <div class="icb">
-                                            <div class="cust-meta">
-                                                <div>
-                                                    <span class="cust-meta-label">Subdistributor</span>
-                                                    <strong>@(ImportResult?.SubDistributorName ?? "—")</strong>
-                                                </div>
-                                                <div>
-                                                    <span class="cust-meta-label">Type</span>
-                                                    <strong>@row.CustomerType</strong>
-                                                </div>
-                                                <div>
-                                                    <span class="cust-meta-label">Province</span>
-                                                    <strong>@row.Province</strong>
-                                                </div>
-                                                <div>
-                                                    <span class="cust-meta-label">City / Municipality</span>
-                                                    <strong>@row.City</strong>
-                                                </div>
-                                                <div>
-                                                    <span class="cust-meta-label">Zip Code</span>
-                                                    <strong>@(row.ZipCode?.ToString() ?? "—")</strong>
-                                                </div>
-                                                <div style="grid-column: 1 / -1;">
-                                                    <span class="cust-meta-label">Address Line</span>
-                                                    <strong>@(row.AddressLine ?? "—")</strong>
-                                                </div>
+                                    <div class="ich-right">
+                                        @if (card.Group.IsSaved)
+                                        {
+                                            <span class="badge badge-saved">
+                                                <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                Saved
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-ready">
+                                                <i class="ti ti-check" aria-hidden="true"></i>
+                                                Ready
+                                            </span>
+                                            <div class="chk" @onclick:stopPropagation="true">
+                                                <input type="checkbox" checked="@card.Group.Selected"
+                                                    @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)"
+                                                    id="chk-@groupKey" />
+                                                <label for="chk-@groupKey">Select</label>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                        <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                    </div>
                                 </div>
-                            }
 
-                            @foreach (var card in filteredCards.Where(c => c.HasErrors))
-                            {
-                                var row = card.Row;
-                                IEnumerable<CustomerImportIssue> visibleIssues = card.Group.Issues;
-                                if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                                @if (isExpanded)
                                 {
-                                    visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
-                                }
-                                var grouped = visibleIssues
-                                    .GroupBy(i => i.Message?.Trim())
-                                    .Select(g => g.Key)
-                                    .Where(m => !string.IsNullOrWhiteSpace(m))
-                                    .ToList();
-
-                                <div class="icard">
-                                    <div class="ich ich-er">
-                                        <div class="ich-left">
-                                            <div class="iicon iicon-er">
-                                                <i class="ti ti-user-exclamation" aria-hidden="true"></i>
+                                    <div class="icb">
+                                        <div class="cust-meta">
+                                            <div>
+                                                <span class="cust-meta-label">Subdistributor</span>
+                                                <strong>@(ImportResult?.SubDistributorName ?? "—")</strong>
                                             </div>
                                             <div>
-                                                <div class="inv-num inv-er">
-                                                    @(string.IsNullOrWhiteSpace(row?.CustomerCode) ? "[Blank customer code]" : $"{row.CustomerCode} - {row.CustomerName}")
-                                                </div>
-                                                <div class="inv-sub inv-sub-er">
-                                                    <span>Row @row?.RowNumber</span>
-                                                    @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
-                                                    {
-                                                        <span class="sep">·</span>
-                                                        <span>@ImportResult.SubDistributorName</span>
-                                                    }
-                                                </div>
+                                                <span class="cust-meta-label">Type</span>
+                                                <strong>@(first?.CustomerType ?? "—")</strong>
+                                            </div>
+                                            <div>
+                                                <span class="cust-meta-label">Province</span>
+                                                <strong>@(first?.Province ?? "—")</strong>
+                                            </div>
+                                            <div>
+                                                <span class="cust-meta-label">City / Municipality</span>
+                                                <strong>@(first?.City ?? "—")</strong>
+                                            </div>
+                                            <div>
+                                                <span class="cust-meta-label">Zip Code</span>
+                                                <strong>@(first?.ZipCode?.ToString() ?? "—")</strong>
+                                            </div>
+                                            <div style="grid-column: 1 / -1;">
+                                                <span class="cust-meta-label">Address Line</span>
+                                                <strong>@(first?.AddressLine ?? "—")</strong>
                                             </div>
                                         </div>
-                                        <span class="badge badge-err">
-                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                            @GetErrorBadgeText(card)
-                                        </span>
-                                    </div>
 
-                                    @if (grouped.Any())
-                                    {
-                                        <div class="icb-err-rows">
-                                            @foreach (var msg in grouped)
+                                        <div class="itbl-wrap">
+                                            <table class="itbl">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Row</th>
+                                                        <th>Subd Customer Code</th>
+                                                        <th>Subd Store Name</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var r in groupRows.OrderBy(r => r.RowNumber))
+                                                    {
+                                                        <tr>
+                                                            <td class="mono">@r.RowNumber</td>
+                                                            <td>@(string.IsNullOrWhiteSpace(r.SubdCustCode) ? "—" : r.SubdCustCode)</td>
+                                                            <td>@(string.IsNullOrWhiteSpace(r.SubdCustName) ? "—" : r.SubdCustName)</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }        
+                        @foreach (var card in filteredCards.Where(c => c.HasErrors))
+                        {
+                            var groupRows = card.Group.Rows;
+                            var first = groupRows.FirstOrDefault();
+                            var groupKey = GroupKey(card.Group);
+
+                            IEnumerable<CustomerImportIssue> visibleIssues = card.Group.Issues;
+                            if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                            {
+                                visibleIssues = visibleIssues.Where(i => NormalizeMessageType(i.Message) == selectedErrorFilter);
+                            }
+                            var grouped = visibleIssues
+                                .GroupBy(i => i.Message?.Trim())
+                                .Select(g => new { Message = g.Key, RowNumbers = g.Select(x => x.RowNumber).Where(r => r > 0).Distinct().OrderBy(r => r).ToList() })
+                                .Where(m => !string.IsNullOrWhiteSpace(m.Message))
+                                .ToList();
+
+                            <div class="icard">
+                                <div class="ich ich-er">
+                                    <div class="ich-left">
+                                        <div class="iicon iicon-er">
+                                            <i class="ti ti-user-exclamation" aria-hidden="true"></i>
+                                        </div>
+                                        <div>
+                                            <div class="inv-num inv-er">
+                                                @(string.IsNullOrWhiteSpace(first?.CustomerCode) ? "[Blank customer code]" : $"{first.CustomerCode} - {first.CustomerName}")
+                                            </div>
+                                            <div class="inv-sub inv-sub-er">
+                                                <span>@groupRows.Count row(s)</span>
+                                                @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
+                                                {
+                                                    <span class="sep">·</span>
+                                                    <span>@ImportResult.SubDistributorName</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span class="badge badge-err">
+                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                        @GetErrorBadgeText(card)
+                                    </span>
+                                </div>
+
+                                <div class="itbl-wrap">
+                                    <table class="itbl">
+                                        <thead>
+                                            <tr>
+                                                <th>Row</th>
+                                                <th>Subd Customer Code</th>
+                                                <th>Subd Store Name</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in groupRows.OrderBy(r => r.RowNumber))
                                             {
-                                                <div class="err-msg-card">
-                                                    <div class="err-msg-hdr">
-                                                        <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
-                                                        <div>
-                                                            <div class="err-msg-text">@msg</div>
-                                                        </div>
+                                                <tr>
+                                                    <td class="mono">@r.RowNumber</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(r.SubdCustCode) ? "—" : r.SubdCustCode)</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(r.SubdCustName) ? "—" : r.SubdCustName)</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                @if (grouped.Any())
+                                {
+                                    <div class="icb-err-rows">
+                                        @foreach (var issueGroup in grouped)
+                                        {
+                                            <div class="err-msg-card">
+                                                <div class="err-msg-hdr">
+                                                    <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                    <div>
+                                                        <div class="err-msg-text">@issueGroup.Message</div>
+                                                        @if (issueGroup.RowNumbers.Any())
+                                                        {
+                                                            <div class="err-rows-pill">
+                                                                <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                Row: @string.Join(" & ", issueGroup.RowNumbers)
+                                                            </div>
+                                                        }
                                                     </div>
                                                 </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                         </div>
                     }
                 }
@@ -398,7 +448,7 @@
     private bool wasShown;
     private GroupFilter groupFilter = GroupFilter.All;
     private string? selectedErrorFilter;
-    private HashSet<int> expandedCards = new();
+    private HashSet<string> expandedCards = new(StringComparer.OrdinalIgnoreCase);   // was HashSet<int>
 
     private enum GroupFilter { All, SuccessOnly, ErrorOnly }
 
@@ -412,7 +462,12 @@
         if (Show && !wasShown) { groupFilter = GroupFilter.SuccessOnly; wasShown = true; hasCommitted = false; }
         else if (!Show) { wasShown = false; }
     }
-    private static string GroupKey(PreparedCustomerGroup g) => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
+    private static string GroupKey(PreparedCustomerGroup g)
+    {
+        var first = g.Rows.FirstOrDefault();
+        if (first == null) return string.Empty;
+        return $"{(first.CustomerCode ?? string.Empty).Trim().ToUpperInvariant()}|{(first.CustomerName ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
 
     private List<GroupCardViewModel> GetGroupCards()
     {
@@ -447,12 +502,11 @@
         selectedErrorFilter = null;
     }
 
-    private void ToggleExpand(int rowNumber)
+    private void ToggleExpand(string key)
     {
-        if (!expandedCards.Remove(rowNumber))
-            expandedCards.Add(rowNumber);
+        if (!expandedCards.Remove(key))
+            expandedCards.Add(key);
     }
-
     private void ToggleGroupSelection(PreparedCustomerGroup group, object? checkedValue)
     {
         if (checkedValue is not bool isChecked) return;
@@ -507,7 +561,6 @@
         if (msg.Contains("already exist")) return "Customer Code Already Exists";
         if (msg.Contains("code") && msg.Contains("required")) return "Customer Code Required";
         if (msg.Contains("name") && msg.Contains("required")) return "Customer Name Required";
-        if (msg.Contains("type") && msg.Contains("required")) return "Customer Type Required";
         if (msg.Contains("subdistributor")) return "Subdistributor Error";
         if (msg.Contains("save failed")) return "Save Failed";
 

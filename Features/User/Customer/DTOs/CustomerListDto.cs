@@ -15,7 +15,7 @@ public class CustomerInfoDto
     public int CustomerId { get; set; }
     public string CustomerCode { get; set; } = null!;
     public string CustomerName { get; set; } = null!;
-    public string CustomerType { get; set; } = null!;
+    public string? CustomerType { get; set; } = null!;
     public bool IsActive { get; set; }
     // Address fields moved to the customer DTO (sourced from Customer table)
     public string? AddressLine { get; set; }

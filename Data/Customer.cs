@@ -11,7 +11,11 @@ public partial class Customer
 
     public string CustomerName { get; set; } = null!;
 
-    public string CustomerType { get; set; } = null!;
+    public string? SubdCustCode { get; set; }
+
+    public string? SubdCustName { get; set; }
+
+    public string? CustomerType { get; set; } = null!;
 
     public int SubDistributorId { get; set; }
 

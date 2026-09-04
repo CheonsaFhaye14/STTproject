@@ -53,15 +53,10 @@
                             <AutoComplete
                                 Label="Customer Type"
                                 Placeholder="Search or select customer type..."
-                                Required="true"
                                 Items="ExistingCustomerTypes"
                                 Disabled=@isViewMode 
                                 SelectedValue="@CustomerType" 
                                 SelectedValueChanged="OnCustomerTypeSelected"/>
-                            @if (ShowValidationErrors &&!string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customertype.Key)))
-                            {
-                                    <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customertype.Key)</span>
-                            }
                         </div>
 
                             <div class="form-group">
@@ -254,7 +249,7 @@
             SubDistributorId = SubDistributorId,
             CustomerCode = CustomerCode ?? string.Empty,
             CustomerName = CustomerName ?? string.Empty,
-            CustomerType = CustomerType ?? string.Empty,
+            CustomerType = CustomerType,
         };
 
 Errors = await CustomerValidations.ValidateAddCustomerAsync(

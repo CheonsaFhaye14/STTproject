@@ -6,6 +6,8 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int CustomerId { get; set; }
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -18,6 +20,8 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int CustomerId { get; set; }
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -35,6 +39,8 @@ namespace STTproject.Features.Admin.Customers.DTOs
     {
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -124,7 +130,9 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int RowNumber { get; set; }
         public string CustomerCode { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
-        public string CustomerType { get; set; } = string.Empty;
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
+        public string? CustomerType { get; set; } = string.Empty;
         public string? AddressLine { get; set; }
         public string? City { get; set; }
         public string? Province { get; set; }
