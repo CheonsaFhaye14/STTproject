@@ -1,7 +1,30 @@
-/* ── Overlay ── */
-::deep .modal.show {
-    background-color: rgba(0, 0, 0, 0.5) !important;
-   
+/* ── Overlay + modal box ──
+   ID selector instead of Bootstrap's .modal/.modal-dialog/.modal-content
+   classes — same fix applied to ImportMapItemResults/ImportCompanyItemsResult.
+   The old .modal.show rule here also had no backdrop-filter at all. */
+#import-customers-overlay.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 15, 17, 0.6);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#import-customers-overlay .modal-box {
+    width: 960px;
+    max-width: 100%;
+    max-height: 85vh;
+    background: #FFFFFF;
+    border-radius: 14px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* ── Modal header ── */
@@ -10,8 +33,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.4rem;
-    background: linear-gradient(135deg, #ede9fb 0%, #f3f0fd 100%);
-    border-bottom: 0.5px solid #e3dff5;
+    background: linear-gradient(135deg, #1B1B1F 0%, #2A2A2E 100%);
+    border-bottom: 1px solid #C9A227;
+    flex-shrink: 0;
 }
 
 ::deep .mh-left {
@@ -24,41 +48,42 @@
     width: 36px;
     height: 36px;
     border-radius: 12px;
-    background: #d4c9f7;
+    background: #C9A227;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #5c3fa8;
+    color: #1B1B1F;
     font-size: 17px;
 }
 
 ::deep .mh-title {
     font-size: 14px;
-    font-weight: 500;
-    color: #3a2870;
+    font-weight: 600;
+    color: #FFFFFF;
 }
 
 ::deep .mh-sub {
     font-size: 11px;
-    color: #8b7ec8;
+    color: #B8B3A6;
     margin-top: 2px;
 }
 
 ::deep .mh-close {
-    background: #fff;
-    border: 0.5px solid #e3dff5;
-    color: #8b7ec8;
+    background: rgba(255, 255, 255, 0.06);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    color: #C7C2B6;
     font-size: 15px;
     cursor: pointer;
     padding: 6px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    transition: color 0.15s;
+    transition: color 0.15s, background 0.15s;
 }
 
     ::deep .mh-close:hover {
-        color: #3a2870;
+        color: #C9A227;
+        background: rgba(255, 255, 255, 0.12);
     }
 
 /* ── Modal body ── */
@@ -67,9 +92,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    max-height: 65vh;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
-    background: #faf9fe;
+    background: #FAFAF8;
 }
 
 /* ── Stat bar ── */
@@ -83,20 +109,20 @@
     background: #fff;
     border-radius: 12px;
     padding: 0.75rem 0.9rem;
-    border: 0.5px solid #ede9fb;
+    border: 0.5px solid #EBE7DC;
 }
 
 ::deep .sc-label {
     font-size: 11px;
-    color: #a09abf;
+    color: #9C968A;
     margin-bottom: 3px;
     font-weight: 500;
 }
 
 ::deep .sc-val {
     font-size: 22px;
-    font-weight: 500;
-    color: #2c235a;
+    font-weight: 600;
+    color: #1B1B1F;
 }
 
     ::deep .sc-val.sc-ok {
@@ -116,7 +142,7 @@
     background: #E1F5EE;
     border: 0.5px solid #5DCAA5;
     border-left: 3px solid #1D9E75;
-    border-radius: 0;
+    border-radius: 10px;
 }
 
 ::deep .success-banner-icon {
@@ -134,7 +160,7 @@
 
 ::deep .success-banner-title {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: #085041;
 }
 
@@ -153,7 +179,7 @@
     background: #FCEBEB;
     border: 0.5px solid #E24B4A;
     border-left: 3px solid #A32D2D;
-    border-radius: 0;
+    border-radius: 10px;
 }
 
 ::deep .global-alert-icon {
@@ -165,7 +191,7 @@
 
 ::deep .global-alert-title {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: #A32D2D;
     margin-bottom: 5px;
 }
@@ -191,8 +217,8 @@
 ::deep .tabs {
     display: flex;
     gap: 3px;
-    background: #f0edf9;
-    border: 0.5px solid #e3dff5;
+    background: #F2EFE6;
+    border: 0.5px solid #EBE7DC;
     border-radius: 30px;
     padding: 3px;
 }
@@ -202,11 +228,11 @@
     padding: 6px 0;
     border-radius: 24px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     border: none;
     background: none;
-    color: #8b7ec8;
+    color: #8E897C;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -216,8 +242,9 @@
 
     ::deep .tab.act-all {
         background: #fff;
-        color: #3a2870;
-        border: 0.5px solid #e3dff5;
+        color: #1B1B1F;
+        border: 0.5px solid #E1D9BC;
+        box-shadow: 0 1px 3px rgba(27, 27, 31, 0.06);
     }
 
     ::deep .tab.act-ok {
@@ -254,7 +281,7 @@
     align-items: center;
     gap: 8px;
     background: #fff;
-    border: 0.5px solid #e3dff5;
+    border: 0.5px solid #EBE7DC;
     border-radius: 10px;
     padding: 6px 10px;
 }
@@ -264,17 +291,17 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     color: #791F1F;
     white-space: nowrap;
 }
 
 ::deep .err-filter-bar select {
     font-size: 12px;
-    border: 0.5px solid #e3dff5;
+    border: 0.5px solid #EBE7DC;
     border-radius: 6px;
-    background: #faf9fe;
-    color: #2c235a;
+    background: #FAFAF8;
+    color: #1B1B1F;
     padding: 3px 6px;
     flex: 1;
 }
@@ -283,7 +310,7 @@
     background: none;
     border: none;
     font-size: 11px;
-    color: #a09abf;
+    color: #9C968A;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -302,18 +329,18 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: #9890b8;
+    color: #948F82;
 }
 
     ::deep .sel-all-bar input[type="checkbox"] {
-        accent-color: #7c5fc8;
+        accent-color: #C9A227;
         width: 13px;
         height: 13px;
     }
 
 /* ── Invoice card ── */
 ::deep .import-results .icard {
-    border: 0.5px solid #ede9fb;
+    border: 0.5px solid #EBE7DC;
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 0.5rem;
@@ -378,7 +405,7 @@
 
 ::deep .inv-num {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
 }
 
     ::deep .inv-num.inv-ok {
@@ -414,7 +441,7 @@
 /* ── Chevron ── */
 ::deep .chev {
     font-size: 13px;
-    color: #a09abf;
+    color: #9C968A;
     transition: transform 0.2s;
     flex-shrink: 0;
 }
@@ -429,7 +456,7 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     padding: 3px 9px;
     border-radius: 20px;
 }
@@ -440,8 +467,8 @@
 }
 
 ::deep .badge-ready {
-    background: #eae5f9;
-    color: #4a3590;
+    background: #F5EECB;
+    color: #6B5410;
 }
 
 ::deep .badge-err {
@@ -455,11 +482,11 @@
     align-items: center;
     gap: 5px;
     font-size: 12px;
-    color: #8b7ec8;
+    color: #8E897C;
 }
 
     ::deep .chk input[type="checkbox"] {
-        accent-color: #7c5fc8;
+        accent-color: #C9A227;
         width: 13px;
         height: 13px;
     }
@@ -468,7 +495,7 @@
 ::deep .icb {
     padding: 0.85rem 1rem;
     background: #fff;
-    border-top: 0.5px solid #ede9fb;
+    border-top: 0.5px solid #EBE7DC;
 }
 
 /* ── Customer meta grid ── */
@@ -477,19 +504,19 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px 1.5rem;
     font-size: 12px;
-    color: #9890b8;
+    color: #948F82;
     margin-bottom: 0.75rem;
 }
 
 ::deep .cust-meta-label {
     font-size: 11px;
-    color: #a09abf;
+    color: #9C968A;
     display: block;
 }
 
 ::deep .cust-meta strong {
-    color: #2c235a;
-    font-weight: 500;
+    color: #1B1B1F;
+    font-weight: 600;
     display: block;
     margin-top: 1px;
 }
@@ -508,18 +535,18 @@
 
     ::deep .itbl th {
         font-size: 11px;
-        font-weight: 500;
-        color: #a09abf;
+        font-weight: 600;
+        color: #9C968A;
         padding: 5px 7px;
-        border-bottom: 0.5px solid #ede9fb;
-        background: #f7f4fd;
+        border-bottom: 0.5px solid #EBE7DC;
+        background: #F7F5EF;
         text-align: left;
     }
 
     ::deep .itbl td {
         padding: 6px 7px;
-        border-bottom: 0.5px solid #f0edf9;
-        color: #2c235a;
+        border-bottom: 0.5px solid #F1EEE4;
+        color: #1B1B1F;
     }
 
     ::deep .itbl tr:last-child td {
@@ -567,7 +594,7 @@
 
 ::deep .err-msg-text {
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     color: #633806;
     line-height: 1.5;
 }
@@ -590,14 +617,14 @@
 /* ── Misc ── */
 ::deep .row-tag {
     font-size: 10px;
-    font-weight: 500;
+    font-weight: 600;
     color: #791F1F;
     font-family: monospace;
 }
 
 ::deep .hint-text {
     font-size: 12px;
-    color: #9890b8;
+    color: #948F82;
 }
 
 /* ── Modal footer ── */
@@ -607,48 +634,52 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 0.85rem 1.4rem;
-    border-top: 0.5px solid #ede9fb;
-    background: #f5f2fd;
+    border-top: 0.5px solid #EBE7DC;
+    background: #F7F5EF;
+    flex-shrink: 0;
 }
 
 ::deep .btn-close-modal {
     padding: 6px 15px;
-    border-radius: 10px;
+    border-radius: 20px;
     font-size: 13px;
     background: #fff;
-    border: 0.5px solid #ddd8f3;
-    color: #8b7ec8;
+    border: 0.5px solid #DDD6C4;
+    color: #8E897C;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s;
 }
 
     ::deep .btn-close-modal:hover {
-        background: #eeecf8;
+        background: #F2EFE6;
+        border-color: #E1D9BC;
     }
 
 ::deep .btn-commit {
     padding: 6px 16px;
-    border-radius: 10px;
+    border-radius: 20px;
     font-size: 13px;
-    font-weight: 500;
-    background: #5c3fa8;
+    font-weight: 600;
+    background: #C9A227;
     border: none;
-    color: #fff;
+    color: #1B1B1F;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: background 0.15s;
+    transition: background 0.15s, box-shadow 0.15s;
 }
 
     ::deep .btn-commit:hover:not(:disabled) {
-        background: #3a2870;
+        background: #B8911D;
+        box-shadow: 0 2px 8px rgba(201, 162, 39, 0.35);
     }
 
     ::deep .btn-commit:disabled {
         opacity: 0.4;
         cursor: not-allowed;
     }
+
 ::deep .btn-download-errors {
     display: inline-flex;
     align-items: center;
@@ -657,7 +688,7 @@
     padding: 6px 14px;
     border-radius: 10px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     background: #fff;
     border: 0.5px solid #E24B4A;
     color: #A32D2D;
@@ -668,4 +699,3 @@
     ::deep .btn-download-errors:hover {
         background: #FCEBEB;
     }
-    

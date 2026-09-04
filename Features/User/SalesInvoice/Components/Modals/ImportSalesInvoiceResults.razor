@@ -1,10 +1,10 @@
 @using STTproject.Features.Admin.Subdistributor.Components.Pages
 @using STTproject.Features.User.SalesInvoice.Services
 
-<div class="modal @(Show ? "show" : "")"
-     style="@(Show ? "display: block;" : "display: none;")">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+@if (Show)
+{
+    <div class="modal-overlay import-sales-invoice-overlay" id="import-sales-invoice-overlay">
+        <div class="modal-box">
 
             @* ── Modal header ── *@
             <div class="modal-header-ent">
@@ -98,7 +98,7 @@
                     @* ── Tabs ── *@
                     @if (invoiceCards.Any())
                     {
-                        <div class="tabs">  
+                        <div class="tabs">
                             <button type="button"
                                     class="tab @GetTabClass(InvoiceCardFilter.All)"
                                     @onclick='() => SetTab(InvoiceCardFilter.All)'>
@@ -187,7 +187,8 @@
                                                         <span class="sep">·</span>
                                                         <span>@card.Prepared.Invoice.CustomerName</span>
                                                         <span class="sep">·</span>
-                                                        <span>₱@((card.Prepared.Items ?? Enumerable.Empty<InputItemModel>()).Sum(i => i.Amount).ToString("N2"))</span>                                                    </div>
+                                                        <span>₱@((card.Prepared.Items ?? Enumerable.Empty<InputItemModel>()).Sum(i => i.Amount).ToString("N2"))</span>
+                                                    </div>
                                                 }
                                             </div>
                                         </div>
@@ -318,7 +319,7 @@
                                         </span>
                                     </div>
 
-                                   @if (grouped.Any())
+                                    @if (grouped.Any())
                                     {
                                         <div class="icb-err-rows">
                                             @foreach (var grp in grouped)
@@ -362,7 +363,7 @@
 
         </div>
     </div>
-</div>
+}
 
 <ConfirmModal Show="showCommitConfirmModal"
               Title="Commit selected invoices"
@@ -456,19 +457,19 @@
                 .ThenBy(issue => issue.Message)
                 .ToList();
 
-        var firstIssue = group.First();
-        var displayInvoiceNumber = string.IsNullOrWhiteSpace(firstIssue.InvoiceNumber)
-            ? "[Blank invoice code]"
-            : firstIssue.InvoiceNumber;
+            var firstIssue = group.First();
+            var displayInvoiceNumber = string.IsNullOrWhiteSpace(firstIssue.InvoiceNumber)
+                ? "[Blank invoice code]"
+                : firstIssue.InvoiceNumber;
 
-        mergedCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
+            mergedCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
+        }
+
+        return mergedCards
+            .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
+            .ThenBy(card => card.InvoiceNumber)
+            .ToList();
     }
-
-    return mergedCards
-        .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
-        .ThenBy(card => card.InvoiceNumber)
-        .ToList();
-}
     private List<ImportSalesInvoiceIssue> GetGlobalIssues()
     {
         if (ImportResult == null)

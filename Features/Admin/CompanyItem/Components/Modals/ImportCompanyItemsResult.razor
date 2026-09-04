@@ -1,9 +1,9 @@
 <LoadingOverlay Show="isCommitting" Title="Committing selected company items..." IconClass="fa-solid fa-upload" />
 
-<div class="modal @(Show ? "show" : "")"
-     style="@(Show ? "display: block;" : "display: none;")">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+@if (Show)
+{
+    <div class="modal-overlay import-company-items-overlay" id="import-company-items-overlay">
+        <div class="modal-box">
 
             <div class="modal-header-ent">
                 <div class="mh-left">
@@ -201,17 +201,17 @@
                                 Download Error Report
                             </button>
                         }
-                    
-                        @if (groupFilter == GroupFilter.WarningOnly && hasWarningCards)                        
+
+                        @if (groupFilter == GroupFilter.WarningOnly && hasWarningCards)
                         {
                             <div class="err-filter-bar">
                                 <span class="err-filter-label">
                                     <i class="ti ti-filter" aria-hidden="true"></i>
                                     Filter warning by
                                 </span>
-                               <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
-                                   <option value="">All warning types</option>
-                                   @foreach (var entry in GetDistinctWarningMessages(cards))
+                                <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
+                                    <option value="">All warning types</option>
+                                    @foreach (var entry in GetDistinctWarningMessages(cards))
                                     {
                                         var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
                                         <option value="@entry.Message">@display (@entry.Count)</option>
@@ -219,7 +219,7 @@
                                 </select>
                                 @if (!string.IsNullOrEmpty(selectedWarningFilter))
                                 {
-                                  <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
+                                    <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
                                         <i class="ti ti-x" aria-hidden="true"></i>
                                         Clear
                                     </button>
@@ -321,84 +321,84 @@
                                         </div>
                                     </div>
 
-                                @if (isExpanded && row != null)
-                                {
-                                    <div class="icb">
-                                        @if (row.Warnings.Any())
-                                        {
-                                            <div class="dup-warning-banner">
-                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                @row.Warnings.First()
-                                            </div>
-                                        }
-
-                                        @if (row.IsExistingItem)
-                                        {
-                                            <div class="price-change-decision" @onclick:stopPropagation="true">
-                                                <div class="cust-meta">
-                                                    <div>
-                                                        <span class="cust-meta-label">Existing Stock Price</span>
-                                                        <strong>@(row.ExistingStockPrice?.ToString("N2") ?? "—")</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span class="cust-meta-label">New Price (from file)</span>
-                                                        <strong>@(row.StockPrice?.ToString("N2") ?? "—")</strong>
-                                                    </div>
+                                    @if (isExpanded && row != null)
+                                    {
+                                        <div class="icb">
+                                            @if (row.Warnings.Any())
+                                            {
+                                                <div class="dup-warning-banner">
+                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                    @row.Warnings.First()
                                                 </div>
+                                            }
 
-                                                <div class="price-change-choice">
-                                                    <label>
-                                                        <input type="radio" name="price-mode-@row.RowNumber"
-                                                            checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.DirectUpdate)"
-                                                            @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.DirectUpdate)" />
-                                                        Just update the stock price
-                                                    </label>
-                                                    <label>
-                                                        <input type="radio" name="price-mode-@row.RowNumber"
-                                                            checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)"
-                                                            @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.ScheduleIncrease)" />
-                                                        Schedule as a formal price change
-                                                    </label>
-                                                </div>
-
-                                                @if (row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)
-                                                {
+                                            @if (row.IsExistingItem)
+                                            {
+                                                <div class="price-change-decision" @onclick:stopPropagation="true">
                                                     <div class="cust-meta">
                                                         <div>
-                                                            <span class="cust-meta-label">Effectivity Date</span>
-                                                            <input type="date"
-                                                                value="@((row.PriceChangeEffectivityDate ?? DateTime.Today).ToString("yyyy-MM-dd"))"
-                                                                @onchange="(e) => SetEffectivityDate(row, e.Value?.ToString())" />
+                                                            <span class="cust-meta-label">Existing Stock Price</span>
+                                                            <strong>@(row.ExistingStockPrice?.ToString("N2") ?? "—")</strong>
+                                                        </div>
+                                                        <div>
+                                                            <span class="cust-meta-label">New Price (from file)</span>
+                                                            <strong>@(row.StockPrice?.ToString("N2") ?? "—")</strong>
                                                         </div>
                                                     </div>
-                                                }
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="cust-meta">
-                                                <div>
-                                                    <span class="cust-meta-label">Principal</span>
-                                                    <strong>@(row.Principal ?? "—")</strong>
+
+                                                    <div class="price-change-choice">
+                                                        <label>
+                                                            <input type="radio" name="price-mode-@row.RowNumber"
+                                                                   checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.DirectUpdate)"
+                                                                   @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.DirectUpdate)" />
+                                                            Just update the stock price
+                                                        </label>
+                                                        <label>
+                                                            <input type="radio" name="price-mode-@row.RowNumber"
+                                                                   checked="@(row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)"
+                                                                   @onchange="() => SetPriceResolution(row, CompanyItemPriceResolutionMode.ScheduleIncrease)" />
+                                                            Schedule as a formal price change
+                                                        </label>
+                                                    </div>
+
+                                                    @if (row.PriceResolution == CompanyItemPriceResolutionMode.ScheduleIncrease)
+                                                    {
+                                                        <div class="cust-meta">
+                                                            <div>
+                                                                <span class="cust-meta-label">Effectivity Date</span>
+                                                                <input type="date"
+                                                                       value="@((row.PriceChangeEffectivityDate ?? DateTime.Today).ToString("yyyy-MM-dd"))"
+                                                                       @onchange="(e) => SetEffectivityDate(row, e.Value?.ToString())" />
+                                                            </div>
+                                                        </div>
+                                                    }
                                                 </div>
-                                                @if (!string.IsNullOrWhiteSpace(row?.Category))
-                                                {
+                                            }
+                                            else
+                                            {
+                                                <div class="cust-meta">
                                                     <div>
-                                                        <span class="cust-meta-label">Category</span>
-                                                        <strong>@row.Category</strong>
+                                                        <span class="cust-meta-label">Principal</span>
+                                                        <strong>@(row.Principal ?? "—")</strong>
                                                     </div>
-                                                }
-                                                @if (row?.StockPrice.HasValue == true)
-                                                {
-                                                    <div>
-                                                        <span class="cust-meta-label">Price</span>
-                                                        <strong>@row.StockPrice.Value.ToString("N2")</strong>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
+                                                    @if (!string.IsNullOrWhiteSpace(row?.Category))
+                                                    {
+                                                        <div>
+                                                            <span class="cust-meta-label">Category</span>
+                                                            <strong>@row.Category</strong>
+                                                        </div>
+                                                    }
+                                                    @if (row?.StockPrice.HasValue == true)
+                                                    {
+                                                        <div>
+                                                            <span class="cust-meta-label">Price</span>
+                                                            <strong>@row.StockPrice.Value.ToString("N2")</strong>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             }
 
@@ -478,7 +478,7 @@
 
         </div>
     </div>
-</div>
+}
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Company Items"
               Message="@($"Commit {GetSelectedCount()} selected company item(s)?")"

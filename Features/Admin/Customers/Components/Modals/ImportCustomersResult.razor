@@ -1,11 +1,11 @@
 @using STTproject.Features.Admin.Customers.DTOs
 
-<LoadingOverlay Show="isCommitting" Title="Committing selected customers..." IconClass="fa-solid fa-upload"/>
+<LoadingOverlay Show="isCommitting" Title="Committing selected customers..." IconClass="fa-solid fa-upload" />
 
-<div class="modal @(Show ? "show" : "")"
-     style="@(Show ? "display: block;" : "display: none;")">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+@if (Show)
+{
+    <div class="modal-overlay import-customers-overlay" id="import-customers-overlay">
+        <div class="modal-box">
 
             @* ── Modal header ── *@
             <div class="modal-header-ent">
@@ -25,7 +25,7 @@
                         </div>
                     </div>
                 </div>
-                <Button Icon="ti ti-x" Variant="ButtonVariant.Secondary" OnClick="HandleClose"></Button> 
+                <Button Icon="ti ti-x" Variant="ButtonVariant.Secondary" OnClick="HandleClose"></Button>
             </div>
 
             @* ── Modal body ── *@
@@ -53,8 +53,8 @@
                     var filteredCards = GetFilteredCards(cards);
                     var selectableCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved);
                     var selectedCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));
-                    
-                   @if (hasCommitted)
+
+                    @if (hasCommitted)
                     {
                         if (ImportResult.ErrorCount == 0)
                         {
@@ -189,7 +189,7 @@
                                     </button>
                                 }
                             </div>
-                             <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                            <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
                                 <i class="ti ti-download" aria-hidden="true"></i>
                                 Download Error Report
                             </button>
@@ -378,7 +378,7 @@
 
         </div>
     </div>
-</div>
+}
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Customers"
               Message="@($"Commit {GetSelectedCount()} selected customer(s)?")"

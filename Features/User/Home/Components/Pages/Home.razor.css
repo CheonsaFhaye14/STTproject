@@ -1,22 +1,67 @@
-﻿
-.home-page {
+﻿.home-page {
     width: 100%;
-    height:90px;
+    height: 70px;
     flex: 1;
 }
+
 .title h2 {
     font-size: clamp(1.5rem, 1.6vw, 2rem);
     font-weight: 700;
     color: #1B1B1F;
     margin: 4px 0 24px;
 }
-    /* CARDS */
-    .cards {
-        display: flex;
-        justify-content: center;
-        gap: clamp(16px, 3vw, 50px);
-        margin: 25px auto 0;
-        width: min(100%, 1400px);
-        flex-wrap: wrap;
-        box-sizing: border-box;
+
+    .title h2.glass-shine {
+        display: inline-block;
+        position: relative;
+        color: #1B1B1F; /* black — base text is always fully opaque/visible */
     }
+
+        .title h2.glass-shine::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+            /* gold band with feathered edges, clipped to the glyph shapes */
+            background-image: linear-gradient( 115deg, transparent 30%, rgba(212, 175, 55, 0.95) 48%, rgba(212, 175, 55, 0.95) 52%, transparent 70% );
+            background-size: 250% 100%;
+            background-repeat: no-repeat;
+            background-position: 180% 0;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            /* normal blend + opacity so the gold tint shows through on top of the black text */
+            opacity: 0.85;
+            animation: glass-shine-sweep 2.2s ease-in-out infinite;
+        }
+
+@keyframes glass-shine-sweep {
+    0% {
+        background-position: 180% 0;
+    }
+
+    75%, 100% {
+        background-position: -80% 0;
+    }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .title h2.glass-shine::after {
+        animation: none;
+        display: none;
+    }
+}
+/* CARDS */
+.cards {
+    display: flex;
+    justify-content: center;
+    gap: clamp(16px, 3vw, 50px);
+    margin: 25px auto 0;
+    width: min(100%, 1400px);
+    flex-wrap: wrap;
+    box-sizing: border-box;
+}
