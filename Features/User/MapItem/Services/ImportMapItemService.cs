@@ -381,11 +381,22 @@ public sealed class ImportMapItemService
 					rowResult.Warnings.AddRange(rowWarnings);
 				}
 
-				// Validate conversion
-				if (row.Conversion <= 0)
+				// Conversion is optional only when the row carries its own price.
+				if (row.Conversion.HasValue && row.Conversion.Value <= 0)
 				{
 					rowResult.IsSuccess = false;
-					rowResult.Issues.Add("Conversion must be a whole number greater than 0.");
+					rowResult.Issues.Add("Conversion must be a whole number greater than 0 when provided.");
+				}
+				else if (!row.Conversion.HasValue && (!row.Price.HasValue || row.Price.Value <= 0))
+				{
+					rowResult.IsSuccess = false;
+					rowResult.Issues.Add("Conversion is required unless a price is entered directly for this row.");
+				}
+				else if (!row.Conversion.HasValue && row.Price.HasValue && row.Price.Value > 0 && !IsPieceUom(row.UOM))
+				{
+					// Valid, but worth flagging — could be an intentional price-only row,
+					// or a forgotten conversion. Non-blocking.
+					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has no conversion — only a price was provided. Double-check this was intentional.");
 				}
 
 				// Validate price
@@ -522,15 +533,17 @@ public sealed class ImportMapItemService
 			var uomEntries = new Dictionary<string, UomEntry>();
 			foreach (var row in subdItemRows)
 			{
-				if (!string.IsNullOrWhiteSpace(row.UomName) && row.Conversion > 0 && row.Price > 0)
+				if (string.IsNullOrWhiteSpace(row.UomName) || row.Price is not > 0)
 				{
-					var canonicalUom = CanonicalizeUomName(row.UomName);
-					uomEntries[canonicalUom] = new UomEntry
-					{
-						Conversion = (int)row.Conversion,
-						Price = row.Price
-					};
+					continue;
 				}
+
+				var canonicalUom = CanonicalizeUomName(row.UomName);
+				uomEntries[canonicalUom] = new UomEntry
+				{
+					Conversion = row.Conversion, // decimal? — null is valid now, price is what's required
+					Price = row.Price
+				};
 			}
 
 			EnsureBaseUnitUom(uomEntries);
@@ -593,7 +606,6 @@ public sealed class ImportMapItemService
 
 			if (string.IsNullOrWhiteSpace(subdItemCode)) blankRequiredColumns.Add("SubdItemCode");
 			if (string.IsNullOrWhiteSpace(uom)) blankRequiredColumns.Add("UOM");
-			if (row.Cell(headers["Conversion"]).IsEmpty()) blankRequiredColumns.Add("Conversion");
 
 			// Skip completely empty rows
 			if (string.IsNullOrWhiteSpace(subdItemCode) && string.IsNullOrWhiteSpace(uom) &&
@@ -607,9 +619,15 @@ public sealed class ImportMapItemService
 				continue; // Skip rows with missing required fields
 			}
 
-			if (!TryGetDecimal(row.Cell(headers["Conversion"]), out var conversion) || conversion <= 0)
+			decimal? conversion = null;
+			if (!row.Cell(headers["Conversion"]).IsEmpty())
 			{
-				continue; // Skip rows with invalid conversion
+				if (!TryGetDecimal(row.Cell(headers["Conversion"]), out var parsedConversion) || parsedConversion <= 0)
+				{
+					continue; // Skip rows with an invalid (non-blank) conversion value
+				}
+
+				conversion = parsedConversion;
 			}
 
 			decimal? price = null;
@@ -785,12 +803,12 @@ public sealed class ImportMapItemService
 				AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
 			}
 
-			if (IsPieceUom(row.UOM) && row.Conversion != 1)
+			if (IsPieceUom(row.UOM) && row.Conversion.HasValue && row.Conversion.Value != 1)
 			{
 				AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
 			}
 
-			if (!IsPieceUom(row.UOM) && row.Conversion == 1)
+			if (!IsPieceUom(row.UOM) && row.Conversion.HasValue && row.Conversion.Value == 1)
 			{
 				AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
 			}
@@ -899,8 +917,11 @@ public sealed class ImportMapItemService
 	private static Dictionary<int, decimal> ComputeMissingPrices(List<ImportedMapItemRow> rows, List<string> errors)
 	{
 		var computedPricesByRow = new Dictionary<int, decimal>();
+
+		// Only a row with BOTH a price and a conversion can serve as the basis
+		// for deriving other rows' prices.
 		var pricedRows = rows
-			.Where(row => row.Price.HasValue && row.Price.Value > 0)
+			.Where(row => row.Price.HasValue && row.Price.Value > 0 && row.Conversion.HasValue && row.Conversion.Value > 0)
 			.OrderBy(row => row.RowNumber)
 			.ToList();
 
@@ -913,18 +934,31 @@ public sealed class ImportMapItemService
 			return computedPricesByRow;
 		}
 
+		// A row with neither a price nor a conversion can't be resolved at all.
+		var unresolvable = missingPriceRows.Where(row => !row.Conversion.HasValue).ToList();
+		foreach (var row in unresolvable)
+		{
+			errors.Add($"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
+		}
+
+		var resolvableMissingPriceRows = missingPriceRows.Except(unresolvable).ToList();
+		if (resolvableMissingPriceRows.Count == 0)
+		{
+			return computedPricesByRow;
+		}
+
 		if (pricedRows.Count == 0)
 		{
-			errors.Add("At least one row in each item group must have a price to compute missing prices for other UOM rows.");
+			errors.Add("At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
 			return computedPricesByRow;
 		}
 
 		var sourceRow = pricedRows[0];
-		var unitPrice = sourceRow.Price!.Value / sourceRow.Conversion;
+		var unitPrice = sourceRow.Price!.Value / sourceRow.Conversion!.Value;
 
-		foreach (var row in missingPriceRows)
+		foreach (var row in resolvableMissingPriceRows)
 		{
-			var computedPrice = Math.Round(unitPrice * row.Conversion, 2, MidpointRounding.AwayFromZero);
+			var computedPrice = Math.Round(unitPrice * row.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
 			if (computedPrice <= 0)
 			{
 				errors.Add($"Unable to compute a valid price for row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}).");
@@ -936,7 +970,7 @@ public sealed class ImportMapItemService
 
 		return computedPricesByRow;
 	}
-
+		
 	private static void EnsureBaseUnitUom(Dictionary<string, UomEntry> uomEntries)
 	{
 		if (uomEntries.Count == 0)
@@ -1007,11 +1041,16 @@ public sealed class ImportMapItemService
 				byUom[NormalizeUomKey(row.UOM)] = row;
 			}
 
-			decimal Resolve(string uomKey, HashSet<string> visiting)
+			decimal? Resolve(string uomKey, HashSet<string> visiting)
 			{
-				if (IsPieceUom(uomKey) || !byUom.TryGetValue(uomKey, out var row))
+				if (IsPieceUom(uomKey))
 				{
 					return 1m;
+				}
+
+				if (!byUom.TryGetValue(uomKey, out var row) || !row.Conversion.HasValue)
+				{
+					return null;
 				}
 
 				var basisKey = string.IsNullOrWhiteSpace(row.ConversionBasedOn)
@@ -1020,13 +1059,11 @@ public sealed class ImportMapItemService
 
 				if (IsPieceUom(basisKey) || !visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
 				{
-					// direct-to-PC, a circular reference, or a basis that isn't
-					// among this SubdItem's own rows -> treat the entered number
-					// as already PC-based (this is also the "no column" fallback)
 					return row.Conversion;
 				}
 
-				return row.Conversion * Resolve(basisKey, visiting);
+				var basisResolved = Resolve(basisKey, visiting);
+				return basisResolved.HasValue ? row.Conversion.Value * basisResolved.Value : row.Conversion;
 			}
 
 			foreach (var row in rowsList)
@@ -1037,13 +1074,22 @@ public sealed class ImportMapItemService
 					continue;
 				}
 
+				if (!row.Conversion.HasValue)
+				{
+					// No conversion supplied for this row — leave it null; it must
+					// carry its own price instead (enforced later).
+					result.Add(row);
+					continue;
+				}
+
 				var resolved = Resolve(NormalizeUomKey(row.UOM), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-				result.Add(row with { Conversion = resolved });
+				result.Add(row with { Conversion = resolved ?? row.Conversion });
 			}
 		}
 
 		return result;
 	}
+
 	private static IReadOnlyDictionary<int, List<string>> BuildSubdItemIdentityConflictsByRow(List<ImportedMapItemRow> rows)
 	{
 		return new Dictionary<int, List<string>>();
@@ -1142,7 +1188,7 @@ private sealed record ImportedMapItemRow(
     string SubdItemCode,
     string SubdItemName,
     string UOM,
-    decimal Conversion,
+    decimal? Conversion,
 	string? ConversionBasedOn,
     decimal? Price,
     IReadOnlyDictionary<string, string?> RawValues);

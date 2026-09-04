@@ -198,6 +198,31 @@
                                 <label for="select-all-warnings-check">Select all with warnings (@warningSelectedCount / @warningSelectableCount ready)</label>
                             </div>
                         }
+                        @* ── Warning filter bar (only on warning tab) ── *@
+                        @if (groupFilter == GroupFilter.WarningOnly && hasWarningGroups)
+                        {
+                            <div class="err-filter-bar">
+                                <span class="err-filter-label">
+                                    <i class="ti ti-filter" aria-hidden="true"></i>
+                                    Rows with Warnings: @GetTotalWarningCount()
+                                </span>
+                                <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
+                                    <option value="">All warnings</option>
+                                    @foreach (var entry in GetDistinctWarningMessages())
+                                    {
+                                        var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
+                                        <option value="@entry.Message">@display (@entry.Count)</option>
+                                    }
+                                </select>
+                                @if (!string.IsNullOrEmpty(selectedWarningFilter))
+                                {
+                                    <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
+                                        <i class="ti ti-x" aria-hidden="true"></i>
+                                        Clear
+                                    </button>
+                                }
+                            </div>
+                        }
 
                         @* ── Item cards ── *@
                         <div class="import-results">
@@ -274,16 +299,16 @@
                                                         <strong>@first.SubdItemCode - @first.SubdItemName</strong>
                                                     </div>
                                                 </div>
-                                                @{
-                                                    var groupWarnings2 = groupRows.SelectMany(r => r.Warnings).Distinct().ToList();
-                                                }
-                                                @if (groupWarnings2.Any())
-                                                {
-                                                    <div class="dup-warning-banner">
-                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        @groupWarnings2.First()
-                                                    </div>
-                                                }
+                                                    @{
+                                                        var groupWarnings2 = groupRows.SelectMany(r => r.Warnings).Distinct().ToList();
+                                                    }
+                                                    @foreach (var w in groupWarnings2)
+                                                    {
+                                                        <div class="dup-warning-banner">
+                                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                            @w
+                                                        </div>
+                                                    }
                                                 <div class="itbl-wrap">
                                                     <table class="itbl">
                                                         <thead>
@@ -300,7 +325,7 @@
                                                                 <tr>
                                                                     <td class="mono">@row.RowNumber</td>
                                                                     <td>@row.UomName</td>
-                                                                    <td class="r">@row.Conversion?.ToString("0") ?? "Not Set"</td>
+                                                                    <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
                                                                     <td class="r">@row.Price?.ToString("N2")</td>
                                                                 </tr>
                                                             }
@@ -438,6 +463,7 @@
     private GroupFilter groupFilter = GroupFilter.All;
     private string? selectedErrorFilter;
     private HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
+    private string? selectedWarningFilter;
 
     protected override void OnParametersSet()
     {
@@ -467,6 +493,7 @@
     {
         groupFilter = filter;
         selectedErrorFilter = null;
+        selectedWarningFilter = null;
     }
 
     private List<ImportMapItemIssue> GetGlobalIssues()
@@ -633,7 +660,9 @@
         return groupFilter switch
         {
             GroupFilter.SuccessOnly => !hasGroupIssues && !hasRowIssues,
-            GroupFilter.WarningOnly => GroupHasWarningOnly(group),
+            GroupFilter.WarningOnly => !string.IsNullOrWhiteSpace(selectedWarningFilter)
+                ? GroupContainsWarningType(group, selectedWarningFilter)
+                : GroupHasWarningOnly(group),
             GroupFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
                 ? GroupContainsError(group, selectedErrorFilter)
                 : (hasGroupIssues || hasRowIssues),
@@ -654,6 +683,67 @@
     {
         var rows = group.Rows;
         return rows.Count > 0 ? rows.Min(r => r.RowNumber) : int.MaxValue;
+    }
+    private void OnWarningFilterChanged(ChangeEventArgs e) => selectedWarningFilter = e?.Value?.ToString();
+    private void ClearWarningFilter() => selectedWarningFilter = null;
+
+    // Warning text mostly embeds per-row detail (row numbers, UOM, price), so
+    // bucket into categories the same way NormalizeMessageType does for errors.
+    private static string NormalizeWarningMessageType(string? m)
+    {
+        var msg = (m ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
+
+        if (msg.Contains("duplicate map item")) return "Duplicate Map Item";
+        if (msg.Contains("has no conversion")) return "No Conversion (Price Only)";
+        return (m ?? string.Empty).Trim();
+    }
+
+    private IEnumerable<(string Message, int Count)> GetDistinctWarningMessages()
+    {
+        if (ImportResult?.PreparedGroups == null)
+            return Enumerable.Empty<(string, int)>();
+
+        var groups = ImportResult.PreparedGroups.Where(GroupHasWarningOnly).ToList();
+        var messageTypes = new HashSet<string>();
+
+        foreach (var g in groups)
+            foreach (var r in g.Rows)
+                foreach (var w in r.Warnings)
+                {
+                    var t = NormalizeWarningMessageType(w);
+                    if (!string.IsNullOrWhiteSpace(t)) messageTypes.Add(t);
+                }
+
+        return messageTypes
+            .Select(type => (Message: type, Count: groups.Sum(g => GetGroupWarningRowCount(g, type))))
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Message)
+            .ToList();
+    }
+
+    private static int GetGroupWarningRowCount(PreparedItemGroup group, string? filterMessageType)
+    {
+        var affectedRows = new HashSet<int>();
+        foreach (var row in group.Rows.Where(r => r.Warnings.Count > 0))
+        {
+            if (string.IsNullOrWhiteSpace(filterMessageType)) affectedRows.Add(row.RowNumber);
+            else if (row.Warnings.Any(w => NormalizeWarningMessageType(w) == filterMessageType)) affectedRows.Add(row.RowNumber);
+        }
+        return affectedRows.Count;
+    }
+
+    private int GetTotalWarningCount()
+    {
+        var groups = ImportResult?.PreparedGroups?.Where(GroupHasWarningOnly) ?? Enumerable.Empty<PreparedItemGroup>();
+        return groups.Sum(g => GetGroupWarningRowCount(g, null));
+    }
+
+    private bool GroupContainsWarningType(PreparedItemGroup group, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        var norm = NormalizeWarningMessageType(message);
+        return group.Rows != null && group.Rows.Any(r => r.Warnings.Any(w => NormalizeWarningMessageType(w) == norm));
     }
 
     private int GetDisplayRowErrorCount(ImportMapItemRowResult row)
