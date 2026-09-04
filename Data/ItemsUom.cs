@@ -9,7 +9,7 @@ public partial class ItemsUom
 
     public string UomName { get; set; } = null!;
 
-    public decimal ConversionToBase { get; set; }
+    public decimal? ConversionToBase { get; set; }
 
     public bool IsBaseUnit { get; set; }
 

@@ -300,7 +300,7 @@
                                                                 <tr>
                                                                     <td class="mono">@row.RowNumber</td>
                                                                     <td>@row.UomName</td>
-                                                                    <td class="r">@row.Conversion</td>
+                                                                    <td class="r">@row.Conversion?.ToString("0") ?? "Not Set"</td>
                                                                     <td class="r">@row.Price?.ToString("N2")</td>
                                                                 </tr>
                                                             }

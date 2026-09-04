@@ -60,7 +60,7 @@ public partial class AddUom
             {
                 customUom = value;
                 validationErrors.Remove("uom");
-                // if custom UOM is piece-like, auto-set conversion to 1
+                validationErrors.Remove("conversion");
                 if (IsBaseUom(GetSelectedUomName()))
                 {
                     conversionInput = "1";
@@ -69,7 +69,7 @@ public partial class AddUom
         }
     }
     private string conversionInput = string.Empty;
-    private string ConversionBasedOnInput = string.Empty;
+    private string ConversionBasedOnInput = BaseUomName;
     private string ConversionInput
     {
         get => conversionInput;
@@ -172,24 +172,32 @@ public partial class AddUom
             price = decimal.Parse(priceInput);
         }
 
-        var enteredCount = decimal.Parse(conversionInput);
+        // Conversion input can now be blank — decimal.Parse would throw on an empty string.
+        decimal? enteredCount = string.IsNullOrWhiteSpace(conversionInput)
+            ? null
+            : decimal.Parse(conversionInput);
+
         var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
 
-        decimal pcConversion;
+        decimal? pcConversion;
         if (IsBaseUom(uomName))
         {
-            pcConversion = 1m;
+            pcConversion = enteredCount;
             basisName = BaseUomName;
+        }
+        else if (!enteredCount.HasValue)
+        {
+            pcConversion = null;
         }
         else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
         {
-            // e.g. "1 Case = 5 Box" and Box already resolves to 12 PC
-            // => Case's PC-equivalent = 5 * 12 = 60
-            pcConversion = enteredCount * basisEntry.Conversion;
+            pcConversion = basisEntry.Conversion.HasValue
+                ? enteredCount.Value * basisEntry.Conversion.Value
+                : enteredCount.Value;
         }
         else
         {
-            pcConversion = enteredCount;
+            pcConversion = enteredCount.Value;
             basisName = BaseUomName;
         }
 
@@ -213,13 +221,7 @@ public partial class AddUom
         await InvokeAsync(StateHasChanged);
         await FocusUomSelectAsync();
     }
-    
-    private async Task HandleConversionBasedOnChanged(string uomName)
-    {
-        await RecalculatePricesAsync(uomName);
-        await PersistDraftAsync();
-    }
-    
+
     private async Task FocusUomSelectAsync()
     {
         await Task.Yield();
@@ -308,15 +310,29 @@ public partial class AddUom
         showReactivateConflictModal = false;
         reactivateConflictMessage = string.Empty;
     }
+    
     private async Task AddAsync()
     {
         if (!workingUomEntries.TryGetValue(BaseUomName, out var baseEntry))
         {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
             baseEntry = workingUomEntries[BaseUomName];
         }
 
-        baseEntry.Conversion = 1;
+        if (!baseEntry.Price.HasValue)
+        {
+               var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry =>
+                entry != baseEntry &&
+                entry.Price.HasValue &&
+                entry.Conversion.HasValue &&
+                entry.Conversion.Value != 0);
+
+            if (sourceEntry != null)
+            {
+                baseEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion!.Value) * 1;
+                baseEntry.IsAutoCalculated = true;
+            }
+        }
 
         validationErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries);
 
@@ -324,16 +340,6 @@ public partial class AddUom
         {
             await InvokeAsync(StateHasChanged);
             return;
-        }
-
-        if (!baseEntry.Price.HasValue)
-        {
-            var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry => entry != baseEntry && entry.Price.HasValue);
-            if (sourceEntry != null)
-            {
-                baseEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion) * 1;
-                baseEntry.IsAutoCalculated = true;
-            }
         }
 
         validationErrors.Clear();
@@ -401,21 +407,12 @@ public partial class AddUom
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
         {
-            // If piece-like UOM, conversion is fixed to 1 so skip validation and move to price
             if (IsBaseUom(GetSelectedUomName()))
             {
                 conversionInput = "1";
-                await priceInputRef.FocusAsync();
-                return;
             }
 
-            if (string.IsNullOrWhiteSpace(conversionInput))
-            {
-                validationErrors["conversion"] = "Conversion must be entered.";
-                await InvokeAsync(StateHasChanged);
-                return;
-            }
-
+            // Conversion is optional now, so a blank value no longer blocks progression.
             await priceInputRef.FocusAsync();
         }
         else if (e.Key == "Tab" && e.ShiftKey)
@@ -428,19 +425,9 @@ public partial class AddUom
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
         {
-            // If piece-like UOM, conversion is fixed to 1 so skip validation and move to price
             if (IsBaseUom(GetSelectedUomName()))
             {
                 conversionInput = "1";
-                await priceInputRef.FocusAsync();
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(conversionInput))
-            {
-                validationErrors["conversion"] = "Conversion must be entered.";
-                await InvokeAsync(StateHasChanged);
-                return;
             }
 
             await priceInputRef.FocusAsync();
@@ -450,7 +437,7 @@ public partial class AddUom
             await uomSelectRef.FocusAsync();
         }
     }
-
+        
     private async Task HandlePriceKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
@@ -490,7 +477,7 @@ public partial class AddUom
 
         if (!workingUomEntries.ContainsKey(BaseUomName))
         {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         }
     }
 
@@ -504,7 +491,7 @@ public partial class AddUom
 
         if (!workingUomEntries.ContainsKey(BaseUomName))
         {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         }
 
         selectedUomOption = draft.SelectedUomOption;
@@ -568,7 +555,7 @@ public partial class AddUom
         }
 
         workingUomEntries.Clear();
-        workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+        workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         selectedUomOption = string.Empty;
         customUom = string.Empty;
         conversionInput = string.Empty;
@@ -606,5 +593,72 @@ public partial class AddUom
     private static string NormalizeBaseUomName(string? uomName)
     {
         return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();
+    }
+    private bool IsConversionNotSet = false;
+    private async Task ClearConversionInputAsync()
+{
+    // Goes through the ConversionInput property setter so its stale "conversion"
+    // validation error is cleared along with the value.
+    ConversionInput = string.Empty;
+    IsConversionNotSet = true;
+    await PersistDraftAsync();
+    await InvokeAsync(StateHasChanged);
+}
+    private async Task SetConversionInput()
+    {
+        IsConversionNotSet = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+private async Task HandleRowConversionChangedAsync(string uomName)
+{
+    if (workingUomEntries.TryGetValue(uomName, out var entry))
+    {
+        // A manually-typed conversion is no longer an auto-derived one.
+        entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
+    }
+
+    await RecalculatePricesAsync();
+    await PersistDraftAsync();
+}
+
+
+private async Task ClearRowConversionAsync(string uomName)
+{
+    if (IsBaseUom(uomName))
+    {
+        return;
+    }
+
+    if (!workingUomEntries.TryGetValue(uomName, out var entry))
+    {
+        return;
+    }
+
+    entry.Conversion = null;
+
+    // A price that was only ever derived from this conversion no longer means
+    // anything once the conversion is cleared — drop it rather than leave a
+    // stale calculated value on screen. A manually-typed price is left alone.
+    if (entry.IsAutoCalculated)
+    {
+        entry.Price = null;
+    }
+
+    await RecalculatePricesAsync();
+    await PersistDraftAsync();
+    await InvokeAsync(StateHasChanged);
+}
+ private async Task SetRowConversionAsync(string uomName)
+    {
+        if (workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            // A manually-typed conversion is no longer an auto-derived one.
+            entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
+        }
+
+        await RecalculatePricesAsync();
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
     }
 }

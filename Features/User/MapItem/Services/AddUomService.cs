@@ -38,10 +38,27 @@ public class AddUomService
         var sourcePrice = sourceEntry.Price;
         var sourceConversion = sourceEntry.Conversion;
 
+        if (!sourceConversion.HasValue || sourceConversion.Value == 0)
+        {
+            return;
+        }
+
         foreach (var entry in entries)
         {
             if (!string.IsNullOrWhiteSpace(sourceKey) && entry.Key.Equals(sourceKey, StringComparison.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            // No conversion set on this UOM — nothing to derive its price from.
+            // If it was previously auto-calculated (conversion has since been cleared),
+            // drop the stale calculated price rather than leaving it looking valid.
+            if (!entry.Value.Conversion.HasValue)
+            {
+                if (entry.Value.IsAutoCalculated)
+                {
+                    entry.Value.Price = null;
+                }
                 continue;
             }
 
@@ -50,7 +67,7 @@ public class AddUomService
                 continue;
             }
 
-            entry.Value.Price = (sourcePrice / sourceConversion) * entry.Value.Conversion;
+            entry.Value.Price = (sourcePrice / sourceConversion.Value) * entry.Value.Conversion.Value;
             entry.Value.IsAutoCalculated = true;
         }
     }

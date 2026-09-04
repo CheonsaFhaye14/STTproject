@@ -310,7 +310,7 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                             .FirstOrDefault()
                         ?? u.Price,
 
-                    ConversionToBase = u.ConversionToBase
+                    ConversionToBase = u.ConversionToBase ?? 1m
                 })
                 .OrderBy(u => u.UomName)
                 .ToList()

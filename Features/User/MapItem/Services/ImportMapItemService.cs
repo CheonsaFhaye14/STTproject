@@ -958,7 +958,9 @@ public sealed class ImportMapItemService
 
 				if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
 				{
-					baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion, 2, MidpointRounding.AwayFromZero);
+					// Conversion filtered to > 0 above, so it's guaranteed non-null here — unwrap
+					// with .Value since Math.Round requires a non-nullable decimal argument.
+					baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
 					baseEntry.IsAutoCalculated = true;
 				}
 			}
@@ -986,10 +988,12 @@ public sealed class ImportMapItemService
 		uomEntries[BaseUomName] = new UomEntry
 		{
 			Conversion = 1,
-			Price = Math.Round(sourceEntry.Value.Price.Value / sourceEntry.Value.Conversion, 2, MidpointRounding.AwayFromZero),
+			// Same unwrap here — Conversion > 0 was already checked above.
+			Price = Math.Round(sourceEntry.Value.Price.Value / sourceEntry.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero),
 			IsAutoCalculated = true
 		};
 	}
+
 	private static List<ImportedMapItemRow> ResolveConversionsForGroup(List<ImportedMapItemRow> groupRows)
 	{
 		var result = new List<ImportedMapItemRow>(groupRows.Count);

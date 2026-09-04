@@ -74,7 +74,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             {
                 var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
 
-                itemActionErrorMessage = $"Failed to generate template: {baseMsg}";
+                itemActionErrorMessage = $"Failed to generate template: {baseMsg} Please try again or contact support.";
                 showErrorModal = true;
             }
             finally
@@ -1034,90 +1034,109 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await PersistDraftAsync();
         }
 
-        private async Task PersistItemAsync()
+    private async Task PersistItemAsync()
+    {
+        await mapTablesLoadLock.WaitAsync();
+        try
         {
-            await mapTablesLoadLock.WaitAsync();
-            try
+            if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
             {
-                if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
-                {
-                    return;
-                }
+                return;
+            }
 
-                var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
-                Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+            var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
+            Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
 
-                var item = new SubdItem
-                {
-                    SubdItemId = editingSubdItemId ?? 0,
-                    SubdItemCode = itemCode ?? string.Empty,
-                    ItemName = itemName ?? string.Empty,
-                    SubDistributorId = selectedSubdId,
-                    CompanyItemId = selectedCompanyItemId.Value,
-                    IsActive = true,
-                    CreatedDate = DateTime.UtcNow,
-                    CreatedBy = userContext.UserId.Value,
-                    UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
-                    UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
-                };
+            var item = new SubdItem
+            {
+                SubdItemId = editingSubdItemId ?? 0,
+                SubdItemCode = itemCode ?? string.Empty,
+                ItemName = itemName ?? string.Empty,
+                SubDistributorId = selectedSubdId,
+                CompanyItemId = selectedCompanyItemId.Value,
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow,
+                CreatedBy = userContext.UserId.Value,
+                UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
+                UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
+            };
 
-                if (IsEditingItem)
+            if (IsEditingItem)
+            {
+                var updateResult = await mapItemService.UpdateSubdItemAsync(item);
+                if (updateResult.IsUpdated)
                 {
-                    var updateResult = await mapItemService.UpdateSubdItemAsync(item);
-                    if (updateResult.IsUpdated)
+                    try
                     {
-                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(updateResult.IsUpdated ? (editingSubdItemId ?? 0) : 0,
+                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(editingSubdItemId ?? 0,
                             uomEntries, userContext.UserId ?? 0);
                         if (!saved)
                         {
-                            itemActionErrorMessage = "Unable to save UOM prices.";
+                            itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
                             showErrorModal = true;
+                            return; // don't reset the form on failure — let the user see what happened
                         }
-
-                        ResetItemForm();
-                        await _LoadMapTablesAsyncInternal();
-                        await ClearDraftAsync();
                     }
-                    else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+                    catch (Exception ex)
                     {
-                        itemActionErrorMessage = updateResult.ErrorMessage;
+                        // Surface the real failure reason instead of a blank modal.
+                        itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
                         showErrorModal = true;
-                    }
-
-                    return;
-                }
-
-                // Plain insert — same SKU/item name/company item as an existing row is fine here;
-                // IsExactDuplicateMappingAsync only blocks when the UOM entries also match exactly.
-                var success = await mapItemService.AddSubdItemAsync(item);
-
-                if (success)
-                {
-                    if (item.SubdItemId > 0)
-                    {
-                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0);
-                        if (!saved)
-                        {
-                            itemActionErrorMessage = "Unable to save UOM prices.";
-                            showErrorModal = true;
-                        }
+                        return;
                     }
 
                     ResetItemForm();
                     await _LoadMapTablesAsyncInternal();
-                    if (mapItemInputHeader is not null)
-                    {
-                        await mapItemInputHeader.FocusItemCodeAsync();
-                    }
                     await ClearDraftAsync();
                 }
+                else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+                {
+                    itemActionErrorMessage = updateResult.ErrorMessage;
+                    showErrorModal = true;
+                }
+
+                return;
             }
-            finally
+
+            // Plain insert path — same wrapping
+            var success = await mapItemService.AddSubdItemAsync(item);
+
+            if (success)
             {
-                mapTablesLoadLock.Release();
+                if (item.SubdItemId > 0)
+                {
+                    try
+                    {
+                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0);
+                        if (!saved)
+                        {
+                            itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
+                            showErrorModal = true;
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
+                        showErrorModal = true;
+                        return;
+                    }
+                }
+
+                ResetItemForm();
+                await _LoadMapTablesAsyncInternal();
+                if (mapItemInputHeader is not null)
+                {
+                    await mapItemInputHeader.FocusItemCodeAsync();
+                }
+                await ClearDraftAsync();
             }
         }
-            
+        finally
+        {
+            mapTablesLoadLock.Release();
+        }
+    }        
         private async Task BeginEditItem(MapSubDistributorItemRow item)
         {
             editingSubdItemId = item.SubdItemId;

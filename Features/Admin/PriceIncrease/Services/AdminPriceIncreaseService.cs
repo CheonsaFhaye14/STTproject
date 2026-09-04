@@ -1,4 +1,3 @@
-//TOFIX uom conversion allow to be null
 using STTproject.Features.Admin.PriceIncrease.DTOs;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
@@ -343,7 +342,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                         SubdItemName = u.SubdItemName,
                         ItemsUomId = u.ItemsUomId,
                         UomName = u.UomName,
-                        ConversionToBase = u.ConversionToBase,
+                        ConversionToBase = u.ConversionToBase ?? 1m,
                         OldPrice = history?.OldPrice,
                         NewPrice = history?.NewPrice
                     };

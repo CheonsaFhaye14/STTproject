@@ -17,18 +17,20 @@ public static class AddUomValidator
             errors["uom"] = "Unit of measure is required.";
         }
 
-        if (!int.TryParse(conversionInput, out var conversion) || conversion <= 0)
+        if (!string.IsNullOrWhiteSpace(conversionInput))
         {
-            errors["conversion"] = "Conversion must be a positive integer.";
-        }
-        else if (existingEntries.Values.Any(entry => entry.IsActive && entry.Conversion == conversion))
-        {
-            errors["conversion"] = "Conversion value must be unique.";
-        }
-
-        if (int.TryParse(conversionInput, out var conv) && IsPieceUom(uomName) && conv != 1)
-        {
-            errors["conversion"] = "Unit 'PC/PCS/PIECE' must have conversion 1.";
+            if (!int.TryParse(conversionInput, out var conversion) || conversion <= 0)
+            {
+                errors["conversion"] = "Conversion must be a positive integer.";
+            }
+            else if (existingEntries.Values.Any(entry => entry.IsActive && entry.Conversion == conversion))
+            {
+                errors["conversion"] = "Conversion value must be unique.";
+            }
+            else if (IsPieceUom(uomName) && conversion != 1)
+            {
+                errors["conversion"] = "Unit 'PC/PCS/PIECE' must have conversion 1.";
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(priceInput))
@@ -46,6 +48,7 @@ public static class AddUomValidator
 
         return errors;
     }
+
     public static Dictionary<string, string> ValidateFinalUomEntries(Dictionary<string, UomEntry> entries)
     {
         var errors = new Dictionary<string, string>();
@@ -71,10 +74,22 @@ public static class AddUomValidator
             errors["prices"] = "Base unit price must be provided or derivable from another priced unit.";
         }
 
-        // Ensure any piece-like UOM has conversion == 1
+        // Every active unit must resolve to a price by this point — whether that price
+        // was typed in directly or auto-calculated from a conversion doesn't matter here;
+        // RecalculatePricesAsync has already run by the time AddAsync validates, so a
+        // still-null Price means it's genuinely unresolved.
         foreach (var kv in entries)
         {
-            if (IsPieceUom(kv.Key) && kv.Value.Conversion != 1)
+            if (kv.Value.IsActive && !kv.Value.Price.HasValue)
+            {
+                errors["prices"] = $"Unit '{kv.Key}' needs a price — either enter one directly or set a conversion so it can be calculated.";
+                break;
+            }
+        }
+
+        foreach (var kv in entries)
+        {
+            if (IsPieceUom(kv.Key) && kv.Value.Conversion.HasValue && kv.Value.Conversion.Value != 1)
             {
                 errors["conversion_piece"] = $"Unit '{kv.Key}' must have conversion 1.";
                 break;
