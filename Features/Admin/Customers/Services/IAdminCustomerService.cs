@@ -17,6 +17,8 @@ namespace STTproject.Features.Admin.Customers.Services
         Task<IEnumerable<string>> GetCustomerTypesAsync();
         Task<CustomerDetailDto?> GetCustomerByIdAsync(int id);
         Task<string?> GetUserNameByIdAsync(int? userId);
-        Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, int? excludeId = null);
+        Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, IEnumerable<int>? excludeIds = null);        
+        Task<IEnumerable<SubdMappingDto>> GetCustomerGroupMappingsAsync(int customerId);
+        Task<(bool success, string? error)> UpdateCustomerGroupAsync(CustomerGroupUpdateDto dto);
     }
 }

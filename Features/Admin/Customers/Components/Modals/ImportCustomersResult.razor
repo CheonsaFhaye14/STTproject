@@ -288,10 +288,12 @@
                                                 <span class="cust-meta-label">Zip Code</span>
                                                 <strong>@(first?.ZipCode?.ToString() ?? "—")</strong>
                                             </div>
+                                       @if(!string.IsNullOrWhiteSpace(first?.AddressLine)){
                                             <div style="grid-column: 1 / -1;">
                                                 <span class="cust-meta-label">Address Line</span>
                                                 <strong>@(first?.AddressLine ?? "—")</strong>
                                             </div>
+                                       }    
                                         </div>
 
                                         <div class="itbl-wrap">

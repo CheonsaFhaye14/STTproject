@@ -49,6 +49,7 @@
                                 <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customername.Key)</span>
                             }
                         </div>
+                        
                         <div class="form-group">
                             <AutoComplete
                                 Label="Customer Type"
@@ -106,6 +107,70 @@
                                 <input @bind="ZipCode" @ref="zipCodeInput" disabled=True Placeholder="Auto-populated based on selected city..." />
                             </div>
 
+                            @{
+                                bool hasAnyPairData = SubdCustPairs.Any(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName));
+                            }
+
+                            @if (!isEdit && !isViewMode)
+                            {
+                                <Button Title="Add Subd Customer Mapping" Variant="ButtonVariant.Secondary" OnClick="() => ShowSubdMapping = !ShowSubdMapping" />
+                            }
+
+                            @if ((!isEdit && ShowSubdMapping) || isEdit)
+                            {
+                                @if (!isViewMode || hasAnyPairData)
+                                {
+                                    <h4>Subd Customer Mapping (optional)</h4>
+
+                                    @if (isViewMode)
+                                    {
+                                        @foreach (var pair in SubdCustPairs.Where(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName)))
+                                        {
+                                            <div class="form-group">
+                                                <label>Subd Customer Code</label>
+                                                <input value="@pair.SubdCustCode" disabled />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Subd Store Name</label>
+                                                <input value="@pair.SubdCustName" disabled />
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        @for (int i = 0; i < SubdCustPairs.Count; i++)
+                                        {
+                                            var idx = i;
+                                            <div class="form-group" style="display:flex; gap:8px; align-items:flex-start;">
+                                                <div style="flex:1;">
+                                                    <label>Subd Customer Code</label>
+                                                    <input @bind="SubdCustPairs[idx].SubdCustCode" Placeholder="e.g. SUBD-0001" />
+                                                </div>
+                                                <div style="flex:1;">
+                                                    <label>Subd Store Name</label>
+                                                    <input @bind="SubdCustPairs[idx].SubdCustName" Placeholder="e.g. Green Breeze - Montalban Rizal" />
+                                                </div>
+                                                @if (SubdCustPairs.Count > 1)
+                                                {
+                                                    <Button Title="Remove" Variant="ButtonVariant.Secondary" OnClick="() => RemoveSubdPair(idx)" />
+                                                }
+                                            </div>
+                                            @if (ShowValidationErrors && SubdPairErrors.TryGetValue(idx, out var pairErr))
+                                            {
+                                                <span class="error-text">@pairErr</span>
+                                            }
+                                        }
+
+                                        <Button Title="+ Add another subd store" Variant="ButtonVariant.Secondary" OnClick="AddSubdPair" />
+
+                                        @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(SubdPairsGeneralError))
+                                        {
+                                            <span class="error-text">@SubdPairsGeneralError</span>
+                                        }
+                                    }
+                                }
+                            }
+
                             @* Audit info — view mode only *@
                             @if (isEdit && isViewMode)
                             {
@@ -155,6 +220,46 @@
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public CustomerCreateDto? PendingDto { get; private set; }
+    private bool ShowSubdMapping { get; set; } = false;
+    private List<SubdCustPairInput> SubdCustPairs { get; set; } = new() { new SubdCustPairInput() };
+    private Dictionary<int, string> SubdPairErrors { get; set; } = new();
+    private string? SubdPairsGeneralError { get; set; }
+    private void AddSubdPair() => SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
+
+    private void RemoveSubdPair(int idx)
+    {
+        if (idx >= 0 && idx < SubdCustPairs.Count)
+            SubdCustPairs.RemoveAt(idx);
+        SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
+    }
+
+    private void ValidateSubdPairs()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 0; i < SubdCustPairs.Count; i++)
+        {
+            var pair = SubdCustPairs[i];
+            var hasCode = !string.IsNullOrWhiteSpace(pair.SubdCustCode);
+            var hasName = !string.IsNullOrWhiteSpace(pair.SubdCustName);
+
+            if (!hasCode && !hasName)
+                continue; // blank row is fine — optional
+
+            if (hasCode != hasName)
+            {
+                SubdPairErrors[i] = "Enter both a Subd Customer Code and a Subd Store Name, or leave both blank.";
+                continue;
+            }
+
+            var key = $"{pair.SubdCustCode!.Trim()}|{pair.SubdCustName!.Trim()}".ToUpperInvariant();
+            if (!seen.Add(key))
+            {
+                SubdPairErrors[i] = "This Subd Customer Code / Store Name pair is already entered above.";
+            }
+        }
+    }
+
     public CustomerUpdateDto? PendingUpdateDto { get; private set; }
 
     private bool isViewMode = false;
@@ -225,7 +330,6 @@
                 Province = customer.Province;
                 ZipCode = customer.ZipCode;
 
-                // Audit
                 CreatedDate = customer.CreatedDate;
                 UpdatedDate = customer.UpdatedDate;
                 CreatedById = customer.CreatedBy;
@@ -236,6 +340,17 @@
 
                 if (!string.IsNullOrWhiteSpace(Province))
                     CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+
+                var mappings = (await AdminCustomerService.GetCustomerGroupMappingsAsync(CustomerId!.Value)).ToList();
+                SubdCustPairs = mappings.Count > 0
+                    ? mappings.Select(m => new SubdCustPairInput
+                    {
+                        CustomerId = m.CustomerId,
+                        SubDistributorId = m.SubDistributorId,
+                        SubdCustCode = m.SubdCustCode,
+                        SubdCustName = m.SubdCustName
+                    }).ToList()
+                    : new List<SubdCustPairInput> { new SubdCustPairInput { CustomerId = CustomerId, SubDistributorId = SubDistributorId } };
             }
         }
     }
@@ -252,20 +367,31 @@
             CustomerType = CustomerType,
         };
 
-Errors = await CustomerValidations.ValidateAddCustomerAsync(
-    customerToValidate,
-    AdminCustomerService,
-    isEdit ? CustomerId : null);        ShowValidationErrors = true;
+        Errors = await CustomerValidations.ValidateAddCustomerAsync(
+            customerToValidate,
+            AdminCustomerService,
+            isEdit ? SubdCustPairs.Where(p => p.CustomerId.HasValue).Select(p => p.CustomerId!.Value) : null);
 
-        if (Errors.Any()) return;
+        SubdPairErrors.Clear();
+        SubdPairsGeneralError = null;
+        ValidateSubdPairs(); // now runs for both create and edit
+
+        ShowValidationErrors = true;
+
+        if (Errors.Any() || SubdPairErrors.Any())
+            return;
 
         if (isEdit)
         {
+            var anchorPair = SubdCustPairs.FirstOrDefault(p => p.CustomerId == CustomerId);
+
             PendingUpdateDto = new CustomerUpdateDto
             {
                 CustomerId = CustomerId!.Value,
                 CustomerCode = CustomerCode,
                 CustomerName = CustomerName,
+                SubdCustCode = anchorPair?.SubdCustCode,
+                SubdCustName = anchorPair?.SubdCustName,
                 CustomerType = CustomerType,
                 SubDistributorId = SubDistributorId,
                 IsActive = IsActive,
@@ -273,28 +399,53 @@ Errors = await CustomerValidations.ValidateAddCustomerAsync(
                 City = City,
                 Province = Province,
                 ZipCode = ZipCode,
-                UpdatedBy = CurrentUserId // ← current user
+                UpdatedBy = CurrentUserId
+            };
+
+            PendingGroupUpdateDto = new CustomerGroupUpdateDto
+            {
+                CustomerId = CustomerId!.Value,
+                Mappings = SubdCustPairs
+                    .Where(p => p.CustomerId.HasValue || !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))
+                    .Select(p => new SubdMappingDto
+                    {
+                        CustomerId = p.CustomerId ?? 0,
+                        SubDistributorId = p.CustomerId.HasValue ? p.SubDistributorId : SubDistributorId,
+                        SubdCustCode = p.SubdCustCode,
+                        SubdCustName = p.SubdCustName
+                    }).ToList()
             };
         }
         else
         {
-            PendingDto = new CustomerCreateDto
-            {
-                CustomerCode = CustomerCode,
-                CustomerName = CustomerName,
-                CustomerType = CustomerType,
-                SubDistributorId = SubDistributorId,
-                IsActive = IsActive,
-                AddressLine = AddressLine,
-                City = City,
-                Province = Province,
-                ZipCode = ZipCode,
-                CreatedBy = CurrentUserId // ← current user
-            };
+            var validPairs = SubdCustPairs
+                .Where(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))
+                .ToList();
+
+            PendingDtos = validPairs.Count == 0
+                ? new List<CustomerCreateDto> { BuildCreateDto(null, null) }
+                : validPairs.Select(p => BuildCreateDto(p.SubdCustCode, p.SubdCustName)).ToList();
         }
 
         await OnRequestConfirm.InvokeAsync();
     }
+        
+    private List<CustomerCreateDto>? PendingDtos { get; set; }
+    private CustomerCreateDto BuildCreateDto(string? subdCode, string? subdName) => new CustomerCreateDto
+    {
+        CustomerCode = CustomerCode,
+        CustomerName = CustomerName,
+        SubdCustCode = subdCode,
+        SubdCustName = subdName,
+        CustomerType = CustomerType,
+        SubDistributorId = SubDistributorId,
+        IsActive = IsActive,
+        AddressLine = AddressLine,
+        City = City,
+        Province = Province,
+        ZipCode = ZipCode,
+        CreatedBy = CurrentUserId
+    };
 
     public async Task<(bool success, string? error)> SubmitAsync()
     {
@@ -303,32 +454,48 @@ Errors = await CustomerValidations.ValidateAddCustomerAsync(
         {
             if (isEdit)
             {
-                if (PendingUpdateDto == null) return (false, "No pending update data.");
-                await AdminCustomerService.UpdateCustomerAsync(PendingUpdateDto);
-                return (true, null);
+                if (PendingUpdateDto == null || PendingGroupUpdateDto == null)
+                    return (false, "No pending update data.");
+
+                var anchorResult = await AdminCustomerService.UpdateCustomerAsync(PendingUpdateDto);
+                if (anchorResult == null)
+                    return (false, "Customer not found.");
+
+                var (success, error) = await AdminCustomerService.UpdateCustomerGroupAsync(PendingGroupUpdateDto);
+                if (!success)
+                {
+                    Errors[CustomerValidations.AddCustomer.customercode.Key] = error ?? "Update failed.";
+                    ShowValidationErrors = true;
+                    await InvokeAsync(StateHasChanged);
+                }
+                return (success, error);
             }
             else
             {
-                if (PendingDto == null) return (false, "No pending data.");
-                await AdminCustomerService.CreateCustomerAsync(PendingDto);
+                if (PendingDtos == null || PendingDtos.Count == 0) return (false, "No pending data.");
+                foreach (var dto in PendingDtos)
+                {
+                    await AdminCustomerService.CreateCustomerAsync(dto);
+                }
                 return (true, null);
             }
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
-            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx
+                && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
         {
             Errors[CustomerValidations.AddCustomer.customercode.Key] =
-                "This Customer Code already exists for the selected subdistributor.";
+                "One of the entered Customer Code / Subd Customer Code combinations already exists for the selected subdistributor.";
             ShowValidationErrors = true;
             await InvokeAsync(StateHasChanged);
-            return (false, "Duplicate customer code.");
+            return (false, "Duplicate customer mapping.");
         }
         finally
         {
             isSubmitting = false;
         }
-    }
-
+    }   
+        
     private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
     {
         if (sd != null)
@@ -432,4 +599,12 @@ Errors = await CustomerValidations.ValidateAddCustomerAsync(
             return onCancel.InvokeAsync();
         return Task.CompletedTask;
     }
+    private sealed class SubdCustPairInput
+    {
+        public int? CustomerId { get; set; }
+        public int SubDistributorId { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
+    }
+    private CustomerGroupUpdateDto? PendingGroupUpdateDto { get; set; }
 }

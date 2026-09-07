@@ -18,7 +18,7 @@ public static class CustomerValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddCustomerAsync(
-        Customer customer, IAdminCustomerService service, int? excludeId = null
+        Customer customer, IAdminCustomerService service, IEnumerable<int>? excludeIds = null
     )
     {
         var errors = new Dictionary<string, string>();
@@ -37,15 +37,16 @@ public static class CustomerValidations
             errors[AddCustomer.customername.Key] = AddCustomer.customername.ErrorMessage;
         }
 
-        if (!string.IsNullOrWhiteSpace(customer.CustomerCode) && !string.IsNullOrWhiteSpace(customer.SubDistributorId.ToString()))
+        if (!string.IsNullOrWhiteSpace(customer.CustomerCode))
         {
-            if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeId))
+            if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeIds))
             {
                 errors[AddCustomer.customercode.Key] = "This Customer Code already exists for the selected Subdistributor.";
             }
         }
         return errors;
     }
+
 }
 
 

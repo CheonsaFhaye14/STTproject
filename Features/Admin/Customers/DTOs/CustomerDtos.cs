@@ -48,13 +48,27 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? City { get; set; }
         public string? Province { get; set; }
         public int? ZipCode { get; set; }
-        public int? CreatedBy { get; set; } // ← add
+        public int? CreatedBy { get; set; }
+    }
+
+    public class CustomerGroupUpdateDto
+    {
+        public int CustomerId { get; set; }
+        public List<SubdMappingDto> Mappings { get; set; } = new();
+    }
+
+    public class SubdMappingDto
+    {
+        public int CustomerId { get; set; }
+        public int SubDistributorId { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
     }
 
     public class CustomerUpdateDto : CustomerCreateDto
     {
         public int CustomerId { get; set; }
-        public int? UpdatedBy { get; set; } // ← add
+        public int? UpdatedBy { get; set; } 
     }
 
     public class SubDistributorDto
@@ -155,6 +169,5 @@ namespace STTproject.Features.Admin.Customers.DTOs
     }
 
     public sealed record CustomerImportIssue(int RowNumber, string CustomerCode, string Message);
-
 }
 

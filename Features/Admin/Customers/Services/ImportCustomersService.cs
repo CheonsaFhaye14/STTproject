@@ -17,7 +17,7 @@ public sealed class ImportCustomersService
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["Customer Code"]  = new[] { "CustomerCode", "Customer Code", "code", "SHIPTOCODE", "Ship To Code" },
-            ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name" },
+            ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name","BILLTONAME" },
             ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "SUBD CUSTOMER CODE", "Subd Customer Code" },
             ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "SUBD STORE NAME", "Subd Store Name" },
             ["Province"]       = new[] { "Province", "SUBD ADDRESS (PROVINCE)", "Subd Address (Province)" },
