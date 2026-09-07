@@ -289,6 +289,7 @@ public sealed class ImportCustomersService
             var candidateHeaders = usedCells.Select(c => c.GetString().Trim()).ToArray();
             var columnIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var foundCanonicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var matchedHeaderTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var allHeaderColumns = usedCells
                 .Select(c => (Column: c.Address.ColumnNumber, Header: c.GetString().Trim()))
