@@ -211,6 +211,7 @@
         display: flex;
         align-items: baseline;
         gap: 6px;
+        white-space: pre-line;
     }
 
 /* ── Tabs ── */
@@ -699,3 +700,6 @@
     ::deep .btn-download-errors:hover {
         background: #FCEBEB;
     }
+
+
+

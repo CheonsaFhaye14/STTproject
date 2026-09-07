@@ -578,6 +578,7 @@
         if (msg.Contains("company item") && msg.Contains("not found")) return "Company Item Not Found";
         if (msg.Contains("duplicate map item")) return "Duplicate Map Item";
         if (msg.Contains("subdistributor") && msg.Contains("not found")) return "SubDistributor Not Found";
+        if (msg.Contains("has no price")) return "Price Not Found";
         return NormalizeMessage(m);
     }
 

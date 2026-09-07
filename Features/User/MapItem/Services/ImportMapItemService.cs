@@ -301,6 +301,29 @@ public sealed class ImportMapItemService
 				}
 			}
 
+			// NEW — PC (base UOM) has no price of its own, and no other UOM row in the group
+			// has both a price AND a conversion to derive the PC price from. Without one of
+			// those, ComputeMissingPrices has nothing to anchor on, so flag it explicitly
+			// instead of letting it fall through to the generic "Price must be provided" message.
+			var pcRow = groupRows.FirstOrDefault(r => IsPieceUom(r.UOM));
+			if (pcRow is not null && (!pcRow.Price.HasValue || pcRow.Price.Value <= 0))
+			{
+				var hasConvertibleReference = groupRows.Any(r =>
+					r.RowNumber != pcRow.RowNumber &&
+					r.Price.HasValue && r.Price.Value > 0 &&
+					r.Conversion.HasValue && r.Conversion.Value > 0);
+
+				if (!hasConvertibleReference)
+				{
+					if (!rowErrors.TryGetValue(pcRow.RowNumber, out var pcIssues))
+					{
+						pcIssues = new List<string>();
+						rowErrors[pcRow.RowNumber] = pcIssues;
+					}
+					pcIssues.Add("PC has no price, and no other UOM row has both a price and a conversion to derive it from.");
+				}
+			}
+
 			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors.Values.SelectMany(x => x).ToList());
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
@@ -616,34 +639,30 @@ public sealed class ImportMapItemService
 
 			if (blankRequiredColumns.Count > 0)
 			{
-				continue; // Skip rows with missing required fields
+				continue;
 			}
 
 			decimal? conversion = null;
 			if (!row.Cell(headers["Conversion"]).IsEmpty())
 			{
-				if (!TryGetDecimal(row.Cell(headers["Conversion"]), out var parsedConversion) || parsedConversion <= 0)
+				if (TryGetDecimal(row.Cell(headers["Conversion"]), out var parsedConversion) && parsedConversion > 0)
 				{
-					continue; // Skip rows with an invalid (non-blank) conversion value
+					conversion = parsedConversion;
 				}
-
-				conversion = parsedConversion;
 			}
 
 			decimal? price = null;
 			if (!row.Cell(headers["Price"]).IsEmpty())
 			{
-				if (!TryGetDecimal(row.Cell(headers["Price"]), out var parsedPrice) || parsedPrice <= 0)
+				if (TryGetDecimal(row.Cell(headers["Price"]), out var parsedPrice) && parsedPrice > 0)
 				{
-					continue; // Skip rows with invalid price
+					price = parsedPrice;
 				}
-
-				price = parsedPrice;
 			}
 
 			if (price.HasValue && price.Value <= 0)
 			{
-				continue; // Skip rows with invalid price
+				continue; 
 			}
 
 			var rawValues = headers.ToDictionary(

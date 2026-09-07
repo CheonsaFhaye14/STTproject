@@ -76,10 +76,24 @@ public sealed class ImportCompanyItemsService
         {
             if (detection.BestCandidateRowNumber > 0)
             {
-                var rawHeadersShown = string.Join(" | ", detection.BestCandidateHeaders.Select(h => $"\"{h}\""));
-                result.AddError(detection.BestCandidateRowNumber, string.Empty,
-                    $"Closest header row found at row {detection.BestCandidateRowNumber}, but it's missing: {string.Join(", ", detection.BestCandidateMissing)}. "
-                    + $"Columns actually found on that row: {rawHeadersShown}");
+                var missingList = string.Join(", ", detection.BestCandidateMissing);
+
+                var unmatchedColumns = detection.BestCandidateUnmatchedHeaders.Count > 0
+                    ? string.Join(", ", detection.BestCandidateUnmatchedHeaders.Select(h => $"\"{h}\""))
+                    : "none";
+
+                var renameHints = detection.BestCandidateMissing.Count == 1
+                    ? $"\nRename if found: {GetAcceptedAliasesText(detection.BestCandidateMissing[0])}"
+                    : "\nRename if found:\n" + string.Join("\n",
+                        detection.BestCandidateMissing.Select(m => $"{m}: {GetAcceptedAliasesText(m)}"));
+
+                var message =
+                    $"Header found at row {detection.BestCandidateRowNumber} " +
+                    $"Missing: {missingList} " +
+                    $"Columns found: {unmatchedColumns} " +
+                    renameHints;
+
+                result.AddError(detection.BestCandidateRowNumber, string.Empty, message);
             }
             else
             {
@@ -248,7 +262,8 @@ public sealed class ImportCompanyItemsService
         int BestCandidateRowNumber,
         string[] BestCandidateHeaders,
         List<string> BestCandidateMissing,
-        List<(int Column, string Header)> AllHeaderColumns);
+        List<(int Column, string Header)> AllHeaderColumns,
+        List<string> BestCandidateUnmatchedHeaders);
 
     private static HeaderDetectionResult DetectHeaderRow(IXLWorksheet worksheet, bool principalPreSelected)
     {
@@ -259,6 +274,7 @@ public sealed class ImportCompanyItemsService
         int bestCandidateRowNumber = -1;
         string[] bestCandidateHeaders = Array.Empty<string>();
         List<string> bestCandidateMissing = new();
+        List<string> bestCandidateUnmatchedHeaders = new(); 
 
         var requiredKeys = RequiredHeaderMap.Keys.ToList();
         if (!principalPreSelected) requiredKeys.Add("Principal");
@@ -272,6 +288,7 @@ public sealed class ImportCompanyItemsService
             var candidateHeaders = usedCells.Select(c => c.GetString().Trim()).ToArray();
             var columnIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var foundCanonicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var matchedHeaderTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var allHeaderColumns = usedCells
                 .Select(c => (Column: c.Address.ColumnNumber, Header: c.GetString().Trim()))
@@ -283,9 +300,13 @@ public sealed class ImportCompanyItemsService
                 var normalized = NormalizeHeader(cell.GetString());
                 if (string.IsNullOrWhiteSpace(normalized)) continue;
 
-                if (AliasLookup.TryGetValue(normalized, out var canonicalKey) && foundCanonicalKeys.Add(canonicalKey))
+                if (AliasLookup.TryGetValue(normalized, out var canonicalKey))
                 {
-                    columnIndex[canonicalKey.Replace(" ", "")] = cell.Address.ColumnNumber;
+                    matchedHeaderTexts.Add(cell.GetString().Trim());  
+                    if (foundCanonicalKeys.Add(canonicalKey))
+                    {
+                        columnIndex[canonicalKey.Replace(" ", "")] = cell.Address.ColumnNumber;
+                    }                
                 }
             }
 
@@ -293,7 +314,9 @@ public sealed class ImportCompanyItemsService
 
             if (missing.Count == 0)
             {
-                return new HeaderDetectionResult(rowNumber, columnIndex, -1, Array.Empty<string>(), new List<string>(), allHeaderColumns);
+                return new HeaderDetectionResult(
+                    rowNumber, columnIndex, -1, Array.Empty<string>(), new List<string>(),
+                    allHeaderColumns, new List<string>());            
             }
 
             if (missing.Count < bestMissingCount)
@@ -302,11 +325,16 @@ public sealed class ImportCompanyItemsService
                 bestCandidateRowNumber = rowNumber;
                 bestCandidateHeaders = candidateHeaders;
                 bestCandidateMissing = missing;
+                bestCandidateUnmatchedHeaders = candidateHeaders
+                    .Where(h => !string.IsNullOrWhiteSpace(h) && !matchedHeaderTexts.Contains(h))
+                    .ToList();
             }
         }
 
-        return new HeaderDetectionResult(-1, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
-            bestCandidateRowNumber, bestCandidateHeaders, bestCandidateMissing, new List<(int, string)>());
+        return new HeaderDetectionResult(
+            -1, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            bestCandidateRowNumber, bestCandidateHeaders, bestCandidateMissing,
+            new List<(int, string)>(), bestCandidateUnmatchedHeaders);
     }
 
     private static string GetString(IXLRow row, int columnNumber)
@@ -528,4 +556,8 @@ public sealed class ImportCompanyItemsService
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
+    private static string GetAcceptedAliasesText(string canonicalKey) =>
+    RequiredHeaderMap.TryGetValue(canonicalKey, out var aliases)
+            ? string.Join(", ", aliases)
+            : "no known aliases";
 }
