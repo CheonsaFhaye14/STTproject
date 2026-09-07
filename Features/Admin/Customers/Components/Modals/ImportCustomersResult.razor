@@ -565,6 +565,7 @@
         if (msg.Contains("name") && msg.Contains("required")) return "Customer Name Required";
         if (msg.Contains("subdistributor")) return "Subdistributor Error";
         if (msg.Contains("save failed")) return "Save Failed";
+        if (msg.Contains("city") || msg.Contains("province") && msg.Contains("does not match")) return "City/Province not same as Geographic Data";
 
         return NormalizeMessage(m);
     }

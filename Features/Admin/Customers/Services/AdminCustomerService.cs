@@ -406,6 +406,68 @@ namespace STTproject.Features.Admin.Customers.Services
                 return (false, "One of the entered Customer Code / Subd Customer Code combinations already exists for the selected subdistributor.");
             }
         }
+
+        public async Task<ImportMatchResult> CheckImportDuplicateAsync(
+            string customerCode, string customerName, int subDistributorId,
+            string? subdCustCode, string? subdCustName)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+
+            var candidates = await db.Customers
+                .Where(c => c.CustomerCode == customerCode &&
+                            c.CustomerName == customerName &&
+                            c.SubDistributorId == subDistributorId)
+                .Select(c => new { c.CustomerId, c.SubdCustCode, c.SubdCustName })
+                .ToListAsync();
+
+            var exact = candidates.FirstOrDefault(c =>
+                string.Equals(c.SubdCustCode ?? "", subdCustCode ?? "", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(c.SubdCustName ?? "", subdCustName ?? "", StringComparison.OrdinalIgnoreCase));
+
+            if (exact != null)
+                return new ImportMatchResult(ImportMatchType.ExactDuplicate, exact.CustomerId);
+
+            if (!string.IsNullOrWhiteSpace(subdCustCode) || !string.IsNullOrWhiteSpace(subdCustName))
+            {
+                var blank = candidates.FirstOrDefault(c =>
+                    string.IsNullOrWhiteSpace(c.SubdCustCode) && string.IsNullOrWhiteSpace(c.SubdCustName));
+
+                if (blank != null)
+                    return new ImportMatchResult(ImportMatchType.FillableBlank, blank.CustomerId);
+            }
+
+            return new ImportMatchResult(ImportMatchType.None, null);
+        }
+
+        public async Task<CustomerDetailDto?> FillBlankSubdMappingAsync(
+            int customerId, string? subdCustCode, string? subdCustName, int? updatedBy)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var entity = await db.Customers.FindAsync(customerId);
+            if (entity == null) return null;
+
+            entity.SubdCustCode = subdCustCode;
+            entity.SubdCustName = subdCustName;
+            entity.UpdatedDate = NowPh();
+            entity.UpdatedBy = updatedBy;
+            await db.SaveChangesAsync();
+
+            return new CustomerDetailDto
+            {
+                CustomerId = entity.CustomerId,
+                CustomerCode = entity.CustomerCode,
+                CustomerName = entity.CustomerName,
+                CustomerType = entity.CustomerType,
+                SubDistributorId = entity.SubDistributorId,
+                IsActive = entity.IsActive,
+                AddressLine = entity.AddressLine,
+                City = entity.City,
+                Province = entity.Province,
+                ZipCode = entity.ZipCode,
+                CreatedDate = entity.CreatedDate,
+                UpdatedDate = entity.UpdatedDate
+            };
+        }     
             
     }   
 }

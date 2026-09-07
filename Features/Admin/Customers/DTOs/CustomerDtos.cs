@@ -155,6 +155,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int? CustomerId { get; set; }
         public List<string> Issues { get; } = new();
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public int? ExistingCustomerIdToUpdate { get; set; }
     }
 
     public sealed class PreparedCustomerGroup
@@ -168,6 +169,8 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public PreparedCustomerGroup(List<CustomerImportRowResult> rows) => Rows = rows ?? new();
     }
 
+    public enum ImportMatchType { None, ExactDuplicate, FillableBlank }
+    public sealed record ImportMatchResult(ImportMatchType MatchType, int? ExistingCustomerId);
     public sealed record CustomerImportIssue(int RowNumber, string CustomerCode, string Message);
 }
 

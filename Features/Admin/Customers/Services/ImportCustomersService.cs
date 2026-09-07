@@ -20,14 +20,14 @@ public sealed class ImportCustomersService
             ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name","BILLTONAME" },
             ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "SUBD CUSTOMER CODE", "Subd Customer Code" },
             ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "SUBD STORE NAME", "Subd Store Name" },
-            ["Province"]       = new[] { "Province", "SUBD ADDRESS (PROVINCE)", "Subd Address (Province)" },
+            ["Province"]       = new[] { "Province", "Subd Address (Province)", "SUBD ADDRESS (PROVICE)" },
             ["City"]           = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)", "Subd Address (City)" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)" },
+            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)", "SUBD ADDRESS (BRGY)" },
             ["Zip Code"]     = new[] { "ZipCode", "Zip Code", "zip" },
             ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type" }, 
         };
@@ -89,7 +89,7 @@ public sealed class ImportCustomersService
             {
                 var rawHeadersShown = string.Join(" | ", detection.BestCandidateHeaders.Select(h => $"\"{h}\""));
                 result.AddError(detection.BestCandidateRowNumber, string.Empty,
-                    $"Closest header row found at row {detection.BestCandidateRowNumber}, but it's missing: {string.Join(", ", detection.BestCandidateMissing)}. "
+                    $"Closest header row found at row {detection.BestCandidateRowNumber}, but it's missing: {string.Join(", ", detection.BestCandidateMissing)}. " 
                     + $"Columns actually found on that row: {rawHeadersShown}");
             }
             else
@@ -153,8 +153,8 @@ public sealed class ImportCustomersService
             {
                 CustomerCode = rowResult.CustomerCode,
                 CustomerName = rowResult.CustomerName,
-                SubdCustCode = rowResult.SubdCustCode,        // NEW
-                SubdCustName = rowResult.SubdCustName,        // NEW
+                SubdCustCode = rowResult.SubdCustCode,        
+                SubdCustName = rowResult.SubdCustName,      
                 CustomerType = rowResult.CustomerType,
                 SubDistributorId = subdistributorId,
                 IsActive = true,
@@ -163,24 +163,37 @@ public sealed class ImportCustomersService
                 City = rowResult.City,
                 ZipCode = rowResult.ZipCode
             };
-            foreach (var msg in (await CustomerValidations.ValidateAddCustomerAsync(entity, _customerService)).Values)
-                rowResult.Issues.Add(msg);
 
-            // Cross-check the location against the geographic reference data.
-            if (!string.IsNullOrWhiteSpace(rowResult.Province) || !string.IsNullOrWhiteSpace(rowResult.City))
+            var validationIssues = (await CustomerValidations.ValidateAddCustomerAsync(entity, _customerService)).Values.ToList();
+
+            // Import path uses its own duplicate check (real unique key + fillable-blank support)
+            // instead of the generic "already exists" message from the base validator.
+            foreach (var msg in validationIssues)
+            {
+                if (msg == "This Customer Code already exists for the selected Subdistributor.")
+                    continue;
+                rowResult.Issues.Add(msg);
+            }
+
+            var dupCheck = await CustomerImportValidation.ValidateDuplicateAsync(
+                _customerService, rowResult.CustomerCode, rowResult.CustomerName, subdistributorId,
+                rowResult.SubdCustCode, rowResult.SubdCustName);
+
+            if (dupCheck.Outcome == ImportDuplicateOutcome.ExactDuplicate)
+                rowResult.Issues.Add(dupCheck.IssueMessage!);
+            else if (dupCheck.Outcome == ImportDuplicateOutcome.FillableBlank)
+                rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
+
+            // Cross-check the location against the geographic reference data — only when both are provided.
+            if (!string.IsNullOrWhiteSpace(rowResult.Province) && !string.IsNullOrWhiteSpace(rowResult.City))
             {
                 var match = await _geoDataService.FindLocationAsync(rowResult.Province, rowResult.City);
 
                 if (match is null)
                 {
-                    if (!string.IsNullOrWhiteSpace(rowResult.Province) &&
-                        !await _geoDataService.ProvinceExistsAsync(rowResult.Province))
+                    if (!await _geoDataService.ProvinceExistsAsync(rowResult.Province))
                     {
                         rowResult.Issues.Add($"Province '{rowResult.Province}' was not found in the geographic reference data.");
-                    }
-                    else if (string.IsNullOrWhiteSpace(rowResult.City))
-                    {
-                        rowResult.Issues.Add($"City is required to validate the location for Province '{rowResult.Province}'.");
                     }
                     else
                     {
@@ -190,7 +203,6 @@ public sealed class ImportCustomersService
                 }
                 else if (rowResult.ZipCode is null && match.ZipCode.HasValue)
                 {
-                    // The sheet left Zip blank but the reference data has one for this exact city/province — fill it in.
                     rowResult.ZipCode = match.ZipCode;
                 }
             }
@@ -200,15 +212,6 @@ public sealed class ImportCustomersService
                 
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
-
-            var group = new PreparedCustomerGroup(new List<CustomerImportRowResult> { rowResult })
-            {
-                Selected = rowResult.IsSuccess
-            };
-            foreach (var issue in rowResult.Issues)
-                group.Issues.Add(new CustomerImportIssue(rowNumber, rowResult.CustomerCode, issue));
-
-            result.PreparedGroups.Add(group);
         }
 
         foreach (var custGroup in result.Rows.GroupBy(r => new
@@ -336,22 +339,31 @@ public sealed class ImportCustomersService
         {
             try
             {
-                var created = await _customerService.CreateCustomerAsync(new CustomerCreateDto
+                if (row.ExistingCustomerIdToUpdate is int existingId)
                 {
-                    CustomerCode = row.CustomerCode,
-                    CustomerName = row.CustomerName,
-                    SubdCustCode = row.SubdCustCode,
-                    SubdCustName = row.SubdCustName,
-                    CustomerType = row.CustomerType,
-                    SubDistributorId = subdistributorId,
-                    IsActive = true,
-                    AddressLine = row.AddressLine,
-                    Province = row.Province,
-                    City = row.City,
-                    ZipCode = row.ZipCode,
-                    CreatedBy = userId
-                });
-                row.CustomerId = created?.CustomerId;
+                    var updated = await _customerService.FillBlankSubdMappingAsync(
+                        existingId, row.SubdCustCode, row.SubdCustName, userId);
+                    row.CustomerId = updated?.CustomerId ?? existingId;
+                }
+                else
+                {
+                    var created = await _customerService.CreateCustomerAsync(new CustomerCreateDto
+                    {
+                        CustomerCode = row.CustomerCode,
+                        CustomerName = row.CustomerName,
+                        SubdCustCode = row.SubdCustCode,
+                        SubdCustName = row.SubdCustName,
+                        CustomerType = row.CustomerType,
+                        SubDistributorId = subdistributorId,
+                        IsActive = true,
+                        AddressLine = row.AddressLine,
+                        Province = row.Province,
+                        City = row.City,
+                        ZipCode = row.ZipCode,
+                        CreatedBy = userId
+                    });
+                    row.CustomerId = created?.CustomerId;
+                }
                 committed++;
             }
             catch (Exception ex)

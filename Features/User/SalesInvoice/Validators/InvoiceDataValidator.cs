@@ -71,38 +71,80 @@ public sealed class InvoiceDataValidator
         string? customerType,
         string? address,
         IReadOnlyDictionary<string, Data.Customer> customerByCode,
-        IReadOnlyDictionary<string, Data.Customer> customerByName,
         IEnumerable<Data.Customer> allCustomers,
         out Data.Customer? customer,
         out List<Data.Customer>? suggestions)
     {
         suggestions = null;
         var allCustomersList = allCustomers.ToList();
+        var candidates = new List<Data.Customer>();
 
         // STEP 1: Match by CustomerCode
         if (!string.IsNullOrWhiteSpace(customerCode))
         {
-            if (customerByCode.TryGetValue(NormalizeCustomerLookup(customerCode), out var found))
+            var normalizedCode = NormalizeCustomerLookup(customerCode);
+
+            if (customerByCode.TryGetValue(normalizedCode, out var found))
             {
                 customer = found;
                 return true;
             }
+
+            // STEP 1.5: Not a CustomerCode — the import may instead reference this
+            // customer's SubdCustCode (the subdistributor's own code for them).
+            var subdCodeMatches = allCustomersList
+                .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustCode) &&
+                            NormalizeCustomerLookup(c.SubdCustCode) == normalizedCode)
+                .ToList();
+
+            if (TryCollapseToSingleLogicalCustomer(subdCodeMatches, out var collapsedFromCode))
+            {
+                customer = collapsedFromCode;
+                return true;
+            }
+
+            if (subdCodeMatches.Count > 1)
+            {
+                if (!string.IsNullOrWhiteSpace(customerName))
+                {
+                    var normalizedSearchName = NormalizeCustomerLookup(customerName);
+                    var narrowed = subdCodeMatches
+                        .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
+                                    (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                                    NormalizeCustomerLookup(c.SubdCustName) == normalizedSearchName))
+                        .ToList();
+
+                    if (TryCollapseToSingleLogicalCustomer(narrowed, out var collapsedNarrowed))
+                    {
+                        customer = collapsedNarrowed;
+                        return true;
+                    }
+
+                    if (narrowed.Count > 0)
+                        candidates = narrowed;
+                }
+
+                if (candidates.Count == 0)
+                    candidates = subdCodeMatches;
+            }
         }
 
         // STEP 2: Try raw name match first (strip code prefix only, keep everything else)
-        var candidates = new List<Data.Customer>();
-        if (!string.IsNullOrWhiteSpace(customerName))
+        if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(customerName))
         {
             var rawName = StripCodePrefix(customerName);
 
             candidates = allCustomersList
                 .Where(c => StripCodePrefix(c.CustomerName ?? string.Empty)
-                    .Equals(rawName, StringComparison.OrdinalIgnoreCase))
+                                .Equals(rawName, StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                            StripCodePrefix(c.SubdCustName!)
+                                .Equals(rawName, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            if (candidates.Count == 1)
+            if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedRaw))
             {
-                customer = candidates[0];
+                customer = collapsedRaw;
                 return true;
             }
 
@@ -111,12 +153,14 @@ public sealed class InvoiceDataValidator
             {
                 var normalizedSearchName = NormalizeCustomerLookup(customerName);
                 var exactFiltered = candidates
-                    .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName)
+                    .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
+                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                                NormalizeCustomerLookup(c.SubdCustName!) == normalizedSearchName))
                     .ToList();
 
-                if (exactFiltered.Count == 1)
+                if (TryCollapseToSingleLogicalCustomer(exactFiltered, out var collapsedExact))
                 {
-                    customer = exactFiltered[0];
+                    customer = collapsedExact;
                     return true;
                 }
 
@@ -129,12 +173,14 @@ public sealed class InvoiceDataValidator
             {
                 var normalizedSearchName = NormalizeCustomerLookup(customerName);
                 candidates = allCustomersList
-                    .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName)
+                    .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
+                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                                NormalizeCustomerLookup(c.SubdCustName!) == normalizedSearchName))
                     .ToList();
 
-                if (candidates.Count == 1)
+                if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedNormalized))
                 {
-                    customer = candidates[0];
+                    customer = collapsedNormalized;
                     return true;
                 }
             }
@@ -145,39 +191,39 @@ public sealed class InvoiceDataValidator
         {
             var (strippedName, locationHint) = ExtractCustomerNameParts(customerName);
 
-            candidates = allCustomersList
+        candidates = allCustomersList
+            .Where(c =>
+            {
+                var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
+                return dbStripped == strippedName;
+            })
+            .ToList();
+
+        if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedStripped))
+        {
+            customer = collapsedStripped;
+            return true;
+        }
+
+        // Use parenthetical hint e.g. (TONDO) to break ties
+        if (candidates.Count > 1 && !string.IsNullOrWhiteSpace(locationHint))
+        {
+            var hintFiltered = candidates
                 .Where(c =>
-                {
-                    var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
-                    return dbStripped == strippedName;
-                })
+                    Normalize(c.City ?? string.Empty).Contains(locationHint) ||
+                    Normalize(c.Province ?? string.Empty).Contains(locationHint) ||
+                    Normalize(c.AddressLine ?? string.Empty).Contains(locationHint))
                 .ToList();
 
-            if (candidates.Count == 1)
+            if (TryCollapseToSingleLogicalCustomer(hintFiltered, out var collapsedHint))
             {
-                customer = candidates[0];
+                customer = collapsedHint;
                 return true;
             }
 
-            // Use parenthetical hint e.g. (TONDO) to break ties
-            if (candidates.Count > 1 && !string.IsNullOrWhiteSpace(locationHint))
-            {
-                var hintFiltered = candidates
-                    .Where(c =>
-                        Normalize(c.City ?? string.Empty).Contains(locationHint) ||
-                        Normalize(c.Province ?? string.Empty).Contains(locationHint) ||
-                        Normalize(c.AddressLine ?? string.Empty).Contains(locationHint))
-                    .ToList();
-
-                if (hintFiltered.Count == 1)
-                {
-                    customer = hintFiltered[0];
-                    return true;
-                }
-
-                if (hintFiltered.Count > 1)
-                    candidates = hintFiltered;
-            }
+            if (hintFiltered.Count > 1)
+                candidates = hintFiltered;
+        }
 
             // STEP 2.6: Compact fallback — strips all spaces
             // handles CHICO'S STORE → "chicosstore" matching CHICO S STORE → "chicosstore"
@@ -185,12 +231,14 @@ public sealed class InvoiceDataValidator
             {
                 var compactSearch = NormalizeCustomerLookupCompact(customerName);
                 candidates = allCustomersList
-                    .Where(c => NormalizeCustomerLookupCompact(c.CustomerName ?? string.Empty) == compactSearch)
+                    .Where(c => NormalizeCustomerLookupCompact(c.CustomerName ?? string.Empty) == compactSearch ||
+                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                                NormalizeCustomerLookupCompact(c.SubdCustName!) == compactSearch))
                     .ToList();
 
-                if (candidates.Count == 1)
+                if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedCompact))
                 {
-                    customer = candidates[0];
+                    customer = collapsedCompact;
                     return true;
                 }
 
@@ -217,7 +265,6 @@ public sealed class InvoiceDataValidator
         }
         // ✅ Steps 3-6 always reachable with any candidates > 1
 
-
         // STEP 3: Filter by Province
         if (!string.IsNullOrWhiteSpace(province))
         {
@@ -226,7 +273,11 @@ public sealed class InvoiceDataValidator
                 .Where(c => Normalize(c.Province ?? string.Empty) == normalizedProvince)
                 .ToList();
 
-            if (filtered.Count == 1) { customer = filtered[0]; return true; }
+            if (TryCollapseToSingleLogicalCustomer(filtered, out var collapsedProvince))
+            {
+                customer = collapsedProvince;
+                return true;
+            }
             if (filtered.Count > 0) candidates = filtered;
         }
 
@@ -238,12 +289,15 @@ public sealed class InvoiceDataValidator
                 .Where(c =>
                 {
                     var dbCity = Normalize(c.City ?? string.Empty);
-                    // bidirectional contains handles "Caloocan City" vs "Caloocan"
                     return dbCity.Contains(normalizedCity) || normalizedCity.Contains(dbCity);
                 })
                 .ToList();
 
-            if (filtered.Count == 1) { customer = filtered[0]; return true; }
+            if (TryCollapseToSingleLogicalCustomer(filtered, out var collapsedCity))
+            {
+                customer = collapsedCity;
+                return true;
+            }
             if (filtered.Count > 0) candidates = filtered;
         }
 
@@ -255,7 +309,11 @@ public sealed class InvoiceDataValidator
                 .Where(c => Normalize(c.CustomerType ?? string.Empty) == normalizedType)
                 .ToList();
 
-            if (filtered.Count == 1) { customer = filtered[0]; return true; }
+            if (TryCollapseToSingleLogicalCustomer(filtered, out var collapsedType))
+            {
+                customer = collapsedType;
+                return true;
+            }
             if (filtered.Count > 0) candidates = filtered;
         }
 
@@ -267,7 +325,11 @@ public sealed class InvoiceDataValidator
                 .Where(c => NormalizeAddress(c.AddressLine ?? string.Empty).Contains(normalizedAddress))
                 .ToList();
 
-            if (filtered.Count == 1) { customer = filtered[0]; return true; }
+            if (TryCollapseToSingleLogicalCustomer(filtered, out var collapsedAddress))
+            {
+                customer = collapsedAddress;
+                return true;
+            }
             if (filtered.Count > 0) candidates = filtered;
         }
 
@@ -757,6 +819,31 @@ public sealed class InvoiceDataValidator
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
         var dashIndex = value.IndexOf(" - ");
         return dashIndex >= 0 ? value[(dashIndex + 3)..].Trim() : value.Trim();
+    }
+
+    // Collapses a list of candidates to a single logical customer if they all share the same CustomerCode, CustomerName, and SubDistributorId.
+    private static bool TryCollapseToSingleLogicalCustomer(List<Data.Customer> candidates, out Data.Customer? customer)
+    {
+        if (candidates.Count == 0)
+        {
+            customer = null;
+            return false;
+        }
+
+        var first = candidates[0];
+        var allSameLogicalCustomer = candidates.All(c =>
+            string.Equals(c.CustomerCode, first.CustomerCode, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(c.CustomerName, first.CustomerName, StringComparison.OrdinalIgnoreCase) &&
+            c.SubDistributorId == first.SubDistributorId);
+
+        if (allSameLogicalCustomer)
+        {
+            customer = candidates.OrderBy(c => c.CustomerId).First(); // anchor row
+            return true;
+        }
+
+        customer = null;
+        return false;
     }
 
 }

@@ -573,7 +573,7 @@ public sealed class ImportSalesInvoiceService
 			if (!InvoiceDataValidator.TryResolveCustomer(
 					customerCode, customerName,
 					province, city, customerType, addressLine,
-					customerByCode, customerByName, allCustomers,
+					customerByCode, allCustomers,
 					out var resolvedCustomer, out var customerSuggestions))
 			{
 				if (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName))
