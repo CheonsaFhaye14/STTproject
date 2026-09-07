@@ -10,6 +10,7 @@ public partial class Customer
     public string CustomerCode { get; set; } = null!;
 
     public string CustomerName { get; set; } = null!;
+    public int SubDistributorId { get; set; }
 
     public string? SubdCustCode { get; set; }
 
@@ -17,7 +18,6 @@ public partial class Customer
 
     public string? CustomerType { get; set; } = null!;
 
-    public int SubDistributorId { get; set; }
 
     public bool IsActive { get; set; }
 

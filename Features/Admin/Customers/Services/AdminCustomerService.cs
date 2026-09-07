@@ -116,21 +116,37 @@ namespace STTproject.Features.Admin.Customers.Services
         public async Task<IEnumerable<CustomerListDto>> GetAllAsync()
         {
             await using var db = _dbFactory.CreateDbContext();
-            return await db.Customers
-                .Include(c => c.SubDistributor)
-                .Select(c => new CustomerListDto
-                {
-                    CustomerId = c.CustomerId,
-                    CustomerCode = c.CustomerCode,
-                    CustomerName = c.CustomerName,
-                    CustomerType = c.CustomerType,
-                    SubDistributorId = c.SubDistributorId,
-                    SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
-                    IsActive = c.IsActive,
-                    CreatedDate = c.CreatedDate
-                }).ToListAsync();
-        }
 
+            var flat = db.Customers
+                .AsNoTracking()
+                .Select(c => new
+                {
+                    c.CustomerId,
+                    c.CustomerCode,
+                    c.CustomerName,
+                    c.CustomerType,
+                    c.SubDistributorId,
+                    SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
+                    c.IsActive,
+                    c.CreatedDate
+                });
+
+            return await flat
+                .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
+                .Select(g => new CustomerListDto
+                {
+                    CustomerId = g.Min(c => c.CustomerId),
+                    CustomerCode = g.Key.CustomerCode,
+                    CustomerName = g.Key.CustomerName,
+                    SubDistributorId = g.Key.SubDistributorId,
+                    SubDistributorName = g.Select(c => c.SubDistributorName).FirstOrDefault(),
+                    CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
+                    IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
+                    CreatedDate = g.Min(c => c.CreatedDate)
+                })
+                .ToListAsync();
+        }
+        
         public async Task<(IEnumerable<CustomerListDto> Items, int TotalCount)> GetPagedAsync(
             int page,
             int pageSize,
@@ -143,9 +159,8 @@ namespace STTproject.Features.Admin.Customers.Services
         {
             await using var db = _dbFactory.CreateDbContext();
 
-            var query = db.Customers
+            var filtered = db.Customers
                 .AsNoTracking()
-                .Include(c => c.SubDistributor)
                 .Where(c => subDistributorId == null || c.SubDistributorId == subDistributorId)
                 .Where(c => string.IsNullOrEmpty(customerType) || c.CustomerType == customerType)
                 .Where(c => string.IsNullOrEmpty(status) ||
@@ -154,43 +169,61 @@ namespace STTproject.Features.Admin.Customers.Services
                     c.CustomerName.Contains(search) ||
                     c.CustomerCode.Contains(search));
 
-            var total = await query.CountAsync();
-
-            query = (sortColumn, sortAscending) switch
+            // Flatten the join first so GroupBy doesn't have to touch the navigation property directly.
+            var flat = filtered.Select(c => new
             {
-                ("CustomerCode", true) => query.OrderBy(c => c.CustomerCode),
-                ("CustomerCode", false) => query.OrderByDescending(c => c.CustomerCode),
-                ("CustomerName", true) => query.OrderBy(c => c.CustomerName),
-                ("CustomerName", false) => query.OrderByDescending(c => c.CustomerName),
-                ("CustomerType", true) => query.OrderBy(c => c.CustomerType),
-                ("CustomerType", false) => query.OrderByDescending(c => c.CustomerType),
-                ("SubDistributor", true) => query.OrderBy(c => c.SubDistributor!.SubdName),
-                ("SubDistributor", false) => query.OrderByDescending(c => c.SubDistributor!.SubdName),
-                ("CreatedDate", true) => query.OrderBy(c => c.CreatedDate),
-                ("CreatedDate", false) => query.OrderByDescending(c => c.CreatedDate),
-                ("IsActive", true) => query.OrderBy(c => c.IsActive),
-                ("IsActive", false) => query.OrderByDescending(c => c.IsActive),
-                _ => query.OrderBy(c => c.CustomerName)
+                c.CustomerId,
+                c.CustomerCode,
+                c.CustomerName,
+                c.CustomerType,
+                c.SubDistributorId,
+                SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
+                c.IsActive,
+                c.CreatedDate
+            });
+
+            // One row per (CustomerCode, CustomerName, SubDistributorId) — collapses sibling Subd-mapping rows.
+            var grouped = flat
+                .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
+                .Select(g => new CustomerListDto
+                {
+                    CustomerId = g.Min(c => c.CustomerId),           // anchor row id — used for View/navigation
+                    CustomerCode = g.Key.CustomerCode,
+                    CustomerName = g.Key.CustomerName,
+                    SubDistributorId = g.Key.SubDistributorId,
+                    SubDistributorName = g.Select(c => c.SubDistributorName).FirstOrDefault(),
+                    CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
+                    IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
+                    CreatedDate = g.Min(c => c.CreatedDate)
+                });
+
+            var total = await grouped.CountAsync();
+
+            grouped = (sortColumn, sortAscending) switch
+            {
+                ("CustomerCode", true) => grouped.OrderBy(c => c.CustomerCode),
+                ("CustomerCode", false) => grouped.OrderByDescending(c => c.CustomerCode),
+                ("CustomerName", true) => grouped.OrderBy(c => c.CustomerName),
+                ("CustomerName", false) => grouped.OrderByDescending(c => c.CustomerName),
+                ("CustomerType", true) => grouped.OrderBy(c => c.CustomerType),
+                ("CustomerType", false) => grouped.OrderByDescending(c => c.CustomerType),
+                ("SubDistributor", true) => grouped.OrderBy(c => c.SubDistributorName),
+                ("SubDistributor", false) => grouped.OrderByDescending(c => c.SubDistributorName),
+                ("CreatedDate", true) => grouped.OrderBy(c => c.CreatedDate),
+                ("CreatedDate", false) => grouped.OrderByDescending(c => c.CreatedDate),
+                ("IsActive", true) => grouped.OrderBy(c => c.IsActive),
+                ("IsActive", false) => grouped.OrderByDescending(c => c.IsActive),
+                _ => grouped.OrderBy(c => c.CustomerName)
             };
 
-            var items = await query
+            var items = await grouped
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(c => new CustomerListDto
-                {
-                    CustomerId = c.CustomerId,
-                    CustomerCode = c.CustomerCode,
-                    CustomerName = c.CustomerName,
-                    CustomerType = c.CustomerType,
-                    SubDistributorId = c.SubDistributorId,
-                    SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
-                    IsActive = c.IsActive,
-                    CreatedDate = c.CreatedDate
-                })
                 .ToListAsync();
 
             return (items, total);
         }
+
         public async Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, IEnumerable<int>? excludeIds = null)
         {
             await using var db = _dbFactory.CreateDbContext();

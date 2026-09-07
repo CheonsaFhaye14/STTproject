@@ -84,6 +84,7 @@
                 <select id="typeFilter" class="clt-select"
                         @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
                     <option value="">All types</option>
+                    <option value=" ">Not set</option>
                     @foreach (var type in AllCustomerTypes)
                     {
                         <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
@@ -147,7 +148,14 @@
                                         <tr class="@(!customer.IsActive ? "clt-row-inactive" : "")">
                                             <td><span class="clt-code">@customer.CustomerCode</span></td>
                                             <td class="clt-name">@customer.CustomerName</td>
-                                            <td><span class="clt-type-badge">@customer.CustomerType</span></td>
+                                            @if (string.IsNullOrWhiteSpace(customer.CustomerType))
+                                            {
+                                                <td><span class="clt-type-badge clt-type-empty">Not set</span></td>
+                                            }
+                                            else
+                                            {
+                                                <td><span class="clt-type-badge">@customer.CustomerType</span></td>
+                                            }
                                             <td class="clt-muted">@customer.SubDistributorName</td>
                                             <td class="clt-muted">
                                                 @customer.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
