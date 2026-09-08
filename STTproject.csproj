@@ -29,7 +29,6 @@
     <Folder Include="Features\Admin\CompanyItem\DTOs\" />
     <Folder Include="Features\Admin\CompanyItem\Services\" />
     <Folder Include="Features\Admin\CompanyItem\Validators\" />
-    <Folder Include="Features\Admin\Customers\Components\Modals\" />
     <Folder Include="Features\Admin\Customers\Components\Sections\" />
     <Folder Include="Features\Admin\Customers\DTOs\" />
     <Folder Include="Features\Admin\Customers\Services\" />

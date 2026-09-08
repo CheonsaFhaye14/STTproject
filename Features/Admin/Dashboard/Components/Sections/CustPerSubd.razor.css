@@ -1,111 +1,138 @@
-﻿.cpsd-card {
+﻿/* Add once, in your host page (e.g. App.razor / _Host.cshtml <head>), not here:
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+   Falls back to system fonts cleanly if you skip this. */
+
+.cpsd-card {
     background: #FFFFFF;
-    border: 1px solid #E5E3DD;
-    box-shadow: 0 4px 16px rgba(27, 27, 31, 0.08);
-    border-radius: 16px;
-    padding: 24px;
-    color: #1B1B1F;
-    font-family: Arial, sans-serif;
+    border: 1px solid #E6E2D8;
+    box-shadow: 0 1px 2px rgba(35, 33, 43, 0.04), 0 8px 24px rgba(35, 33, 43, 0.04);
+    border-radius: 12px;
+    padding: 22px 26px 18px;
+    color: #23212B;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .cpsd-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #E6E2D8;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
 }
 
 .cpsd-title {
-    font-weight: bold;
-    font-size: 13px;
-    letter-spacing: 1px;
-    color: #1B1B1F;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: 0;
+    color: #23212B;
+    text-transform: none;
 }
 
 .cpsd-summary {
     display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: #5F5E5A;
+    gap: 22px;
+    font-size: 11px;
 }
 
 .cpsd-summary-item {
-    opacity: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    color: #9A97A2;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
+    .cpsd-summary-item strong {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 17px;
+        font-weight: 600;
+        color: #23212B;
+        margin-top: 2px;
+    }
+
     .cpsd-summary-item.active strong {
-        color: #16a34a;
+        color: #1E7A52;
     }
 
     .cpsd-summary-item.inactive strong {
-        color: #dc2626;
+        color: #B23A3A;
     }
 
 .cpsd-controls {
     display: flex;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
 .cpsd-search {
     flex: 1;
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid #E5E3DD;
-    background: #FFFFFF;
-    color: #1B1B1F;
-    font-size: 12px;
+    max-width: 320px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #D8D2C3;
+    background: #FCFBF9;
+    color: #23212B;
+    font-size: 12.5px;
+    font-family: inherit;
 }
 
     .cpsd-search::placeholder {
-        color: #9A968C;
+        color: #9A97A2;
     }
 
     .cpsd-search:focus {
         outline: none;
-        border-color: #B08D57;
-        box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.2);
+        border-color: #A9793F;
+        box-shadow: 0 0 0 3px rgba(169, 121, 63, 0.15);
     }
 
 .cpsd-sort {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid #E5E3DD;
-    background: #FFFFFF;
-    color: #1B1B1F;
-    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #D8D2C3;
+    background: #FCFBF9;
+    color: #23212B;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 500;
     cursor: pointer;
 }
 
     .cpsd-sort option {
         background: #FFFFFF;
-        color: #1B1B1F;
+        color: #23212B;
     }
 
 .cpsd-legend {
     display: flex;
     gap: 16px;
     font-size: 11px;
+    color: #6A6774;
     margin-bottom: 10px;
     align-items: center;
 }
 
 .dot {
     display: inline-block;
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 2px;
-    margin-right: 4px;
+    margin-right: 5px;
 }
 
 .dot-active {
-    background: #16a34a;
+    background: #1E7A52;
 }
 
 .dot-inactive {
-    background: #dc2626;
+    background: #B23A3A;
 }
 
 .cpsd-table {
@@ -119,71 +146,82 @@
     display: grid;
     grid-template-columns: 80px 1fr 180px 55px 55px 55px;
     align-items: center;
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: 10px 10px;
+    font-size: 12.5px;
     gap: 8px;
 }
 
 .cpsd-table-header {
-    background: #d6d2c9;
-    color: #1B1B1F;
-    border-radius: 6px;
-    font-weight: bold;
+    background: transparent;
+    color: #9A97A2;
+    border-bottom: 1px solid #E6E2D8;
+    border-radius: 0;
+    font-weight: 600;
     font-size: 11px;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    letter-spacing: 0.03em;
+    margin-bottom: 2px;
+    padding-top: 0;
+    padding-bottom: 8px;
 }
 
 .cpsd-table-row {
-    border-radius: 6px;
+    border-bottom: 1px solid #F0EDE6;
+    border-radius: 0;
     transition: background 0.15s;
 }
 
+    .cpsd-table-row:last-child {
+        border-bottom: none;
+    }
+
     .cpsd-table-row:hover {
-        background: #F7F6F4;
+        background: #FBFAF7;
     }
 
 .cpsd-code {
-    background: #F7F6F4;
-    border: 1px solid #E5E3DD;
-    color: #8A6A34;
+    background: #F3E9D9;
+    border: none;
+    color: #A9793F;
     border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 10px;
-    font-weight: bold;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    font-weight: 600;
     white-space: nowrap;
+    font-family: inherit;
 }
 
 .col-name {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 12px;
-    color: #1B1B1F;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #23212B;
 }
 
 .col-num {
-    text-align: center;
-    font-weight: bold;
-    font-size: 12px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
 }
 
 .active-num {
-    color: #16a34a;
+    color: #1E7A52;
 }
 
 .inactive-num {
-    color: #dc2626;
+    color: #B23A3A;
 }
 
 .total-num {
-    color: #1B1B1F;
+    color: #23212B;
 }
 
 .mini-bar-track {
-    height: 10px;
-    background: #E5E3DD;
-    border-radius: 4px;
+    height: 5px;
+    background: #EFEDE7;
+    border-radius: 3px;
     display: flex;
     overflow: hidden;
     width: 100%;
@@ -191,13 +229,13 @@
 
 .mini-bar-active {
     height: 100%;
-    background: #16a34a;
+    background: #1E7A52;
     transition: width 0.4s ease;
 }
 
 .mini-bar-inactive {
     height: 100%;
-    background: #dc2626;
+    background: #B23A3A;
     transition: width 0.4s ease;
 }
 
@@ -205,46 +243,49 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 16px;
-    margin-top: 16px;
+    gap: 14px;
+    margin-top: 14px;
     font-size: 12px;
+    color: #6A6774;
 }
 
 .cpsd-page-btn {
-    background: #F1F0EB;
-    border: 1px solid #E5E3DD;
+    background: #FCFBF9;
+    border: 1px solid #D8D2C3;
     border-radius: 6px;
-    color: #5F5E5A;
+    color: #23212B;
     padding: 4px 12px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: inherit;
 }
 
     .cpsd-page-btn:disabled {
-        opacity: 0.3;
+        opacity: 0.35;
         cursor: not-allowed;
     }
 
     .cpsd-page-btn:not(:disabled):hover {
-        background: #E5E3DD;
+        background: #F3F1EB;
+        border-color: #A9793F;
     }
 
 .cpsd-footer {
     text-align: center;
     font-size: 11px;
-    color: #8A867C;
+    color: #9A97A2;
     margin-top: 6px;
 }
 
 .cpsd-empty {
     text-align: center;
     padding: 24px;
-    color: #8A867C;
+    color: #9A97A2;
     font-size: 13px;
 }
 
 .cpsd-loading {
     text-align: center;
-    color: #8A867C;
+    color: #9A97A2;
     padding: 40px;
 }

@@ -8,15 +8,15 @@
 @inject IJSRuntime JS
 
 <LoadingOverlay Show="isLoading"
-                      Title="Loading customers…"
-                      Subtitle="Please wait while we fetch the latest data."
-                      IconClass="fa-solid fa-users" />
+                Title="Loading customers…"
+                Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-users" />
 
 
 <LoadingOverlay Show="isDownloadingTemplate"
-                      Title="Downloading Excel Template…"
-                      Subtitle="Please wait while we prepare the template for download."
-                      IconClass="fa-solid fa-upload" />
+                Title="Downloading Excel Template…"
+                Subtitle="Please wait while we prepare the template for download."
+                IconClass="fa-solid fa-upload" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">
@@ -26,10 +26,12 @@
                 <h1 class="clt-page-title">Customers</h1>
                 <p class="clt-page-sub">@totalCount total customers</p>
             </div>
-        <Button Title="Download Excel Template" Variant="ButtonVariant.Secondary" OnClick="DownloadTemplate" 
-         Disabled="isDownloadingTemplate"></Button>            
-        <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
-            <Button Title="Add Customer" Variant="ButtonVariant.Primary" Icon="fa-plus" OnClick="OpenAddCustomerModal"></Button>
+            <div class="clt-header-actions">
+                <Button Title="Download Excel Template" Variant="ButtonVariant.Secondary" OnClick="DownloadTemplate"
+                        Disabled="isDownloadingTemplate"></Button>
+                <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
+                <Button Title="Add Customer" Variant="ButtonVariant.Primary" Icon="fa-plus" OnClick="OpenAddCustomerModal"></Button>
+            </div>
         </div>
 
         @* ------------- Customer List Table ----------------- *@
@@ -73,10 +75,10 @@
 
     private void OpenAddCustomerModal()
     {
-        editCustomerId = null; 
+        editCustomerId = null;
         showAddModal = true;
     }
-    
+
     private void OpenEditModal(int id)
     {
         editCustomerId = id;

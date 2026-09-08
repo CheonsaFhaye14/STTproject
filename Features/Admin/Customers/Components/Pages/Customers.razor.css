@@ -1,4 +1,3 @@
-
 /* Header */
 
 .clt-page {
@@ -31,6 +30,13 @@
     font-size: 13px;
     color: #5F5E5A;
     margin: 0;
+}
+
+.clt-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
 .clt-add-btn {
