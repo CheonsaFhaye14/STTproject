@@ -6,7 +6,7 @@
     <div class="tpsd-header">
         <div class="tpsd-title">Total Monthly &amp; Annual Prices per Sub Distributor</div>
         <div class="tpsd-summary">
-            <span class="tpsd-summary-item">Total: <strong>@FormatCurrency(data.Sum(x => x.TotalPrice))</strong></span>
+            <span class="tpsd-summary-item">Total: <strong>@FormatCurrency(data.Sum(x => x.MonthlyTotals.Sum()))</strong></span>
             <span class="tpsd-summary-item">Sub Distributors: <strong>@data.Count</strong></span>
         </div>
     </div>
@@ -102,7 +102,7 @@
         .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
                     x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
                     x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-        .OrderByDescending(x => x.TotalPrice);
+        .OrderByDescending(x => x.MonthlyTotals.Sum());
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,7 +125,7 @@
             ? await DashboardService.GetTotalPricesPerSubdMonthlyAsync(selectedYear, selectedMonth)
             : await DashboardService.GetTotalPricesPerSubdAnnualAsync(selectedYear);
 
-        maxPrice = data.Any() ? data.Max(x => x.TotalPrice) : 0;
+        maxPrice = data.Any() ? data.Max(x => x.MonthlyTotals.Sum()) : 0;
         StateHasChanged();
 
         if (!hasFiredInitialLoad)
