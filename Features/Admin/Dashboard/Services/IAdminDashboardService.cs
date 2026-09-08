@@ -8,7 +8,6 @@ namespace STTproject.Features.Admin.Dashboard.Services
         Task<int> GetTotalCustomersAsync();
         Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdMonthlyAsync(int year, int month);
         Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdAnnualAsync(int year);
-        Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdAllTimeAsync();
         Task<List<SubdItemPerSubdDto>> GetTotalSubdItemsPerSubdAsync();
     }
 }

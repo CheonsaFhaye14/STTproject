@@ -6,7 +6,7 @@
     <div class="tpsd-header">
         <div class="tpsd-title">Total Monthly &amp; Annual Prices per Sub Distributor</div>
         <div class="tpsd-summary">
-            <span class="tpsd-summary-item">Total: <strong>@FormatCurrency(data.Sum(x => x.MonthlyTotals.Sum()))</strong></span>
+            <span class="tpsd-summary-item">Total: <strong>@FormatCurrency(data.Sum(x => x.TotalPrice))</strong></span>
             <span class="tpsd-summary-item">Sub Distributors: <strong>@data.Count</strong></span>
         </div>
     </div>
@@ -47,7 +47,7 @@
         <div class="tpsd-chart">
             @foreach (var item in FilteredData)
             {
-                var widthPct = maxPrice == 0 ? 0.0 : (double)(item.MonthlyTotals.Sum() / maxPrice) * 100.0;
+                var widthPct = maxPrice == 0 ? 0.0 : (double)(item.TotalPrice / maxPrice) * 100.0;
 
                 <div class="tpsd-bar-row">
                     <div class="tpsd-bar-label" title="@item.SubdName">
@@ -57,7 +57,7 @@
                     <div class="tpsd-bar-track">
                         <div class="tpsd-bar-fill" style="width:@(widthPct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%"></div>
                     </div>
-                    <div class="tpsd-bar-value">@FormatCurrency(item.MonthlyTotals.Sum())</div>
+                    <div class="tpsd-bar-value">@FormatCurrency(item.TotalPrice)</div>
                 </div>
             }
         </div>
@@ -102,7 +102,7 @@
         .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
                     x.SubdName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
                     x.SubdCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-        .OrderByDescending(x => x.MonthlyTotals.Sum());
+        .OrderByDescending(x => x.TotalPrice);
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,7 +125,7 @@
             ? await DashboardService.GetTotalPricesPerSubdMonthlyAsync(selectedYear, selectedMonth)
             : await DashboardService.GetTotalPricesPerSubdAnnualAsync(selectedYear);
 
-        maxPrice = data.Any() ? data.Max(x => x.MonthlyTotals.Sum()) : 0;
+        maxPrice = data.Any() ? data.Max(x => x.TotalPrice) : 0;
         StateHasChanged();
 
         if (!hasFiredInitialLoad)
