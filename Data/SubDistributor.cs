@@ -11,9 +11,9 @@ public partial class SubDistributor
 
     public string SubdName { get; set; } = null!;
 
-    public string? CityMunicipality { get; set; } = null!;
+    public string? CityMunicipality { get; set; } = null;
 
-    public string? Province { get; set; } = null!;
+    public string? Province { get; set; } = null;
 
     public int? EncoderId { get; set; }
 
@@ -27,7 +27,7 @@ public partial class SubDistributor
 
     public DateTime? UpdatedDate { get; set; }
 
-    public string? CompanySubdCode { get; set; } = null!;
+    public string? CompanySubdCode { get; set; } = null;
 
     public virtual User? CreatedByNavigation { get; set; }
 

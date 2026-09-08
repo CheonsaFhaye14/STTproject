@@ -113,7 +113,7 @@
             Console.WriteLine(ex.ToString()); 
             Show = false;
             importResult = new STTproject.Features.Admin.Customers.DTOs.CustomerImportResult();
-            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
         }
         finally
         {

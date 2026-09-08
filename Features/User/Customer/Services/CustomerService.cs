@@ -34,8 +34,8 @@ public class CustomerService : ICustomerService
             SubDistributorId = s.SubDistributorId,
             SubdCode = s.SubdCode,
             SubdName = s.SubdName,
-            CityMunicipality = s.CityMunicipality,
-            Province = s.Province
+            CityMunicipality = s.CityMunicipality ?? null,
+            Province = s.Province ?? null
         }).ToList();
 
         // Choose the first sub-distributor as default

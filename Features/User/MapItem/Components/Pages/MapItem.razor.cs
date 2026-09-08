@@ -610,7 +610,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             var selected = subdList.FirstOrDefault(s => s.SubDistributorId == selectedSubdId);
             locationText = selected == null
                 ? "---"
-                : FormatHelper.FormatLocation(selected.CityMunicipality, selected.Province ?? string.Empty);
+                : FormatHelper.FormatLocation(selected.CityMunicipality ?? "N/A", selected.Province ?? "N/A");
         }
 
         private async Task LoadMapTablesAsync()

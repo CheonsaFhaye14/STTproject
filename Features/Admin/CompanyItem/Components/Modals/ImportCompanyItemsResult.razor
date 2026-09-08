@@ -48,7 +48,7 @@
                     var hasWarningCards = cards.Any(GroupHasWarningOnly);
                     var hasErrorCards = cards.Any(c => c.HasErrors);
                     var filteredCards = GetFilteredCards(cards);
-                    var selectableCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved);
+                    var selectableCount = cards.Count(c => !c.HasErrors && !GroupHasWarningOnly(c) && !c.Group.IsSaved);
                     var selectedCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));
                     var warningSelectableCount = cards.Count(c => GroupHasWarningOnly(c) && !c.Group.IsSaved);
                     var warningSelectedCount = cards.Count(c => c.Group.Selected && !c.Group.IsSaved && GroupHasWarningOnly(c));

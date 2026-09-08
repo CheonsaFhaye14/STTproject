@@ -6,7 +6,7 @@
 				<h3>@STTproject.Shared.Helper.FormatHelper.ToAllCaps(Subdistributor.SubdName)</h3>
 			</div>
 
-			<p>@STTproject.Shared.Helper.FormatHelper.FormatLocation(Subdistributor.CityMunicipality, Subdistributor.Province ?? string.Empty)</p>
+			<p>@STTproject.Shared.Helper.FormatHelper.FormatLocation(Subdistributor.CityMunicipality ?? "N/A", Subdistributor.Province ?? "N/A")</p>
 		</div>
 
 		<button type="button" class="example" @onclick="HandleInputInvoice">

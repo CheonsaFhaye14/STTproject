@@ -62,8 +62,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
             {
                 SubdCode = dto.SubdCode,
                 SubdName = dto.SubdName,
-                CityMunicipality = dto.CityMunicipality,
-                Province = dto.Province,
+                CityMunicipality = dto.CityMunicipality ?? null,
+                Province = dto.Province ?? null,
                 EncoderId = dto.EncoderId,
                 IsActive = dto.IsActive,
                 CreatedDate = NowPh(),
@@ -87,8 +87,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
 
             entity.SubdCode = dto.SubdCode ?? entity.SubdCode;
             entity.SubdName = dto.SubdName ?? entity.SubdName;
-            entity.CityMunicipality = dto.CityMunicipality ?? entity.CityMunicipality;
-            entity.Province = dto.Province ?? entity.Province;
+            entity.CityMunicipality = dto.CityMunicipality ?? entity.CityMunicipality ?? null;
+            entity.Province = dto.Province ?? entity.Province ?? null;
             entity.EncoderId = dto.EncoderId;
             entity.IsActive = dto.IsActive;
             entity.UpdatedBy = dto.UpdatedBy;
@@ -118,8 +118,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubDistributorId = s.SubDistributorId,
                     SubdCode = s.SubdCode,
                     SubdName = s.SubdName,
-                    CityMunicipality = s.CityMunicipality,
-                    Province = s.Province,
+                    CityMunicipality = s.CityMunicipality ?? null,
+                    Province = s.Province ?? null,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
@@ -174,8 +174,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubDistributorId = s.SubDistributorId,
                     SubdCode = s.SubdCode,
                     SubdName = s.SubdName,
-                    CityMunicipality = s.CityMunicipality,
-                    Province = s.Province,
+                    CityMunicipality = s.CityMunicipality ?? null,
+                    Province = s.Province ?? null,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
@@ -198,8 +198,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubDistributorId = s.SubDistributorId,
                     SubdCode = s.SubdCode,
                     SubdName = s.SubdName,
-                    CityMunicipality = s.CityMunicipality,
-                    Province = s.Province,
+                    CityMunicipality = s.CityMunicipality ?? null,
+                    Province = s.Province ?? null,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,

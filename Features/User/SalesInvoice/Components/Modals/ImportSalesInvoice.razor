@@ -87,7 +87,7 @@
         {
             Console.WriteLine(ex.ToString());
             importResult = new ImportSalesInvoiceResult();
-            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}. Supported formats: .xlsx, .xlsm.");
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
         }
         finally
         {

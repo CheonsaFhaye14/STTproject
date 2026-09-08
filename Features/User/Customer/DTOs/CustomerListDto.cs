@@ -5,8 +5,8 @@ public class SubDistributorInfoDto
     public int SubDistributorId { get; set; }
     public string SubdCode { get; set; } = null!;
     public string SubdName { get; set; } = null!;
-    public string CityMunicipality { get; set; } = null!;
-    public string Province { get; set; } = null!;
+    public string? CityMunicipality { get; set; } = null!;
+    public string? Province { get; set; } = null!;
 }
 
 

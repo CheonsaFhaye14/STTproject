@@ -271,7 +271,7 @@ public partial class SttprojectContext : DbContext
             entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD15E8FA9F");
 
             entity.ToTable("SubDistributor");
-
+            entity.HasIndex(e => e.SubdCode, "UQ_SubDistributor_SubdCode").IsUnique();
             entity.Property(e => e.CityMunicipality).HasMaxLength(100);
             entity.Property(e => e.CompanySubdCode)
                 .HasMaxLength(50)
