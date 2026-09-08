@@ -10,9 +10,6 @@ public static class SubDistributorValidations
     {
         public static readonly SubDistributorField subdcode = new(nameof(subdcode), "Subdistributor Code", true, "Subdistributor code is required.");
         public static readonly SubDistributorField subdname = new(nameof(subdname), "Subdistributor Name", true, "Subdistributor name is required.");
-        public static readonly SubDistributorField citymunicipality = new(nameof(citymunicipality), "City / Municipality", true, "City/Municipality is required.");
-        public static readonly SubDistributorField province = new(nameof(province), "Province", true, "Province is required.");
-        public static readonly SubDistributorField companysubdcode = new(nameof(companysubdcode), "Company Subdistributor Code", true, "Company subdistributor code is required.");
         public static readonly SubDistributorField encoder = new(nameof(encoder), "Encoder", false, "Selected user is not a valid Encoder.");
     }
 
@@ -22,9 +19,8 @@ public static class SubDistributorValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddSubDistributorAsync(
-        Data.SubDistributor subDistributor,
-        IAdminSubDistributorService subDistributorService,
-        int? excludeId = null
+        SubDistributor subDistributor,
+        IAdminSubDistributorService subDistributorService
     )
     {
         var errors = new Dictionary<string, string>();
@@ -39,22 +35,6 @@ public static class SubDistributorValidations
             errors[AddSubDistributor.subdname.Key] = AddSubDistributor.subdname.ErrorMessage;
         }
 
-        if (string.IsNullOrWhiteSpace(subDistributor.CityMunicipality))
-        {
-            errors[AddSubDistributor.citymunicipality.Key] = AddSubDistributor.citymunicipality.ErrorMessage;
-        }
-
-        if (string.IsNullOrWhiteSpace(subDistributor.Province))
-        {
-            errors[AddSubDistributor.province.Key] = AddSubDistributor.province.ErrorMessage;
-        }
-
-        if (string.IsNullOrWhiteSpace(subDistributor.CompanySubdCode))
-        {
-            errors[AddSubDistributor.companysubdcode.Key] = AddSubDistributor.companysubdcode.ErrorMessage;
-        }
-
-        // Encoder is optional, but if one is assigned it must actually be an active Encoder-role user.
         if (subDistributor.EncoderId.HasValue)
         {
             var isValidEncoder = await subDistributorService.IsValidEncoderAsync(subDistributor.EncoderId.Value);

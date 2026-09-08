@@ -64,7 +64,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 SubdName = dto.SubdName,
                 CityMunicipality = dto.CityMunicipality,
                 Province = dto.Province,
-                CompanySubdCode = dto.CompanySubdCode,
                 EncoderId = dto.EncoderId,
                 IsActive = dto.IsActive,
                 CreatedDate = NowPh(),
@@ -90,7 +89,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
             entity.SubdName = dto.SubdName ?? entity.SubdName;
             entity.CityMunicipality = dto.CityMunicipality ?? entity.CityMunicipality;
             entity.Province = dto.Province ?? entity.Province;
-            entity.CompanySubdCode = dto.CompanySubdCode ?? entity.CompanySubdCode;
             entity.EncoderId = dto.EncoderId;
             entity.IsActive = dto.IsActive;
             entity.UpdatedBy = dto.UpdatedBy;
@@ -122,7 +120,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubdName = s.SubdName,
                     CityMunicipality = s.CityMunicipality,
                     Province = s.Province,
-                    CompanySubdCode = s.CompanySubdCode,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
@@ -150,8 +147,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 .Where(s => string.IsNullOrEmpty(province) || s.Province == province)
                 .Where(s => string.IsNullOrEmpty(search) ||
                     s.SubdCode.Contains(search) ||
-                    s.SubdName.Contains(search) ||
-                    s.CityMunicipality.Contains(search));
+                    s.SubdName.Contains(search));
 
             var total = await query.CountAsync();
 
@@ -180,7 +176,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubdName = s.SubdName,
                     CityMunicipality = s.CityMunicipality,
                     Province = s.Province,
-                    CompanySubdCode = s.CompanySubdCode,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
@@ -205,7 +200,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubdName = s.SubdName,
                     CityMunicipality = s.CityMunicipality,
                     Province = s.Province,
-                    CompanySubdCode = s.CompanySubdCode,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,

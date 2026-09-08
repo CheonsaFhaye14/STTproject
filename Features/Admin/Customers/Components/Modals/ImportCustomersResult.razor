@@ -48,11 +48,13 @@
                 {
                     var cards = GetGroupCards();
                     var globalIssues = ImportResult.Issues;
-                    var hasSuccessCards = cards.Any(c => !c.HasErrors);
+                    var hasSuccessCards = cards.Any(c => !c.HasErrors && !GroupHasWarningOnly(c));
                     var hasErrorCards = cards.Any(c => c.HasErrors);
+                    var hasWarningCards = cards.Any(GroupHasWarningOnly);
                     var filteredCards = GetFilteredCards(cards);
-                    var selectableCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved);
-                    var selectedCount = cards.Count(c => !c.HasErrors && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));
+                    var selectableCount = cards.Count(c => !c.HasErrors && !GroupHasWarningOnly(c) && !c.Group.IsSaved);
+                    var selectedCount = cards.Count(c => !c.HasErrors && !GroupHasWarningOnly(c) && !c.Group.IsSaved && SelectedGroupKeys.Contains(GroupKey(c.Group)));                    var warningSelectableCount = cards.Count(c => GroupHasWarningOnly(c) && !c.Group.IsSaved);
+                    var warningSelectedCount = cards.Count(c => c.Group.Selected && !c.Group.IsSaved && GroupHasWarningOnly(c));
 
                     @if (hasCommitted)
                     {
@@ -90,7 +92,11 @@
                         </div>
                         <div class="sc">
                             <div class="sc-label">Valid</div>
-                            <div class="sc-val sc-ok">@cards.Count(c => !c.HasErrors)</div>
+                            <div class="sc-val sc-ok">@cards.Count(c => !c.HasErrors && !GroupHasWarningOnly(c))</div>
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">With warnings</div>
+                            <div class="sc-val sc-warn">@cards.Count(GroupHasWarningOnly)</div>
                         </div>
                         <div class="sc">
                             <div class="sc-label">With errors</div>
@@ -151,7 +157,16 @@
                                         class="tab @GetTabClass(GroupFilter.SuccessOnly)"
                                         @onclick='() => SetTab(GroupFilter.SuccessOnly)'>
                                     <span class="dot dot-ok"></span>
-                                    Valid (@cards.Count(c => !c.HasErrors))
+                                    Valid (@cards.Count(c => !c.HasErrors && !GroupHasWarningOnly(c)))
+                                </button>
+                            }
+                            @if (hasWarningCards)
+                            {
+                                <button type="button"
+                                        class="tab @GetTabClass(GroupFilter.WarningOnly)"
+                                        @onclick='() => SetTab(GroupFilter.WarningOnly)'>
+                                    <span class="dot dot-warn"></span>
+                                    Warnings (@cards.Count(GroupHasWarningOnly))
                                 </button>
                             }
                             @if (hasErrorCards)
@@ -194,9 +209,32 @@
                                 Download Error Report
                             </button>
                         }
-
+                        @if (groupFilter == GroupFilter.WarningOnly && hasWarningCards)
+                        {
+                            <div class="err-filter-bar">
+                                <span class="err-filter-label">
+                                    <i class="ti ti-filter" aria-hidden="true"></i>
+                                    Filter warning by
+                                </span>
+                                <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
+                                    <option value="">All warning types</option>
+                                    @foreach (var entry in GetDistinctWarningMessages(cards))
+                                    {
+                                        var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
+                                        <option value="@entry.Message">@display (@entry.Count)</option>
+                                    }
+                                </select>
+                                @if (!string.IsNullOrEmpty(selectedWarningFilter))
+                                {
+                                    <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
+                                        <i class="ti ti-x" aria-hidden="true"></i>
+                                        Clear
+                                    </button>
+                                }
+                            </div>
+                        }
                         @* ── Select all (only on valid / all tab) ── *@
-                        @if (groupFilter != GroupFilter.ErrorOnly && selectableCount > 0)
+                        @if ((groupFilter == GroupFilter.All || groupFilter == GroupFilter.SuccessOnly) && selectableCount > 0)
                         {
                             <div class="sel-all-bar">
                                 <input type="checkbox"
@@ -204,6 +242,16 @@
                                        checked="@(selectedCount == selectableCount)"
                                        @onchange="(e) => ToggleSelectAll(e.Value)" />
                                 <label for="select-all-check">Select all valid (@selectedCount / @selectableCount ready)</label>
+                            </div>
+                        }
+                        else if (groupFilter == GroupFilter.WarningOnly && warningSelectableCount > 0)
+                        {
+                            <div class="sel-all-bar">
+                                <input type="checkbox"
+                                       id="select-all-warnings-check"
+                                       checked="@(warningSelectedCount == warningSelectableCount)"
+                                       @onchange="(e) => ToggleSelectAllWarnings(e.Value)" />
+                                <label for="select-all-warnings-check">Select all with warnings (@warningSelectedCount / @warningSelectableCount ready)</label>
                             </div>
                         }
 
@@ -215,26 +263,26 @@
                             var first = groupRows.FirstOrDefault();
                             var groupKey = GroupKey(card.Group);
                             var isExpanded = expandedCards.Contains(groupKey);
+                            var hasWarning = GroupHasWarningOnly(card);
+                            var groupWarnings = GroupWarnings(card.Group);
 
                             <div class="icard">
-                                <div class="ich ich-ok @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
+                                <div class="ich @(hasWarning ? "ich-warn" : "ich-ok") @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
                                     <div class="ich-left">
-                                        <div class="iicon iicon-ok">
+                                        <div class="iicon @(hasWarning ? "iicon-warn" : "iicon-ok")">
                                             <i class="ti ti-user-check" aria-hidden="true"></i>
                                         </div>
                                         <div>
-                                            <div class="inv-num inv-ok">@first?.CustomerCode - @first?.CustomerName</div>
-                                            <div class="inv-sub inv-sub-ok">
+                                            <div class="inv-num @(hasWarning ? "inv-warn" : "inv-ok")">@first?.CustomerCode - @first?.CustomerName</div>
+                                            <div class="inv-sub @(hasWarning ? "inv-sub-warn" : "inv-sub-ok")">
                                                 <span>@groupRows.Count subd store(s)</span>
                                                 @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
                                                 {
-                                                    <span class="sep">·</span>
-                                                    <span>@ImportResult.SubDistributorName</span>
+                                                    <span class="sep">·</span><span>@ImportResult.SubDistributorName</span>
                                                 }
                                                 @if (!string.IsNullOrWhiteSpace(first?.CustomerType))
                                                 {
-                                                    <span class="sep">·</span>
-                                                    <span>@first.CustomerType</span>
+                                                    <span class="sep">·</span><span>@first.CustomerType</span>
                                                 }
                                             </div>
                                         </div>
@@ -242,21 +290,21 @@
                                     <div class="ich-right">
                                         @if (card.Group.IsSaved)
                                         {
-                                            <span class="badge badge-saved">
-                                                <i class="ti ti-circle-check" aria-hidden="true"></i>
-                                                Saved
-                                            </span>
+                                            <span class="badge badge-saved"><i class="ti ti-circle-check" aria-hidden="true"></i>Saved</span>
                                         }
                                         else
                                         {
-                                            <span class="badge badge-ready">
-                                                <i class="ti ti-check" aria-hidden="true"></i>
-                                                Ready
-                                            </span>
+                                            @if (hasWarning)
+                                            {
+                                                <span class="badge badge-warn"><i class="ti ti-alert-triangle" aria-hidden="true"></i>Warning</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-ready"><i class="ti ti-check" aria-hidden="true"></i>Ready</span>
+                                            }
                                             <div class="chk" @onclick:stopPropagation="true">
                                                 <input type="checkbox" checked="@card.Group.Selected"
-                                                    @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)"
-                                                    id="chk-@groupKey" />
+                                                    @onchange="(e) => ToggleGroupSelection(card.Group, e.Value)" id="chk-@groupKey" />
                                                 <label for="chk-@groupKey">Select</label>
                                             </div>
                                         }
@@ -267,6 +315,13 @@
                                 @if (isExpanded)
                                 {
                                     <div class="icb">
+                                        @if (groupWarnings.Any())
+                                        {
+                                            <div class="dup-warning-banner">
+                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                @string.Join(" · ", groupWarnings)
+                                            </div>
+                                        }
                                         <div class="cust-meta">
                                             <div>
                                                 <span class="cust-meta-label">Subdistributor</span>
@@ -450,9 +505,10 @@
     private bool wasShown;
     private GroupFilter groupFilter = GroupFilter.All;
     private string? selectedErrorFilter;
+    private string? selectedWarningFilter;
     private HashSet<string> expandedCards = new(StringComparer.OrdinalIgnoreCase);   // was HashSet<int>
 
-    private enum GroupFilter { All, SuccessOnly, ErrorOnly }
+    private enum GroupFilter { All, SuccessOnly, ErrorOnly, WarningOnly }
 
     private sealed record GroupCardViewModel(PreparedCustomerGroup Group, CustomerImportRowResult? Row)
     {
@@ -482,6 +538,7 @@
 
     private List<GroupCardViewModel> GetFilteredCards(List<GroupCardViewModel> cards) => groupFilter switch
     {
+        GroupFilter.WarningOnly => cards.Where(c => GroupHasWarningOnly(c)).ToList(),
         GroupFilter.SuccessOnly => cards.Where(c => !c.HasErrors).ToList(),
         GroupFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
             ? cards.Where(c => c.HasErrors && c.Group.Issues.Any(i => NormalizeMessageType(i.Message) == selectedErrorFilter)).ToList()
@@ -492,6 +549,7 @@
     private string GetTabClass(GroupFilter filter) => groupFilter == filter
         ? filter switch
         {
+            GroupFilter.WarningOnly => "tab act-warn",
             GroupFilter.SuccessOnly => "tab act-ok",
             GroupFilter.ErrorOnly => "tab act-er",
             _ => "tab act-all"
@@ -502,6 +560,7 @@
     {
         groupFilter = filter;
         selectedErrorFilter = null;
+        selectedWarningFilter = null;
     }
 
     private void ToggleExpand(string key)
@@ -520,7 +579,7 @@
     private void ToggleSelectAll(object? checkedValue)
     {
         if (checkedValue is not bool isChecked || ImportResult == null) return;
-        foreach (var g in ImportResult.PreparedGroups.Where(g => g.Issues.Count == 0 && !g.IsSaved))
+        foreach (var g in ImportResult.PreparedGroups.Where(g => g.Issues.Count == 0 && !g.IsSaved && !g.Rows.Any(r => r.Warnings.Count > 0)))
         {
             g.Selected = isChecked;
             var key = GroupKey(g);
@@ -565,7 +624,6 @@
         if (msg.Contains("name") && msg.Contains("required")) return "Customer Name Required";
         if (msg.Contains("subdistributor")) return "Subdistributor Error";
         if (msg.Contains("save failed")) return "Save Failed";
-        if (msg.Contains("city") || msg.Contains("province") && msg.Contains("does not match")) return "City/Province not same as Geographic Data";
 
         return NormalizeMessage(m);
     }
@@ -595,4 +653,48 @@
     {
         if (OnClose.HasDelegate) await OnClose.InvokeAsync();
     }
+    private static List<string> GroupWarnings(PreparedCustomerGroup g) =>
+    g.Rows.SelectMany(r => r.Warnings).Distinct().ToList();
+
+    private static bool GroupHasWarningOnly(GroupCardViewModel c) =>
+        !c.HasErrors && GroupWarnings(c.Group).Count > 0;
+
+    private static string NormalizeWarningMessageType(string? m)
+    {
+        var msg = NormalizeMessage(m).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
+
+        if (msg.Contains("not found in the geographic")) return "Province Not Found";
+        if (msg.Contains("does not match province")) return "City/Province Mismatch";
+
+        return NormalizeMessage(m);
+    }
+
+    private IEnumerable<(string Message, int Count)> GetDistinctWarningMessages(List<GroupCardViewModel> cards)
+    {
+        var all = cards
+            .Where(GroupHasWarningOnly)
+            .SelectMany(c => GroupWarnings(c.Group).Select(NormalizeWarningMessageType));
+
+        return all
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .GroupBy(m => m)
+            .Select(g => (Message: g.Key, Count: g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Message)
+            .ToList();
+    }
+
+    private void OnWarningFilterChanged(ChangeEventArgs e) => selectedWarningFilter = e?.Value?.ToString();
+    private void ClearWarningFilter() => selectedWarningFilter = null;
+    private void ToggleSelectAllWarnings(object? checkedValue)
+{
+    if (checkedValue is not bool isChecked || ImportResult == null) return;
+    foreach (var g in ImportResult.PreparedGroups.Where(g => g.Issues.Count == 0 && !g.IsSaved && g.Rows.Any(r => r.Warnings.Count > 0)))
+    {
+        g.Selected = isChecked;
+        var key = GroupKey(g);
+        if (isChecked) SelectedGroupKeys.Add(key); else SelectedGroupKeys.Remove(key);
+    }
+}
 }

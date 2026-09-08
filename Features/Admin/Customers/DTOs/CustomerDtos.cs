@@ -154,6 +154,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public bool IsSuccess { get; set; }
         public int? CustomerId { get; set; }
         public List<string> Issues { get; } = new();
+        public List<string> Warnings { get; } = new();
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int? ExistingCustomerIdToUpdate { get; set; }
     }

@@ -11,7 +11,6 @@ namespace STTproject.Features.Admin.Customers.Services
         Task<string?> GetIslandByProvinceAsync(string? province);
         Task<IReadOnlyList<string?>> GetCitiesMunicipalitiesByIslandAsync(string? island);
 
-        //TODO: Delete
         Task<IReadOnlyList<string?>> GetAllProvincesAsync();
         Task<IReadOnlyList<string?>> GetAllCitiesMunicipalitiesAsync();
         Task<IReadOnlyList<string?>> GetAllIslandsAsync();

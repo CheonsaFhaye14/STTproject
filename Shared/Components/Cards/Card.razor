@@ -7,7 +7,20 @@
     </div>
 </div>
 <style>
-    
+    .card {
+        border: 1px solid var(--app-border);
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        background-color: black;
+        color: var(--app-text-color);
+    }
+    .card-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--app-border);
+    }
+    .card-body {
+        padding: 16px;
+    }
 </style>
 @code{
     [Parameter] public string Title { get; set; } = string.Empty;

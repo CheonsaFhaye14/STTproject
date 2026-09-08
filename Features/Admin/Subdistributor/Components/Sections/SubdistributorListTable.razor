@@ -1,3 +1,4 @@
+@using STTproject.Features.Admin.Customers.Services
 @using STTproject.Features.Admin.Subdistributor.DTOs
 @inject STTproject.Features.Admin.Subdistributor.Services.IAdminSubDistributorService AdminSubDistributorService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
@@ -63,21 +64,6 @@
                         <span>Inactive</span>
                     </label>
                 </div>
-            </div>
-
-            <!-- Province filter -->
-            <div class="clt-filter-group">
-                <label class="clt-filter-label" for="provinceFilter">Province</label>
-                <input id="provinceFilter" class="clt-select" list="province-options"
-                       value="@SelectedProvince"
-                       @onchange="e => OnFilterChanged(province: e.Value?.ToString() ?? string.Empty)"
-                       placeholder="All provinces" />
-                <datalist id="province-options">
-                    @foreach (var p in KnownProvinces)
-                    {
-                        <option value="@p"></option>
-                    }
-                </datalist>
             </div>
 
             @if (HasActiveFilters)
@@ -205,7 +191,6 @@
     [Parameter] public EventCallback<int> OnEditSubDistributor { get; set; }
 
     private List<SubDistributorListDto> PagedSubDistributors { get; set; } = new();
-    private List<string> KnownProvinces { get; set; } = new();
 
     private string _searchTerm = "";
     private string SearchTerm
@@ -251,12 +236,6 @@
         try
         {
             await LoadPageAsync();
-            var all = await AdminSubDistributorService.GetAllAsync();
-            KnownProvinces = all.Select(s => s.Province)
-                .Where(p => !string.IsNullOrWhiteSpace(p))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(p => p)
-                .ToList();
         }
         catch (Exception ex)
         {
@@ -328,6 +307,7 @@
 
     private void SetActive(int id, bool isActive)
     {
+        Console.WriteLine($"SetActive called with id: {id}, isActive: {isActive}");
         pendingToggleId = id;
         pendingToggleStatus = isActive;
         toggleConfirmMessage = isActive

@@ -1,7 +1,9 @@
-@using STTproject.Features.Admin.Subdistributor.Validators
+
 @using STTproject.Features.Admin.Users.DTOs
 @inject STTproject.Features.Admin.Subdistributor.Services.IAdminSubDistributorService AdminSubDistributorService
 @inject STTproject.Services.IUserContextService UserContextService
+
+@inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
 
 <div class="modal-overlay">
     <div class="modal-box">
@@ -31,33 +33,23 @@
             </div>
 
             <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.companysubdcode.Label<span class="required-asterisk">*</span></label>
-                <input @bind="CompanySubdCode" @ref="companySubdCodeInput" disabled=@isViewMode Placeholder="Enter company subdistributor code..." />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.companysubdcode.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.companysubdcode.Key)</span>
-                }
+                <AutoComplete 
+                    Label="Province" 
+                    Placeholder="Search province..."
+                    Items="Provinces" 
+                    SelectedValue="@Province"
+                    SelectedValueChanged="OnProvinceSelected"
+                    Disabled="@isViewMode"/>
             </div>
 
             <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.province.Label<span class="required-asterisk">*</span></label>
-                <input @bind="Province" @ref="provinceInput" disabled=@isViewMode Placeholder="Enter province..." />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.province.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.province.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.citymunicipality.Label<span class="required-asterisk">*</span></label>
-                <input @bind="CityMunicipality" @ref="cityMunicipalityInput" disabled=@isViewMode Placeholder="Enter city/municipality..." />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.citymunicipality.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.citymunicipality.Key)</span>
-                }
+                <AutoComplete 
+                    Label="City / Municipality" 
+                    Placeholder="Search city/municipality..."
+                    Items="CitiesMunicipalities" 
+                    SelectedValue="@CityMunicipality"
+                    SelectedValueChanged="OnCityMunicipalitySelected"
+                    Disabled="@isViewMode"/>
             </div>
 
             <div class="form-group">
@@ -131,13 +123,10 @@
     private GenericAutocomplete<UserListDto>? encoderAutocomplete;
     private ElementReference subdCodeInput;
     private ElementReference subdNameInput;
-    private ElementReference companySubdCodeInput;
-    private ElementReference provinceInput;
     private ElementReference cityMunicipalityInput;
 
     private string? SubdCode { get; set; }
     private string? SubdName { get; set; }
-    private string? CompanySubdCode { get; set; }
     private string? Province { get; set; }
     private string? CityMunicipality { get; set; }
     private bool IsActive { get; set; } = true;
@@ -161,9 +150,15 @@
     private string GetFieldError(string key) =>
         Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
 
+    private List<string?> Provinces { get; set; } = new();
+    private List<string?> Islands { get; set; } = new();
+    private List<string?> CitiesMunicipalities { get; set; } = new();
+
     protected override async Task OnInitializedAsync()
     {
         Encoders = (await AdminSubDistributorService.GetEncoderUsersAsync()).ToList();
+        Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
+        CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
 
         if (isEdit)
         {
@@ -173,7 +168,6 @@
             {
                 SubdCode = subd.SubdCode;
                 SubdName = subd.SubdName;
-                CompanySubdCode = subd.CompanySubdCode;
                 Province = subd.Province;
                 CityMunicipality = subd.CityMunicipality;
                 IsActive = subd.IsActive;
@@ -181,9 +175,6 @@
                 EncoderId = subd.EncoderId;
                 SelectedEncoderName = subd.EncoderName;
 
-                // Ensure the currently assigned encoder appears in the list even if they've
-                // since gone inactive or changed roles — otherwise the autocomplete has
-                // nothing to match against and can render blank.
                 if (subd.EncoderId.HasValue && !Encoders.Any(e => e.UserId == subd.EncoderId.Value))
                 {
                     Encoders.Insert(0, new UserListDto
@@ -194,6 +185,9 @@
                         Role = EncoderRoleFallback
                     });
                 }
+                
+                if (!string.IsNullOrWhiteSpace(Province))
+                    CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
 
                 // Audit
                 CreatedDate = subd.CreatedDate;
@@ -225,7 +219,6 @@
         {
             SubdCode = SubdCode ?? string.Empty,
             SubdName = SubdName ?? string.Empty,
-            CompanySubdCode = CompanySubdCode ?? string.Empty,
             Province = Province ?? string.Empty,
             CityMunicipality = CityMunicipality ?? string.Empty,
             EncoderId = EncoderId,
@@ -243,7 +236,6 @@
                 SubDistributorId = SubDistributorId!.Value,
                 SubdCode = SubdCode,
                 SubdName = SubdName,
-                CompanySubdCode = CompanySubdCode,
                 Province = Province,
                 CityMunicipality = CityMunicipality,
                 EncoderId = EncoderId,
@@ -257,7 +249,6 @@
             {
                 SubdCode = SubdCode ?? string.Empty,
                 SubdName = SubdName ?? string.Empty,
-                CompanySubdCode = CompanySubdCode ?? string.Empty,
                 Province = Province ?? string.Empty,
                 CityMunicipality = CityMunicipality ?? string.Empty,
                 EncoderId = EncoderId,
@@ -320,5 +311,40 @@
         if (onCancel.HasDelegate)
             return onCancel.InvokeAsync();
         return Task.CompletedTask;
+    }
+    private async Task OnProvinceSelected(string? selected)
+    {
+        Province = selected;
+        await ProvinceChanged();
+    }
+    private async Task ProvinceChanged()
+    {
+        try
+        {
+            CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+
+        }
+        catch (Exception)
+        {
+            CitiesMunicipalities = new();
+        }
+        CityMunicipality = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnCityMunicipalitySelected(string? selected)
+    {
+        CityMunicipality = selected;
+
+        if (!string.IsNullOrWhiteSpace(selected) && string.IsNullOrWhiteSpace(Province))
+        {
+            var inferredProvince = await GeographicDataService.GetProvinceByCityAsync(selected);
+            if (!string.IsNullOrWhiteSpace(inferredProvince))
+            {
+                Province = inferredProvince;
+                CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
     }
 }

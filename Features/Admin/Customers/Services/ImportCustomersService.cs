@@ -206,14 +206,9 @@ public sealed class ImportCustomersService
                 if (match is null)
                 {
                     if (!await _geoDataService.ProvinceExistsAsync(rowResult.Province))
-                    {
-                        rowResult.Issues.Add($"Province '{rowResult.Province}' was not found in the geographic reference data.");
-                    }
+                        rowResult.Warnings.Add($"Province '{rowResult.Province}' was not found in the geographic reference data.");
                     else
-                    {
-                        rowResult.Issues.Add(
-                            $"City '{rowResult.City}' does not match Province '{rowResult.Province}' in the geographic reference data.");
-                    }
+                        rowResult.Warnings.Add($"City '{rowResult.City}' does not match Province '{rowResult.Province}' in the geographic reference data.");
                 }
                 else if (rowResult.ZipCode is null && match.ZipCode.HasValue)
                 {

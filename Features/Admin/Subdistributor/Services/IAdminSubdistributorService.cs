@@ -13,8 +13,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
             int page, int pageSize, string? search, string? status,
             string? province, string? sortColumn = "SubdName", bool sortAscending = true);
         Task<SubDistributorListDto?> GetSubDistributorByIdAsync(int id);
-
-        // Encoder assignment — pulled from Users, restricted to Role == "Encoder"
         Task<IEnumerable<UserListDto>> GetEncoderUsersAsync();
         Task<bool> IsValidEncoderAsync(int userId);
     }
