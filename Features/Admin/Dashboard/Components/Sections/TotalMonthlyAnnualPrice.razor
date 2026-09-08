@@ -47,7 +47,7 @@
         <div class="tpsd-chart">
             @foreach (var item in FilteredData)
             {
-                var widthPct = maxPrice == 0 ? 0.0 : (double)(item.TotalPrice / maxPrice) * 100.0;
+                var widthPct = maxPrice == 0 ? 0.0 : (double)(item.MonthlyTotals.Sum() / maxPrice) * 100.0;
 
                 <div class="tpsd-bar-row">
                     <div class="tpsd-bar-label" title="@item.SubdName">
@@ -57,7 +57,7 @@
                     <div class="tpsd-bar-track">
                         <div class="tpsd-bar-fill" style="width:@(widthPct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%"></div>
                     </div>
-                    <div class="tpsd-bar-value">@FormatCurrency(item.TotalPrice)</div>
+                    <div class="tpsd-bar-value">@FormatCurrency(item.MonthlyTotals.Sum())</div>
                 </div>
             }
         </div>

@@ -15,7 +15,9 @@ namespace STTproject.Features.Admin.Dashboard.DTOs
         public int SubDistributorId { get; set; }
         public string SubdCode { get; set; } = string.Empty;
         public string SubdName { get; set; } = string.Empty;
-        public decimal TotalPrice { get; set; }
+        public List<decimal> SubdTotals { get; set; } = new();
+        public List<decimal> YearlyTotals { get; set; } = new();
+        public List<decimal> MonthlyTotals { get; set; } = new();
     }
 
     public class SubdItemPerSubdDto

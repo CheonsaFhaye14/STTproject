@@ -58,9 +58,9 @@ namespace STTproject.Features.Admin.Dashboard.Services
                     SubDistributorId = g.Key.SubDistributorId,
                     SubdCode = g.Key.SubdCode,
                     SubdName = g.Key.SubdName,
-                    TotalPrice = g.Sum(x => x.Amount)
+                    MonthlyTotals = g.Select(x => x.Amount).ToList()
                 })
-                .OrderByDescending(x => x.TotalPrice)
+                .OrderByDescending(x => x.MonthlyTotals.Sum())
                 .ToListAsync();
         }
 
@@ -86,9 +86,9 @@ namespace STTproject.Features.Admin.Dashboard.Services
                     SubDistributorId = g.Key.SubDistributorId,
                     SubdCode = g.Key.SubdCode,
                     SubdName = g.Key.SubdName,
-                    TotalPrice = g.Sum(x => x.Amount)
+                    YearlyTotals = g.Select(x => x.Amount).ToList()
                 })
-                .OrderByDescending(x => x.TotalPrice)
+                .OrderByDescending(x => x.YearlyTotals.Sum())
                 .ToListAsync();
         }
 
@@ -109,6 +109,29 @@ namespace STTproject.Features.Admin.Dashboard.Services
                     InactiveCount = s.SubdItems.Count(si => !si.IsActive),
                 })
                 .OrderBy(s => s.SubdName)
+                .ToListAsync();
+        }
+
+        public async Task<List<TotalPricesPerSubdMonthlyAnnualDto>> GetTotalPricesPerSubdAllTimeAsync()
+        {
+            await using var db = _dbContextFactory.CreateDbContext();
+
+            return await db.SalesInvoiceItems
+                .AsNoTracking()
+                .GroupBy(sii => new
+                {
+                    sii.SalesInvoice.SubDistributorId,
+                    sii.SalesInvoice.SubDistributor.SubdCode,
+                    sii.SalesInvoice.SubDistributor.SubdName
+                })
+                .Select(g => new TotalPricesPerSubdMonthlyAnnualDto
+                {
+                    SubDistributorId = g.Key.SubDistributorId,
+                    SubdCode = g.Key.SubdCode,
+                    SubdName = g.Key.SubdName,
+                    SubdTotals = g.Select(x => x.Amount).ToList()
+                })
+                .OrderByDescending(x => x.SubdTotals.Sum())
                 .ToListAsync();
         }
 
