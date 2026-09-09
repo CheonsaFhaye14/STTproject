@@ -1,0 +1,158 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+<div class="toggle-group" @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
+    <label class="toggle-label">
+        <span class="toggle-switch">
+            <input type="checkbox" checked="@(Bind)" disabled="@Disabled" @onchange="OnChanged" />
+            <span class="toggle-slider"></span>
+        </span>
+        <span class="toggle-text">@(Title ?? DisplayTitle)</span>
+    </label>
+    @if (!string.IsNullOrWhiteSpace(EffectiveTooltip) && isHovering)
+    {
+        <span class="toggle-tooltip-bubble" role="tooltip"
+              style="left:@(mouseX + 14)px; top:@(mouseY + 18)px;">
+            @EffectiveTooltip
+        </span>
+    }
+</div>
+
+@code
+{
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string ActiveLabel { get; set; } = "Active";
+    [Parameter] public string InactiveLabel { get; set; } = "Inactive";
+    [Parameter] public string? Tooltip { get; set; }
+    [Parameter] public bool Bind { get; set; }
+    [Parameter] public bool Disabled { get; set; } = false;
+    [Parameter] public EventCallback<bool> BindChanged { get; set; }
+    private bool isHovering;
+    private double mouseX;
+    private double mouseY;
+
+    private string DisplayTitle => Title ?? (Bind == true ? ActiveLabel : InactiveLabel);
+    private string EffectiveTooltip => Tooltip ?? $"Click to set to {(Bind == true ? InactiveLabel : ActiveLabel)}";
+
+    private async Task OnChanged(ChangeEventArgs e)
+    {
+        var value = e.Value is bool b && b;
+        Bind = value;
+        await BindChanged.InvokeAsync(value);
+    }
+
+    private void OnMouseEnter(MouseEventArgs e)
+    {
+        isHovering = true;
+        mouseX = e.ClientX;
+        mouseY = e.ClientY;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        mouseX = e.ClientX;
+        mouseY = e.ClientY;
+    }
+
+    private void OnMouseLeave(MouseEventArgs e)
+    {
+        isHovering = false;
+    }
+    
+}
+
+<style>
+    
+.toggle-group {
+    position: relative;
+    display: inline-flex;
+}
+
+.toggle-tooltip-bubble {
+    position: fixed;
+    background: var(--app-dark-deep, #211a10);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    padding: 6px 10px;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    z-index: 2147483647;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 21px;
+    flex-shrink: 0;
+}
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #DDD6C4;
+    border-radius: 999px;
+    transition: background 0.15s;
+}
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 15px;
+        height: 15px;
+        left: 3px;
+        top: 3px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.15s;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+.toggle-switch input:checked + .toggle-slider {
+    background: #C9A227;
+}
+
+    .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(17px);
+    }
+
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1B1B1F;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    margin-bottom: 0;
+    cursor: pointer;
+    width: fit-content;
+}
+
+.form-group input[type="checkbox"] {
+    accent-color: #C9A227;
+    width: 15px;
+    height: 15px;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+</style>

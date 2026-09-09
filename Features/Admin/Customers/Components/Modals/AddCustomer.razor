@@ -1,4 +1,5 @@
 @using STTproject.Features.Admin.Customers.Validators
+@using STTproject.Shared.Components.Tables
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 @inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
 @inject STTproject.Services.IUserContextService UserContextService
@@ -18,217 +19,120 @@
             <ChildContent>
                 <div class="form-group">
                     <AutoComplete Label="Subdistributor" Placeholder="Search subdistributor..." TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto" Required="true" Items="SubDistributors" ValueSelector="x => x.SubDistributorId.ToString()" TextSelector="x => x.SubDistributorName ?? string.Empty"
-                        SelectedValue="@(SubDistributorId.ToString())" SelectedItemChanged="OnSubDistributorSelected" Disabled=@isViewMode />
-                            @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)))
-                            {
-                                <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)</span>
-                            }
-                        </div>
+                        SelectedValue="@(SubDistributorId.ToString())" SelectedItemChanged="OnSubDistributorSelected" Disabled=@isViewMode
+                        ShowError="@ShowValidationErrors"
+                        ErrorText="@GetFieldError(CustomerValidations.AddCustomer.subdistributor.Key)" />
+                </div>
 
-                        <div class="form-group">
-                            <label>
-                                @CustomerValidations.AddCustomer.customercode.Label<span class="required-asterisk">*</span>
-                            </label>
-                            <input @bind="CustomerCode" @ref="customerCodeInput" disabled=@isViewMode Placeholder="Enter customer code..." />
-                            @if (ShowValidationErrors &&
-                            !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customercode.Key)))
-                            {
-                                <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customercode.Key)</span>
-                            }
-                        </div>
+                <div class="form-group">
+                    <Input Label="@CustomerValidations.AddCustomer.customercode.Label" Required="true" @bind-Value="CustomerCode" Disabled="@isViewMode"
+                        Placeholder="Enter customer code..." ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CustomerValidations.AddCustomer.customercode.Key)" />
+                </div>
 
-                        <div class="form-group">
-                            <label>
-                                @CustomerValidations.AddCustomer.customername.Label<span class="required-asterisk">*</span>
-                            </label>
-                            <input @bind="CustomerName" @ref="customerNameInput" disabled=@isViewMode Placeholder="Enter customer name..." />
-                            @if (ShowValidationErrors &&
-                            !string.IsNullOrWhiteSpace(GetFieldError(CustomerValidations.AddCustomer.customername.Key)))
-                            {
-                                <span class="error-text">@GetFieldError(CustomerValidations.AddCustomer.customername.Key)</span>
-                            }
-                        </div>
-
-                        <div class="form-group">
-                            <AutoComplete Label="Customer Type"
-                                          Placeholder="Search or select customer type..."
-                                          Items="ExistingCustomerTypes"
-                                          Disabled=@isViewMode
-                                          SelectedValue="@CustomerType"
-                                          SelectedValueChanged="OnCustomerTypeSelected" />
-                        </div>
-
-                        <div class="form-group toggle-group">
-                            <label class="toggle-label">
-                                <span class="toggle-switch">
-                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
-                                    <span class="toggle-slider"></span>
-                                </span>
-                                <span class="toggle-text">Is Active</span>
-                            </label>
-                        </div>
-            </ChildContent>
+                <div class="form-group">
+                    <Input Label="Customer Name" Required="true" @bind-Value="CustomerName" Disabled="@isViewMode" Placeholder="Enter customer name..." ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CustomerValidations.AddCustomer.customername.Key)" />
+                </div>
+                @if(!isViewMode || (isViewMode && !string.IsNullOrWhiteSpace(CustomerType)))
+                {
+                <div class="form-group">
+                    <AutoComplete Label="Customer Type"
+                                    Placeholder="Search or select customer type..."
+                                    Items="ExistingCustomerTypes"
+                                    Disabled=@isViewMode
+                                    SelectedValue="@CustomerType"
+                                    SelectedValueChanged="OnCustomerTypeSelected"
+                                    AllowCustomValue="true" />
+                </div>
+                }
+                <div class="form-group">
+                    <Toggle @bind-Bind="IsActive" Disabled=@isViewMode />
+                </div>
+            </ChildContent> 
         </FormSection>
 
-        <FormSection Icon="ti ti-map-pin" Title="Customer Address" Optional="true" Summary="@GetAddressSummary()" Expandable="true" IsExpanded="false">
-            <ChildContent>
-                        <div class="form-group">
-                        <AutoComplete Label="Island"
-                                          Placeholder="Search or select island..."
-                                          Items="Islands"
-                                          SelectedValue="@Island"
-                                          SelectedValueChanged="OnIslandSelected"
-                                          Disabled=@isViewMode />
-                        </div>
-                        <div class="form-group">
-                            <AutoComplete Label="Province"
-                                          Placeholder="Search or select province..."
-                                          Items="Provinces"
-                                          SelectedValue="@Province"
-                                          SelectedValueChanged="OnProvinceSelected"
-                                          Disabled=@isViewMode />
-                        </div>
-
-                        <div class="form-group">
-                            <AutoComplete Label="City / Municipality"
-                                          Placeholder="Search or select city / municipality..."
-                                          Items="CitiesMunicipalities"
-                                          SelectedValue="@City"
-                                          SelectedValueChanged="OnCitySelected"
-                                          Disabled=@isViewMode />
-                        </div>
-
-                        <div class="form-group">
-                            <label>Address Line</label>
-                            <input @bind="AddressLine" @ref="addressLineInput" disabled=@isViewMode Placeholder="Enter address line..." />
-                        </div>
-
-                        <div class="form-group">
-                            <label>Zip Code</label>
-                            <input @bind="ZipCode" @ref="zipCodeInput" disabled=True Placeholder="Auto-populated based on selected city..." />
-                        </div>
-            </ChildContent>
-        </FormSection>
-
+        @if(!isViewMode || (isViewMode && (!string.IsNullOrWhiteSpace(Island) || !string.IsNullOrWhiteSpace(Province) || !string.IsNullOrWhiteSpace(City) || !string.IsNullOrWhiteSpace(AddressLine) || ZipCode.HasValue)))
+            {
+            <FormSection Icon="ti ti-map-pin" Title="Customer Address" Optional="true" Summary="@GetAddressSummary()" Expandable="true" IsExpanded="false">
+                <ChildContent>
+                            @if(!@isViewMode)
+                            {
+                                <div class="form-group">
+                                <AutoComplete Label="Island"
+                                                Placeholder="Search or select island..."
+                                                Items="Islands"
+                                                SelectedValue="@Island"
+                                                SelectedValueChanged="OnIslandSelected"
+                                                Disabled=@isViewMode />
+                                </div>
+                            }
+                            @if(!isViewMode || (isViewMode && !string.IsNullOrWhiteSpace(Province)))
+                            {
+                            <div class="form-group">
+                                <AutoComplete Label="Province"
+                                            Placeholder="Search or select province..."
+                                            Items="Provinces"
+                                            SelectedValue="@Province"
+                                            SelectedValueChanged="OnProvinceSelected"
+                                            Disabled=@isViewMode />
+                            </div>
+                            }
+                            @if(!isViewMode || (isViewMode && !string.IsNullOrWhiteSpace(City)))
+                            {
+                            <div class="form-group">
+                                <AutoComplete Label="City / Municipality"
+                                            Placeholder="Search or select city / municipality..."
+                                            Items="CitiesMunicipalities"
+                                            SelectedValue="@City"
+                                            SelectedValueChanged="OnCitySelected"
+                                            Disabled=@isViewMode />
+                            </div>
+                            }
+                            @if(!isViewMode || (isViewMode && !string.IsNullOrWhiteSpace(AddressLine)))
+                            {
+                            <div class="form-group">
+                                <Input Label="Address Line" @bind-Value="AddressLine" Disabled=@isViewMode Placeholder="Enter address line..." />
+                            </div>
+                            }
+                            @if(!isViewMode || (isViewMode && ZipCode.HasValue))
+                            {
+                            <div class="form-group">
+                                <Input Label="Zip Code" @bind-Value="ZipCode" Disabled=true Placeholder="Auto-populated based on selected city..." />
+                            </div>
+                            }
+                </ChildContent>
+            </FormSection>
+        }
             @{
                 bool hasAnyPairData = SubdCustPairs.Any(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName));
             }
 
             @if (!isViewMode || hasAnyPairData)
             {
-                <FormSection Icon="ti ti-link" Title="Subd Customer Mapping" Optional="true" Summary="@(hasAnyPairData ? $"{SubdCustPairs.Count(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))} mapping(s) added" : "No mappings yet")" Expandable="true" IsExpanded="false">
+                <FormSection Icon="ti ti-link" Title="Subd Customer Mapping" Optional="true"
+                            Summary="@(hasAnyPairData ? $"{SubdCustPairs.Count(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))} mapping(s) added" : "No mappings yet")"
+                            Expandable="true" IsExpanded="isEdit || hasAnyPairData">
                     <ChildContent>
-                            @if (isViewMode)
-                            {
-                                var viewPairs = SubdCustPairs.Where(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName)).ToList();
-                                <div class="subd-table-wrap">
-                                    <table class="subd-table">
-                                        <thead>
-                                            <tr>
-                                                <th class="subd-row-num"></th>
-                                                <th>Subd Customer Code</th>
-                                                <th>Subd Store Name</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @for (int i = 0; i < viewPairs.Count; i++)
-                                            {
-                                                var pair = viewPairs[i];
-                                                <tr>
-                                                    <td class="subd-row-num">@(i + 1)</td>
-                                                    <td><input value="@pair.SubdCustCode" disabled /></td>
-                                                    <td><input value="@pair.SubdCustName" disabled /></td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="subd-table-wrap">
-                                    <table class="subd-table">
-                                        <thead>
-                                            <tr>
-                                                <th class="subd-row-num"></th>
-                                                <th>Subd Customer Code</th>
-                                                <th>Subd Store Name</th>
-                                                <th class="subd-action-col"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @for (int i = 0; i < SubdCustPairs.Count; i++)
-                                            {
-                                                var idx = i;
-                                                <tr>
-                                                    <td class="subd-row-num">@(idx + 1)</td>
-                                                    <td><input @bind="SubdCustPairs[idx].SubdCustCode" placeholder="e.g. SUBD-0001" /></td>
-                                                    <td><input @bind="SubdCustPairs[idx].SubdCustName" placeholder="e.g. Green Breeze - Montalban Rizal" /></td>
-                                                    <td class="subd-action-col">
-                                                        @if (SubdCustPairs.Count > 1)
-                                                        {
-                                                            <button type="button" class="subd-remove-btn" aria-label="Remove mapping" disabled=@isSubmitting @onclick="() => RemoveSubdPair(idx)">
-                                                                <i class="ti ti-trash" aria-hidden="true"></i>
-                                                            </button>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                                @if (ShowValidationErrors && SubdPairErrors.TryGetValue(idx, out var pairErr))
-                                                {
-                                                    <tr class="subd-error-row">
-                                                        <td></td>
-                                                        <td colspan="3"><span class="error-text">@pairErr</span></td>
-                                                    </tr>
-                                                }
-                                            }
-                                        </tbody>
-                                    </table>
-                                    <div class="subd-table-footer">
-                                        <button type="button" class="subd-add-btn" @onclick="AddSubdPair">+ Add another subd store</button>
-                                    </div>
-                                </div>
-
-                                @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(SubdPairsGeneralError))
-                                {
-                                    <span class="error-text">@SubdPairsGeneralError</span>
-                                }
-                            }
-
+                        <AddTable TItem="SubdCustPairInput"
+                                Items="SubdCustPairs"
+                                Columns="@(new List<string> { "SubdCustCode", "SubdCustName" })"
+                                ColumnLabels="@(new Dictionary<string,string> { ["SubdCustCode"] = "Subd Customer Code", ["SubdCustName"] = "Subd Store Name" })"
+                                ColumnPlaceholders="@(new Dictionary<string,string> { ["SubdCustCode"] = "e.g. SUBD-0001", ["SubdCustName"] = "e.g. Green Breeze - Montalban Rizal" })"
+                                EditableColumns="@(new List<string> { "SubdCustCode", "SubdCustName" })"
+                                ViewMode="isViewMode"
+                                Disabled="isSubmitting"
+                                MinItems="1"
+                                AddButtonVisible="!isViewMode"
+                                AddTableButtonText="+ Add another subd store"
+                                OnAdd="AddSubdPair"
+                                RemoveButtonVisible="!isViewMode"
+                                RemoveButtonDisabled="isSubmitting"
+                                OnRemove="RemoveSubdPair"
+                                ShowError="ShowValidationErrors"
+                                ErrorSelector="@(idx => SubdPairErrors.TryGetValue(idx, out var err) ? err : null)"
+                                GeneralErrorText="@SubdPairsGeneralError" />
                     </ChildContent>
                 </FormSection>
             }
-
-            @* Audit info — view mode only *@
-            @if (isEdit && isViewMode)
-            {
-                <FormSection Icon="ti ti-info-circle" Title="Audit Information">
-                    <ChildContent>
-                        <div class="form-group">
-                            <label>Created Date</label>
-                            <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                        </div>
-
-                        <div class="form-group">
-                            <label>Created By</label>
-                            <input value="@(CreatedByName ?? CreatedById?.ToString() ?? "—")" disabled />
-                        </div>
-
-                        @if (UpdatedDate.HasValue)
-                        {
-                            <div class="form-group">
-                                <label>Updated Date</label>
-                                <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                            </div>
-
-                            <div class="form-group">
-                                <label>Updated By</label>
-                                <input value="@(UpdatedByName ?? UpdatedById?.ToString() ?? "—")" disabled />
-                            </div>
-                        }
-                    </ChildContent>
-                </FormSection>
-            }
-
             <div class="action-buttons">
                 @if (isEdit && isViewMode)
                 {
@@ -259,9 +163,11 @@
 
     private void RemoveSubdPair(int idx)
     {
-        if (idx >= 0 && idx < SubdCustPairs.Count)
-            SubdCustPairs.RemoveAt(idx);
-        SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
+        if (SubdCustPairs.Count == 0 ||
+            SubdCustPairs.All(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName)))
+        {
+            SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
+        }
     }
 
     private void ValidateSubdPairs()
@@ -374,9 +280,8 @@
                     .FirstOrDefault(s => s.SubDistributorId == customer.SubDistributorId)?.SubDistributorName;
                 CustomerCode = customer.CustomerCode;
                 CustomerName = customer.CustomerName;
-                CustomerType = customer.CustomerType;
+                CustomerType = customer.CustomerType ?? string.Empty;
                 IsActive = customer.IsActive;
-                AddressLine = customer.AddressLine;
                 City = customer.City;
                 Province = customer.Province;
                 ZipCode = customer.ZipCode;
@@ -658,4 +563,5 @@
         public string? SubdCustName { get; set; }
     }
     private CustomerGroupUpdateDto? PendingGroupUpdateDto { get; set; }
+
 }

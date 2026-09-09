@@ -1,0 +1,144 @@
+@typeparam TItem
+@using System.Reflection
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="row-num"></th>
+                @foreach (var column in Columns)
+                {
+                    <th>@(ColumnLabels.TryGetValue(column, out var label) ? label : column)</th>
+                }
+                @if (RemoveButtonVisible)
+                {
+                    <th class="action-col"></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @for (int i = 0; i < Items.Count; i++)
+            {
+                var idx = i;
+                var item = Items[idx];
+                <tr>
+                    <td class="row-num">@(idx + 1)</td>
+                    @foreach (var column in Columns)
+                    {
+                        <td>
+                            @if (!ViewMode && EditableColumns.Contains(column))
+                            {
+                                <input value="@GetPropertyValue(item, column)"
+                                       placeholder="@(ColumnPlaceholders.TryGetValue(column, out var ph) ? ph : "")"
+                                       disabled="@Disabled"
+                                       @oninput="e => SetPropertyValue(item, column, e.Value?.ToString())" />
+                            }
+                            else
+                            {
+                                <input value="@GetPropertyValue(item, column)" disabled />
+                            }
+                        </td>
+                    }
+                    @if (RemoveButtonVisible)
+                    {
+                        <td class="action-col">
+                            @if (Items.Count > MinItems)
+                            {
+                                <button type="button" class="remove-btn" aria-label="Remove"
+                                        disabled="@RemoveButtonDisabled"
+                                        @onclick="() => RemoveRow(idx)">
+                                    <i class="ti ti-trash" aria-hidden="true"></i>
+                                </button>
+                            }
+                        </td>
+                    }
+                </tr>
+                @if (ShowError && ErrorSelector?.Invoke(idx) is { Length: > 0 } rowError)
+                {
+                    <tr class="error-row">
+                        <td></td>
+                        <td colspan="@(Columns.Count + (RemoveButtonVisible ? 1 : 0))">
+                            <span class="error-text">@rowError</span>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+    @if (AddButtonVisible)
+    {
+        <div class="table-footer">
+            <button type="button" class="add-btn" @onclick="() => OnAdd.InvokeAsync()" disabled="@AddButtonDisabled">
+                @AddTableButtonText
+            </button>
+        </div>
+    }
+</div>
+@if (ShowError && !string.IsNullOrWhiteSpace(GeneralErrorText))
+{
+    <span class="error-text">@GeneralErrorText</span>
+}
+
+@code
+{
+    [Parameter] public List<TItem> Items { get; set; } = new();
+    [Parameter] public List<string> Columns { get; set; } = new();
+    [Parameter] public Dictionary<string, string> ColumnLabels { get; set; } = new();
+    [Parameter] public List<string> EditableColumns { get; set; } = new();
+    [Parameter] public Dictionary<string, string> ColumnPlaceholders { get; set; } = new();
+    [Parameter] public bool ViewMode { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public int MinItems { get; set; } = 0;
+
+    [Parameter] public bool AddButtonVisible { get; set; }
+    [Parameter] public bool AddButtonDisabled { get; set; }
+    [Parameter] public string AddTableButtonText { get; set; } = "Add";
+    [Parameter] public EventCallback OnAdd { get; set; }
+
+    [Parameter] public bool RemoveButtonVisible { get; set; }
+    [Parameter] public bool RemoveButtonDisabled { get; set; }
+    [Parameter] public EventCallback<int> OnRemove { get; set; }
+
+    [Parameter] public bool ShowError { get; set; }
+    [Parameter] public Func<int, string?>? ErrorSelector { get; set; }
+    [Parameter] public string? GeneralErrorText { get; set; }
+
+    private static readonly Dictionary<string, PropertyInfo?> PropertyCache = new();
+
+    private PropertyInfo? GetProperty(string column)
+    {
+        if (!PropertyCache.TryGetValue(column, out var prop))
+        {
+            prop = typeof(TItem).GetProperty(column, BindingFlags.Public | BindingFlags.Instance);
+            PropertyCache[column] = prop;
+        }
+        return prop;
+    }
+
+    private string GetPropertyValue(TItem item, string column)
+    {
+        var prop = GetProperty(column);
+        if (prop is null || item is null) return string.Empty;
+        return prop.GetValue(item)?.ToString() ?? string.Empty;
+    }
+
+    private void SetPropertyValue(TItem item, string column, string? value)
+    {
+        var prop = GetProperty(column);
+        if (prop is null || item is null || !prop.CanWrite) return;
+
+        if (prop.PropertyType == typeof(string))
+        {
+            prop.SetValue(item, value);
+        }
+    }
+    private async Task RemoveRow(int idx)
+    {
+        if (idx >= 0 && idx < Items.Count && Items.Count > MinItems)
+        {
+            Items.RemoveAt(idx);
+        }
+        await OnRemove.InvokeAsync(idx);
+    }
+}

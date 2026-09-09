@@ -49,6 +49,11 @@
         </ul>
     }
 </div>
+@if (ShowError && !string.IsNullOrWhiteSpace(ErrorText))
+{
+    <span class="error-text">@ErrorText</span>
+}
+
 
 <style>
 .autocomplete-wrapper {
@@ -113,22 +118,23 @@
     [Parameter] public TItem? SelectedItem { get; set; }
     [Parameter] public EventCallback<TItem?> SelectedItemChanged { get; set; }
 
-    // NEW: fires on Enter, whether it just selected an item or accepted typed-as-is text
     [Parameter] public EventCallback OnConfirmed { get; set; }
 
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public int MinSearchLength { get; set; } = 0;
     [Parameter] public string NoResultsText { get; set; } = "No results found";
 
-    // NEW: if true, focusing/first-Enter shows the full list regardless of current text
     [Parameter] public bool ShowAllOnOpen { get; set; } = false;
+
+    [Parameter] public string? ErrorText { get; set; }
+    [Parameter] public bool ShowError { get; set; } = true;
+    [Parameter] public bool AllowCustomValue { get; set; } = false;
 
     private string SearchText { get; set; } = string.Empty;
     private bool ShowSuggestions { get; set; }
     private int HighlightedIndex { get; set; } = -1;
     private bool ShowingAll { get; set; }
     private bool HasSelectedItem { get; set; }
-
     private List<TItem> FilteredItems { get; set; } = new();
 
     private ElementReference InputElement;
@@ -178,7 +184,11 @@
             var current = Items.FirstOrDefault(i =>
                 GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
 
-            if (current is null || GetText(current) != SearchText)
+            if (current is not null && GetText(current) != SearchText)
+            {
+                 _ = AcceptCustomValueAsync();
+            }
+            if (current is null)
             {
                 _ = ClearSelectionAsync();
             }
@@ -195,6 +205,19 @@
 
     private void HandleFocusOut()
     {
+        if (AllowCustomValue && !HasSelectedItem && !string.IsNullOrWhiteSpace(SearchText))
+        {
+            var match = Items.FirstOrDefault(i => GetText(i).Equals(SearchText, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                _ = SelectItem(match);
+            }
+            else
+            {
+                _ = AcceptCustomValueAsync();
+            }
+        }
+
         ShowSuggestions = false;
         HighlightedIndex = -1;
     }
@@ -223,7 +246,6 @@
             case "Enter":
                 if (!ShowSuggestions && !HasSelectedItem)
                 {
-                    // First Enter: open the list instead of confirming
                     ShowingAll = ShowAllOnOpen;
                     ShowSuggestions = true;
                     RefreshFilteredItems();
@@ -239,11 +261,15 @@
 
                     if (toSelect is not null)
                     {
-                        await SelectItem(toSelect); // closes list, sets HasSelectedItem
+                        await SelectItem(toSelect);
+                    }
+                    else if (AllowCustomValue && !string.IsNullOrWhiteSpace(SearchText))
+                    {
+                        await AcceptCustomValueAsync();
                     }
                     else
                     {
-                        ShowSuggestions = false; // nothing matched; accept typed text as-is
+                        ShowSuggestions = false;
                     }
 
                     await OnConfirmed.InvokeAsync();
@@ -276,6 +302,17 @@
         await SelectedValueChanged.InvokeAsync(SelectedValue);
         await SelectedItemChanged.InvokeAsync(item);
     }
+    private async Task AcceptCustomValueAsync()
+    {
+        SelectedValue = SearchText;
+        ShowSuggestions = false;
+        HighlightedIndex = -1;
+        HasSelectedItem = true;
+        ShowingAll = false;
+
+        await SelectedValueChanged.InvokeAsync(SelectedValue);
+        await SelectedItemChanged.InvokeAsync(default); 
+    }
 
     private async Task ClearSelectionAsync()
     {
@@ -285,7 +322,6 @@
         await SelectedItemChanged.InvokeAsync(default);
     }
 
-    // NEW: imperative API, like doc2's OpenPopupAsync/GetInputRef
     public async Task OpenPopupAsync()
     {
         ShowingAll = ShowAllOnOpen;
