@@ -142,3 +142,13 @@
     max-height: 220px;
     overflow-y: auto;
 }
+::deep .error-text {
+    display: block;
+    font-size: 11px;
+    color: #A32D2D;
+    margin-top: 4px;
+}
+::deep .required-asterisk {
+    color: #A32D2D;
+    margin-left: 2px;
+}

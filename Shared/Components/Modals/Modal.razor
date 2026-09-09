@@ -3,7 +3,7 @@
 
 @if (ShowModal)
 {
-    <div class="modal-overlay" @onclick="OnClose">
+    <div class="modal-overlay">
         <div class="modal-box" style="@GetModalBoxStyle()" @onclick:stopPropagation="true">
             <div class="modal-header">
                 @if (Icon != null)

@@ -149,14 +149,18 @@
 
     protected override void OnParametersSet()
     {
-        if (!string.IsNullOrEmpty(SelectedValue))
+        if (!string.IsNullOrEmpty(SelectedValue) && string.IsNullOrEmpty(SearchText))
         {
             var match = Items.FirstOrDefault(i =>
                 GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
 
-            if (match is not null && string.IsNullOrEmpty(SearchText))
+            if (match is not null)
             {
                 SearchText = GetText(match);
+            }
+            else if (AllowCustomValue)
+            {
+                SearchText = SelectedValue;
             }
         }
     }

@@ -1,94 +1,57 @@
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
 
-<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
 
-<div class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")</h3>
+<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" 
+    Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
+    OnClose="Cancel">
+    <ChildContent>
+        <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="false" IsExpanded="true">
+        <div class="form-group">
+            <Input Label="Sku Code" Required="true" @bind-Value="ItemCode" Disabled="@isViewMode" Placeholder="Enter SKU Code" 
+            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
         </div>
-
-        <div class="modal-body">
+        <div class="form-group">
+            <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode" Placeholder="Enter Item Name"
+            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
+        </div>
+        <div class="form-group">
+            <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" Required="true" ShowError="@ShowValidationErrors" 
+            Placeholder="Select a principal" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
+        </div>
+        <div class="form-group">
+            <Input Label="Category" @bind-Value="Category" Required="true" Disabled="@isViewMode" Placeholder="Enter Category"
+            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)" />
+        </div>
+        <div class="form-group">
+            <Input Label="Stock Price" @bind-Value="StockPrice" Disabled="@isViewMode" Placeholder="Enter Stock Price" />
+        </div>
+        <div class="form-group">
+            <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
+        </div>
+        </FormSection>
+        @if (isEdit && isViewMode)
+        {
+            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="true">
+            <h4>Audit Information</h4>
             <div class="form-group">
-                <label>@CompanyItemValidations.AddCompanyItem.ItemCode.Label<span
-                    class="required-asterisk">*</span></label>
-                    <input @bind="ItemCode" @ref="itemCodeInput" disabled=@isViewMode placeholder="" />
-                    @if (ShowValidationErrors &&
-                            !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)))
-                    {
-                        <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)</span>
-                    }
-                </div>
-
+                <label>Created Date</label>
+                <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+            </div>
+            @if (UpdatedDate.HasValue)
+            {
                 <div class="form-group">
-                    <label>@CompanyItemValidations.AddCompanyItem.ItemName.Label<span
-                        class="required-asterisk">*</span></label>
-                        <input @bind="ItemName" @ref="itemNameInput" disabled=@isViewMode />
-                        @if (ShowValidationErrors &&
-                                !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)))
-                        {
-                            <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)</span>
-                        }
-                    </div>
-
-                    <div class="form-group">
-                        <label>@CompanyItemValidations.AddCompanyItem.Principal.Label<span
-                            class="required-asterisk">*</span></label>
-                            <select @bind="Principal" @ref="principalInput" disabled=@isViewMode>
-                                <option value="">Select a principal</option>
-                                @foreach (var principal in Principals)
-                                {
-                                    <option value="@principal">@principal</option>
-                                }
-                            </select>
-                            @if (ShowValidationErrors &&
-                                    !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)))
-                            {
-                                <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)</span>
-                            }
-                        </div>
-                        <div class="form-group">
-                            <label>@CompanyItemValidations.AddCompanyItem.Category.Label<span
-                                class="required-asterisk">*</span></label>
-                                <input @bind="Category" @ref="categoryInput" disabled=@isViewMode />
-                                @if (ShowValidationErrors &&
-                                        !string.IsNullOrWhiteSpace(GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)))
-                                {
-                                    <span class="error-text">@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)</span>
-                                }
-                            </div>
-                        <div class="form-group">
-                            <label>Stock Price</label>
-                                <input @bind="StockPrice" @ref="stockpriceInput" disabled=@isViewMode />
-                            </div>  
-
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
-                                    Is Active
-                                </label>
-                            </div>
-                            @if (isEdit && isViewMode)
-                            {
-                                <h4>Audit Information</h4>
-                                <div class="form-group">
-                                    <label>Created Date</label>
-                                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                                </div>
-                                @if (UpdatedDate.HasValue)
-                                {
-                                    <div class="form-group">
-                                        <label>Updated Date</label>
-                                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                                    </div>
-                                }
-                            }
-
-                            <div class="action-buttons">
-                                <Button Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" disabled="@isSubmitting" Title="@(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))">
-                                </Button>
+                    <label>Updated Date</label>
+                    <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                </div>
+            }
+            </FormSection>
+        }
+    </ChildContent>
+    <FooterContent>
+                      <div class="action-buttons">
                                 <Button Variant="ButtonVariant.Secondary" OnClick="Cancel" disabled="@isSubmitting" Title="Cancel"></Button>
+                                <Button Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" disabled="@isSubmitting" Title="@(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))"></Button>
                                 @if (isEdit && PriceHistory.Any())
                                 {
                                     <h4>Price History</h4>
@@ -148,9 +111,8 @@
                                     }
                                 }
                             </div>
-                        </div>
-                    </div>
-                </div>
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
