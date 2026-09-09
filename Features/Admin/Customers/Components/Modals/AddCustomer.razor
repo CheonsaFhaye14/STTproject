@@ -4,17 +4,11 @@
 @inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
 @inject STTproject.Services.IUserContextService UserContextService
 
-<div class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>
-                <i class="ti @(isEdit ? (isViewMode ? "ti-eye" : "ti-edit") : "ti-user-plus")" aria-hidden="true"></i>
-                @(isEdit ? (isViewMode ? "View Customer" : "Edit Customer") : "Add New Customer")
-            </h3>
-        </div>
-
-        <div class="modal-body">
-
+<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" 
+       Title="@(isEdit ? (isViewMode ? "View Customer" : "Edit Customer") : "Add New Customer")"
+       IconType="@(isEdit ? (isViewMode ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
+         OnClose="Cancel">
+         <ChildContent>
         <FormSection Icon="ti ti-user" Title="Customer Information" Summary="@GetCustomerInfoSummary()" Expandable="true" IsExpanded="true">
             <ChildContent>
                 <div class="form-group">
@@ -133,29 +127,28 @@
                     </ChildContent>
                 </FormSection>
             }
-            <div class="action-buttons">
+         </ChildContent>
+         <FooterContent>
                 @if (isEdit && isViewMode)
                 {
-                    <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
                     <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+                    <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
                 }
                 else
                 {
-                    <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Customer"))" Variant="ButtonVariant.Primary" OnClick="CreateCustomer" Disabled="@isSubmitting"></Button>
                     <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+                    <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Customer"))" Variant="ButtonVariant.Primary" OnClick="CreateCustomer" Disabled="@isSubmitting"></Button>
                 }
-            </div>
-        </div>
-    </div>
-</div>
+         </FooterContent>
+</Modal>
+
+
+
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
-    public CustomerCreateDto? PendingDto { get; private set; }
     private bool ShowSubdMapping { get; set; } = false;
-    private bool ExpandCustomerInfo { get; set; } = true;
-    private bool ExpandCustomerAddress { get; set; } = false;
     private List<SubdCustPairInput> SubdCustPairs { get; set; } = new() { new SubdCustPairInput() };
     private Dictionary<int, string> SubdPairErrors { get; set; } = new();
     private string? SubdPairsGeneralError { get; set; }
@@ -200,10 +193,6 @@
     public CustomerUpdateDto? PendingUpdateDto { get; private set; }
 
     private bool isViewMode = false;
-    private ElementReference customerCodeInput;
-    private ElementReference customerNameInput;
-    private ElementReference addressLineInput;
-    private ElementReference zipCodeInput;
 
     private int SubDistributorId { get; set; }
     private string? SelectedSubDistributorName { get; set; }

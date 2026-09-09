@@ -9,5 +9,8 @@ namespace STTproject.Shared.Components.Modals
         Success,
         Question,
         Upload,
+        UserPlus,
+        UserView,
+        UserEdit,
     }
 }
