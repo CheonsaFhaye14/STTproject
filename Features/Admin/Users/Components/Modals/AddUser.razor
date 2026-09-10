@@ -1,145 +1,81 @@
 @using STTproject.Features.Admin.Users.Validators
+@using STTproject.Shared.Components.Buttons
+@using STTproject.Shared.Components.Forms
+@using STTproject.Shared.Components.Modals
 @inject STTproject.Features.Admin.Users.Services.IAdminUserService AdminUserService
 @inject STTproject.Services.IUserContextService UserContextService
 
-<div class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>@(isEdit ? (isViewMode ? "View User" : "Edit User") : "Add New User")</h3>
-        </div>
-
-        <div class="modal-body">
-            <div class="form-group">
-                <label>@UserValidations.AddUser.fullname.Label<span class="required-asterisk">*</span></label>
-                <input @bind="FullName" @ref="fullNameInput" disabled=@isViewMode />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.fullname.Key)))
-                {
-                    <span class="error-text">@GetFieldError(UserValidations.AddUser.fullname.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>@UserValidations.AddUser.email.Label<span class="required-asterisk">*</span></label>
-                <input @bind="Email" @ref="emailInput" disabled=@isViewMode />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.email.Key)))
-                {
-                    <span class="error-text">@GetFieldError(UserValidations.AddUser.email.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>@UserValidations.AddUser.username.Label<span class="required-asterisk">*</span></label>
-                <input @bind="UserName" @ref="userNameInput" disabled=@isViewMode />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.username.Key)))
-                {
-                    <span class="error-text">@GetFieldError(UserValidations.AddUser.username.Key)</span>
-                }
-            </div>
-
-            @if (!isViewMode)
-            {
+<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" 
+    Title="@(isEdit ? (isViewMode ? "View User" : "Edit User") : "Add New User")"
+    IconType="@(isEdit ? (isViewMode ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
+    OnClose="Cancel">
+    <ChildContent>
+        <FormSection Icon="ti ti-user" Title="User Details" Expandable="@isEdit" IsExpanded="true">
+            <ChildContent>
                 <div class="form-group">
-                    <label>
-                        @UserValidations.AddUser.password.Label
-                        @if (!isEdit)
-                        {
-                            <span class="required-asterisk">*</span>
-                        }
-                        else
-                        {
-                            <small style="font-weight:normal;"> (leave blank to keep current password)</small>
-                        }
-                    </label>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="@(showPassword ? "text" : "password")"
-                               @bind="Password"
-                               @bind:event="oninput"
-                               placeholder="@(isEdit ? "Leave blank to keep current password" : "Enter password")" />
-                        <button type="button" @onclick="ToggleShowPassword">
-                            @(showPassword ? "Hide" : "Show")
-                        </button>
-                        <button type="button" @onclick="GenerateAndFillPassword">
-                            🎲 Generate
-                        </button>
-                    </div>
-                    @if (ShowValidationErrors &&
-                            !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.password.Key)))
-                    {
-                        <span class="error-text">@GetFieldError(UserValidations.AddUser.password.Key)</span>
-                    }
+                    <Input Label="Full Name" Required="true" @bind-Value="FullName" Disabled="@isViewMode" Placeholder="Enter full name"
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(UserValidations.AddUser.fullname.Key)" />
                 </div>
-            }
-
-            @* @if (isEdit && !isViewMode)
-            {
                 <div class="form-group">
-                    <button type="button" @onclick="ResetPasswordAndSendEmail" disabled="@isSendingPassword">
-                        @(isSendingPassword ? "Sending..." : "🔄 Reset Password & Send to Email")
-                    </button>
-                    @if (!string.IsNullOrWhiteSpace(passwordResetMessage))
-                    {
-                        <span style="color:green;font-size:13px;">@passwordResetMessage</span>
-                    }
+                    <Input Label="Username" Required="true" @bind-Value="UserName" Disabled="@isViewMode" Placeholder="Enter username"
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(UserValidations.AddUser.username.Key)" />
                 </div>
-            } *@
-
-            <div class="form-group">
-                <label>@UserValidations.AddUser.role.Label<span class="required-asterisk">*</span></label>
-                <select @bind="Role" @ref="RoleSelect" disabled=@isViewMode>
-                    <option value="">Select Role</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Encoder">Encoder</option>
-                </select>
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(UserValidations.AddUser.role.Key)))
-                {
-                    <span class="error-text">@GetFieldError(UserValidations.AddUser.role.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
-                    Is Active
-                </label>
-            </div>
-
-            @if (isEdit && isViewMode)
-            {
-                <h4>Audit Information</h4>
                 <div class="form-group">
-                    <label>Created Date</label>
-                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                    <Input Label="Email" Required="true" @bind-Value="Email" Disabled="@isViewMode" Placeholder="Enter email"
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(UserValidations.AddUser.email.Key)" />
                 </div>
-                @if (UpdatedDate.HasValue)
+                @if (!isViewMode)
                 {
                     <div class="form-group">
-                        <label>Updated Date</label>
-                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                        <InputPass @bind-Value="Password" Label="Password" Required="!isEdit" AddOptionalText="isEdit" OptionalText="(leave blank to keep current password)"
+                                    ShowGenerate="true" ShowToggle="!isEdit"
+                                    Placeholder="@(isEdit ? "Leave blank to keep current password" : "Enter password")"
+                                    ShowError="@ShowValidationErrors"
+                                    ErrorText="@GetFieldError(UserValidations.AddUser.password.Key)" />
                     </div>
                 }
-            }
+                <div class="form-group">
+                    <Select Label="Role" Required="true" Items="@(new List<string> { "Admin", "Encoder" })" SelectedValue="@Role"
+                            SelectedValueChanged="@(v => Role = v)" Disabled="@isViewMode" Placeholder="Select role"
+                            ErrorText="@GetFieldError(UserValidations.AddUser.role.Key)" ShowError="@ShowValidationErrors"></Select>
+                </div>
+                <div class="form-group">
+                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
+                </div>
 
-            <div class="action-buttons">
-                @if (isEdit && isViewMode)
-                {
-                    <button @onclick="EnableEdit">Edit</button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
-                }
-                else
-                {
-                    <button @onclick="CreateUser" disabled="@isSubmitting">
-                        @(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create User"))
-                    </button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
-                }
-            </div>
-        </div>
-    </div>
-</div>
+            </ChildContent>
+        </FormSection>
+
+        @if (isViewMode)
+        {
+            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="false">
+                <ChildContent>
+                    <div class="form-group">
+                        <Input Label="Created Date" Disabled="true" Value="@CreatedDateDisplay" />
+                    </div>
+                    @if(UpdatedDate != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Updated Date" Disabled="true" Value="@UpdatedDateDisplay" />
+                    </div>
+                    }
+                </ChildContent>
+            </FormSection>
+        }
+    </ChildContent>
+    <FooterContent>
+        @if(isEdit && isViewMode)
+        {
+            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+            <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
+        }
+        else
+        {
+            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create User"))" Variant="ButtonVariant.Primary" OnClick="CreateUser" Disabled="@isSubmitting"></Button>
+        } 
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
@@ -163,10 +99,8 @@
     // Audit fields (view mode only)
     private DateTime CreatedDate { get; set; }
     private DateTime? UpdatedDate { get; set; }
-    @* private int? CreatedById { get; set; }
-    private int? UpdatedById { get; set; }
-    private string? CreatedByName { get; set; }
-    private string? UpdatedByName { get; set; }*@
+    private string? CreatedDateDisplay => CreatedDate.ToString("MMM d, yyyy hh:mm tt");
+    private string? UpdatedDateDisplay => UpdatedDate?.ToString("MMM d, yyyy hh:mm tt");
 
     private Dictionary<string, string> Errors { get; set; } = new();
     private bool ShowValidationErrors { get; set; } = false;
