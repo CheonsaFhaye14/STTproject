@@ -9,7 +9,7 @@
         @Label
         @if (Required)
         {
-            <span class="required">*</span>
+            <span class="required-asterisk">*</span>
         }
     </label>
 }
@@ -31,9 +31,13 @@
         </option>
     }
 </select>
+@if (ShowError && !string.IsNullOrWhiteSpace(ErrorText))
+{
+    <span class="error-text">@ErrorText</span>
+}
 
 <style>
-.required {
+.required-asterisk {
     color: #dc3545;
     margin-left: 2px;
 }
@@ -43,6 +47,9 @@
     [Parameter] public string? Label { get; set; }
     [Parameter] public string? Placeholder { get; set; }
     [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? ErrorText { get; set; }
+    [Parameter] public bool ShowError { get; set; } = true;
 
     [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
 
@@ -52,9 +59,8 @@
     [Parameter] public string? SelectedValue { get; set; }
     [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
 
-    [Parameter] public bool Disabled { get; set; }
-
     private ElementReference SelectElement;
+    public ElementReference GetInputRef() => SelectElement;
 
     private async Task OnSelectedValueChanged(ChangeEventArgs e)
     {

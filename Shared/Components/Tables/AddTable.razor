@@ -103,6 +103,7 @@
     [Parameter] public bool ShowError { get; set; }
     [Parameter] public Func<int, string?>? ErrorSelector { get; set; }
     [Parameter] public string? GeneralErrorText { get; set; }
+    [Parameter] public Func<TItem, string, string?>? DisplayValueSelector { get; set; }
 
     private static readonly Dictionary<string, PropertyInfo?> PropertyCache = new();
 
@@ -118,8 +119,16 @@
 
     private string GetPropertyValue(TItem item, string column)
     {
+        if (item is null) return string.Empty;
+
+        if (DisplayValueSelector is not null)
+        {
+            var custom = DisplayValueSelector(item, column);
+            if (custom is not null) return custom;
+        }
+
         var prop = GetProperty(column);
-        if (prop is null || item is null) return string.Empty;
+        if (prop is null) return string.Empty;
         return prop.GetValue(item)?.ToString() ?? string.Empty;
     }
 

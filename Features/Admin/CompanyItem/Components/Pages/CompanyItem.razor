@@ -24,7 +24,7 @@
 
         @* ------------- Company Item List Table ----------------- *@
         <CompanyItemTable @ref="companyItemTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
-                          OnEditCompanyItem="OpenEditModal" />
+                          OnViewCompanyItem="OpenEditModal" />
 
         <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
                       Title="@(editCompanyItemId.HasValue ? "Confirm Update of Company Item" : "Confirm Creation of Company Item")"
@@ -68,7 +68,6 @@
         showAddModal = true;
     }
 
-    // called from CompanyItemListTable OnViewCompanyItem
     private void OpenEditModal(int id)
     {
         editCompanyItemId = id;

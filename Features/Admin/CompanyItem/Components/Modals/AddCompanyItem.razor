@@ -1,3 +1,4 @@
+@using STTproject.Shared.Components.Tables
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
 
@@ -6,111 +7,93 @@
     Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
     OnClose="Cancel">
     <ChildContent>
-        <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="false" IsExpanded="true">
-        <div class="form-group">
-            <Input Label="Sku Code" Required="true" @bind-Value="ItemCode" Disabled="@isViewMode" Placeholder="Enter SKU Code" 
-            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
-        </div>
-        <div class="form-group">
-            <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode" Placeholder="Enter Item Name"
-            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
-        </div>
-        <div class="form-group">
-            <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" Required="true" ShowError="@ShowValidationErrors" 
-            Placeholder="Select a principal" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
-        </div>
-        <div class="form-group">
-            <Input Label="Category" @bind-Value="Category" Required="true" Disabled="@isViewMode" Placeholder="Enter Category"
-            ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)" />
-        </div>
-        <div class="form-group">
-            <Input Label="Stock Price" @bind-Value="StockPrice" Disabled="@isViewMode" Placeholder="Enter Stock Price" />
-        </div>
-        <div class="form-group">
-            <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
-        </div>
-        </FormSection>
-        @if (isEdit && isViewMode)
-        {
-            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="true">
-            <h4>Audit Information</h4>
-            <div class="form-group">
-                <label>Created Date</label>
-                <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
-            </div>
-            @if (UpdatedDate.HasValue)
-            {
+        <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="@isEdit" IsExpanded="true">
+            <ChildContent>
                 <div class="form-group">
-                    <label>Updated Date</label>
-                    <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                    <Input Label="Sku Code" Required="true" @bind-Value="ItemCode" Disabled="@isViewMode" Placeholder="Enter SKU Code" 
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
                 </div>
-            }
+                <div class="form-group">
+                    <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode" Placeholder="Enter Item Name"
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
+                </div>
+                <div class="form-group">
+                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" Required="true" ShowError="@ShowValidationErrors" 
+                    Placeholder="Select a principal" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
+                </div>
+                <div class="form-group">
+                    <Input Label="Category" @bind-Value="Category" Required="true" Disabled="@isViewMode" Placeholder="Enter Category"
+                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)" />
+                </div>
+                <div class="form-group">
+                    <Input Label="Stock Price" @bind-Value="StockPrice" Disabled="@isViewMode" Placeholder="Enter Stock Price" />
+                </div>
+                <div class="form-group">
+                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
+                </div>
+            </ChildContent>
+        </FormSection>
+        @if (isViewMode && PriceHistory.Any())
+        {
+            <FormSection Icon="ti ti-history" Title="Price History" Expandable="true" IsExpanded="false">
+                <ChildContent>
+                    <AddTable TItem="CompanyItemPriceHistoryDto"
+                            Items="@PriceHistory.ToList()"
+                            Columns="@(new List<string> { "EffectivityDate", "NewPrice", "CreatedDate" })"
+                            ColumnLabels="@(new Dictionary<string,string> {
+                                ["EffectivityDate"] = "Effectivity Date",
+                                ["NewPrice"] = "New Price",
+                                ["CreatedDate"] = "Created Date"
+                            })"
+                            DisplayValueSelector="@FormatPriceHistoryColumn"
+                            ViewMode="true"
+                            Disabled="true"
+                            RemoveButtonVisible="false"
+                            AddButtonVisible="false" />
+                </ChildContent>
             </FormSection>
         }
+        @if (isViewMode)
+        {
+            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="false">
+                <ChildContent>
+                    @if(CreatedByName != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Created By" Disabled="true" @bind-Value="@CreatedByName" />
+                    </div>
+                    }
+                    <div class="form-group">
+                        <Input Label="Created Date" Disabled="true" Value="CreatedDateDisplay" />
+                    </div>
+                    @if(UpdatedByName != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Updated By" Disabled="true" @bind-Value="@UpdatedByName" />
+                    </div>
+                    }
+                    @if(UpdatedDate != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Updated Date" Disabled="true" Value="UpdatedDateDisplay" />
+                    </div>
+                    }
+                </ChildContent>
+            </FormSection>
+        }
+        
     </ChildContent>
     <FooterContent>
-                      <div class="action-buttons">
-                                <Button Variant="ButtonVariant.Secondary" OnClick="Cancel" disabled="@isSubmitting" Title="Cancel"></Button>
-                                <Button Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" disabled="@isSubmitting" Title="@(isSubmitting ? "Submitting..." : (isEdit ? "Save Changes" : "Add Company Item"))"></Button>
-                                @if (isEdit && PriceHistory.Any())
-                                {
-                                    <h4>Price History</h4>
-                                    <table class="price-history-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Effectivity Date</th>
-                                                <th>New Price</th>
-                                                <th>Created Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var history in PriceHistory)
-                                            {
-                                                <tr>
-                                                    <td>@history.EffectivityDate.ToString("MMM d, yyyy")</td>
-                                                    <td>@history.NewPrice.ToString("N2")</td>
-                                                    <td>@history.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                }
-                                else if (isEdit)
-                                {
-                                    <h4>Price History</h4>
-                                    <p><em>No price history available.</em></p>
-                                }
-                                @if (isEdit && isViewMode)
-                                {
-
-                                    <h4>Audit Information</h4>
-                                    <div class="form-group">
-                                        <label>Created Date</label>
-                                        <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(CreatedByName))
-                                    {
-                                        <div class="form-group">
-                                            <label>Created By</label>
-                                            <input value="@CreatedByName" disabled />
-                                        </div>
-                                    }
-                                    @if (UpdatedDate.HasValue)
-                                    {
-                                        <div class="form-group">
-                                            <label>Updated Date</label>
-                                            <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                                        </div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(UpdatedByName))
-                                    {
-                                        <div class="form-group">
-                                            <label>Updated By</label>
-                                            <input value="@UpdatedByName" disabled />
-                                        </div>
-                                    }
-                                }
-                            </div>
+        @if(isEdit && isViewMode)
+        {
+            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+            <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
+        }
+        else
+        {
+            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Company Item"))" Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" Disabled="@isSubmitting"></Button>
+        }    
     </FooterContent>
 </Modal>
 
@@ -135,14 +118,11 @@
     private int? UpdatedById { get; set; }
     private string? CreatedByName { get; set; }
     private string? UpdatedByName { get; set; }
-    private ElementReference itemCodeInput;
-    private ElementReference itemNameInput;
-    private ElementReference principalInput;
-    private ElementReference stockpriceInput;
-    private ElementReference categoryInput;
     private Dictionary<string, string> Errors { get; set; } = new();
     private bool ShowValidationErrors { get; set; } = false;
     private bool isSubmitting = false;
+    private string? CreatedDateDisplay => CreatedDate.ToString("MMM d, yyyy hh:mm tt");
+    private string? UpdatedDateDisplay => UpdatedDate?.ToString("MMM d, yyyy hh:mm tt");
 
     [Parameter] public int? CompanyItemId { get; set; }
     private bool isEdit => CompanyItemId.HasValue;
@@ -156,7 +136,7 @@ private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = n
         Principals = await AdminCompanyItemService.GetAllPrincipalsAsync();
         if (isEdit)
         {
-            isViewMode = false;
+            isViewMode = true;
             var companyItem = await AdminCompanyItemService.GetCompanyItemByIdAsync(CompanyItemId!.Value);
             if (companyItem != null)
             {
@@ -226,7 +206,13 @@ Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToV
 
         await OnRequestConfirm.InvokeAsync();
     }
-
+    private string? FormatPriceHistoryColumn(CompanyItemPriceHistoryDto item, string column) => column switch
+    {
+        "EffectivityDate" => item.EffectivityDate.ToString("MMM d, yyyy"),
+        "NewPrice" => item.NewPrice.ToString("N2"),
+        "CreatedDate" => item.CreatedDate.ToString("MMM d, yyyy hh:mm tt"),
+        _ => null
+    };
     public async Task<(bool success, string? error)> SubmitAsync()
     {
         isSubmitting = true;

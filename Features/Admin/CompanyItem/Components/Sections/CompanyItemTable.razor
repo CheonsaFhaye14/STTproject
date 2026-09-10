@@ -151,7 +151,7 @@
                                         <td>
                                             <div class="clt-actions">
                                                 <button class="clt-btn-edit"
-                                                        @onclick="() => OnEditCompanyItem.InvokeAsync(companyItem.CompanyItemId)">Edit</button>
+                                                        @onclick="() => OnViewCompanyItem.InvokeAsync(companyItem.CompanyItemId)">View</button>
                                                 @if (companyItem.IsActive)
                                                 {
                                                     <button class="clt-btn-toggle clt-btn-deactivate"
@@ -223,8 +223,8 @@
     private int pendingToggleId;
     private bool pendingToggleStatus;
     private string toggleConfirmMessage = "";
+    [Parameter] public EventCallback<int> OnViewCompanyItem { get; set; }
 
-    [Parameter] public EventCallback<int> OnEditCompanyItem { get; set; }
     private string SelectedStatus { get; set; } = "";
 
     private int currentPage = 1;
