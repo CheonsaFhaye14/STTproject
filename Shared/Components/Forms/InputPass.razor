@@ -1,0 +1,146 @@
+@using System.Globalization
+@typeparam TValue
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using STTproject.Shared.Components.Buttons
+
+@if (!string.IsNullOrWhiteSpace(Label))
+{
+    <label class="form-label">
+        @Label
+        @if (Required)
+        {
+            <span class="required-asterisk">*</span>
+        }
+        @if (AddOptionalText)
+        {
+            <span class="optional-text">@OptionalText</span>
+        }
+    </label>
+}
+<div class="password-wrapper">
+        <input type="@(ShowPlainText ? "text" : "password")"
+            placeholder="@Placeholder"
+            disabled="@Disabled"
+            value="@DisplayValue"
+            class="password-input"
+            @oninput="OnInputChanged"
+            @ref="InputElement" />
+        @if (ShowToggle)
+        {
+            <button type="button" class="password-toggle-icon" @onclick="ToggleShowPlainText"
+                    disabled="@Disabled" title="Show/hide password">
+                <i class="fas @(ShowPlainText ? "fa-eye-slash" : "fa-eye")" aria-hidden="true"></i>
+            </button>
+        }
+    @if (ShowGenerate)
+    {
+        <Button Title="🎲 Generate" OnClick="GenerateAndFill" Disabled="@Disabled" />
+    }
+</div>
+@if (ShowError && !string.IsNullOrWhiteSpace(ErrorText))
+{
+    <span class="error-text">@ErrorText</span>
+}
+<style>
+    .password-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .password-wrapper .input-icon {
+        position: absolute;
+        left: 10px;
+        color: #888;
+    }
+    .password-wrapper input {
+        padding-left: 30px;
+        flex: 1;
+    }
+    .password-input {
+        margin-right: 20px;
+    }
+    .password-toggle-icon {
+        position: absolute;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #888;
+        right: 140px;
+    }
+    .optional-text{
+        font-size: 0.9em;
+        color: #6c757d;
+        margin-left: 5px;
+    }
+
+    
+</style>
+@code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? ErrorText { get; set; }
+    [Parameter] public bool ShowError { get; set; } = true;
+    [Parameter] public bool AddOptionalText { get; set; } = false;
+    [Parameter] public string? OptionalText { get; set; } = "(Optional)";
+    [Parameter] public bool ShowToggle { get; set; } = false;
+    [Parameter] public bool ShowGenerate { get; set; } = false;
+    [Parameter] public int GeneratedLength { get; set; } = 12;
+
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue?> ValueChanged { get; set; }
+
+    private ElementReference InputElement;
+    public ElementReference GetInputRef() => InputElement;
+
+    private bool ShowPlainText { get; set; } = false;
+
+    private static readonly Type UnderlyingType = Nullable.GetUnderlyingType(typeof(TValue)) ?? typeof(TValue);
+
+    private string DisplayValue => Value switch
+    {
+        null => string.Empty,
+        decimal d => d.ToString(CultureInfo.InvariantCulture),
+        double d => d.ToString(CultureInfo.InvariantCulture),
+        _ => Value.ToString() ?? string.Empty
+    };
+
+    private void ToggleShowPlainText() => ShowPlainText = !ShowPlainText;
+
+    private async Task OnInputChanged(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? string.Empty;
+
+        if (UnderlyingType == typeof(string))
+        {
+            Value = (TValue?)(object?)raw;
+            await ValueChanged.InvokeAsync(Value);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            Value = default;
+            await ValueChanged.InvokeAsync(Value);
+        }
+    }
+
+    private async Task GenerateAndFill()
+    {
+        var generated = GenerateRandomPassword(GeneratedLength);
+        Value = (TValue?)(object?)generated;
+        ShowPlainText = true; // reveal so the user can copy/note it down
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private static string GenerateRandomPassword(int length)
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+        var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        var bytes = new byte[length];
+        rng.GetBytes(bytes);
+        return new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
+    }
+}

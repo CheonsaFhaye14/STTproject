@@ -25,9 +25,9 @@
 
     @foreach (var item in Items)
     {
-        var itemValue = ValueSelector(item);
+        var itemValue = GetValue(item);
         <option value="@itemValue" selected="@(itemValue == SelectedValue)">
-            @TextSelector(item)
+            @GetText(item)
         </option>
     }
 </select>
@@ -53,14 +53,22 @@
 
     [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
 
-    [Parameter] public Func<TItem, string> ValueSelector { get; set; } = default!;
-    [Parameter] public Func<TItem, string> TextSelector { get; set; } = default!;
+    [Parameter] public Func<TItem, string>? ValueSelector { get; set; }
+    [Parameter] public Func<TItem, string>? TextSelector { get; set; }
 
     [Parameter] public string? SelectedValue { get; set; }
     [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
 
     private ElementReference SelectElement;
     public ElementReference GetInputRef() => SelectElement;
+
+    private string GetValue(TItem item) => ValueSelector is not null
+        ? ValueSelector(item)
+        : item?.ToString() ?? string.Empty;
+
+    private string GetText(TItem item) => TextSelector is not null
+        ? TextSelector(item)
+        : item?.ToString() ?? string.Empty;
 
     private async Task OnSelectedValueChanged(ChangeEventArgs e)
     {

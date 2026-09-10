@@ -1,8 +1,8 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
-<div class="toggle-group" @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
+<div class="toggle-group">
     <label class="toggle-label">
-        <span class="toggle-switch">
+        <span class="toggle-switch"  @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
             <input type="checkbox" checked="@(Bind)" disabled="@Disabled" @onchange="OnChanged" />
             <span class="toggle-slider"></span>
         </span>
