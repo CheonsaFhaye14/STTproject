@@ -12,5 +12,7 @@ namespace STTproject.Shared.Components.Modals
         UserPlus,
         UserView,
         UserEdit,
+        Ruler,
+        ItemView,
     }
 }

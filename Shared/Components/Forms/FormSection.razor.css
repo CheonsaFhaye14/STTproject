@@ -129,6 +129,14 @@
         cursor: not-allowed;
     }
 
+.form-item ::deep .form-group button,
+.form-item ::deep .input-row button,
+.form-item ::deep .password-wrapper button {
+    height: 36px;
+    width: 140px;
+    box-sizing: border-box;
+}
+
 .form-item ::deep .form-group .autocomplete-list {
     position: absolute;
     top: calc(100% + 4px);
@@ -151,4 +159,15 @@
 ::deep .required-asterisk {
     color: #A32D2D;
     margin-left: 2px;
+}
+
+.form-item ::deep .input-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.form-item ::deep .input-row .input-field {
+    flex: 1;
+    min-width: 0;
 }

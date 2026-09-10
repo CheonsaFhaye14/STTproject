@@ -11,6 +11,10 @@
         {
             <span class="required-asterisk">*</span>
         }
+        @if (AddOptionalText)
+        {
+            <span class="optional-text">@OptionalText</span>
+        }
     </label>
 }
 
@@ -30,6 +34,16 @@
             @GetText(item)
         </option>
     }
+
+    @if (ExtraOptions is not null)
+    {
+        @foreach (var extra in ExtraOptions)
+        {
+            <option value="@extra.Value" selected="@(extra.Value == SelectedValue)">
+                @extra.Text
+            </option>
+        }
+    }
 </select>
 @if (ShowError && !string.IsNullOrWhiteSpace(ErrorText))
 {
@@ -41,6 +55,11 @@
     color: #dc3545;
     margin-left: 2px;
 }
+.Optional-text {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-left: 5px;
+}
 </style>
 
 @code {
@@ -50,11 +69,14 @@
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public string? ErrorText { get; set; }
     [Parameter] public bool ShowError { get; set; } = true;
-
+    [Parameter] public bool AddOptionalText { get; set; } = false;
+    [Parameter] public string? OptionalText { get; set; } = "(Optional)";
     [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
 
     [Parameter] public Func<TItem, string>? ValueSelector { get; set; }
     [Parameter] public Func<TItem, string>? TextSelector { get; set; }
+
+    [Parameter] public IEnumerable<(string Value, string Text)>? ExtraOptions { get; set; }
 
     [Parameter] public string? SelectedValue { get; set; }
     [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }

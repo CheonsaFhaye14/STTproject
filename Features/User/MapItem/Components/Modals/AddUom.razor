@@ -1,227 +1,126 @@
 ﻿@inject IJSRuntime JSRuntime
 
-@if (ShowAddUomModal)
-{
-    <div class="modal-overlay add-uom-modal-overlay" id="add-uom-modal-overlay">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div class="header-icon"><i class="fa-solid fa-ruler-combined"></i></div>
-                <div class="uom-header">
-                    <h4>Add Unit of Measure</h4>
-                    @if (!string.IsNullOrWhiteSpace(ItemName) || !string.IsNullOrWhiteSpace(ItemCode))
-                    {
-                        <p class="modal-subtitle">
-                            @if (!string.IsNullOrWhiteSpace(ItemCode))
-                            {
-                                @ItemCode
-                                @if (!string.IsNullOrWhiteSpace(ItemName))
-                                {
-                                    <text> - </text>
-                                }
-                            }
-                            @if (!string.IsNullOrWhiteSpace(ItemName))
-                            {
-                                @ItemName
-                            }
-                        </p>
-                    }
-                </div>
-            </div>
 
-            <div class="modal-body">
-                <h5>Add Additional Units</h5>
-
+<Modal ShowModal="ShowAddUomModal" Width="900px" MaxWidth="100%" MaxHeight="80vh"
+    Title="Add Unit of Measure" OnClose="CancelAsync" IconType="ModalIconType.Ruler" Subtitle="@getModalSubtitle()">
+    <ChildContent>
+        <FormSection Icon="ti ti-library-plus" Title="Additional Units of Measure" Expandable="true" IsExpanded="true">
+            <ChildContent>
                 <div class="form-group">
-                    <label>Unit of Measure</label>
-                    <select @ref="uomSelectRef" @bind="SelectedUomOption" @bind:after="PersistDraftAsync"
-                            @onkeydown="HandleUomSelectKeyDown"
-                            @onkeydown:preventDefault="@(selectedUomOption != string.Empty)">
-                        <option value="">-- Select Unit of Measure --</option>
-                        @foreach (var option in defaultOptions)
-                        {
-                            @if (!workingUomEntries.ContainsKey(option) || !workingUomEntries[option].IsActive)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        }
-                        <option value="__custom">Other (type custom)</option>
-                    </select>
-                    @if (!string.IsNullOrWhiteSpace(GetFieldError("uom")))
-                    {
-                        <span class="error-text">@GetFieldError("uom")</span>
-                    }
+                    <Select Label="Unit of Measure" Required="true" Items="@defaultOptions" SelectedValue="@SelectedUomOption"
+                            SelectedValueChanged="OnUomSelectChanged" Placeholder="-- Select Unit of Measure --"
+                            ExtraOptions="@(new[] { ("__custom", "Other (type custom)") })"
+                            ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("uom")))" ErrorText='@GetFieldError("uom")' />
                 </div>
-
-                @if (selectedUomOption == "__custom")
+                @if (SelectedUomOption == "__custom")
                 {
                     <div class="form-group">
-                        <label>Custom Unit of Measure</label>
-                        <input @bind="CustomUom" @bind:event="oninput" @bind:after="PersistDraftAsync"
-                               placeholder="Enter unit name" />
+                        <Input Label="Custom Unit of Measure" Required="true" @bind-Value="CustomUom" Placeholder="Enter unit name" 
+                                 ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("customUom")))" ErrorText='@GetFieldError("customUom")' />
                     </div>
                 }
                 @if (!IsConversionNotSet)
                 {
                 <div class="form-group">
                     <div class="conversion-label">
-                    <label>Conversion (How many @ConversionBasedOnInput per @(GetSelectedUomName() ?? "unit")?):</label>
-                    <Button  Onclick="ClearConversionInputAsync" Disabled="@IsBaseUom(GetSelectedUomName())" Title="Clear conversion">
-                    </Button>
+                        <label>Conversion</label>
                     </div>
-                        <input @ref="conversionInputRef" type="number" min="1" step="1" @bind="ConversionInput"
-                            @bind:event="oninput" @bind:after="PersistDraftAsync" placeholder="e.g., 12"
-                            @onkeydown="HandleConversionKeyDown" disabled="@IsBaseUom(GetSelectedUomName())" />
-
+                    <div class="input-row">
+                        <Input TValue="string"
+                            Value="@ConversionInput"
+                            ValueChanged="@(async v => { ConversionInput = v ?? string.Empty; await PersistDraftAsync(); })"
+                            Placeholder="e.g., 12"
+                            Disabled="@IsBaseUom(GetSelectedUomName())"/>
+                        <Button Title="Clear conversion" OnClick="ClearConversionInputAsync" Disabled="@IsBaseUom(GetSelectedUomName())" />
+                    </div>
                     @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
                     {
                         <span class="error-text">@GetFieldError("conversion")</span>
                     }
-                    @if (IsBaseUom(GetSelectedUomName()))
-                    {
-                        <div class="hint-text">Piece-like units require conversion = 1.</div>
-                    }
-                    <select ref="conversionBasedOnInputRef" @bind="ConversionBasedOnInput" @bind:event="onchange" @bind:after="PersistDraftAsync"
-                            @onkeydown="HandleConversionBasedOnKeyDown" disabled="@IsBaseUom(GetSelectedUomName())">
-                        @foreach (var uom in workingUomEntries.Keys
-                            .Where(k => k != GetSelectedUomName()
-                                && workingUomEntries[k]?.IsActive == true)
-                            .OrderBy(k => k))
-                        {
-                            <option value="@uom">@uom</option>
-                        }
-                    </select>
                 </div>
-                }
+                <div class="form-group">
+                    <Select Items="@ConversionBasedOnOptions"
+                            Label="@getLabelForConversionBased()"
+                            ValueSelector="@(k => k)"
+                            TextSelector="@(k => k)"
+                            SelectedValue="@ConversionBasedOnInput"
+                            SelectedValueChanged="OnConversionBasedOnChanged"
+                            Disabled="@IsBaseUom(GetSelectedUomName())" />
+                </div>
+                }  
                 else
                 {
-                    
                     <div class="form-group">
-                    <div class="conversion-label">
-                    <label>Conversion:</label>
-                    <Button Title="Set conversion" Onclick="SetConversionInput" Disabled="@IsBaseUom(GetSelectedUomName())">
-                    </Button>
+                        <label>Conversion</label>
+                        <div class="input-row">
+                            <input type="text" value="Not set" disabled />
+                            <Button Title="Set conversion" OnClick="SetConversionInput" Disabled="@IsBaseUom(GetSelectedUomName())" />
+                        </div>
                     </div>
-                        <input disabled type="text" value="Not set." />
-                    </div>
-
                 }
-
 
                 <div class="form-group">
-                    <label>Price (Optional - will be calculated if left empty)</label>
-                    <input @ref="priceInputRef" type="number" min="0" step="0.01" @bind="PriceInput" @bind:event="oninput"
-                           @bind:after="PersistDraftAsync" placeholder="0.00" @onkeydown="HandlePriceKeyDown" />
-                    @if (!string.IsNullOrWhiteSpace(GetFieldError("price")))
-                    {
-                        <span class="error-text">@GetFieldError("price")</span>
-                    }
+                    <Input Label="Price" @bind-Value="PriceInput" Placeholder="0.00" Step="0.01" AddOptionalText="true" OptionalText="(Optional - will be calculated if left empty)"
+                           ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("price")))" ErrorText='@GetFieldError("price")' />
                 </div>
+                <Button Title="Add UOM" OnClick="() => AddUomEntryAsync(false)" Variant="ButtonVariant.Primary"></Button>
+            </ChildContent>
+        </FormSection>
 
-                <div class="modal-actions">
-                    <button @ref="addUomButtonRef" type="button" class="btn-primary"
-                            @onclick="() => AddUomEntryAsync(false)" @onkeydown="HandleAddUomButtonKeyDown">
-                        Add UOM
-                    </button>
-                </div>
-
-                <!-- Display all UOMs -->
-                @if (workingUomEntries.Count > 0)
+        <FormSection Title="All Units of Measures" Icon="ti ti-clipboard-list" IsExpanded="true" Expandable="true">
+            <ChildContent>
+                @{
+                    var uomRows = UomRows;
+                }
+                @if (uomRows.Count > 0)
                 {
-                    <div class="modal-queue">
-                        <div class="queue-heading">
-                            <h5>All Unit of Measures<span class="queue-count">@workingUomEntries.Count</span></h5>
-                        </div>
-                        <div class="queue-table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Unit of Measure</th>
-                                        <th class="num">Conversion per (PC)</th>
-                                        <th class="num">Price</th>
-                                        <th class="col-remove"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var row in workingUomEntries.OrderBy(x => x.Value.Conversion ?? decimal.MaxValue))                                    
+                        <AddTable TItem="UomRow"
+                                Items="uomRows"
+                                Columns="UomColumns"
+                                ColumnLabels="UomColumnLabels"
+                                EditableColumns="UomEditableColumns"
+                                ColumnInputTypes="UomColumnInputTypes"
+                                IsCellEditableOverride="IsUomCellEditable"
+                                DisplayValueSelector="GetUomDisplayValue"
+                                OnCellChanged="HandleUomCellChangedAsync"
+                                RemoveButtonVisible="true"
+                                ShowError="true"
+                                ErrorSelector='idx => GetFieldError($"price_{uomRows[idx].Name}")'>
+                                <RowActionsTemplate Context="row">
+                                    @if (!row.IsBase)
                                     {
-                                        <tr>
-                                            <td>@row.Key@(IsBaseUom(row.Key) ? " (Base Unit)" : string.Empty)@(!row.Value.IsActive ? " (Inactive)" : string.Empty)</td>
-                                            <td class="num">
-                                                @if (IsBaseUom(row.Key))
-                                                {
-                                                    <input type="number" min="1" step="1" @bind="row.Value.Conversion"
-                                                        @bind:event="onchange" readonly />
-                                                }
-                                                else
-                                                {
-                                                    @if(row.Value.Conversion == null)
-                                                    {
-                                                        <input type="text" value="Not set" readonly />
-                                                    }
-                                                   else{
-                                                        <input type="number" min="1" step="1" @bind="row.Value.Conversion"
-                                                            @bind:event="onchange"
-                                                            @bind:after="@(async () => await HandleRowConversionChangedAsync(row.Key))" />
-                                                   }
-                                                }
-                                            </td>
-                                            <td class="num">
-                                                <input type="number" min="0" step="0.01" @bind="row.Value.Price"
-                                                       @bind:event="onchange"
-                                                       @bind:after="@(async () => await HandlePriceInputChangedAsync(row.Key))"
-                                                       placeholder="0.00" />
-                                            </td>
-                                            <td class="col-remove">
-                                                @if (!IsBaseUom(row.Key))
-                                                {
-                                                    @if (row.Value.IsActive)
-                                                    {
-                                                        <button type="button" class="btn-table-action danger" @onclick="() => RemoveUomEntry(row.Key)">
-                                                            @(IsUomInUse(row.Key) ? "Deactivate" : "Remove")
-                                                        </button>
-                                                    }
-                                                    else
-                                                    {
-                                                        <button type="button" class="btn-table-action"
-                                                                @onclick="() => ReactivateUomEntry(row.Key)">
-                                                            Reactivate
-                                                        </button>
-                                                    }
-                                                }
-                                            </td>
-                                        </tr>
+                                        @if (row.Entry.IsActive)
+                                        {
+                                            <Button OnClick="() => RemoveUomEntry(row.Name)" Tooltip="@(IsUomInUse(row.Name) ? "Deactivate" : "Remove")" Variant="ButtonVariant.IconActionDelete" Icon="ti ti-trash"></Button>
+                                        }
+                                        else
+                                        {
+                                            <Button OnClick="() => ReactivateUomEntry(row.Name)" Title="Reactivate"></Button>
+                                        }
                                     }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                                </RowActionsTemplate>
+                        </AddTable>
                 }
-            </div>
 
-            <div class="modal-footer">
-                @if (!string.IsNullOrWhiteSpace(GetFieldError("prices")))
-                {
-                    <span class="error-text">@GetFieldError("prices")</span>
-                }
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" @onclick="CancelAsync">Cancel (Esc)</button>
-                    <button type="button" class="btn-secondary" @onclick="ShowClearDraftConfirmModal">Clear Draft</button>
-                    <button type="button" class="btn-primary" @onclick="AddAsync">Save</button>
-                </div>
-            </div>
+            </ChildContent>
+        </FormSection>
+    </ChildContent>
+    <FooterContent>
+        <Button Title="Cancel" OnClick="CancelAsync" />
+        <Button Title="Clear Draft" OnClick="ShowClearDraftConfirmModal" />
+        <Button Title="Save" OnClick="AddAsync" Variant="ButtonVariant.Primary" />
+    </FooterContent>
+</Modal>
 
-            @if (showClearDraftConfirmModal)
-            {
-                <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
-                              Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
-                              OnNo="CancelClearDraftConfirm" />
-            }
+@if (showClearDraftConfirmModal)
+{
+    <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
+                    Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
+                    OnNo="CancelClearDraftConfirm" />
+}
 
-            @if (showReactivateConflictModal)
-            {
-                <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
-                              OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
-            }
-        </div>
-    </div>
+@if (showReactivateConflictModal)
+{
+    <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
+                    OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
 }

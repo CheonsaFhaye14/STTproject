@@ -11,6 +11,10 @@
         {
             <span class="required-asterisk">*</span>
         }
+        @if (AddOptionalText)
+        {
+            <span class="optional-text">@OptionalText</span>
+        }
     </label>
 }
 <input type="@InputType"
@@ -24,7 +28,13 @@
 {
     <span class="error-text">@ErrorText</span>
 }
-
+<style>
+.optional-text{
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-left: 5px;
+}
+</style>
 @code {
     [Parameter] public string? Label { get; set; }
     [Parameter] public string? Placeholder { get; set; }
@@ -33,9 +43,10 @@
     [Parameter] public string? ErrorText { get; set; }
     [Parameter] public bool ShowError { get; set; } = true;
     [Parameter] public string? Step { get; set; }
-
     [Parameter] public TValue? Value { get; set; }
     [Parameter] public EventCallback<TValue?> ValueChanged { get; set; }
+    [Parameter] public bool AddOptionalText { get; set; } = false;
+    [Parameter] public string? OptionalText { get; set; } = "(Optional)";
 
     private ElementReference InputElement;
     public ElementReference GetInputRef() => InputElement;

@@ -11,7 +11,7 @@
                 {
                     <th>@(ColumnLabels.TryGetValue(column, out var label) ? label : column)</th>
                 }
-                @if (RemoveButtonVisible)
+                @if (RemoveButtonVisible || RowActionsTemplate is not null)
                 {
                     <th class="action-col"></th>
                 }
@@ -26,24 +26,37 @@
                     <td class="row-num">@(idx + 1)</td>
                     @foreach (var column in Columns)
                     {
+                        var col = column;
+                        var editable = !ViewMode && EditableColumns.Contains(col)
+                            && (IsCellEditableOverride?.Invoke(item, col) ?? true);
                         <td>
-                            @if (!ViewMode && EditableColumns.Contains(column))
+                            @if (editable)
                             {
-                                <input value="@GetPropertyValue(item, column)"
-                                       placeholder="@(ColumnPlaceholders.TryGetValue(column, out var ph) ? ph : "")"
+                                <input value="@GetPropertyValue(item, col)"
+                                       type="@(ColumnInputTypes.TryGetValue(col, out var it) ? it : "text")"
+                                       placeholder="@(ColumnPlaceholders.TryGetValue(col, out var ph) ? ph : "")"
                                        disabled="@Disabled"
-                                       @oninput="e => SetPropertyValue(item, column, e.Value?.ToString())" />
+                                       @oninput="e => SetPropertyValue(item, col, e.Value?.ToString())"
+                                       @onchange="async e =>
+                                       {
+                                           SetPropertyValue(item, col, e.Value?.ToString());
+                                           await OnCellChanged.InvokeAsync((item, col));
+                                       }" />
                             }
                             else
                             {
-                                <input value="@GetPropertyValue(item, column)" disabled />
+                                <input value="@GetPropertyValue(item, col)" disabled />
                             }
                         </td>
                     }
-                    @if (RemoveButtonVisible)
+                    @if (RemoveButtonVisible || RowActionsTemplate is not null)
                     {
                         <td class="action-col">
-                            @if (Items.Count > MinItems)
+                            @if (RowActionsTemplate is not null)
+                            {
+                                @RowActionsTemplate(item)
+                            }
+                            else if (Items.Count > MinItems)
                             {
                                 <button type="button" class="remove-btn" aria-label="Remove"
                                         disabled="@RemoveButtonDisabled"
@@ -58,7 +71,7 @@
                 {
                     <tr class="error-row">
                         <td></td>
-                        <td colspan="@(Columns.Count + (RemoveButtonVisible ? 1 : 0))">
+                        <td colspan="@(Columns.Count + ((RemoveButtonVisible || RowActionsTemplate is not null) ? 1 : 0))">
                             <span class="error-text">@rowError</span>
                         </td>
                     </tr>
@@ -105,6 +118,12 @@
     [Parameter] public string? GeneralErrorText { get; set; }
     [Parameter] public Func<TItem, string, string?>? DisplayValueSelector { get; set; }
 
+    // --- New, additive ---
+    [Parameter] public Func<TItem, string, bool>? IsCellEditableOverride { get; set; }
+    [Parameter] public EventCallback<(TItem Item, string Column)> OnCellChanged { get; set; }
+    [Parameter] public RenderFragment<TItem>? RowActionsTemplate { get; set; }
+    [Parameter] public Dictionary<string, string> ColumnInputTypes { get; set; } = new();
+
     private static readonly Dictionary<string, PropertyInfo?> PropertyCache = new();
 
     private PropertyInfo? GetProperty(string column)
@@ -137,11 +156,26 @@
         var prop = GetProperty(column);
         if (prop is null || item is null || !prop.CanWrite) return;
 
-        if (prop.PropertyType == typeof(string))
+        var underlying = Nullable.GetUnderlyingType(prop.PropertyType);
+        var targetType = underlying ?? prop.PropertyType;
+
+        if (targetType == typeof(string))
         {
             prop.SetValue(item, value);
+            return;
         }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (underlying is not null) prop.SetValue(item, null);
+            return;
+        }
+
+        if (targetType == typeof(decimal) && decimal.TryParse(value, out var d)) prop.SetValue(item, d);
+        else if (targetType == typeof(int) && int.TryParse(value, out var n)) prop.SetValue(item, n);
+        else if (targetType == typeof(bool) && bool.TryParse(value, out var b)) prop.SetValue(item, b);
     }
+
     private async Task RemoveRow(int idx)
     {
         if (idx >= 0 && idx < Items.Count && Items.Count > MinItems)
