@@ -12,7 +12,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
         {
             _jsRuntime = jsRuntime;
         }
-
+//TODO: To be fixed
         public async Task GenerateAndDownloadExcelAsync(
             List<(string Code, string Name)>? customers = null,
             List<(string Code, string Name)>? skus = null,
@@ -64,7 +64,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 worksheet.Columns(10, 30).Style.Protection.Locked = false;
                 worksheet.Range("A1:I1").Style.Protection.Locked = true;
                 worksheet.SheetView.FreezeRows(1);
-
                 worksheet.Column(1).Style.NumberFormat.Format = "@"; // InvoiceCode — avoid Excel stripping leading zeros
 
                 const int maxRow = 1048576;
@@ -174,11 +173,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
                 qtyValidation.ErrorTitle = "Invalid Quantity";
                 qtyValidation.ErrorMessage = "Quantity must be a whole number greater than 0";
 
-                // ── Amount auto-calc (H) — locked formula ──
-                // Quantity is G, UOM is F. Plain SkuCode isn't stored anywhere on this sheet
-                // directly (E holds the combined "Code - Name" picker text), so it's derived
-                // inline via VLOOKUP(E, SkuList!C:A, 2, FALSE) — reversed range C:A puts the
-                // picker label leftmost so VLOOKUP can look it up and return column A (the code).
                 if (priceTable != null)
                 {
                     for (int row = 2; row <= formulaFillRows; row++)
@@ -211,6 +205,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     await _jsRuntime.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
                 }
+                
             }
         }
 
@@ -355,7 +350,9 @@ namespace STTproject.Features.User.SalesInvoice.Services
             var errorColumn = headers.Count + 1;
             sheet.Cell(1, errorColumn).Value = "Error";
             sheet.Row(1).Style.Font.Bold = true;
-            sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+            sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
+            sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#ffffff");
+            sheet.SheetView.FreezeRows(1);
 
             var issuesByRow = result.Issues
                 .GroupBy(issue => issue.RowNumber)
