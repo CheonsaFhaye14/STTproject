@@ -49,8 +49,6 @@ public class DownloadTemplateService
             worksheet.Cell(1, 8).Value = "ConversionBasedOn";
             worksheet.Cell(1, 9).Value = "Conversion";
             worksheet.Cell(1, 10).Value = "Price";
-            worksheet.SheetView.FreezeRows(1);
-            worksheet.Columns().AdjustToContents();
 
             // Extra unlocked cells for user scratch space; the import parser ignores these columns.
             // Moved past column J now that ConversionBasedOn occupies H.
@@ -62,7 +60,9 @@ public class DownloadTemplateService
             // Style headers
             var headerRow = worksheet.Row(1);
             headerRow.Style.Font.Bold = true;
-            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#000000");
+            headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.FromHtml("#FFFFFF");
+                        worksheet.SheetView.FreezeRows(1);
 
             // Add data rows with empty duplication rows for each item
             int currentRow = 2;
@@ -232,7 +232,9 @@ public class DownloadTemplateService
         var errorColumn = headers.Count + 1;
         sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
-        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
+        sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
+        sheet.SheetView.FreezeRows(1);
 
         int excelRow = 2;
         foreach (var row in rowsToExport)
