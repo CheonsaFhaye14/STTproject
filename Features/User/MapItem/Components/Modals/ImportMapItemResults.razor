@@ -696,8 +696,10 @@
 
         if (msg.Contains("duplicate map item")) return "Duplicate Map Item";
         if (msg.Contains("has no conversion")) return "No Conversion (Price Only)";
+        if (msg.Contains("has a price of 0")) return "Zero Price";
         return (m ?? string.Empty).Trim();
     }
+    
 
     private IEnumerable<(string Message, int Count)> GetDistinctWarningMessages()
     {

@@ -10,8 +10,6 @@ namespace STTproject.Features.User.MapItem.Services;
 
 public sealed class ImportMapItemService
 {
-	private const string BaseUomName = "PC";
-
 	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
 	private readonly IMapItemService _mapItemService;
 	private readonly ILogger<ImportMapItemService> _logger;
@@ -182,9 +180,6 @@ public sealed class ImportMapItemService
 				.ToListAsync(cancellationToken);
 		}
 
-		// Identity now includes ItemName (description) so two rows that share
-		// SubDistributor/Code/CompanyItem but differ in description are treated
-		// as distinct items rather than a duplicate.
 		var existingBySubdCodeCompanyAndItem = new HashSet<(string, string, string, string)>();
 		var companyItemCodesById = companyItems.Values.ToDictionary(ci => ci.CompanyItemId, ci => Normalize(ci.ItemCode));
 		foreach (var si in existingSubdItems)
@@ -278,9 +273,6 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			// Check if any rows conflict with an existing exact SubdItem mapping in the database.
-			// Includes description (ItemName) — a matching code/company with a different
-			// description is treated as a new/distinct item, not a conflict.
 			var subdDistributorKey = (
 				Normalize(firstRow.SubDistributorCode),
 				Normalize(firstRow.SubdItemCode),
@@ -301,26 +293,22 @@ public sealed class ImportMapItemService
 				}
 			}
 
-			// NEW — PC (base UOM) has no price of its own, and no other UOM row in the group
-			// has both a price AND a conversion to derive the PC price from. Without one of
-			// those, ComputeMissingPrices has nothing to anchor on, so flag it explicitly
-			// instead of letting it fall through to the generic "Price must be provided" message.
-			var pcRow = groupRows.FirstOrDefault(r => IsPieceUom(r.UOM));
-			if (pcRow is not null && (!pcRow.Price.HasValue || pcRow.Price.Value <= 0))
+			var baseRow = groupRows.FirstOrDefault(r => r.Conversion == 1);
+			if (baseRow is not null && !baseRow.Price.HasValue)
 			{
 				var hasConvertibleReference = groupRows.Any(r =>
-					r.RowNumber != pcRow.RowNumber &&
-					r.Price.HasValue && r.Price.Value > 0 &&
+					r.RowNumber != baseRow.RowNumber &&
+					r.Price.HasValue &&
 					r.Conversion.HasValue && r.Conversion.Value > 0);
 
 				if (!hasConvertibleReference)
 				{
-					if (!rowErrors.TryGetValue(pcRow.RowNumber, out var pcIssues))
+					if (!rowErrors.TryGetValue(baseRow.RowNumber, out var baseIssues))
 					{
-						pcIssues = new List<string>();
-						rowErrors[pcRow.RowNumber] = pcIssues;
+						baseIssues = new List<string>();
+						rowErrors[baseRow.RowNumber] = baseIssues;
 					}
-					pcIssues.Add("PC has no price, and no other UOM row has both a price and a conversion to derive it from.");
+					baseIssues.Add($"'{baseRow.UOM}' (the base unit) has no price, and no other UOM row has both a price and a conversion to derive it from.");
 				}
 			}
 
@@ -410,23 +398,31 @@ public sealed class ImportMapItemService
 					rowResult.IsSuccess = false;
 					rowResult.Issues.Add("Conversion must be a whole number greater than 0 when provided.");
 				}
-				else if (!row.Conversion.HasValue && (!row.Price.HasValue || row.Price.Value <= 0))
+				else if (!row.Conversion.HasValue && !row.Price.HasValue)
 				{
 					rowResult.IsSuccess = false;
 					rowResult.Issues.Add("Conversion is required unless a price is entered directly for this row.");
 				}
-				else if (!row.Conversion.HasValue && row.Price.HasValue && row.Price.Value > 0 && !IsPieceUom(row.UOM))
+				else if (!row.Conversion.HasValue && row.Price.HasValue)
 				{
 					// Valid, but worth flagging — could be an intentional price-only row,
 					// or a forgotten conversion. Non-blocking.
 					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has no conversion — only a price was provided. Double-check this was intentional.");
 				}
 
-				// Validate price
-				if (effectivePrice is null || effectivePrice <= 0)
+				// Validate price — 0 is a valid price now, only negative/missing is an error.
+				if (effectivePrice is null || effectivePrice < 0)
 				{
 					rowResult.IsSuccess = false;
-					rowResult.Issues.Add("Price must be provided or computable from another UOM row, and greater than 0.");
+					rowResult.Issues.Add("Price must be provided or computable from another UOM row, and cannot be negative.");
+				}
+				else if (effectivePrice.Value == 0)
+				{
+					// Non-blocking — 0 is technically valid, but it's much more likely a
+					// mistake (blank cell, copy-paste slip) than an intentional free item.
+					// Flag it so the user notices and can fix it before committing.
+					var priceSource = row.Price.HasValue ? "entered directly" : "computed from another UOM row";
+					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has a price of 0 ({priceSource}). Double-check this was intentional.");
 				}
 
 				// Validate UOM is not empty
@@ -556,7 +552,7 @@ public sealed class ImportMapItemService
 			var uomEntries = new Dictionary<string, UomEntry>();
 			foreach (var row in subdItemRows)
 			{
-				if (string.IsNullOrWhiteSpace(row.UomName) || row.Price is not > 0)
+				if (string.IsNullOrWhiteSpace(row.UomName) || !row.Price.HasValue)
 				{
 					continue;
 				}
@@ -588,16 +584,16 @@ public sealed class ImportMapItemService
 		int currentUserId,
 		CancellationToken cancellationToken)
 	{
-		// TODO: adjust to your actual Users/role schema (e.g. RoleId FK, enum,
-		// or a claims-based role that's passed in from the controller instead
-		// of being looked up here).
 		return await context.Users
 			.AsNoTracking()
 			.Where(u => u.UserId == currentUserId)
 			.Select(u => u.Role == "Admin")
 			.FirstOrDefaultAsync(cancellationToken);
 	}
-
+	private static string CanonicalizeUomName(string? uom)
+	{
+		return (uom ?? string.Empty).Trim();
+	}
 	private static List<ImportedMapItemRow> ReadMapItemRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
@@ -654,7 +650,7 @@ public sealed class ImportMapItemService
 			decimal? price = null;
 			if (!row.Cell(headers["Price"]).IsEmpty())
 			{
-				if (TryGetDecimal(row.Cell(headers["Price"]), out var parsedPrice) && parsedPrice > 0)
+				if (TryGetDecimal(row.Cell(headers["Price"]), out var parsedPrice) && parsedPrice >= 0)
 				{
 					price = parsedPrice;
 				}
@@ -821,24 +817,27 @@ public sealed class ImportMapItemService
 			{
 				AddError(row.RowNumber, "Company Item name must match the first row in the item group.");
 			}
+		}
 
-			if (IsPieceUom(row.UOM) && row.Conversion.HasValue && row.Conversion.Value != 1)
+		var conflictingNameGroups = rows
+			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
+			.GroupBy(row => new
 			{
-				AddError(row.RowNumber, "UOM 'PC' must have conversion 1.");
-			}
+				Subd = Normalize(row.SubdItemCode),
+				ItemName = Normalize(row.SubdItemName),
+				Uom = Normalize(row.UOM)
+			})
+			.Where(g => g.Count() > 1 && g.Select(r => r.Conversion).Distinct().Count() > 1);
 
-			if (!IsPieceUom(row.UOM) && row.Conversion.HasValue && row.Conversion.Value == 1)
+		foreach (var group in conflictingNameGroups)
+		{
+			var rowNums = FormatRowNumbers(group.Select(r => r.RowNumber));
+			foreach (var row in group)
 			{
-				AddError(row.RowNumber, "Only UOM 'PC' can have conversion 1.");
+				AddError(row.RowNumber, $"UOM '{row.UOM}' is entered with conflicting conversion values for this item (rows {rowNums}). Each UOM name must map to a single conversion.");
 			}
 		}
 
-		// Duplicate UOM+conversion within the same SubdItemCode+description:
-		// if every other field also matches (price included), the rows describe
-		// the exact same mapping entered twice — that's a "duplicate map item"
-		// warning, not a blocking error, and only one copy gets committed.
-		// If fields differ (e.g. conflicting price), it stays a blocking error
-		// since we can't tell which value is correct.
 		var duplicateUomConvGroups = rows
 			.Where(row => !string.IsNullOrWhiteSpace(row.UOM))
 			.GroupBy(row => new
@@ -846,7 +845,7 @@ public sealed class ImportMapItemService
 				Company = Normalize(row.CompanyItemCode),
 				Subd = Normalize(row.SubdItemCode),
 				ItemName = Normalize(row.SubdItemName),
-				Uom = NormalizeUomKey(row.UOM),
+				Uom = Normalize(row.UOM),
 				Conv = row.Conversion
 			})
 			.Where(group => group.Count() > 1)
@@ -889,22 +888,6 @@ public sealed class ImportMapItemService
 		return string.Join(", ", nums.Take(nums.Count - 1)) + " & " + nums[^1];
 	}
 
-	private static bool IsPieceUom(string? uom)
-	{
-		var normalized = Normalize(uom ?? string.Empty);
-		return normalized is "piece" or "pcs" or "pc";
-	}
-
-	private static string NormalizeUomKey(string? uom)
-	{
-		return IsPieceUom(uom) ? BaseUomName : Normalize(uom ?? string.Empty);
-	}
-
-	private static string CanonicalizeUomName(string? uom)
-	{
-		return IsPieceUom(uom) ? BaseUomName : (uom ?? string.Empty).Trim();
-	}
-
 	private static void MergeRowErrors(
 		Dictionary<int, List<string>> rowErrors,
 		IEnumerable<ImportedMapItemRow> rows,
@@ -937,10 +920,9 @@ public sealed class ImportMapItemService
 	{
 		var computedPricesByRow = new Dictionary<int, decimal>();
 
-		// Only a row with BOTH a price and a conversion can serve as the basis
-		// for deriving other rows' prices.
+
 		var pricedRows = rows
-			.Where(row => row.Price.HasValue && row.Price.Value > 0 && row.Conversion.HasValue && row.Conversion.Value > 0)
+			.Where(row => row.Price.HasValue && row.Conversion.HasValue && row.Conversion.Value > 0)
 			.OrderBy(row => row.RowNumber)
 			.ToList();
 
@@ -953,7 +935,6 @@ public sealed class ImportMapItemService
 			return computedPricesByRow;
 		}
 
-		// A row with neither a price nor a conversion can't be resolved at all.
 		var unresolvable = missingPriceRows.Where(row => !row.Conversion.HasValue).ToList();
 		foreach (var row in unresolvable)
 		{
@@ -978,7 +959,7 @@ public sealed class ImportMapItemService
 		foreach (var row in resolvableMissingPriceRows)
 		{
 			var computedPrice = Math.Round(unitPrice * row.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
-			if (computedPrice <= 0)
+			if (computedPrice < 0)
 			{
 				errors.Add($"Unable to compute a valid price for row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}).");
 				continue;
@@ -997,54 +978,47 @@ public sealed class ImportMapItemService
 			return;
 		}
 
-		var existingBaseKey = uomEntries.Keys.FirstOrDefault(IsPieceUom);
+		// The base unit is identified purely by Conversion == 1 — any UOM name can hold
+		// that role, so there's no more forcing everything into a fixed "PC" key.
+		var existingBaseKey = uomEntries.FirstOrDefault(kv => kv.Value.Conversion == 1).Key;
 		if (!string.IsNullOrWhiteSpace(existingBaseKey) && uomEntries.TryGetValue(existingBaseKey, out var baseEntry))
 		{
-			baseEntry.Conversion = 1;
-			if (!baseEntry.Price.HasValue || baseEntry.Price <= 0)
+			if (!baseEntry.Price.HasValue)
 			{
 				var pricedSource = uomEntries
-					.Where(entry => !IsPieceUom(entry.Key))
-					.Where(entry => entry.Value.Price.HasValue && entry.Value.Price > 0 && entry.Value.Conversion > 0)
+					.Where(entry => !string.Equals(entry.Key, existingBaseKey, StringComparison.OrdinalIgnoreCase))
+					.Where(entry => entry.Value.Price.HasValue && entry.Value.Conversion > 0)
 					.OrderBy(entry => entry.Value.Conversion)
 					.FirstOrDefault();
 
 				if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
 				{
-					// Conversion filtered to > 0 above, so it's guaranteed non-null here — unwrap
-					// with .Value since Math.Round requires a non-nullable decimal argument.
 					baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
 					baseEntry.IsAutoCalculated = true;
 				}
 			}
 
-			if (!string.Equals(existingBaseKey, BaseUomName, StringComparison.OrdinalIgnoreCase))
-			{
-				uomEntries.Remove(existingBaseKey);
-			}
-
-			uomEntries[BaseUomName] = baseEntry;
 			return;
 		}
 
+		// No row explicitly claimed conversion 1 — fall back to promoting the
+		// cheapest-conversion priced entry in place, keeping its original name.
 		var sourceEntry = uomEntries
-			.Where(entry => entry.Value.Price.HasValue && entry.Value.Price > 0 && entry.Value.Conversion > 0)
-			.OrderBy(entry => entry.Key.Equals(BaseUomName, StringComparison.OrdinalIgnoreCase))
-			.ThenBy(entry => entry.Value.Conversion)
+			.Where(entry => entry.Value.Price.HasValue && entry.Value.Conversion > 0)
+			.OrderBy(entry => entry.Value.Conversion)
 			.FirstOrDefault();
 
-		if (sourceEntry.Value == null || !sourceEntry.Value.Price.HasValue || sourceEntry.Value.Conversion <= 0)
+		if (sourceEntry.Value == null || !sourceEntry.Value.Price.HasValue || sourceEntry.Value.Conversion is not > 0)
 		{
 			return;
 		}
 
-		uomEntries[BaseUomName] = new UomEntry
-		{
-			Conversion = 1,
-			// Same unwrap here — Conversion > 0 was already checked above.
-			Price = Math.Round(sourceEntry.Value.Price.Value / sourceEntry.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero),
-			IsAutoCalculated = true
-		};
+		var originalConversion = sourceEntry.Value.Conversion!.Value;
+		var unitPrice = Math.Round(sourceEntry.Value.Price!.Value / originalConversion, 2, MidpointRounding.AwayFromZero);
+
+		sourceEntry.Value.Conversion = 1;
+		sourceEntry.Value.Price = unitPrice;
+		sourceEntry.Value.IsAutoCalculated = true;
 	}
 
 	private static List<ImportedMapItemRow> ResolveConversionsForGroup(List<ImportedMapItemRow> groupRows)
@@ -1057,28 +1031,36 @@ public sealed class ImportMapItemService
 			var byUom = new Dictionary<string, ImportedMapItemRow>(StringComparer.OrdinalIgnoreCase);
 			foreach (var row in rowsList)
 			{
-				byUom[NormalizeUomKey(row.UOM)] = row;
+				byUom[Normalize(row.UOM)] = row;
 			}
 
 			decimal? Resolve(string uomKey, HashSet<string> visiting)
 			{
-				if (IsPieceUom(uomKey))
-				{
-					return 1m;
-				}
-
-				if (!byUom.TryGetValue(uomKey, out var row) || !row.Conversion.HasValue)
+				if (!byUom.TryGetValue(uomKey, out var row))
 				{
 					return null;
 				}
 
-				var basisKey = string.IsNullOrWhiteSpace(row.ConversionBasedOn)
-					? Normalize(BaseUomName)
-					: NormalizeUomKey(row.ConversionBasedOn);
-
-				if (IsPieceUom(basisKey) || !visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
+				if (row.Conversion == 1)
 				{
-					return row.Conversion; 
+					return 1m;
+				}
+
+				if (!row.Conversion.HasValue)
+				{
+					return null;
+				}
+
+				if (string.IsNullOrWhiteSpace(row.ConversionBasedOn))
+				{
+					return row.Conversion;
+				}
+
+				var basisKey = Normalize(row.ConversionBasedOn);
+
+				if (!visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
+				{
+					return row.Conversion;
 				}
 
 				var basisResolved = Resolve(basisKey, visiting);
@@ -1087,19 +1069,13 @@ public sealed class ImportMapItemService
 
 			foreach (var row in rowsList)
 			{
-				if (IsPieceUom(row.UOM))
-				{
-					result.Add(row with { Conversion = 1 });
-					continue;
-				}
-
-				if (!row.Conversion.HasValue)
+				if (row.Conversion == 1 || !row.Conversion.HasValue)
 				{
 					result.Add(row);
 					continue;
 				}
 
-				var resolved = Resolve(NormalizeUomKey(row.UOM), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+				var resolved = Resolve(Normalize(row.UOM), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 				var resolvedInt = resolved.HasValue
 					? (int?)Math.Round(resolved.Value, MidpointRounding.AwayFromZero)
 					: null;
