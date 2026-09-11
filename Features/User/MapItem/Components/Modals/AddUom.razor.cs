@@ -155,7 +155,7 @@ public partial class AddUom
         return selectedUomOption;
     }
         
-    private async Task AddUomEntryAsync(bool autoCalc = false, bool confirmedNoPrice = false)
+   private async Task AddUomEntryAsync(bool autoCalc = false)
     {
         var uomName = selectedUomOption == "__custom"
             ? (CustomUom ?? string.Empty).Trim()
@@ -190,17 +190,9 @@ public partial class AddUom
         }
 
         validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries, BaseUomName);
-
+        
         if (validationErrors.Any())
         {
-            return;
-        }
-
-        // Price is optional, but adding a row with no price should be a deliberate choice,
-        // not something that slips through silently — confirm with the user first.
-        if (string.IsNullOrWhiteSpace(priceInput) && !confirmedNoPrice)
-        {
-            await InvokeAsync(StateHasChanged);
             return;
         }
 
@@ -235,8 +227,6 @@ public partial class AddUom
         await InvokeAsync(StateHasChanged);
         await FocusUomSelectAsync();
     }
-
-
     private async Task FocusUomSelectAsync()
     {
         await Task.Yield();
