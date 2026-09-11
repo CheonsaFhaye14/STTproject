@@ -1,7 +1,7 @@
 using STTproject.Features.Admin.PriceIncrease.DTOs;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
-
+//TODO: Dont change price for items uom without conversion or price.
 namespace STTproject.Features.Admin.PriceIncrease.Services
 {
     public class AdminPriceIncreaseService : IAdminPriceIncreaseService
@@ -280,7 +280,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
 
                 foreach (var uom in uomRows)
                 {
-                    var conversion = uom.ItemsUom?.ConversionToBase ?? 1m;
+                    var conversion = uom.ItemsUom?.ConversionToBase ?? 0;
                     uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion);
                     uom.EffectivityDate = effectivityDate;
                 }
@@ -342,7 +342,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                         SubdItemName = u.SubdItemName,
                         ItemsUomId = u.ItemsUomId,
                         UomName = u.UomName,
-                        ConversionToBase = u.ConversionToBase ?? 1m,
+                        ConversionToBase = u.ConversionToBase ?? 1,
                         OldPrice = history?.OldPrice,
                         NewPrice = history?.NewPrice
                     };

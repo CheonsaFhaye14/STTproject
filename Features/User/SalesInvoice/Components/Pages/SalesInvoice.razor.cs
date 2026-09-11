@@ -869,7 +869,7 @@ public partial class SalesInvoice
                 .Join(subdItems,
                     uom => uom.SubdItemId,
                     item => item.SubdItemId,
-                    (uom, item) => (SkuCode: item.SubdItemCode ?? string.Empty, Uom: uom.UomName, Price: uom.Price))
+                    (uom, item) => (SkuCode: item.SubdItemCode ?? string.Empty, Uom: uom.UomName, Price: uom.Price ?? 0m))
                 .Where(p => !string.IsNullOrWhiteSpace(p.SkuCode) && !string.IsNullOrWhiteSpace(p.Uom))
                 .ToList();
 

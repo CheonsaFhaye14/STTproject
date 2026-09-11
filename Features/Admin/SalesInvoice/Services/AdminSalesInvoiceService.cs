@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.SalesInvoice.DTOs;
-
+//TODO: Allow to select Items Uom with out price or conversion. 
 namespace STTproject.Features.Admin.SalesInvoice.Services;
 
 public class AdminSalesInvoiceService : IAdminSalesInvoiceService
@@ -197,7 +197,7 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
                                 .OrderBy(h => h.AppliedDate)
                                 .Select(h => (decimal?)h.OldPrice)
                                 .FirstOrDefault()
-                            ?? item.ItemsUom.Price,
+                            ?? item.ItemsUom.Price ?? 0m,
                         Quantity = item.Quantity,
                         Amount = item.Amount
                     })
@@ -308,9 +308,9 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                             .OrderBy(h => h.AppliedDate)
                             .Select(h => (decimal?)h.OldPrice)
                             .FirstOrDefault()
-                        ?? u.Price,
+                        ?? u.Price ?? 0m,
 
-                    ConversionToBase = u.ConversionToBase ?? 1m
+                    ConversionToBase = u.ConversionToBase ?? 1
                 })
                 .OrderBy(u => u.UomName)
                 .ToList()

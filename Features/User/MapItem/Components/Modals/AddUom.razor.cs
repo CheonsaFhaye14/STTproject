@@ -11,7 +11,7 @@ namespace STTproject.Features.User.MapItem.Components.Modals;
 
 public partial class AddUom
 {
-    private const string BaseUomName = "PC";
+    [Parameter] public string BaseUomName { get; set; } = "PC";    
     [Parameter] public HashSet<string> InUseUomNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
@@ -23,7 +23,7 @@ public partial class AddUom
 
     [Inject] private AddUomService AddUomService { get; set; } = default!;
 
-    private readonly string[] defaultOptions = { BaseUomName, "Case", "Box", "Pack" };
+    private string[] DefaultOptions => new[] { BaseUomName, "Case", "Box", "Pack" };
     private Dictionary<string, UomEntry> workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> validationErrors = new();
     private string selectedUomOption = string.Empty;
@@ -41,7 +41,6 @@ public partial class AddUom
                     CustomUom = string.Empty;
                 }
 
-                // If selected UOM is piece-like, auto-set conversion to 1
                 if (IsBaseUom(GetSelectedUomName()))
                 {
                     conversionInput = "1";
@@ -69,7 +68,7 @@ public partial class AddUom
         }
     }
     private string conversionInput = string.Empty;
-    private string ConversionBasedOnInput = BaseUomName;
+    private string ConversionBasedOnInput = string.Empty;
     private string ConversionInput
     {
         get => conversionInput;
@@ -120,6 +119,7 @@ public partial class AddUom
                 customUom = string.Empty;
                 conversionInput = string.Empty;
                 priceInput = string.Empty;
+                ConversionBasedOnInput = string.Empty;
                 validationErrors.Clear();
             }
 
@@ -145,6 +145,8 @@ public partial class AddUom
 
         await base.OnAfterRenderAsync(firstRender);
     }
+    private bool HasBaseUnit(Dictionary<string, UomEntry> entries) =>
+        entries.ContainsKey(BaseUomName) || entries.Values.Any(e => e.Conversion == 1);
 
     private string GetSelectedUomName()
     {
@@ -153,73 +155,88 @@ public partial class AddUom
         return selectedUomOption;
     }
         
-    private async Task AddUomEntryAsync(bool autoCalc = false)
-{
-    var uomName = selectedUomOption == "__custom"
-        ? (CustomUom ?? string.Empty).Trim()
-        : selectedUomOption.Trim();
-
-    decimal? enteredCount = string.IsNullOrWhiteSpace(conversionInput)
-        ? null
-        : decimal.Parse(conversionInput);
-
-    var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
-
-    decimal? pcConversion;
-    if (IsBaseUom(uomName))
+    private async Task AddUomEntryAsync(bool autoCalc = false, bool confirmedNoPrice = false)
     {
-        pcConversion = enteredCount;
-        basisName = BaseUomName;
+        var uomName = selectedUomOption == "__custom"
+            ? (CustomUom ?? string.Empty).Trim()
+            : selectedUomOption.Trim();
+
+        int? enteredCount = string.IsNullOrWhiteSpace(conversionInput)
+            ? null
+            : int.Parse(conversionInput);
+
+        var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
+
+        int? pcConversion;
+        if (IsBaseUom(uomName))
+        {
+            pcConversion = enteredCount;
+            basisName = BaseUomName;
+        }
+        else if (!enteredCount.HasValue)
+        {
+            pcConversion = null;
+        }
+        else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
+        {
+            pcConversion = basisEntry.Conversion.HasValue
+                ? enteredCount.Value * basisEntry.Conversion.Value
+                : enteredCount.Value;
+        }
+        else
+        {
+            pcConversion = enteredCount.Value;
+            basisName = BaseUomName;
+        }
+
+        validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries, BaseUomName);
+
+        if (validationErrors.Any())
+        {
+            return;
+        }
+
+        // Price is optional, but adding a row with no price should be a deliberate choice,
+        // not something that slips through silently — confirm with the user first.
+        if (string.IsNullOrWhiteSpace(priceInput) && !confirmedNoPrice)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        decimal? price = null;
+        if (!string.IsNullOrWhiteSpace(priceInput))
+        {
+            price = decimal.Parse(priceInput);
+        }
+
+        var priorItemsUomId = workingUomEntries.TryGetValue(uomName, out var priorEntry)
+                ? priorEntry.ItemsUomId
+                : null;
+
+        workingUomEntries[uomName] = new UomEntry
+        {
+            ItemsUomId = priorItemsUomId,
+            Conversion = pcConversion,
+            ConversionBasedOn = basisName,
+            Price = price,
+            IsActive = true,
+            IsAutoCalculated = autoCalc || !price.HasValue
+        };
+
+        selectedUomOption = string.Empty;
+        customUom = string.Empty;
+        conversionInput = string.Empty;
+        priceInput = string.Empty;
+
+        await RecalculatePricesAsync(uomName);
+        await PersistDraftAsync();
+        shouldFocusUomSelect = true;
+        await InvokeAsync(StateHasChanged);
+        await FocusUomSelectAsync();
     }
-    else if (!enteredCount.HasValue)
-    {
-        pcConversion = null;
-    }
-    else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
-    {
-        pcConversion = basisEntry.Conversion.HasValue
-            ? enteredCount.Value * basisEntry.Conversion.Value
-            : enteredCount.Value;
-    }
-    else
-    {
-        pcConversion = enteredCount.Value;
-        basisName = BaseUomName;
-    }
 
-    validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries);
 
-    if (validationErrors.Any())
-    {
-        return;
-    }
-
-    decimal? price = null;
-    if (!string.IsNullOrWhiteSpace(priceInput))
-    {
-        price = decimal.Parse(priceInput);
-    }
-
-    workingUomEntries[uomName] = new UomEntry
-    {
-        Conversion = pcConversion,
-        ConversionBasedOn = basisName,
-        Price = price,
-        IsActive = true,
-        IsAutoCalculated = autoCalc || !price.HasValue
-    };
-
-    selectedUomOption = string.Empty;
-    customUom = string.Empty;
-    conversionInput = string.Empty;
-    priceInput = string.Empty;
-
-    await RecalculatePricesAsync(uomName);
-    await PersistDraftAsync();
-    shouldFocusUomSelect = true;
-    await InvokeAsync(StateHasChanged);
-    await FocusUomSelectAsync();
-}
     private async Task FocusUomSelectAsync()
     {
         await Task.Yield();
@@ -239,17 +256,23 @@ public partial class AddUom
         public required UomEntry Entry { get; init; }
         public bool IsBase { get; init; }
 
-        public string UnitLabel => Name; // real text supplied via DisplayValueSelector
-        public decimal? Conversion { get => Entry.Conversion; set => Entry.Conversion = value; }
+        public string UnitLabel { get; set; } = string.Empty;
+        public int? Conversion { get => Entry.Conversion; set => Entry.Conversion = value; }
         public decimal? Price { get => Entry.Price; set => Entry.Price = value; }
     }
 
     private List<UomRow> UomRows =>
         workingUomEntries
             .OrderBy(x => x.Value.Conversion ?? decimal.MaxValue)
-            .Select(kv => new UomRow { Name = kv.Key, Entry = kv.Value, IsBase = IsBaseUom(kv.Key) })
+            .Select(kv => new UomRow { Name = kv.Key, Entry = kv.Value, IsBase = kv.Value.Conversion == 1, UnitLabel = kv.Key })
             .ToList();
 
+    private bool IsBaseUomEntry(string? uomName)
+    {
+        return !string.IsNullOrWhiteSpace(uomName)
+            && workingUomEntries.TryGetValue(uomName, out var entry)
+            && entry.Conversion == 1;
+    }
     private static readonly List<string> UomColumns = new()
     {
         nameof(UomRow.UnitLabel), nameof(UomRow.Conversion), nameof(UomRow.Price)
@@ -257,7 +280,7 @@ public partial class AddUom
 
     private static readonly List<string> UomEditableColumns = new()
     {
-        nameof(UomRow.Conversion), nameof(UomRow.Price)
+        nameof(UomRow.UnitLabel), nameof(UomRow.Conversion), nameof(UomRow.Price)
     };
 
     private static readonly Dictionary<string, string> UomColumnLabels = new()
@@ -273,17 +296,6 @@ public partial class AddUom
         [nameof(UomRow.Price)] = "number",
     };
 
-    private bool IsUomCellEditable(UomRow row, string column)
-    {
-        // Base unit's conversion is fixed; an unset conversion is edited only via
-        // the "Set conversion" flow in the draft section above, not inline here.
-        if (column == nameof(UomRow.Conversion))
-        {
-            return !row.IsBase && row.Entry.Conversion.HasValue;
-        }
-        return true;
-    }
-
     private string? GetUomDisplayValue(UomRow row, string column)
     {
         if (column == nameof(UomRow.UnitLabel))
@@ -293,17 +305,16 @@ public partial class AddUom
                 + (!row.Entry.IsActive ? " (Inactive)" : string.Empty);
         }
 
-        if (column == nameof(UomRow.Conversion) && row.Entry.Conversion is null)
-        {
-            return "Not set";
-        }
-
-        return null; // default reflection-based formatting
+        return null; 
     }
 
     private async Task HandleUomCellChangedAsync((UomRow Row, string Column) args)
     {
-        if (args.Column == nameof(UomRow.Conversion))
+        if (args.Column == nameof(UomRow.UnitLabel))
+        {
+            await HandleUomRenamedAsync(args.Row.Name, args.Row.UnitLabel);
+        }
+        else if (args.Column == nameof(UomRow.Conversion))
         {
             await HandleRowConversionChangedAsync(args.Row.Name);
         }
@@ -312,6 +323,70 @@ public partial class AddUom
             await HandlePriceInputChangedAsync(args.Row.Name);
         }
     }
+
+    private async Task HandleUomRenamedAsync(string oldName, string? newNameRaw)
+    {
+        var newName = (newNameRaw ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(newName) || string.Equals(newName, oldName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!workingUomEntries.TryGetValue(oldName, out var entry))
+        {
+            return;
+        }
+
+        var renameErrors = AddUomValidator.ValidateUomRename(oldName, newName, workingUomEntries, BaseUomName);
+        if (renameErrors.Any())
+        {
+            foreach (var kv in renameErrors)
+            {
+                validationErrors[kv.Key] = kv.Value;
+            }
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        validationErrors.Remove($"uomname_{oldName}");
+
+        if (workingUomEntries.TryGetValue(newName, out var conflictingEntry) && !conflictingEntry.IsActive)
+        {
+            workingUomEntries.Remove(newName);
+        }
+
+        workingUomEntries.Remove(oldName);
+        workingUomEntries[newName] = entry;
+
+        foreach (var other in workingUomEntries.Values)
+        {
+            if (string.Equals(other.ConversionBasedOn, oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                other.ConversionBasedOn = newName;
+            }
+        }
+        if (string.Equals(ConversionBasedOnInput, oldName, StringComparison.OrdinalIgnoreCase))
+        {
+            ConversionBasedOnInput = newName;
+        }
+
+        // Carry any per-row errors over to the new key so they keep showing.
+        if (validationErrors.TryGetValue($"conversion_{oldName}", out var convErr))
+        {
+            validationErrors.Remove($"conversion_{oldName}");
+            validationErrors[$"conversion_{newName}"] = convErr;
+        }
+        if (validationErrors.TryGetValue($"price_{oldName}", out var priceErr))
+        {
+            validationErrors.Remove($"price_{oldName}");
+            validationErrors[$"price_{newName}"] = priceErr;
+        }
+
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task HandlePriceInputChangedAsync(string uomName)
     {
         if (workingUomEntries.TryGetValue(uomName, out var entry))
@@ -332,7 +407,7 @@ public partial class AddUom
 
     private async Task RemoveUomEntry(string uomName)
     {
-        if (IsBaseUom(uomName))
+        if (IsBaseUomEntry(uomName))
         {
             return;
         }
@@ -344,11 +419,11 @@ public partial class AddUom
 
         if (IsUomInUse(uomName))
         {
-            entry.IsActive = false; // preserve history for existing references
+            entry.IsActive = false; 
         }
         else
         {
-            workingUomEntries.Remove(uomName); // never referenced, safe to drop entirely
+            workingUomEntries.Remove(uomName); 
         }
 
         await PersistDraftAsync();
@@ -390,7 +465,11 @@ public partial class AddUom
     
     private async Task AddAsync()
     {
-        if (!workingUomEntries.TryGetValue(BaseUomName, out var baseEntry))
+        var baseEntry = workingUomEntries.TryGetValue(BaseUomName, out var byName)
+            ? byName
+            : workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
+
+        if (baseEntry is null)
         {
             workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
             baseEntry = workingUomEntries[BaseUomName];
@@ -398,7 +477,7 @@ public partial class AddUom
 
         if (!baseEntry.Price.HasValue)
         {
-               var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry =>
+            var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry =>
                 entry != baseEntry &&
                 entry.Price.HasValue &&
                 entry.Conversion.HasValue &&
@@ -411,16 +490,33 @@ public partial class AddUom
             }
         }
 
-        validationErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries);
+        var finalErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
+        var carriedRowErrors = validationErrors
+            .Where(kv => kv.Key.StartsWith("uomname_") || kv.Key.StartsWith("conversion_"))
+            .Where(kv => !finalErrors.ContainsKey(kv.Key));
+
+        foreach (var kv in carriedRowErrors)
+        {
+            finalErrors[kv.Key] = kv.Value;
+        }
+
+        validationErrors = finalErrors;
 
         if (validationErrors.Any())
         {
+            // Errors present — do NOT invoke OnAdd, so HandleAddUomModalAddAsync in the
+            // parent never runs and nothing gets added/closed.
             await InvokeAsync(StateHasChanged);
             return;
         }
 
         validationErrors.Clear();
-        await PersistDraftAsync();
+
+        if (!string.IsNullOrWhiteSpace(DraftStorageKey))
+        {
+            jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            await jsModule.InvokeVoidAsync("clearSalesInvoiceDraft", DraftStorageKey);
+        }
 
         await OnAdd.InvokeAsync(new Dictionary<string, UomEntry>(workingUomEntries, StringComparer.OrdinalIgnoreCase));
     }
@@ -450,7 +546,6 @@ public partial class AddUom
                 validationErrors["uom"] = "Custom unit of measure is required.";
                 return;
             }
-            // If piece-like UOM, skip conversion input (it's fixed to 1)
             if (IsBaseUom(GetSelectedUomName()))
             {
                 await priceInputRef.FocusAsync();
@@ -546,13 +641,14 @@ public partial class AddUom
         {
             workingUomEntries[NormalizeBaseUomName(entry.Key)] = new UomEntry
             {
+                ItemsUomId = entry.Value.ItemsUomId,
                 Conversion = entry.Value.Conversion,
                 Price = entry.Value.Price,
                 IsAutoCalculated = false
             };
         }
 
-        if (!workingUomEntries.ContainsKey(BaseUomName))
+        if (!HasBaseUnit(workingUomEntries))
         {
             workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         }
@@ -566,7 +662,7 @@ public partial class AddUom
             workingUomEntries[NormalizeBaseUomName(entry.Key)] = entry.Value;
         }
 
-        if (!workingUomEntries.ContainsKey(BaseUomName))
+        if (!HasBaseUnit(workingUomEntries))
         {
             workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         }
@@ -607,13 +703,30 @@ public partial class AddUom
         }
 
         jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-        var draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", DraftStorageKey);
+
+        string? draftJson;
+        try
+        {
+            draftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", DraftStorageKey);
+        }
+        catch (JSDisconnectedException)
+        {
+            return null;
+        }
+
         if (string.IsNullOrWhiteSpace(draftJson))
         {
             return null;
         }
 
-        return JsonSerializer.Deserialize<AddUomModalDraftState>(draftJson);
+        try
+        {
+            return JsonSerializer.Deserialize<AddUomModalDraftState>(draftJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private void ShowClearDraftConfirmModal()
@@ -632,7 +745,7 @@ public partial class AddUom
         }
 
         workingUomEntries.Clear();
-        workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
+        workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
         selectedUomOption = string.Empty;
         customUom = string.Empty;
         conversionInput = string.Empty;
@@ -640,6 +753,7 @@ public partial class AddUom
         validationErrors.Clear();
         lastEditedUom = null;
         shouldFocusUomSelect = true;
+        ConversionBasedOnInput = string.Empty;
 
         await InvokeAsync(StateHasChanged);
         await FocusUomSelectAsync();
@@ -660,27 +774,24 @@ public partial class AddUom
         await ConfirmClearDraftAsync();
     }
 
-    private static bool IsBaseUom(string? uomName)
+    private bool IsBaseUom(string? uomName)
     {
-        var normalized = (uomName ?? string.Empty).Trim().ToLowerInvariant();
-        return normalized is "piece" or "pcs" or "pc";
+        return string.Equals((uomName ?? string.Empty).Trim(), BaseUomName.Trim(), StringComparison.OrdinalIgnoreCase);
     }
     private bool IsUomInUse(string? uomName) =>
         !string.IsNullOrWhiteSpace(uomName) && InUseUomNames.Contains(uomName.Trim());
-    private static string NormalizeBaseUomName(string? uomName)
+    private string NormalizeBaseUomName(string? uomName)
     {
         return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();
     }
     private bool IsConversionNotSet = false;
     private async Task ClearConversionInputAsync()
-{
-    // Goes through the ConversionInput property setter so its stale "conversion"
-    // validation error is cleared along with the value.
-    ConversionInput = string.Empty;
-    IsConversionNotSet = true;
-    await PersistDraftAsync();
-    await InvokeAsync(StateHasChanged);
-}
+    {
+        ConversionInput = string.Empty;
+        IsConversionNotSet = true;
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
     private async Task SetConversionInput()
     {
         IsConversionNotSet = false;
@@ -691,64 +802,88 @@ private List<string> ConversionBasedOnOptions =>
         .Where(k => k != GetSelectedUomName() && workingUomEntries[k]?.IsActive == true)
         .OrderBy(k => k)
         .ToList();
-private async Task HandleRowConversionChangedAsync(string uomName)
-{
-    if (workingUomEntries.TryGetValue(uomName, out var entry))
+    private async Task HandleRowConversionChangedAsync(string uomName)
     {
-        // A manually-typed conversion is no longer an auto-derived one.
-        entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
-    }
-
-    await RecalculatePricesAsync();
-    await PersistDraftAsync();
-}
-private async Task OnConversionBasedOnChanged(string value)
-{
-    ConversionBasedOnInput = value;
-    await PersistDraftAsync();
-}
-
-private async Task ClearRowConversionAsync(string uomName)
-{
-    if (IsBaseUom(uomName))
-    {
-        return;
-    }
-
-    if (!workingUomEntries.TryGetValue(uomName, out var entry))
-    {
-        return;
-    }
-
-    entry.Conversion = null;
-
-    // A price that was only ever derived from this conversion no longer means
-    // anything once the conversion is cleared — drop it rather than leave a
-    // stale calculated value on screen. A manually-typed price is left alone.
-    if (entry.IsAutoCalculated)
-    {
-        entry.Price = null;
-    }
-
-    await RecalculatePricesAsync();
-    await PersistDraftAsync();
-    await InvokeAsync(StateHasChanged);
-}
-    private string getLabelForConversionBased()
+        if (!workingUomEntries.TryGetValue(uomName, out var entry))
         {
-            return $"How many {ConversionBasedOnInput} per {GetSelectedUomName() ?? "unit"}?";
+            return;
         }
- private async Task SetRowConversionAsync(string uomName)
-    {
-        if (workingUomEntries.TryGetValue(uomName, out var entry))
+
+        // A manually-typed conversion is no longer an auto-derived one.  
+        entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
+
+        validationErrors.Remove($"conversion_{uomName}");
+        var conversionErrors = AddUomValidator.ValidateUomConversion(uomName, entry.Conversion, workingUomEntries, BaseUomName);
+        foreach (var kv in conversionErrors)
         {
-            entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
+            validationErrors[kv.Key] = kv.Value;
         }
 
         await RecalculatePricesAsync();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
     }
+    private string? GetRowError(int idx)
+    {
+        var rows = UomRows;
+        if (idx < 0 || idx >= rows.Count)
+        {
+            return null;
+        }
+
+        var name = rows[idx].Name;
+        return GetFieldError($"uomname_{name}") is { Length: > 0 } nameError ? nameError
+            : GetFieldError($"conversion_{name}") is { Length: > 0 } convError ? convError
+            : GetFieldError($"price_{name}");
+    }
+    private async Task OnConversionBasedOnChanged(string value)
+    {
+        ConversionBasedOnInput = value;
+        await PersistDraftAsync();
+    }
+
+    private async Task ClearRowConversionAsync(string uomName)
+    {
+        if (IsBaseUomEntry(uomName))
+        {
+            return;
+        }
+
+        if (!workingUomEntries.TryGetValue(uomName, out var entry))
+        {
+            return;
+        }
+
+        entry.Conversion = null;
+
+        // A price that was only ever derived from this conversion no longer means
+        // anything once the conversion is cleared — drop it rather than leave a
+        // stale calculated value on screen. A manually-typed price is left alone.
+        if (entry.IsAutoCalculated)
+        {
+            entry.Price = null;
+        }
+
+        await RecalculatePricesAsync();
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string getLabelForConversionBased()
+        {
+            return $"How many {ConversionBasedOnInput} per {GetSelectedUomName() ?? "unit"}?";
+        }
+    private async Task SetRowConversionAsync(string uomName)
+        {
+            if (workingUomEntries.TryGetValue(uomName, out var entry))
+            {
+                entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
+            }
+
+            await RecalculatePricesAsync();
+            await PersistDraftAsync();
+            await InvokeAsync(StateHasChanged);
+        }
     private string getModalSubtitle()
     {
         if (!string.IsNullOrWhiteSpace(ItemCode) && !string.IsNullOrWhiteSpace(ItemName))
@@ -770,7 +905,8 @@ private async Task ClearRowConversionAsync(string uomName)
     }
     private async Task OnUomSelectChanged(string value)
     {
-        SelectedUomOption = value; // goes through the property setter's side effects
+        SelectedUomOption = value; 
         await PersistDraftAsync();
     }
+    
 }

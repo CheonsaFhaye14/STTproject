@@ -128,7 +128,7 @@
 
     <DownloadTemplate ShowModal="showDownloadTemplateModal" SubdList="subdList" PrincipalList="principals"
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
-    <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries"
+    <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries" BaseUomName="@BaseUomName"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName"
             InUseUomNames="@inUseUomNames" />

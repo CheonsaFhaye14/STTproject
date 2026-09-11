@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using STTproject.Data;
@@ -25,7 +24,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await LoadMapTablesAsync();
         }
         private HashSet<string> inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
-        private const string BaseUomName = "PC";
+        private string BaseUomName => "Piece"; 
         private bool isPageLoading = true;
         private bool isDownloadingTemplate = false;
         private bool showAddUomModal = false;
@@ -151,7 +150,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             var userId = userContext.UserId ?? 0;
             var companyItemId = selectedCompanyItemId ?? 0;
-            return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}";
+            var subdItemKey = editingSubdItemId ?? 0; 
+            return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}:{subdItemKey}";
         }
         private string GetLastSelectedSubdStorageKey()
         {
@@ -746,11 +746,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             async () => await IsExactDuplicateMappingAsync());
     }
 
-    /// <summary>
-    /// Returns true only when an existing mapped item (excluding the one being edited)
-    /// matches on SKU code, item name, company item, AND every UOM entry (name/conversion/price).
-    /// If any of those differ, it is not considered a duplicate.
-    /// </summary>
     private async Task<bool> IsExactDuplicateMappingAsync()
     {
         if (!IsSubDistributorSelected
@@ -761,7 +756,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             return false;
         }
 
-        // Narrow down to same-SKU candidates in this subdistributor first (cheap), excluding self.
         var candidates = subDistributorItems
             .Where(x => x.SubdItemId != (editingSubdItemId ?? 0))
             .Where(x => string.Equals(x.SubItemCode, itemCode, StringComparison.OrdinalIgnoreCase))
@@ -774,7 +768,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             return false;
         }
 
-        // Only now do the more expensive UOM comparison, and only for real candidates.
         foreach (var candidate in candidates)
         {
             var existingUoms = await mapItemService.GetSubdItemUomsAsync(candidate.SubdItemId);
@@ -787,9 +780,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         return false;
     }
 
-    private static bool UomEntriesMatchExactly(
-        IEnumerable<ItemsUom>? existingUoms,
-        Dictionary<string, UomEntry> currentEntries)
+    private bool UomEntriesMatchExactly(IEnumerable<ItemsUom>? existingUoms, Dictionary<string, UomEntry> currentEntries)
     {
         var existingList = existingUoms?.ToList() ?? new List<ItemsUom>();
 
@@ -800,7 +791,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 StringComparer.OrdinalIgnoreCase);
 
         var currentNormalized = currentEntries
-            .Where(e => e.Value.Price.HasValue) // only priced entries count as "mapped"
+            .Where(e => e.Value.Price.HasValue)
             .ToDictionary(
                 e => NormalizeBaseUomName(e.Key),
                 e => (Conversion: e.Value.Conversion, Price: e.Value.Price!.Value),
@@ -810,7 +801,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             return false;
         }
-
         foreach (var (uomName, existing) in existingNormalized)
         {
             if (!currentNormalized.TryGetValue(uomName, out var current))
@@ -823,7 +813,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return false;
             }
         }
-
         return true;
     }
         private Task HandleFormFieldBlur(FocusEventArgs _)
@@ -943,8 +932,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                         }
                         else
                         {
-                            // If editing an existing subd item, preserve existing available UOMs fetched from DB
-                            uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });
+                            uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });                        
                         }
                     }
                 }
@@ -967,7 +955,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             uomEntries = new();
             ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
             _ = PersistDraftAsync();
-        }
+        }   
 
         private string GetSelectedCompanyItemName()
         {
@@ -1137,50 +1125,68 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             mapTablesLoadLock.Release();
         }
     }        
-        private async Task BeginEditItem(MapSubDistributorItemRow item)
+
+    private async Task BeginEditItem(MapSubDistributorItemRow item)
+    {
+        editingSubdItemId = item.SubdItemId;
+        itemCode = item.SubItemCode;
+        itemName = item.Description;
+        selectedCompanyItemId = item.CompanyItemId;
+        selectedCompanyItemDisplayName = item.CompanyItemName;
+        selectedDropdownPrincipal = item.Principal;
+
+        var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
+        if (existingUoms is not null && existingUoms.Any())
         {
-            editingSubdItemId = item.SubdItemId;
-            itemCode = item.SubItemCode;
-            itemName = item.Description;
-            selectedCompanyItemId = item.CompanyItemId;
-            selectedCompanyItemDisplayName = item.CompanyItemName;
-            selectedDropdownPrincipal = item.Principal;
+            var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1 || IsBaseUom(u.UomName));
+            
+            string NormalizeForEdit(string? name) =>
+                IsBaseUom(name) ? BaseUomName : (name ?? string.Empty).Trim();
 
-            var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
-            if (existingUoms is not null && existingUoms.Any())
+            availableUoms = new List<string>(existingUoms
+                .Select(u => NormalizeForEdit(u.UomName))
+                .Concat(hasBaseUnit ? Enumerable.Empty<string>() : new[] { BaseUomName })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(u => u));
+
+            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var u in availableUoms)
             {
-                availableUoms = new List<string>(existingUoms.Select(u => NormalizeBaseUomName(u.UomName)).Append(BaseUomName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(u => u));
+                var matched = existingUoms.FirstOrDefault(e =>
+                    string.Equals(NormalizeForEdit(e.UomName), u, StringComparison.OrdinalIgnoreCase));
 
-                uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-                foreach (var u in availableUoms)
+                if (IsBaseUom(u))
                 {
-                    var matched = existingUoms.FirstOrDefault(e => string.Equals(NormalizeBaseUomName(e.UomName), u, StringComparison.OrdinalIgnoreCase));
-                    if (IsBaseUom(u))
+                    var price = matched != null && matched.ConversionToBase != 0
+                        ? matched.Price / matched.ConversionToBase
+                        : matched?.Price;
+                    uomEntries[u] = new UomEntry { ItemsUomId = matched?.ItemsUomId, Conversion = 1, Price = price };
+                }
+                else if (matched != null)
+                {
+                    uomEntries[u] = new UomEntry
                     {
-                        var price = matched != null && matched.ConversionToBase != 0 ? matched.Price / matched.ConversionToBase :
-    matched?.Price;
-                        uomEntries[u] = new UomEntry { Conversion = 1, Price = price };
-                    }
-                    else if (matched != null)
-                    {
-                        uomEntries[u] = new UomEntry { Conversion = matched.ConversionToBase, Price = matched.Price };
-                    }
-                    else
-                    {
-                        uomEntries[u] = new UomEntry { Conversion = 1, Price = null };
-                    }
+                        ItemsUomId = matched.ItemsUomId,
+                        Conversion = matched.ConversionToBase,
+                        Price = matched.Price
+                    };
+                }
+                else
+                {
+                    uomEntries[u] = new UomEntry { Conversion = 1, Price = null };
                 }
             }
-            else
-            {
-                availableUoms = new List<string>();
-                uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-            }
-
-            ClearValidationErrors();
-            await PersistDraftAsync();
+        }
+        else
+        {
+            availableUoms = new List<string>();
+            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
         }
 
+        ClearValidationErrors();
+        await PersistDraftAsync();
+    }
+        
         private void DeleteItemAsync(MapSubDistributorItemRow item)
         {
             pendingItem = item;
@@ -1428,16 +1434,14 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             itemActionErrorMessage = null;
         }
 
-        private static bool IsBaseUom(string? uomName)
+        private bool IsBaseUom(string? uomName)
         {
-            var normalized = (uomName ?? string.Empty).Trim().ToLowerInvariant();
-            return normalized is "piece" or "pcs" or "pc";
+            return string.Equals((uomName ?? string.Empty).Trim(), BaseUomName.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string NormalizeBaseUomName(string? uomName)
+        private string NormalizeBaseUomName(string? uomName)
         {
             return IsBaseUom(uomName) ? BaseUomName : (uomName ?? string.Empty).Trim();
         }
-
     }
 }

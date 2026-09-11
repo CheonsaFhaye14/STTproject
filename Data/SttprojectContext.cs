@@ -142,7 +142,7 @@ public partial class SttprojectContext : DbContext
                 .IsUnique()
                 .HasFilter("([IsBaseUnit]=(1))");
 
-            entity.Property(e => e.ConversionToBase).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.ConversionToBase).HasColumnType("int");
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");

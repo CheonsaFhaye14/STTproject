@@ -9,7 +9,7 @@ public partial class ItemsUom
 
     public string UomName { get; set; } = null!;
 
-    public decimal? ConversionToBase { get; set; }
+    public int? ConversionToBase { get; set; }
 
     public bool IsBaseUnit { get; set; }
 
@@ -21,7 +21,7 @@ public partial class ItemsUom
 
     public DateTime? UpdatedDate { get; set; }
 
-    public decimal Price { get; set; }
+    public decimal? Price { get; set; }
 
     public int SubdItemId { get; set; }
 

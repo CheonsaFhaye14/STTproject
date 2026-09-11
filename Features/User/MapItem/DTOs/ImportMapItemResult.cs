@@ -32,7 +32,7 @@ public sealed class ImportMapItemRowResult
 	public string SubdItemCode { get; set; } = string.Empty;
 	public string SubdItemName { get; set; } = string.Empty;
 	public string UomName { get; set; } = string.Empty;
-	public decimal? Conversion { get; set; }
+	public int? Conversion { get; set; }
 	public decimal? Price { get; set; }
 	public bool IsSuccess { get; set; }
 	public string Message { get; set; } = string.Empty;

@@ -42,7 +42,12 @@ public sealed class MapItemDraftService
         {
             return new MapItemDraftStore();
         }
-
+        catch (JsonException)
+        {
+            // Draft was saved under an older shape (e.g. Conversion was decimal, now int)
+            // or is otherwise corrupt — discard it instead of crashing the circuit.
+            return new MapItemDraftStore();
+        }
     }
 
     public async Task ClearDraftStoreAsync(string storageKey)
@@ -59,15 +64,30 @@ public sealed class MapItemDraftService
 
     public async Task<MapItemSelectionState?> LoadSelectionStateAsync(string storageKey)
     {
-        var module = await GetModuleAsync();
-        var selectionJson = await module.InvokeAsync<string?>("loadSalesInvoiceDraft", storageKey);
+        try
+        {
+            var module = await GetModuleAsync();
+            var selectionJson = await module.InvokeAsync<string?>("loadSalesInvoiceDraft", storageKey);
 
-        if (string.IsNullOrWhiteSpace(selectionJson))
+            if (string.IsNullOrWhiteSpace(selectionJson))
+            {
+                return null;
+            }
+
+            return JsonSerializer.Deserialize<MapItemSelectionState>(selectionJson);
+        }
+        catch (OperationCanceledException)
         {
             return null;
         }
-
-        return JsonSerializer.Deserialize<MapItemSelectionState>(selectionJson);
+        catch (JSDisconnectedException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private async Task<IJSObjectReference> GetModuleAsync()

@@ -564,7 +564,7 @@ public sealed class ImportMapItemService
 				var canonicalUom = CanonicalizeUomName(row.UomName);
 				uomEntries[canonicalUom] = new UomEntry
 				{
-					Conversion = row.Conversion, // decimal? — null is valid now, price is what's required
+					Conversion = row.Conversion,
 					Price = row.Price
 				};
 			}
@@ -642,10 +642,10 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			decimal? conversion = null;
+			int? conversion = null;
 			if (!row.Cell(headers["Conversion"]).IsEmpty())
 			{
-				if (TryGetDecimal(row.Cell(headers["Conversion"]), out var parsedConversion) && parsedConversion > 0)
+				if (TryGetInt(row.Cell(headers["Conversion"]), out var parsedConversion) && parsedConversion > 0)
 				{
 					conversion = parsedConversion;
 				}
@@ -1078,7 +1078,7 @@ public sealed class ImportMapItemService
 
 				if (IsPieceUom(basisKey) || !visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
 				{
-					return row.Conversion;
+					return row.Conversion; 
 				}
 
 				var basisResolved = Resolve(basisKey, visiting);
@@ -1089,20 +1089,21 @@ public sealed class ImportMapItemService
 			{
 				if (IsPieceUom(row.UOM))
 				{
-					result.Add(row with { Conversion = 1m });
+					result.Add(row with { Conversion = 1 });
 					continue;
 				}
 
 				if (!row.Conversion.HasValue)
 				{
-					// No conversion supplied for this row — leave it null; it must
-					// carry its own price instead (enforced later).
 					result.Add(row);
 					continue;
 				}
 
 				var resolved = Resolve(NormalizeUomKey(row.UOM), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-				result.Add(row with { Conversion = resolved ?? row.Conversion });
+				var resolvedInt = resolved.HasValue
+					? (int?)Math.Round(resolved.Value, MidpointRounding.AwayFromZero)
+					: null;
+				result.Add(row with { Conversion = resolvedInt ?? row.Conversion });
 			}
 		}
 
@@ -1207,7 +1208,7 @@ private sealed record ImportedMapItemRow(
     string SubdItemCode,
     string SubdItemName,
     string UOM,
-    decimal? Conversion,
+    int? Conversion,
 	string? ConversionBasedOn,
     decimal? Price,
     IReadOnlyDictionary<string, string?> RawValues);

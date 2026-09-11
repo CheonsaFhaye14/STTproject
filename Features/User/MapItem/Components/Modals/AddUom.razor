@@ -7,7 +7,7 @@
         <FormSection Icon="ti ti-library-plus" Title="Additional Units of Measure" Expandable="true" IsExpanded="true">
             <ChildContent>
                 <div class="form-group">
-                    <Select Label="Unit of Measure" Required="true" Items="@defaultOptions" SelectedValue="@SelectedUomOption"
+                    <Select Label="Unit of Measure" Required="true" Items="@DefaultOptions" SelectedValue="@SelectedUomOption"
                             SelectedValueChanged="OnUomSelectChanged" Placeholder="-- Select Unit of Measure --"
                             ExtraOptions="@(new[] { ("__custom", "Other (type custom)") })"
                             ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("uom")))" ErrorText='@GetFieldError("uom")' />
@@ -80,12 +80,11 @@
                                 ColumnLabels="UomColumnLabels"
                                 EditableColumns="UomEditableColumns"
                                 ColumnInputTypes="UomColumnInputTypes"
-                                IsCellEditableOverride="IsUomCellEditable"
                                 DisplayValueSelector="GetUomDisplayValue"
                                 OnCellChanged="HandleUomCellChangedAsync"
                                 RemoveButtonVisible="true"
                                 ShowError="true"
-                                ErrorSelector='idx => GetFieldError($"price_{uomRows[idx].Name}")'>
+                                ErrorSelector='idx => GetRowError(idx)'>
                                 <RowActionsTemplate Context="row">
                                     @if (!row.IsBase)
                                     {
