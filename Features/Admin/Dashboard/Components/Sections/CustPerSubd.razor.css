@@ -168,6 +168,7 @@
     border-bottom: 1px solid #F0EDE6;
     border-radius: 0;
     transition: background 0.15s;
+    cursor: pointer;
 }
 
     .cpsd-table-row:last-child {
@@ -289,3 +290,143 @@
     color: #9A97A2;
     padding: 40px;
 }
+
+/* ---------- Added for click-to-open detail panel ---------- */
+
+.cpsd-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+}
+
+    .cpsd-wrapper .cpsd-card {
+        flex: 1;
+        min-width: 0;
+    }
+
+.cpsd-row-selected {
+    background: #F9F2E2;
+}
+
+    .cpsd-row-selected:hover {
+        background: #F9F2E2;
+    }
+
+    .cpsd-row-selected .col-name {
+        color: #A9793F;
+    }
+
+.cpsd-panel {
+    width: 0;
+    min-width: 0;
+    background: #FFFFFF;
+    border: 1px solid #E6E2D8;
+    border-left: none;
+    border-radius: 0 12px 12px 0;
+    overflow: hidden;
+    transition: width 220ms ease;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+
+.cpsd-panel-open {
+    width: 300px;
+    border-left: 1px solid #E6E2D8;
+    margin-left: -1px;
+}
+
+.cpsd-panel-content {
+    width: 300px;
+    padding: 22px 24px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.cpsd-panel-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.cpsd-close {
+    cursor: pointer;
+    color: #9A97A2;
+    font-size: 18px;
+}
+
+    .cpsd-close:hover {
+        color: #23212B;
+    }
+
+.cpsd-panel-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: #23212B;
+    margin: 0 0 16px;
+}
+
+.cpsd-stat-block {
+    background: #FCFBF9;
+    border: 1px solid #F0EDE6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    font-size: 12.5px;
+    color: #23212B;
+}
+
+.cpsd-stat-half {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.cpsd-stat-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.cpsd-stat-label {
+    font-size: 11px;
+    color: #9A97A2;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin-bottom: 2px;
+}
+
+.cpsd-stat-value {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: #23212B;
+}
+
+.cpsd-section-label {
+    font-size: 11px;
+    color: #9A97A2;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0 0 6px;
+}
+
+.cpsd-view-full {
+    width: 100%;
+    margin-top: 4px;
+    background: transparent;
+    border: 1px solid #D8C29A;
+    color: #A9793F;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+    .cpsd-view-full:hover {
+        background: #FBF3E4;
+    }

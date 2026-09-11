@@ -74,6 +74,11 @@
         color: #1B1B1F;
     }
 
+        .mapping-table th.text-col,
+        .mapping-table td.text-col {
+            text-align: left;
+        }
+
     .mapping-table th {
         background: #B08D57;
         color: #FAFAF9;
@@ -157,6 +162,31 @@
         box-shadow: 0 2px 8px rgba(27, 27, 31, 0.08), 0 0 0 3px rgba(176, 141, 87, 0.2);
         transform: translateY(-1px);
     }
+
+.uom-td {
+    text-align: center;
+}
+
+.uom-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    max-width: 220px;
+    margin: 0 auto;
+}
+
+.uom-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: #F4EFE2;
+    color: #8A6A34;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
 
 .price-scheduled-badge {
     display: inline-block;

@@ -4,9 +4,9 @@
 @using STTproject.Shared.Components.Loadings
 
 <LoadingOverlay Show="isLoading"
-                      Title="Loading company items…"
-                      Subtitle="Please wait while we fetch the latest data."
-                      IconClass="fa-solid fa-dolly" />
+                Title="Loading company items…"
+                Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-dolly" />
 
 
 <div style="@(isLoading ? "display:none;" : "")">
@@ -17,9 +17,11 @@
                 <h1 class="clt-page-title">Company Items</h1>
                 <p class="clt-page-sub">@totalCount total company items</p>
             </div>
-        <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
-            <Button Variant="ButtonVariant.Primary" Title="Add Company Item" Icon="fa-plus" OnClick="OpenAddCompanyItemModal">
-            </Button>
+            <div class="clt-header-actions">
+                <Button Title="Import Excel" Variant="ButtonVariant.Primary" OnClick="OpenImportModal"></Button>
+                <Button Variant="ButtonVariant.Primary" Title="Add Company Item" Icon="fa-plus" OnClick="OpenAddCompanyItemModal">
+                </Button>
+            </div>
         </div>
 
         @* ------------- Company Item List Table ----------------- *@

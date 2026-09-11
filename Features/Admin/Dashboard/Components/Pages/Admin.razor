@@ -12,7 +12,7 @@
 @if (!isCheckingAccess)
 {
     <div class="admin-page" style="@(AllSectionsLoaded ? "" : "visibility:hidden; position:absolute; top:0; left:0;")">
-        <h1>DASHBOARD</h1>
+        <h1>OVERVIEW</h1>
         <CustPerSubd OnLoaded="@(() => MarkLoaded("cust"))" />
         <TotalMonthlyAnnualPrice OnLoaded="@(() => MarkLoaded("price"))" />
         <SubdItemPerSubd OnLoaded="@(() => MarkLoaded("subditem"))" />

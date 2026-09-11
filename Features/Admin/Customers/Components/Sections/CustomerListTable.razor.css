@@ -6,12 +6,9 @@
     align-items: start;
     flex: 1;
     min-height: 0;
-    /* This component renders inside Customers.razor's .clt-page,
-       which is the flex column with height:90vh — this element
-       just needs to fill the remaining space, not redeclare it. */
+    
 }
 
-/* ── Sidebar ───────────────────────────────────────────────── */
 .clt-sidebar {
     background: #fff;
     border: 1px solid #E5E3DD;
@@ -202,7 +199,7 @@
         background: #F7F6F4;
     }
 
-/* ── Main table area ───────────────────────────────────────── */
+/* ── Main table area */
 .clt-main {
     display: flex;
     flex-direction: column;

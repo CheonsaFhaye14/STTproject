@@ -12,11 +12,11 @@
         </h3>
 
     </div>
-    <div class="filters">         
-        <div class="filter-group">  
-                <input type="text" placeholder="Search"
-                         @bind="SearchText" @bind:event="oninput" />
-         </div>
+    <div class="filters">
+        <div class="filter-group">
+            <input type="text" placeholder="Search"
+                   @bind="SearchText" @bind:event="oninput" />
+        </div>
         <div class="filter-group">
             <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged">
                 <option value="All">All categories</option>
@@ -32,18 +32,19 @@
                 <option value="Unmapped">Items for Mapping </option>
                 <option value="Mapped">Already Mapped</option>
             </select>
-        </div></div>
+        </div>
+    </div>
     <div class="mapping-table-wrapper">
         <table class="mapping-table">
             <thead>
                 <tr>
-                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
-                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
-                    <th @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
+                    <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
+                    <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
+                    <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
                 </tr>
             </thead>
             <tbody>
-                    @if (FilteredCompanyItems.Any())
+                @if (FilteredCompanyItems.Any())
                 {
                     @foreach (var item in FilteredCompanyItems)
                     {
@@ -52,9 +53,9 @@
                         var isMapped = item.IsMapped;
                         <tr @onclick="() => HandleRowClicked(item)"
                             class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
-                            <td>@item.CompanyItemCode</td>
-                            <td>@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
-                            <td>
+                            <td class="text-col">@item.CompanyItemCode</td>
+                            <td class="text-col">@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
+                            <td class="text-col">
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
                                     <span>@item.ItemName</span>
                                     @if (isPriceIncreasePending)
@@ -72,7 +73,7 @@
                             </td>
                         </tr>
                     }
-           
+
                 }
                 else
                 {

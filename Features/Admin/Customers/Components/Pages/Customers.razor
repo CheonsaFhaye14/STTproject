@@ -20,7 +20,7 @@
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">
-        @* ------------- Header ----------------- *@
+        @**@
         <div class="clt-page-header">
             <div>
                 <h1 class="clt-page-title">Customers</h1>
@@ -34,7 +34,7 @@
             </div>
         </div>
 
-        @* ------------- Customer List Table ----------------- *@
+        @**@
         <CustomerListTable @ref="customerTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                            OnViewCustomer="OpenEditModal" />
 

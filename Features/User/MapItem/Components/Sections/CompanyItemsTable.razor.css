@@ -110,6 +110,11 @@
         color: #1B1B1F;
     }
 
+        .mapping-table th.text-col,
+        .mapping-table td.text-col {
+            text-align: left;
+        }
+
     .mapping-table th {
         background: #B08D57;
         color: #FAFAF9;

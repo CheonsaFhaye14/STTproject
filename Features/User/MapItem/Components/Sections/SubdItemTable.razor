@@ -50,16 +50,16 @@
 				<tr>
 					@if (!IsSubDistributorSelected)
 					{
-						<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">
+						<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">
 							SUB DISTRIBUTOR NAME
 							@GetSortIndicator(SubItemSortColumn.SubdName)
 						</th>
 					}
-					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">
+					<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">
 						SUB ITEM CODE
 						@GetSortIndicator(SubItemSortColumn.SubItemCode)
 					</th>
-					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">
+					<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">
 						ITEM NAME
 						@GetSortIndicator(SubItemSortColumn.Description)
 					</th>
@@ -75,14 +75,29 @@
 				{
 					@foreach (MapSubDistributorItemRow item in FilteredSubdItems)
 					{
+						var uomEntries = ParseUomEntries(item.UomName);
 						<tr>
 							@if (!IsSubDistributorSelected)
 							{
-								<td>@item.SubdName</td>
+								<td class="text-col">@item.SubdName</td>
 							}
-							<td>@item.SubItemCode</td>
-							<td>@item.Description</td>
-							<td>@item.UomName</td>
+							<td class="text-col">@item.SubItemCode</td>
+							<td class="text-col">@item.Description</td>
+							<td class="uom-td">
+								@if (uomEntries.Count == 0)
+								{
+									<span>—</span>
+								}
+								else
+								{
+									<div class="uom-pill-list">
+										@foreach (var entry in uomEntries)
+										{
+											<span class="uom-pill">@entry.Label @entry.Value</span>
+										}
+									</div>
+								}
+							</td>
 							<td>
 								<Button Variant="ButtonVariant.IconActionEdit" OnClick="() => HandleEditClicked(item)"
 										Tooltip="Edit"

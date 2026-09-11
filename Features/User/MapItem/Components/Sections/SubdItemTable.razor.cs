@@ -36,6 +36,28 @@ public partial class SubdItemTable
     private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.SubItemCode;
     private bool SortAscending { get; set; } = true;
 
+    // Matches "Label - Value" pairs directly against the raw string instead of
+    // splitting on every comma — values can contain thousand-separator commas
+    // (e.g. "CS - 1,013.62"), which a naive Split(',') would break apart.
+    private static readonly System.Text.RegularExpressions.Regex UomEntryPattern =
+        new(@"([A-Za-z]+)\s*-\s*([\d,]+\.\d+)", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static List<(string Label, string Value)> ParseUomEntries(string? uomText)
+    {
+        var entries = new List<(string Label, string Value)>();
+        if (string.IsNullOrWhiteSpace(uomText))
+        {
+            return entries;
+        }
+
+        foreach (System.Text.RegularExpressions.Match match in UomEntryPattern.Matches(uomText))
+        {
+            entries.Add((match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim()));
+        }
+
+        return entries;
+    }
+
     private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch));
 
     private Task SetSortByColumnAsync(SubItemSortColumn column)
