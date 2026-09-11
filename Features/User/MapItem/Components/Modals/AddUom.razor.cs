@@ -155,87 +155,78 @@ public partial class AddUom
         return selectedUomOption;
     }
         
-    private async Task AddUomEntryAsync(bool autoCalc = false, bool confirmedNoPrice = false)
+    private async Task AddUomEntryAsync(bool autoCalc = false)
+{
+    var uomName = selectedUomOption == "__custom"
+        ? (CustomUom ?? string.Empty).Trim()
+        : selectedUomOption.Trim();
+
+    int? enteredCount = string.IsNullOrWhiteSpace(conversionInput)
+        ? null
+        : int.Parse(conversionInput);
+
+    var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
+
+    int? pcConversion;
+    if (IsBaseUom(uomName))
     {
-        var uomName = selectedUomOption == "__custom"
-            ? (CustomUom ?? string.Empty).Trim()
-            : selectedUomOption.Trim();
-
-        int? enteredCount = string.IsNullOrWhiteSpace(conversionInput)
-            ? null
-            : int.Parse(conversionInput);
-
-        var basisName = string.IsNullOrWhiteSpace(ConversionBasedOnInput) ? BaseUomName : ConversionBasedOnInput;
-
-        int? pcConversion;
-        if (IsBaseUom(uomName))
-        {
-            pcConversion = enteredCount;
-            basisName = BaseUomName;
-        }
-        else if (!enteredCount.HasValue)
-        {
-            pcConversion = null;
-        }
-        else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
-        {
-            pcConversion = basisEntry.Conversion.HasValue
-                ? enteredCount.Value * basisEntry.Conversion.Value
-                : enteredCount.Value;
-        }
-        else
-        {
-            pcConversion = enteredCount.Value;
-            basisName = BaseUomName;
-        }
-
-        validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries, BaseUomName);
-
-        if (validationErrors.Any())
-        {
-            return;
-        }
-
-        // Price is optional, but adding a row with no price should be a deliberate choice,
-        // not something that slips through silently — confirm with the user first.
-        if (string.IsNullOrWhiteSpace(priceInput) && !confirmedNoPrice)
-        {
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-
-        decimal? price = null;
-        if (!string.IsNullOrWhiteSpace(priceInput))
-        {
-            price = decimal.Parse(priceInput);
-        }
-
-        var priorItemsUomId = workingUomEntries.TryGetValue(uomName, out var priorEntry)
-                ? priorEntry.ItemsUomId
-                : null;
-
-        workingUomEntries[uomName] = new UomEntry
-        {
-            ItemsUomId = priorItemsUomId,
-            Conversion = pcConversion,
-            ConversionBasedOn = basisName,
-            Price = price,
-            IsActive = true,
-            IsAutoCalculated = autoCalc || !price.HasValue
-        };
-
-        selectedUomOption = string.Empty;
-        customUom = string.Empty;
-        conversionInput = string.Empty;
-        priceInput = string.Empty;
-
-        await RecalculatePricesAsync(uomName);
-        await PersistDraftAsync();
-        shouldFocusUomSelect = true;
-        await InvokeAsync(StateHasChanged);
-        await FocusUomSelectAsync();
+        pcConversion = enteredCount;
+        basisName = BaseUomName;
+    }
+    else if (!enteredCount.HasValue)
+    {
+        pcConversion = null;
+    }
+    else if (workingUomEntries.TryGetValue(basisName, out var basisEntry))
+    {
+        pcConversion = basisEntry.Conversion.HasValue
+            ? enteredCount.Value * basisEntry.Conversion.Value
+            : enteredCount.Value;
+    }
+    else
+    {
+        pcConversion = enteredCount.Value;
+        basisName = BaseUomName;
     }
 
+    validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries, BaseUomName);
+    
+    if (validationErrors.Any())
+    {
+        return;
+    }
+
+    decimal? price = null;
+    if (!string.IsNullOrWhiteSpace(priceInput))
+    {
+        price = decimal.Parse(priceInput);
+    }
+
+    var priorItemsUomId = workingUomEntries.TryGetValue(uomName, out var priorEntry)
+            ? priorEntry.ItemsUomId
+            : null;
+
+    workingUomEntries[uomName] = new UomEntry
+    {
+        ItemsUomId = priorItemsUomId,
+        Conversion = pcConversion,
+        ConversionBasedOn = basisName,
+        Price = price,
+        IsActive = true,
+        IsAutoCalculated = autoCalc || !price.HasValue
+    };
+
+    selectedUomOption = string.Empty;
+    customUom = string.Empty;
+    conversionInput = string.Empty;
+    priceInput = string.Empty;
+
+    await RecalculatePricesAsync(uomName);
+    await PersistDraftAsync();
+    shouldFocusUomSelect = true;
+    await InvokeAsync(StateHasChanged);
+    await FocusUomSelectAsync();
+}
 
     private async Task FocusUomSelectAsync()
     {
