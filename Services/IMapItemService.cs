@@ -366,11 +366,6 @@ public class MapItemService : IMapItemService
                     .Distinct()
                     .ToListAsync(cancellationToken);
 
-                var companyItemId = await context.SubdItems
-                    .Where(si => si.SubdItemId == subdItemId)
-                    .Select(si => si.CompanyItemId)
-                    .FirstOrDefaultAsync(cancellationToken);
-
                 var now = DateTime.Now;
 
                 var matchedExistingIds = new HashSet<int>();
@@ -384,10 +379,6 @@ public class MapItemService : IMapItemService
                         ? existingUoms.FirstOrDefault(e => e.ItemsUomId == entry.ItemsUomId.Value)
                         : existingUoms.FirstOrDefault(e =>
                             string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase));
-
-                    // If applying `name` to `existing` would collide with a DIFFERENT row that
-                    // already owns that name (the unique constraint doesn't care about IsActive),
-                    // redirect onto that row instead of renaming `existing` into a collision.
                     var nameOwner = existingUoms.FirstOrDefault(e =>
                         string.Equals(e.UomName, name, StringComparison.OrdinalIgnoreCase) &&
                         (existing == null || e.ItemsUomId != existing.ItemsUomId));
@@ -396,15 +387,8 @@ public class MapItemService : IMapItemService
                     {
                         if (nameOwner.IsActive)
                         {
-                            // Genuine active conflict — client-side validation should already
-                            // prevent this; skip rather than crash the whole save.
                             continue;
                         }
-
-                        // Name is only held by an inactive placeholder — reclaim/merge into it.
-                        // Whatever `existing` was pointing at (if different) is simply left
-                        // unmatched this iteration, so the cleanup pass below retires it
-                        // (deactivate if referenced, hard-delete otherwise).
                         existing = nameOwner;
                     }
 
@@ -412,27 +396,10 @@ public class MapItemService : IMapItemService
                     {
                         matchedExistingIds.Add(existing.ItemsUomId);
 
-                        var oldPrice = existing.Price;
-                        var newPrice = entry.Price ?? 0m;
-
-                        if (oldPrice != newPrice)
-                        {
-                            context.ItemsUomPriceHistories.Add(new ItemsUomPriceHistory
-                            {
-                                ItemsUomId = existing.ItemsUomId,
-                                CompanyItemId = companyItemId,
-                                OldPrice = oldPrice ?? 0m,
-                                NewPrice = newPrice,
-                                EffectivityDate = now,
-                                AppliedDate = now,
-                                CreatedDate = now,
-                                CreatedBy = currentUserId > 0 ? currentUserId : null
-                            });
-                        }
-
+    
                         existing.UomName = name;
                         existing.ConversionToBase = entry.Conversion;
-                        existing.Price = newPrice;
+                        existing.Price = entry.Price ?? 0m;
                         existing.IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase);
                         existing.IsActive = true; // reclaiming (or normally updating) always reactivates
                         existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
