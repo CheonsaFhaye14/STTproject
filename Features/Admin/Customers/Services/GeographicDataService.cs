@@ -96,7 +96,6 @@ namespace STTproject.Features.Admin.Customers.Services
                                  .OrderBy(g => g)
                                  .ToList();
         }
-        //TODO: Delete
 
         public async Task<string?> GetProvinceByCityAsync(string cityMunicipality)
         {

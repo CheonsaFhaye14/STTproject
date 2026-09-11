@@ -18,18 +18,18 @@ public sealed class ImportCustomersService
         {
             ["Customer Code"]  = new[] { "CustomerCode", "Customer Code", "code", "SHIPTOCODE", "Ship To Code" },
             ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name","BILLTONAME" },
-            ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "Subd Customer Code" },
-            ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "Subd Store Name" },
             ["Province"]       = new[] { "Province", "Subd Address (Province)" },
-            ["City"]           = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)" },
+            ["City"]           = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)", "City / Municipality" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)", "SUBD ADDRESS (BRGY)" },
-            ["Zip Code"]     = new[] { "ZipCode", "Zip Code", "zip" },
-            ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type" }, 
+            ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "Subd Customer Code" },
+            ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "Subd Store Name" },
+            ["Address Line"]   = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)", "SUBD ADDRESS (BRGY)" },
+            ["Zip Code"]       = new[] { "ZipCode", "Zip Code", "zip" , "ZIP CODE (OPTIONAL)", "Zip Code (Optional)" },
+            ["Customer Type"]  = new[] { "CustomerType", "Customer Type", "type", "CUSTOMER TYPE (OPTIONAL)", "Customer Type (Optional)" }, 
         };
 
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
@@ -406,9 +406,8 @@ public sealed class ImportCustomersService
         var sheet = workbook.Worksheets.Add("Errors");
 
         var headers = result.OriginalHeaders.Count > 0
-            ? result.OriginalHeaders
-            : new List<string> { "SUBD CUSTOMER CODE", "SUBD STORE NAME", "SUBD ADDRESS (STREET/BRGY)",
-                                "SUBD ADDRESS (CITY)", "SUBD ADDRESS (PROVINCE)", "SHIPTOCODE", "SHIPTONAME" };
+                ? result.OriginalHeaders
+                : TemplateHeaders.ToList();
 
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
@@ -416,7 +415,9 @@ public sealed class ImportCustomersService
         var errorColumn = headers.Count + 1;
         sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
-        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDECEA");
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
+        sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
+        sheet.SheetView.FreezeRows(1);
 
         var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
 
@@ -446,9 +447,11 @@ public sealed class ImportCustomersService
 
     private static readonly string[] TemplateHeaders =
     {
-        "SUBD CUSTOMER CODE", "SUBD STORE NAME", "SUBD ADDRESS (STREET/BRGY)",
-        "SUBD ADDRESS (CITY)", "SUBD ADDRESS (PROVINCE)", "SHIPTOCODE", "SHIPTONAME"
+        "SUBD CUSTOMER CODE", "SUBD STORE NAME", "ADDRESS LINE",
+        "CITY / MUNICIPALITY", "PROVINCE", "SHIPTOCODE", "SHIPTONAME",
+        "ZIP CODE (OPTIONAL)", "CUSTOMER TYPE (OPTIONAL)"
     };
+        
     public async Task<byte[]> GenerateTemplateExcelAsync()
     {
         using var workbook = new XLWorkbook();
@@ -458,18 +461,35 @@ public sealed class ImportCustomersService
             sheet.Cell(1, i + 1).Value = TemplateHeaders[i];
 
         sheet.Row(1).Style.Font.Bold = true;
-        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FB");
+        sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
+        sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
+        sheet.SheetView.FreezeRows(1);
 
-        // A=SubdCustCode B=SubdCustName C=Address D=City E=Province F=ShipToCode G=ShipToName
+        // A=SubdCustCode B=SubdCustName C=Address D=City E=Province F=ShipToCode G=ShipToName H=ZipCode I=CustomerType
         sheet.Cell(2, 1).Value = "SUBD-0001";
-        sheet.Cell(2, 2).Value = "Green Breeze - Montalban Rizal";
-        sheet.Cell(2, 3).Value = "Brgy San Isidro";
-        sheet.Cell(2, 4).Value = "Montalban (Rodriguez)";
-        sheet.Cell(2, 5).Value = "Rizal";
+        sheet.Cell(2, 2).Value = "Ate Liza - Binangonan Rizal";
+        sheet.Cell(2, 3).Value = "Pantok, Mabuhay Homes";
+        sheet.Cell(2, 4).Value = "BINANGONAN";
+        sheet.Cell(2, 5).Value = "RIZAL";
         sheet.Cell(2, 6).Value = "CUST-0001";
-        sheet.Cell(2, 7).Value = "Juan Dela Cruz";
-        sheet.Row(2).Style.Font.Italic = true;
-        sheet.Row(2).Style.Font.FontColor = XLColor.FromHtml("#A09ABF");
+        sheet.Cell(2, 7).Value = "Ate Liza Store";
+        sheet.Cell(2, 8).Value = "1940";
+        sheet.Cell(2, 9).Value = "Sari Sari Store";
+
+        void AddInputHint(int row, int column, string message)
+        {
+            var dv = sheet.Cell(row, column).CreateDataValidation();
+            dv.ShowInputMessage = true;
+            dv.InputMessage = message;
+            dv.ShowErrorMessage = false;
+        }
+
+        AddInputHint(2, 1, "This is the Code of the customer based on Subdistributor.");
+        AddInputHint(2, 2, "Name of the customer based on Subdistributor.");
+        AddInputHint(2, 3, "Additional address of the customer.");
+        AddInputHint(2, 6, "Company Code of the customer.");
+        AddInputHint(2, 7, "Company Name of the customer.");
+        AddInputHint(2, 8, "Auto-generated from the selected City and Province — no need to type this in.");
 
         const int lastDataRow = 500;
 
@@ -500,6 +520,9 @@ public sealed class ImportCustomersService
             provinceValidation.InputMessage = "Select a province.";
             provinceValidation.ShowErrorMessage = false;
 
+            // Zip lookup table: Province|City -> Zip
+            var zipLookupEntries = new List<(string Key, int? Zip)>();
+
             int col = 2;
             foreach (var province in provinces)
             {
@@ -518,6 +541,12 @@ public sealed class ImportCustomersService
                 var cityRange = geoSheet.Range(1, col, cities.Count, col);
                 workbook.NamedRanges.Add(BuildProvinceDefinedName(province), cityRange);
                 col++;
+
+                foreach (var city in cities)
+                {
+                    var zip = await _geoDataService.GetZipCodeAsync(province, city);
+                    zipLookupEntries.Add(($"{province}|{city}", zip));
+                }
             }
 
             // City is column D, referencing Province (E) on the same row
@@ -528,6 +557,31 @@ public sealed class ImportCustomersService
             cityValidation.InputTitle = "City / Municipality";
             cityValidation.InputMessage = "Select Province (column E) first — this list filters to match it.";
             cityValidation.ShowErrorMessage = false;
+
+            // Zip is column H, referencing Province (E) and City (D) on the same row
+            if (zipLookupEntries.Count > 0)
+            {
+                var zipKeyCol = col;
+                var zipValueCol = col + 1;
+
+                for (int i = 0; i < zipLookupEntries.Count; i++)
+                {
+                    geoSheet.Cell(i + 1, zipKeyCol).Value = zipLookupEntries[i].Key;
+                    if (zipLookupEntries[i].Zip.HasValue)
+                    {
+                        geoSheet.Cell(i + 1, zipValueCol).Value = zipLookupEntries[i].Zip!.Value;
+                    }
+                }
+
+                var zipLookupRange = geoSheet.Range(1, zipKeyCol, zipLookupEntries.Count, zipValueCol);
+                workbook.NamedRanges.Add("ZipLookupTable", zipLookupRange);
+
+                for (int row = 2; row <= lastDataRow; row++)
+                {
+                    sheet.Cell(row, 8).FormulaA1 =
+                        $"=IFERROR(VLOOKUP(E{row}&\"|\"&D{row}, ZipLookupTable, 2, FALSE), \"\")";
+                }
+            }
         }
 
         sheet.Columns().AdjustToContents();
@@ -536,7 +590,6 @@ public sealed class ImportCustomersService
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
-    
     private static string BuildProvinceDefinedName(string province)
     {
         var sanitized = Regex.Replace(province, @"[^A-Za-z0-9]+", "_").Trim('_');

@@ -383,7 +383,8 @@ public sealed class InvoiceDataValidator
             string.Equals(orderType, "ML2I", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "VS2", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(orderType, "VS1", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "Sales", StringComparison.OrdinalIgnoreCase))
+            string.Equals(orderType, "Sales", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(orderType, "Sales Receipt", StringComparison.OrdinalIgnoreCase))
         {
             normalizedOrderType = "Invoice";
             return true;
