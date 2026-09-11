@@ -481,22 +481,10 @@ public partial class AddUom
             }
         }
 
-        var finalErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
-        var carriedRowErrors = validationErrors
-            .Where(kv => kv.Key.StartsWith("uomname_") || kv.Key.StartsWith("conversion_"))
-            .Where(kv => !finalErrors.ContainsKey(kv.Key));
-
-        foreach (var kv in carriedRowErrors)
-        {
-            finalErrors[kv.Key] = kv.Value;
-        }
-
-        validationErrors = finalErrors;
-
+        validationErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
+        
         if (validationErrors.Any())
         {
-            // Errors present — do NOT invoke OnAdd, so HandleAddUomModalAddAsync in the
-            // parent never runs and nothing gets added/closed.
             await InvokeAsync(StateHasChanged);
             return;
         }
