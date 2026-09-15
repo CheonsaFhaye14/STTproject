@@ -99,6 +99,7 @@
         width: clamp(92px, 10vw, 120px);
         height: 32px;
         background-color: #B08D57;
+        border-radius:10px;
         color: #2A1F0F;
         border: none;
         box-shadow: none;
