@@ -56,50 +56,59 @@
                     </label>
                 </div>
             </div>
-
-            <!-- Customer filter -->
-            <div class="clt-filter-group">
-                <label class="clt-filter-label" for="customerFilter">Customer</label>
-                <select id="customerFilter" class="clt-select"
-                        @onchange="e => OnFilterChanged(customerId: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All customers</option>
-                    @foreach (var customer in Customers)
-                    {
-                        <option value="@customer.Id" selected="@(SelectedCustomerId?.ToString() == customer.Id.ToString())">
-                            @(customer.Name ?? "—")
-                        </option>
-                    }
-                </select>
-            </div>
-
-            <!-- Subdistributor filter -->
+            <!-- Subdistributor -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
                 <select id="subdistFilter" class="clt-select"
+                        value="@(SelectedSubDistributorId?.ToString() ?? "")"
                         @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
                     <option value="">All subdistributors</option>
                     @foreach (var sd in SubDistributors)
                     {
-                        <option value="@sd.Id" selected="@(SelectedSubDistributorId?.ToString() == sd.Id.ToString())">
-                            @(sd.Name ?? "—")
-                        </option>
+                        <option value="@sd.Id">@(sd.Name ?? "—")</option>
                     }
                 </select>
             </div>
-                        <!-- Items filter -->
+
+            <!-- Principal -->
             <div class="clt-filter-group">
-    <label class="clt-filter-label" for="itemFilter">Item</label>
-    <select id="itemFilter" class="clt-select"
-            @onchange="e => OnFilterChanged(itemId: e.Value?.ToString() ?? string.Empty)">
-        <option value="">All items</option>
-        @foreach (var item in Items)
-        {
-            <option value="@item.Id" selected="@(SelectedItemId?.ToString() == item.Id.ToString())">
-                @(item.Name ?? "—")
-            </option>
-        }
-    </select>
-</div>
+                <label class="clt-filter-label" for="principalFilter">Principal</label>
+                <select id="principalFilter" class="clt-select"
+                        value="@SelectedPrincipal"
+                        @onchange="e => OnFilterChanged(principal: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All principals</option>
+                    @foreach (var principal in Principals)
+                    {
+                        <option value="@principal">@principal</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Month -->
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="monthFilter">Sales Invoice Date</label>
+                <select id="monthFilter" class="clt-select"
+                        value="@(SelectedMonth?.ToString() ?? "")"
+                        @onchange="e => OnDateChanged(month: e.Value?.ToString())">
+                    <option value="">All months</option>
+                    @foreach (var month in AvailableMonths)
+                    {
+                        var monthName = new DateTime(1, month, 1).ToString("MMMM");
+                        <option value="@month">@monthName</option>
+                    }
+                </select>
+
+                <!-- Year -->
+                <select id="yearFilter" class="clt-select"
+                        value="@(SelectedYear?.ToString() ?? "")"
+                        @onchange="e => OnDateChanged(year: e.Value?.ToString())">
+                    <option value="">All years</option>
+                    @foreach (var year in AvailableYears)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </select>
+            </div>
 
             @if (HasActiveFilters)
             {
@@ -331,28 +340,33 @@
             }, null, 400, Timeout.Infinite);
         }
     }
-
-private bool HasActiveFilters =>
-    !string.IsNullOrWhiteSpace(_searchTerm) ||
-    SelectedSubDistributorId.HasValue ||
-    SelectedCustomerId.HasValue ||
-    SelectedItemId.HasValue ||
-    !string.IsNullOrWhiteSpace(SelectedOrderType);
+    private List<string> Principals { get; set; } = new();
+    private string SelectedPrincipal { get; set; } = "";
+    private int? SelectedMonth { get; set; }
+    private int? SelectedYear { get; set; }
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
+        SelectedSubDistributorId.HasValue ||
+        !string.IsNullOrWhiteSpace(SelectedPrincipal) ||
+        SelectedMonth.HasValue ||
+        SelectedYear.HasValue ||
+        !string.IsNullOrWhiteSpace(SelectedOrderType);
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            SubDistributors = (await SalesInvoiceService.GetSubDistributorsAsync())
-    .Select(sd => (sd.SubDistributorId, (string?)sd.SubdName))
-    .ToList();
+            var subdTask = SalesInvoiceService.GetSubDistributorsAsync();
+            var principalTask = SalesInvoiceService.GetPrincipalsForDropdownAsync();
+            var datesTask = SalesInvoiceService.GetAvailableInvoiceMonthsAsync();
 
-            Customers = (await SalesInvoiceService.GetCustomersForDropdownAsync(0))
-                .Select(c => (c.CustomerId, (string?)c.CustomerName))
-                .ToList();
-Items = (await SalesInvoiceService.GetItemsForDropdownAsync())
-    .Select(i => (i.SubdItemId, (string?)$"{i.SubdItemCode} - {i.ItemName}"))
-    .ToList();
+            await Task.WhenAll(subdTask, principalTask, datesTask);
+
+            SubDistributors = subdTask.Result
+                .Select(sd => (sd.SubDistributorId, (string?)sd.SubdName)).ToList();
+            Principals = principalTask.Result;
+            AvailableInvoiceDates = datesTask.Result;
+
             await LoadPageAsync();
         }
         catch (Exception ex)
@@ -362,8 +376,6 @@ Items = (await SalesInvoiceService.GetItemsForDropdownAsync())
             await InvokeAsync(StateHasChanged);
         }
     }
-    private List<(int Id, string? Name)> Items { get; set; } = new();
-private int? SelectedItemId { get; set; }
 
     public async Task LoadPageAsync()
     {
@@ -372,15 +384,16 @@ private int? SelectedItemId { get; set; }
 
         try
         {
-        var (items, total) = await SalesInvoiceService.GetPagedAsync(
-            currentPage, pageSize,
-            _searchTerm,
-            SelectedOrderType,
-            SelectedCustomerId,
-            SelectedSubDistributorId,
-            SelectedItemId,
-            SortColumn,
-            SortAscending);
+            var (items, total) = await SalesInvoiceService.GetPagedAsync(
+                currentPage, pageSize,
+                _searchTerm,
+                SelectedOrderType,
+                SelectedSubDistributorId,
+                SelectedPrincipal,
+                SelectedMonth,
+                SelectedYear,
+                SortColumn,
+                SortAscending);
 
             PagedSalesInvoices = items.ToList();
             totalCount = total;
@@ -393,46 +406,51 @@ private int? SelectedItemId { get; set; }
         {
             isLoading = false;
             await InvokeAsync(StateHasChanged);
-            if (OnCountChanged.HasDelegate)
-                await OnCountChanged.InvokeAsync(totalCount);
-            if (OnLoaded.HasDelegate)
-                await OnLoaded.InvokeAsync();
+            if (OnCountChanged.HasDelegate) await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
             selectedIds.Clear();
             selectAll = false;
         }
     }
 
-private async Task OnFilterChanged(
-    string? orderType = null,
-    string? customerId = null,
-    string? subdId = null,
-    string? itemId = null)
-{
-    if (orderType != null) SelectedOrderType = orderType;
-    if (customerId != null)
-        SelectedCustomerId = int.TryParse(customerId, out var cid) && cid > 0 ? cid : null;
-    if (subdId != null)
-        SelectedSubDistributorId = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
-    if (itemId != null)
-        SelectedItemId = int.TryParse(itemId, out var iid) && iid > 0 ? iid : null;
+    private async Task OnFilterChanged(
+        string? orderType = null,
+        string? subdId = null,
+        string? principal = null)
+    {
+        if (orderType != null) SelectedOrderType = orderType;
+        if (subdId != null)
+            SelectedSubDistributorId = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
+        if (principal != null) SelectedPrincipal = principal;
 
-    currentPage = 1;
-    await LoadPageAsync();
-}
+        currentPage = 1;
+        await LoadPageAsync();
+    }
 
     private async Task GoToPage(int page)
     {
         currentPage = page;
         await LoadPageAsync();
     }
+    private List<(int Year, int Month)> AvailableInvoiceDates { get; set; } = new();
+
+    private List<int> AvailableYears =>
+        AvailableInvoiceDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
+
+    private List<int> AvailableMonths =>
+        (SelectedYear.HasValue
+            ? AvailableInvoiceDates.Where(d => d.Year == SelectedYear.Value)
+            : AvailableInvoiceDates)
+        .Select(d => d.Month).Distinct().OrderBy(m => m).ToList();
 
     private async Task ClearFilters()
     {
         _searchTerm = "";
         SelectedOrderType = "";
-        SelectedCustomerId = null;
         SelectedSubDistributorId = null;
-        SelectedItemId = null;
+        SelectedPrincipal = "";
+        SelectedMonth = null;
+        SelectedYear = null;
         currentPage = 1;
         await LoadPageAsync();
     }
@@ -442,6 +460,22 @@ private async Task OnFilterChanged(
         pendingDeleteId = id;
         toggleConfirmMessage = "Are you sure you want to delete this sales invoice? This cannot be undone.";
         showToggleConfirmModal = true;
+    }
+    private async Task OnDateChanged(string? month = null, string? year = null)
+    {
+        if (month != null)
+            SelectedMonth = int.TryParse(month, out var m) && m > 0 ? m : null;
+
+        if (year != null)
+        {
+            SelectedYear = int.TryParse(year, out var y) && y > 0 ? y : null;
+
+            if (SelectedMonth.HasValue && !AvailableMonths.Contains(SelectedMonth.Value))
+                SelectedMonth = null;
+        }
+
+        currentPage = 1;
+        await LoadPageAsync();
     }
 
     private async Task ConfirmDelete()

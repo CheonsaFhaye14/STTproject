@@ -106,6 +106,7 @@ public sealed class SalesInvoiceCustomerDropdownItem
     public int CustomerId { get; init; }
     public string CustomerCode { get; init; } = string.Empty;
     public string CustomerName { get; init; } = string.Empty;
+    public int SubDistributorId { get; init; }
 }
 
 public sealed class SalesInvoiceSubdItemDropdownItem

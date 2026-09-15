@@ -30,9 +30,6 @@ public static class PriceIncreaseValidations
 
         ValidateAmountAndDate(dto.PriceIncreaseAmount, dto.EffectivityDate, errors);
 
-        // Prevent scheduling a second pending increase for the same item — matches the
-        // duplicate-check already enforced by sp_SchedulePriceIncrease, but surfaces it
-        // as a form error instead of a thrown SQL exception.
         if (dto.CompanyItemId.HasValue && dto.EffectivityDate.HasValue)
         {
             var (existing, _) = await service.GetPagedAsync(
@@ -55,12 +52,6 @@ public static class PriceIncreaseValidations
         return errors;
     }
 
-    /// <summary>
-    /// Lighter validation for editing an existing pending increase: same amount/date
-    /// sanity checks as Add, but skips the CompanyItem/Principal checks (fixed, not
-    /// selectable on edit) and skips the duplicate-pending check (editing the one
-    /// existing pending row against itself would always false-positive).
-    /// </summary>
     public static Task<Dictionary<string, string>> ValidateEditPriceIncreaseAsync(AddPriceIncreaseDto dto)
     {
         var errors = new Dictionary<string, string>();

@@ -1,7 +1,9 @@
+using System.Data;
 using STTproject.Features.Admin.PriceIncrease.DTOs;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using STTproject.Data;
-//TODO: Dont change price for items uom without conversion or price.
+
 namespace STTproject.Features.Admin.PriceIncrease.Services
 {
     public class AdminPriceIncreaseService : IAdminPriceIncreaseService
@@ -127,9 +129,6 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             return (items, total);
         }
 
-        /// <summary>
-        /// Lazy-loaded detail for one increase event — call only when a row is expanded.
-        /// </summary>
         public async Task<IReadOnlyList<PriceIncreaseViewDto>> GetCascadedUomDetailsAsync(int companyItemPriceHistoryId)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -141,15 +140,16 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     SubdItemId = h.ItemsUom.SubdItemId,
                     SubdItemCode = h.ItemsUom.SubdItem.SubdItemCode,
                     SubdItemName = h.ItemsUom.SubdItem.ItemName,
+                    ConversionToBase = h.ItemsUom.ConversionToBase,
                     UomName = h.ItemsUom.UomName,
                     OldPrice = h.OldPrice,
                     NewPrice = h.NewPrice,
                     AppliedDate = h.AppliedDate,
                     CreatedBy = h.CreatedBy
-                })
-                .OrderBy(d => d.SubdItemCode)
-                .ThenBy(d => d.UomName)
-                .ToListAsync();
+                }).OrderBy(x => x.SubdItemCode)
+                .ThenBy(x => x.SubdItemId)
+                .ThenBy(x => x.ConversionToBase ?? int.MinValue)
+                .ThenBy(x => x.UomName).ToListAsync();
         }
 
         public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
@@ -223,28 +223,55 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             if (!dto.CompanyItemId.HasValue || !dto.PriceIncreaseAmount.HasValue || !dto.EffectivityDate.HasValue)
                 return (false, "Missing required fields.");
 
+            var overridesTable = new DataTable();
+            overridesTable.Columns.Add("ItemsUomId", typeof(int));
+            overridesTable.Columns.Add("Skip", typeof(bool));
+            overridesTable.Columns.Add("NewPrice", typeof(decimal));
+
+            foreach (var uomId in dto.SkippedUomIds)
+            {
+                overridesTable.Rows.Add(uomId, true, DBNull.Value);
+            }
+
+            foreach (var kv in dto.ManualUomPrices)
+            {
+                if (dto.SkippedUomIds.Contains(kv.Key)) continue; // Skip wins if both were somehow set
+                overridesTable.Rows.Add(kv.Key, false, kv.Value);
+            }
+
             await using var db = _dbFactory.CreateDbContext();
+            var connection = (SqlConnection)db.Database.GetDbConnection();
+            var wasClosed = connection.State != ConnectionState.Open;
+            if (wasClosed) await connection.OpenAsync();
+
             try
             {
-                await db.Database.ExecuteSqlInterpolatedAsync($@"
-                    EXEC sp_SchedulePriceIncrease
-                        @CompanyItemId = {dto.CompanyItemId.Value},
-                        @PriceIncreaseAmount = {dto.PriceIncreaseAmount.Value},
-                        @EffectivityDate = {dto.EffectivityDate.Value},
-                        @CreatedBy = {dto.CreatedBy}");
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.CommandText = "ojt.sp_SchedulePriceIncrease";
+
+                cmd.Parameters.Add(new SqlParameter("@CompanyItemId", dto.CompanyItemId.Value));
+                cmd.Parameters.Add(new SqlParameter("@PriceIncreaseAmount", dto.PriceIncreaseAmount.Value));
+                cmd.Parameters.Add(new SqlParameter("@EffectivityDate", dto.EffectivityDate.Value));
+                cmd.Parameters.Add(new SqlParameter("@CreatedBy", (object?)dto.CreatedBy ?? DBNull.Value));
+
+                var tvpParam = cmd.Parameters.AddWithValue("@UomOverrides", overridesTable);
+                tvpParam.SqlDbType = SqlDbType.Structured;
+                tvpParam.TypeName = "ojt.UomOverrideTableType";
+
+                await cmd.ExecuteNonQueryAsync();
                 return (true, null);
             }
-            catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 50001)
+            catch (SqlException sqlEx) when (sqlEx.Number == 50001)
             {
                 return (false, "This company item already has a pending price change scheduled.");
             }
+            finally
+            {
+                if (wasClosed) await connection.CloseAsync();
+            }
         }
 
-        /// <summary>
-        /// Edits a not-yet-applied increase: updates the company-level history row and
-        /// recomputes every linked UOM-level history row (their OldPrice snapshot is
-        /// preserved; only NewPrice and EffectivityDate change).
-        /// </summary>
         public async Task<(bool success, string? error)> UpdatePendingIncreaseAsync(
             int companyItemPriceHistoryId, decimal priceIncreaseAmount, DateTime effectivityDate, int? updatedBy)
         {
@@ -280,8 +307,15 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
 
                 foreach (var uom in uomRows)
                 {
-                    var conversion = uom.ItemsUom?.ConversionToBase ?? 0;
-                    uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion);
+                    var conversion = uom.ItemsUom?.ConversionToBase;
+
+                    if (!conversion.HasValue || conversion.Value <= 0)
+                    {
+                        uom.EffectivityDate = effectivityDate;
+                        continue;
+                    }
+
+                    uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion.Value);
                     uom.EffectivityDate = effectivityDate;
                 }
 
@@ -330,7 +364,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 .ToListAsync();
 
             var historyByUomId = pendingHistory.ToDictionary(h => h.ItemsUomId);
-
+            
             return uoms
                 .Select(u =>
                 {
@@ -342,8 +376,8 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                         SubdItemName = u.SubdItemName,
                         ItemsUomId = u.ItemsUomId,
                         UomName = u.UomName,
-                        ConversionToBase = u.ConversionToBase ?? 1,
-                        OldPrice = history?.OldPrice,
+                        ConversionToBase = u.ConversionToBase,
+                        OldPrice = history?.OldPrice ?? u.CurrentPrice,
                         NewPrice = history?.NewPrice
                     };
                 })

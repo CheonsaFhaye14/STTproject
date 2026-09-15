@@ -6,16 +6,17 @@ public interface IAdminSalesInvoiceService
 {
     // View
     Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
-    int page, int pageSize,
-    string? search,
-    string? orderType,
-    int? customerId,
-    int? subDistributorId,
-    int? subdItemId,
-    string sortColumn,
-    bool sortAscending,
-    CancellationToken cancellationToken = default);
-
+        int page, int pageSize,
+        string? search,
+        string? orderType,
+        int? subDistributorId,
+        string? principal,
+        int? month,     
+        int? year,       
+        string sortColumn,
+        bool sortAscending,
+        CancellationToken cancellationToken = default);
+    Task<List<(int Year, int Month)>> GetAvailableInvoiceMonthsAsync(CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceListRow>> GetSalesInvoicesAsync(
         int subDistributorId,
         CancellationToken cancellationToken = default);
@@ -34,7 +35,7 @@ public interface IAdminSalesInvoiceService
     Task<List<SalesInvoiceCustomerDropdownItem>> GetCustomersForDropdownAsync(
         int subDistributorId,
         CancellationToken cancellationToken = default);
-
+    Task<List<string>> GetPrincipalsForDropdownAsync(CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
         int subDistributorId, 
         DateOnly salesInvoiceDate,

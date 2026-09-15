@@ -70,17 +70,37 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             })
             .ToListAsync(cancellationToken);
     }
-public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
-    int page, int pageSize,
-    string? search,
-    string? orderType,
-    int? customerId,
-    int? subDistributorId,
-    int? subdItemId,
-    string sortColumn,
-    bool sortAscending,
+    
+    public async Task<List<(int Year, int Month)>> GetAvailableInvoiceMonthsAsync(
     CancellationToken cancellationToken = default)
-{
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        var raw = await context.SalesInvoices
+            .AsNoTracking()
+            .Select(si => new { si.SalesInvoiceDate.Year, si.SalesInvoiceDate.Month })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return raw
+            .Select(x => (x.Year, x.Month))
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
+            .ToList();
+    }
+
+    public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
+        int page, int pageSize,
+        string? search,
+        string? orderType,
+        int? subDistributorId,
+        string? principal,
+        int? month,
+        int? year,
+        string sortColumn,
+        bool sortAscending,
+        CancellationToken cancellationToken = default)
+    {
         await using var context = _contextFactory.CreateDbContext();
 
         var query = context.SalesInvoices.AsNoTracking().AsQueryable();
@@ -93,14 +113,20 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
                 si.Customer.CustomerCode.Contains(search));
 
         if (!string.IsNullOrWhiteSpace(orderType))
-            query = query.Where(si =>
-                si.OrderType.ToLower() == orderType.ToLower());
-
-        if (customerId > 0)
-            query = query.Where(si => si.CustomerId == customerId);
+            query = query.Where(si => si.OrderType.ToLower() == orderType.ToLower());
 
         if (subDistributorId > 0)
             query = query.Where(si => si.SubDistributorId == subDistributorId);
+
+        if (!string.IsNullOrWhiteSpace(principal))
+            query = query.Where(si =>
+                si.SalesInvoiceItems.Any(item => item.SubdItem.CompanyItem.Principal == principal));
+
+        if (month.HasValue && month.Value > 0)
+            query = query.Where(si => si.SalesInvoiceDate.Month == month.Value);
+
+        if (year.HasValue && year.Value > 0)
+            query = query.Where(si => si.SalesInvoiceDate.Year == year.Value);
 
         // ── Total count ───────────────────────────────────────────────────────
         var total = await query.CountAsync(cancellationToken);
@@ -116,6 +142,7 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
             "CreatedDate" => sortAscending ? query.OrderBy(si => si.CreatedDate) : query.OrderByDescending(si => si.CreatedDate),
             _ => query.OrderByDescending(si => si.SalesInvoiceDate)
         };
+
         // ── Paging ────────────────────────────────────────────────────────────
         var items = await query
             .Skip((page - 1) * pageSize)
@@ -135,17 +162,30 @@ public async Task<(List<SalesInvoiceListRow> Items, int Total)> GetPagedAsync(
                 CreatedDate = si.CreatedDate,
                 UpdatedDate = si.UpdatedDate,
                 CreatedByName = si.CreatedByNavigation != null
-                                       ? (si.CreatedByNavigation.FullName ?? si.CreatedByNavigation.Username)
-                                       : null,
+                                    ? (si.CreatedByNavigation.FullName ?? si.CreatedByNavigation.Username)
+                                    : null,
                 UpdatedByName = si.UpdatedByNavigation != null
-                                       ? (si.UpdatedByNavigation.FullName ?? si.UpdatedByNavigation.Username)
-                                       : null,
+                                    ? (si.UpdatedByNavigation.FullName ?? si.UpdatedByNavigation.Username)
+                                    : null,
             })
             .ToListAsync(cancellationToken);
 
         return (items, total);
     }
+    
+    public async Task<List<string>> GetPrincipalsForDropdownAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
 
+        return await context.CompanyItems
+            .AsNoTracking()
+            .Where(ci => !string.IsNullOrWhiteSpace(ci.Principal))
+            .Select(ci => ci.Principal)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToListAsync(cancellationToken);
+    }
     public async Task<SalesInvoiceDetailDto?> GetSalesInvoiceDetailAsync(
         int salesInvoiceId,
         CancellationToken cancellationToken = default)

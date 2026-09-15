@@ -1,156 +1,151 @@
 @using STTproject.Features.Admin.PriceIncrease.DTOs
 @using STTproject.Features.Admin.PriceIncrease.Validators
-@using STTproject.Shared.Components
+@using STTproject.Shared.Components.Buttons
+@using STTproject.Shared.Components.Forms
+@using STTproject.Shared.Components.Modals
+@using STTproject.Shared.Components.Tables
+
 @inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
 @inject STTproject.Services.IUserContextService UserContextService
-<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
 
-<div class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>@(isEdit ? "Edit Price Change" : "Schedule Price Change")</h3>
-        </div>
-
-        <div class="modal-body">
-            @if (!isEdit)
-            {
-                <div class="form-group">
-                    <label>Principal</label>
-                    <select @bind="Principal" @bind:after="OnPrincipalChanged">
-                        <option value="">Select a principal</option>
-                        @foreach (var principal in Principals)
-                        {
-                            <option value="@principal">@principal</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Company Item<span class="required-asterisk"> *</span></label>
-                    <GenericAutocomplete TItem="CompanyItemDropdownItem" @ref="CompanyItemAutocomplete"
-                                         Items="FilteredCompanyItems.ToList()" @bind-Value="SelectedCompanyItemLabel"
-                                         ItemLabel="@(c => $"{c.CompanyItemCode} - {c.CompanyItemName}")" OnSelected="OnCompanyItemSelected"
-                                         ShowAllOnOpen="true" Placeholder="Search company item..." />
-                    @if (ShowValidationErrors &&
-                            !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)))
-                    {
-                        <span
-                        class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)</span>
-                    }
-                </div>
-            }
-            else
-            {
-                <div class="form-group">
-                    <label>Company Item</label>
-                    <input value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")" disabled />
-                </div>
-                @if (!string.IsNullOrWhiteSpace(readOnlyReason))
-                {
-                    <p class="modal-note modal-note-warning">@readOnlyReason</p>
-                }
-            }
-
-@if (SelectedStockPrice.HasValue)
-{
-    <div class="form-group">
-        <label>Stock Price</label>
-        <input value="@SelectedStockPrice.Value.ToString("N2")" disabled />
-    </div>
-}
-
-@if (SelectedCompanyItemId.HasValue && UomPrices.Any())
-{
-    <div class="form-group">
-        <label>Sub-Item / UOM Prices</label>
-        <table class="uom-price-table">
-            <thead>
-                <tr>
-                    <th>Sub-Item Code</th>
-                    <th>Sub-Item Name</th>
-                    <th>UOM</th>
-                    <th>Old Price</th>
-                    <th>New Price</th>
-                </tr>
-            </thead>
-                <tbody>
-                    @foreach (var uom in UomPrices)
-                    {
-                        <tr>
-                            <td>@uom.SubdItemCode</td>
-                            <td>@uom.SubdItemName</td>
-                            <td>@uom.UomName</td>
-                            <td>@uom.OldPrice?.ToString("N2")</td>
-                            <td>@(uom.NewPrice?.ToString("N2") ?? "-")</td>
-                        </tr>
-                    }
-                </tbody>
-        </table>
-    </div>
-}
-else if (SelectedCompanyItemId.HasValue)
-{
-    <div class="form-group">
-        <p><em>No active UOMs found for this item.</em></p>
-    </div>
-}
-
-            <div class="form-group">
-                <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)</label>
-<input type="number" step="0.01" @bind="PriceIncreaseAmount" @bind:event="onchange" disabled="@isReadOnly" />             
-            </div>
-
-            <div class="form-group">
-                <label>@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)</label>
-                <input type="date" @bind="EffectivityDate" disabled="@isReadOnly" />
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)))
-                {
-                    <span
-                    class="error-text">@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)</span>
-                }
-            </div>
-
-            @if (isEdit)
-            {
-                <div class="form-group">
-                    <label>Status</label>
-                    <input value="@ViewStatus" disabled />
-                </div>
-
-                <h4>Audit Information</h4>
-                <div class="form-group">
-                    <label>Created Date</label>
-                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                </div>
-                @if (!string.IsNullOrWhiteSpace(CreatedByName))
+<Modal ShowModal="true" Width="900px" MaxWidth="100%" MaxHeight="88vh"
+       Title="@(isEdit ? (isReadOnly ? "View Price Change" : "Edit Price Change") : "Schedule Price Change")"
+       IconType="@(isEdit ? (isReadOnly ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
+       OnClose="Cancel">
+    <ChildContent>
+        <FormSection Icon="ti ti-circle-plus" Title="Price Change Details" IsExpanded="true" Expandable="true">
+            <ChildContent>
+                @if (!isEdit)
                 {
                     <div class="form-group">
-                        <label>Created By</label>
-                        <input value="@CreatedByName" disabled />
+                        <AutoComplete Label="Principal" Placeholder="Select a principal" Items="Principals"
+                                    SelectedValue="Principal" SelectedValueChanged="OnPrincipalChanged" />
+                    </div>
+
+                    <div class="form-group">
+                        <AutoComplete Label="Company Item" Required="true" Placeholder="Search company item..."
+                                    TItem="CompanyItemDropdownItem"
+                                    Items="FilteredCompanyItems"
+                                    ValueSelector="@(x => x.CompanyItemId.ToString())"
+                                    TextSelector="@(x => $"{x.CompanyItemCode} - {x.CompanyItemName}")"
+                                    SelectedValue="@(SelectedCompanyItemId?.ToString())"
+                                    SelectedItemChanged="OnCompanyItemSelected"
+                                    ShowError="@ShowValidationErrors"
+                                    ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)" />
                     </div>
                 }
-            }
-
-            @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
-            {
-                <span class="error-text">@generalError</span>
-            }
-
-            <div class="action-buttons">
-                @if (!isReadOnly)
+                else
                 {
-                    <button class="btn btn-primary" type="button" @onclick="RequestConfirm" disabled="@isSubmitting">
-                        @(isEdit ? "Save Changes" : "Schedule Increase")
-                    </button>
+                    <div class="form-group">
+                        <Input Label="Company Item" Value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")" Disabled="true" />
+                    </div>
                 }
-                <button class="btn btn-secondary" type="button" @onclick="Cancel" disabled="@isSubmitting">
-                    @(isReadOnly ? "Close" : "Cancel")
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+
+                @if (SelectedStockPrice.HasValue)
+                {
+                    <div class="form-group">
+                        <Input Label="Stock Price" Value="@SelectedStockPrice.Value.ToString("N2")" Disabled="true" />
+                    </div>
+                }
+
+                <div class="form-group">
+                    <Input Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)"
+                           @bind-Value="PriceIncreaseAmount" Step="0.01" Disabled="@isReadOnly"
+                           ShowError="@ShowValidationErrors"
+                           ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)" />
+                </div>
+
+                <div class="form-group">
+                    <DateInput Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)"
+                               @bind-Value="EffectivityDate" Disabled="@isReadOnly"
+                               ShowError="@ShowValidationErrors"
+                               ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)" />
+                </div>
+
+                @if (isEdit)
+                {
+                    <div class="form-group">
+                        <Input Label="Status" Value="@ViewStatus" Disabled="true" />
+                    </div>
+                }
+
+                @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
+                {
+                    <span class="error-text">@generalError</span>
+                }
+            </ChildContent>
+        </FormSection>
+
+        @if (PreviewUomPrices.Any())
+        {
+            <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
+                <ChildContent>
+                    @if (!isEdit && PreviewUomPrices.Any(RequiresManualPrice))
+                    {
+                        <p class="hint-text">
+                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                            Some UOMs have no conversion or current price set, so their new price
+                            can't be calculated automatically. Enter one manually, or mark them to skip.
+                        </p>
+                    }
+                    <AddTable TItem="CompanyItemUomPriceDto"
+                            Items="PreviewUomPrices"
+                            Columns="@(new List<string> { "SubdItem", "UomName", "OldPrice", "NewPrice" })"
+                            ColumnLabels="@(new Dictionary<string, string> {
+                                ["SubdItem"] = "Sub-Item",
+                                ["UomName"] = "UOM",
+                                ["OldPrice"] = "Old Price",
+                                ["NewPrice"] = "New Price"
+                            })"
+                            EditableColumns="@(new List<string> { "NewPrice" })"
+                            ColumnInputTypes="@(new Dictionary<string, string> { ["NewPrice"] = "number" })"
+                            IsCellEditableOverride="IsUomPriceCellEditable"
+                            DisplayValueSelector="FormatUomPriceColumn"
+                            EditableValueSelector="GetEditableUomValue"
+                            PlaceholderSelector="GetUomPlaceholder"
+                            OnCellChanged="HandleUomPriceCellChangedAsync"
+                            GroupColumn="SubdItem"
+                            ViewMode="@isEdit"
+                            Disabled="@isEdit"
+                            RemoveButtonVisible="false"
+                            AddButtonVisible="false">
+                        <RowActionsTemplate Context="row">
+                            @if (!isEdit && RequiresManualPrice(row))
+                            {
+                                <label class="skip-price-toggle">
+                                    <input type="checkbox"
+                                        checked="@SkippedUomIds.Contains(row.ItemsUomId)"
+                                        @onchange="(e) => ToggleSkipPrice(row.ItemsUomId, e.Value)" />
+                                    Don't change price
+                                </label>
+                            }
+                        </RowActionsTemplate>
+                    </AddTable>
+                </ChildContent>
+            </FormSection>
+        }
+        else if (SelectedCompanyItem != null || isEdit)
+        {
+            <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
+                <ChildContent>
+                    <p><em>No active UOMs found for this item.</em></p>
+                </ChildContent>
+            </FormSection>
+        }
+    </ChildContent>
+    <FooterContent>
+        @if (isReadOnly)
+        {
+            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+        }
+        else
+        {
+            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Scheduling...") : (isEdit ? "Save Changes" : "Schedule Increase"))"
+                    Variant="ButtonVariant.Primary" OnClick="RequestConfirm" Disabled="@isSubmitting"></Button>
+        }
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
@@ -159,12 +154,11 @@ else if (SelectedCompanyItemId.HasValue)
 
     private bool isEdit => PriceIncreaseId.HasValue;
     private bool isReadOnly;
-    private string? readOnlyReason;
     private int? CurrentUserId => UserContextService.UserId;
-private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List<CompanyItemUomPriceDto>();
-    // Company item
-    private GenericAutocomplete<CompanyItemDropdownItem>? CompanyItemAutocomplete;
-    private string? SelectedCompanyItemLabel { get; set; }
+
+    private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List<CompanyItemUomPriceDto>();
+
+    private CompanyItemDropdownItem? SelectedCompanyItem { get; set; }
     private int? SelectedCompanyItemId { get; set; }
     private IReadOnlyList<CompanyItemDropdownItem> CompanyItems { get; set; } = new List<CompanyItemDropdownItem>();
     private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItems =>
@@ -178,6 +172,7 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
     private decimal? PriceIncreaseAmount { get; set; }
     private DateTime? EffectivityDate { get; set; }
 
+    // View/edit-mode display fields
     private string? ViewCompanyItemCode { get; set; }
     private string? ViewCompanyItemName { get; set; }
     private string? ViewStatus { get; set; }
@@ -196,37 +191,147 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
 
     private async Task OnCompanyItemSelected(CompanyItemDropdownItem? item)
     {
+        SelectedCompanyItem = item;
+
         if (item == null)
         {
+            SelectedCompanyItemId = null;
+            SelectedStockPrice = null;
             UomPrices = new List<CompanyItemUomPriceDto>();
             return;
         }
+
         SelectedCompanyItemId = item.CompanyItemId;
         SelectedStockPrice = item.StockPrice;
         Principal = item.Principal;
-        SelectedCompanyItemLabel = $"{item.CompanyItemCode} - {item.CompanyItemName}";
         UomPrices = await AdminPriceIncreaseService.GetUomPricesByCompanyItemIdAsync(item.CompanyItemId);
     }
 
-    private void OnPrincipalChanged()
+    private void OnPrincipalChanged(string? value)
     {
-        if (SelectedCompanyItemId.HasValue)
+        Principal = value;
+
+        if (SelectedCompanyItem != null)
         {
             var stillValid = CompanyItems.Any(c =>
-                c.CompanyItemId == SelectedCompanyItemId.Value &&
+                c.CompanyItemId == SelectedCompanyItem.CompanyItemId &&
                 (string.IsNullOrWhiteSpace(Principal) || c.Principal == Principal));
 
             if (!stillValid)
             {
+                SelectedCompanyItem = null;
                 SelectedCompanyItemId = null;
                 SelectedStockPrice = null;
-                SelectedCompanyItemLabel = null;
                 UomPrices = new List<CompanyItemUomPriceDto>();
             }
         }
     }
+        
+    private static bool RequiresManualPrice(CompanyItemUomPriceDto item) =>
+        !item.ConversionToBase.HasValue || item.ConversionToBase.Value <= 0 || !item.OldPrice.HasValue;
 
-   protected override async Task OnInitializedAsync()
+    private HashSet<int> SkippedUomIds { get; set; } = new();
+    private Dictionary<int, string> ManualPriceInputs { get; set; } = new();
+
+    private List<CompanyItemUomPriceDto> PreviewUomPrices
+    {
+        get
+        {
+            IEnumerable<CompanyItemUomPriceDto> items = isEdit
+                ? UomPrices
+                : UomPrices.Select(u =>
+                {
+                    decimal? newPrice;
+
+                    if (RequiresManualPrice(u))
+                    {
+                        if (SkippedUomIds.Contains(u.ItemsUomId))
+                        {
+                            newPrice = null;
+                        }
+                        else if (ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed)
+                            && decimal.TryParse(typed, out var manualValue))
+                        {
+                            newPrice = manualValue;
+                        }
+                        else
+                        {
+                            newPrice = null;
+                        }
+                    }
+                    else
+                    {
+                        newPrice = PriceIncreaseAmount.HasValue
+                            ? (u.OldPrice ?? 0) + PriceIncreaseAmount.Value * u.ConversionToBase!.Value
+                            : null;
+                    }
+
+                    return new CompanyItemUomPriceDto
+                    {
+                        SubdItemId = u.SubdItemId,
+                        SubdItemCode = u.SubdItemCode,
+                        SubdItemName = u.SubdItemName,
+                        ItemsUomId = u.ItemsUomId,
+                        UomName = u.UomName,
+                        ConversionToBase = u.ConversionToBase,
+                        OldPrice = u.OldPrice,
+                        NewPrice = newPrice
+                    };
+                });
+
+            return items
+                .OrderBy(x => x.SubdItemCode)
+                .ThenBy(x => x.SubdItemId)
+                .ThenBy(x => x.ConversionToBase ?? int.MinValue)
+                .ThenBy(x => x.UomName)
+                .ToList();
+        }
+    }
+
+    private bool IsUomPriceCellEditable(CompanyItemUomPriceDto row, string column)
+    {
+        if (isEdit || column != "NewPrice") return false;
+        if (!RequiresManualPrice(row)) return false;       
+        return !SkippedUomIds.Contains(row.ItemsUomId);    
+    }
+
+    private Task HandleUomPriceCellChangedAsync((CompanyItemUomPriceDto Row, string Column) args)
+    {
+        if (args.Column == "NewPrice")
+        {
+            ManualPriceInputs[args.Row.ItemsUomId] = args.Row.NewPrice?.ToString() ?? string.Empty;
+            SkippedUomIds.Remove(args.Row.ItemsUomId); 
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private void ToggleSkipPrice(int itemsUomId, object? checkedValue)
+    {
+        if (checkedValue is not bool isChecked) return;
+
+        if (isChecked)
+        {
+            SkippedUomIds.Add(itemsUomId);
+            ManualPriceInputs.Remove(itemsUomId);
+        }
+        else
+        {
+            SkippedUomIds.Remove(itemsUomId);
+        }
+    }
+
+    private string? FormatUomPriceColumn(CompanyItemUomPriceDto item, string column) => column switch
+    {
+        "SubdItem" => $"{item.SubdItemCode} - {item.SubdItemName}",
+        "OldPrice" => item.OldPrice?.ToString("N2") ?? "-",
+        "NewPrice" => SkippedUomIds.Contains(item.ItemsUomId)
+            ? "No change"
+            : item.NewPrice?.ToString("N2")
+                ?? (RequiresManualPrice(item) ? "Enter manually" : "-"),
+        _ => null
+    };
+    protected override async Task OnInitializedAsync()
     {
         Principals = await AdminPriceIncreaseService.GetAllPrincipalsAsync();
         if (isEdit)
@@ -244,10 +349,6 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
                 CreatedDate = history.CreatedDate;
                 CreatedByName = await AdminPriceIncreaseService.GetUserNameByIdAsync(history.CreatedBy);
 
-                // Scoped to this exact increase event (via CompanyItemPriceHistoryId) —
-                // works whether the event is pending, overdue, or already applied.
-                // GetUomPricesByCompanyItemIdAsync only sees *currently pending* rows,
-                // so it goes blank once this event has been applied — this doesn't.
                 var details = await AdminPriceIncreaseService.GetCascadedUomDetailsAsync(PriceIncreaseId!.Value);
                 UomPrices = details.Select(d => new CompanyItemUomPriceDto
                 {
@@ -255,6 +356,7 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
                     SubdItemCode = d.SubdItemCode,
                     SubdItemName = d.SubdItemName,
                     UomName = d.UomName,
+                    ConversionToBase = d.ConversionToBase,
                     OldPrice = d.OldPrice,
                     NewPrice = d.NewPrice
                 }).ToList();
@@ -262,7 +364,6 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
                 if (string.Equals(history.Status, "Applied", StringComparison.OrdinalIgnoreCase))
                 {
                     isReadOnly = true;
-                    readOnlyReason = "This increase has already been applied and can no longer be edited.";
                 }
             }
         }
@@ -295,12 +396,28 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
                 CompanyItemId = SelectedCompanyItemId,
                 PriceIncreaseAmount = PriceIncreaseAmount,
                 EffectivityDate = EffectivityDate,
-                CreatedBy = CurrentUserId
+                CreatedBy = CurrentUserId,
+                SkippedUomIds = SkippedUomIds.ToList(),
+                ManualUomPrices = UomPrices
+                    .Where(u => RequiresManualPrice(u) && !SkippedUomIds.Contains(u.ItemsUomId))
+                    .Where(u => ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed) && decimal.TryParse(typed, out _))
+                    .ToDictionary(u => u.ItemsUomId, u => decimal.Parse(ManualPriceInputs[u.ItemsUomId]))
             };
 
             Errors = await PriceIncreaseValidations.ValidateAddPriceIncreaseAsync(dto, AdminPriceIncreaseService);
             ShowValidationErrors = true;
             if (Errors.Any()) return;
+
+            var unresolved = UomPrices.Where(RequiresManualPrice)
+                .Where(u => !SkippedUomIds.Contains(u.ItemsUomId))
+                .Where(u => !ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed) || !decimal.TryParse(typed, out _))
+                .ToList();
+
+            if (unresolved.Any())
+            {
+                Errors["general"] = "Enter a new price or mark 'Don't change price' for every UOM missing a conversion/current price.";
+                return;
+            }
 
             PendingScheduleDto = dto;
         }
@@ -340,4 +457,68 @@ private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List
         if (onCancel.HasDelegate) return onCancel.InvokeAsync();
         return Task.CompletedTask;
     }
+    private string? GetEditableUomValue(CompanyItemUomPriceDto item, string column) => column switch
+    {
+        "NewPrice" => item.NewPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        _ => null
+    };
+
+    private string? GetUomPlaceholder(CompanyItemUomPriceDto item, string column) => column switch
+    {
+        "NewPrice" when RequiresManualPrice(item) && !SkippedUomIds.Contains(item.ItemsUomId) => "Enter manually",
+        _ => null
+    };
 }
+
+<style>
+    .skip-price-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6B655A;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.skip-price-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border: 1.5px solid #DDD6C4;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+    .skip-price-toggle input[type="checkbox"]:checked {
+        background: #C9A227;
+        border-color: #C9A227;
+    }
+
+    .skip-price-toggle input[type="checkbox"]:checked::after {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 1px;
+        width: 4px;
+        height: 8px;
+        border: solid #fff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+    }
+
+    .skip-price-toggle input[type="checkbox"]:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.2);
+    }
+
+    .skip-price-toggle input[type="checkbox"]:hover:not(:checked) {
+        border-color: #C9A227;
+    }
+</style>

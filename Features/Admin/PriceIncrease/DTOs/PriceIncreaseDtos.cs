@@ -16,7 +16,7 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public DateTime CreatedDate { get; set; }
     }
 
-    public class PriceIncreaseViewDto //Inside PriceIncreaseListDto
+    public class PriceIncreaseViewDto
     {
         public int? SubdItemId { get; set; }
         public string? SubdItemCode { get; set; }
@@ -27,6 +27,7 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public decimal? PriceIncreaseAmount { get; set; }
         public DateTime? AppliedDate { get; set; }
         public int? CreatedBy { get; set; }
+        public int? ConversionToBase { get; set; }
     }
 
     public class AddPriceIncreaseDto
@@ -36,6 +37,10 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public DateTime? EffectivityDate { get; set; }
         public int? CreatedBy { get; set; }
         public string? Principal { get; set; }
+
+        public List<int> SkippedUomIds { get; set; } = new();
+
+        public Dictionary<int, decimal> ManualUomPrices { get; set; } = new();
     }
     public class CompanyItemDropdownItem
     {

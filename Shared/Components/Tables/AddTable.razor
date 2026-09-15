@@ -22,19 +22,28 @@
             {
                 var idx = i;
                 var item = Items[idx];
-                <tr>
+                var isGroupStart = string.IsNullOrEmpty(GroupColumn)
+                    || idx == 0
+                    || GetPropertyValue(Items[idx - 1], GroupColumn) != GetPropertyValue(item, GroupColumn);
+                <tr class="@(string.IsNullOrEmpty(GroupColumn) ? "" : (isGroupStart ? "group-start" : "group-continuation"))">
                     <td class="row-num">@(idx + 1)</td>
                     @foreach (var column in Columns)
                     {
                         var col = column;
                         var editable = !ViewMode && EditableColumns.Contains(col)
                             && (IsCellEditableOverride?.Invoke(item, col) ?? true);
+                        var isSuppressedGroupCell = !string.IsNullOrEmpty(GroupColumn) && col == GroupColumn && !isGroupStart;
                         <td>
-                            @if (editable)
+                            @if (isSuppressedGroupCell)
                             {
-                                <input value="@GetPropertyValue(item, col)"
+                                <span class="group-empty"></span>
+                            }
+                            else if (editable)
+                            {
+                                <input value="@GetEditableValue(item, col)"
                                        type="@(ColumnInputTypes.TryGetValue(col, out var it) ? it : "text")"
-                                       placeholder="@(ColumnPlaceholders.TryGetValue(col, out var ph) ? ph : "")"
+                                       placeholder="@GetPlaceholder(item, col)"
+                                       size="@GetInputSize(item, col)"
                                        disabled="@Disabled"
                                        @oninput="e => SetPropertyValue(item, col, e.Value?.ToString())"
                                        @onchange="async e =>
@@ -45,7 +54,7 @@
                             }
                             else
                             {
-                                <input value="@GetPropertyValue(item, col)" disabled />
+                                <input value="@GetPropertyValue(item, col)" size="@GetInputSize(item, col)" disabled />
                             }
                         </td>
                     }
@@ -117,12 +126,18 @@
     [Parameter] public Func<int, string?>? ErrorSelector { get; set; }
     [Parameter] public string? GeneralErrorText { get; set; }
     [Parameter] public Func<TItem, string, string?>? DisplayValueSelector { get; set; }
-
-    // --- New, additive ---
+    [Parameter] public string? GroupColumn { get; set; }
     [Parameter] public Func<TItem, string, bool>? IsCellEditableOverride { get; set; }
     [Parameter] public EventCallback<(TItem Item, string Column)> OnCellChanged { get; set; }
     [Parameter] public RenderFragment<TItem>? RowActionsTemplate { get; set; }
     [Parameter] public Dictionary<string, string> ColumnInputTypes { get; set; } = new();
+
+    // Lets a numeric/editable cell show its own raw value (not the formatted
+    // display string, which may be non-numeric text like "Enter manually" and
+    // would be silently rejected by <input type="number">), plus an optional
+    // per-row placeholder hint shown when that value is empty.
+    [Parameter] public Func<TItem, string, string?>? EditableValueSelector { get; set; }
+    [Parameter] public Func<TItem, string, string?>? PlaceholderSelector { get; set; }
 
     private static readonly Dictionary<string, PropertyInfo?> PropertyCache = new();
 
@@ -134,6 +149,42 @@
             PropertyCache[column] = prop;
         }
         return prop;
+    }
+
+    // Drives column auto-sizing: the browser's table-layout:auto pass takes the
+    // widest `size` across all cells in a column, so this doesn't need to be exact —
+    // it just needs to reflect roughly how much room this cell's content wants.
+    private int GetInputSize(TItem item, string column)
+    {
+        var value = GetPropertyValue(item, column) ?? string.Empty;
+        var placeholder = GetPlaceholder(item, column);
+        var label = ColumnLabels.TryGetValue(column, out var lbl) ? lbl : column;
+        var longest = new[] { value.Length, placeholder.Length, label.Length }.Max();
+        return Math.Clamp(longest + 2, 4, 60);
+    }
+
+    private string GetEditableValue(TItem item, string column)
+    {
+        if (EditableValueSelector is not null)
+        {
+            var custom = EditableValueSelector(item, column);
+            if (custom is not null) return custom;
+        }
+
+        var prop = GetProperty(column);
+        if (prop is null) return string.Empty;
+        return prop.GetValue(item)?.ToString() ?? string.Empty;
+    }
+
+    private string GetPlaceholder(TItem item, string column)
+    {
+        if (PlaceholderSelector is not null)
+        {
+            var custom = PlaceholderSelector(item, column);
+            if (custom is not null) return custom;
+        }
+
+        return ColumnPlaceholders.TryGetValue(column, out var ph) ? ph : string.Empty;
     }
 
     private string GetPropertyValue(TItem item, string column)
