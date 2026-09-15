@@ -5,113 +5,102 @@
 
 @inject STTproject.Features.Admin.Customers.Services.IGeographicDataService GeographicDataService
 
-<div class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>@(isEdit ? (isViewMode ? "View Subdistributor" : "Edit Subdistributor") : "Add New Subdistributor")</h3>
-        </div>
 
-        <div class="modal-body">
-            <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.subdcode.Label<span class="required-asterisk">*</span></label>
-                <input @bind="SubdCode" @ref="subdCodeInput" disabled=@isViewMode Placeholder="Enter subdistributor code..." />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.subdcode.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.subdcode.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.subdname.Label<span class="required-asterisk">*</span></label>
-                <input @bind="SubdName" @ref="subdNameInput" disabled=@isViewMode Placeholder="Enter subdistributor name..." />
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.subdname.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.subdname.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <AutoComplete 
-                    Label="Province" 
-                    Placeholder="Search province..."
-                    Items="Provinces" 
-                    SelectedValue="@Province"
-                    SelectedValueChanged="OnProvinceSelected"
-                    Disabled="@isViewMode"/>
-            </div>
-
-            <div class="form-group">
-                <AutoComplete 
-                    Label="City / Municipality" 
-                    Placeholder="Search city/municipality..."
-                    Items="CitiesMunicipalities" 
-                    SelectedValue="@CityMunicipality"
-                    SelectedValueChanged="OnCityMunicipalitySelected"
-                    Disabled="@isViewMode"/>
-            </div>
-
-            <div class="form-group">
-                <label>@SubDistributorValidations.AddSubDistributor.encoder.Label</label>
-                @if (isViewMode)
-                {
-                    <input value="@(SelectedEncoderName ?? "—")" disabled />
-                }
-                else
-                {
-                    <GenericAutocomplete TItem="UserListDto" @ref="encoderAutocomplete" Items="Encoders"
-                                        @bind-Value="SelectedEncoderName" ItemLabel="@(u => u.FullName ?? u.UserName ?? string.Empty)"
-                                        OnSelected="OnEncoderSelected" ShowAllOnOpen="true"
-                                        Placeholder="Search encoder..." />
-                }
-                @if (ShowValidationErrors &&
-                        !string.IsNullOrWhiteSpace(GetFieldError(SubDistributorValidations.AddSubDistributor.encoder.Key)))
-                {
-                    <span class="error-text">@GetFieldError(SubDistributorValidations.AddSubDistributor.encoder.Key)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" @bind="IsActive" disabled=@isViewMode />
-                    Is Active
-                </label>
-            </div>
-
-            @if (isEdit && isViewMode)
-            {
-                <h4>Audit Information</h4>
+<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" IconType="ModalIconType.ItemView" Title="@(isEdit ? (isViewMode ? "View Subdistributor" : "Edit Subdistributor") : "Add New Subdistributor")" OnClose="Cancel">
+    <ChildContent>
+        <FormSection Icon="ti ti-building-warehouse" Title="Subdistributor Details" Expandable="true" IsExpanded="true">
+           <ChildContent>
                 <div class="form-group">
-                    <label>Created Date</label>
-                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                    <Input Label="Subdistributor Code" Required="true" @bind-Value="SubdCode" Disabled="@isViewMode" Placeholder="Enter subdistributor code..." 
+                    ShowError="ShowValidationErrors" ErrorText="@GetFieldError(SubDistributorValidations.AddSubDistributor.subdcode.Key)"/>
                 </div>
-                @if (UpdatedDate.HasValue)
-                {
-                    <div class="form-group">
-                        <label>Updated Date</label>
-                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
-                    </div>
-                }
-            }
 
-            <div class="action-buttons">
-                @if (isEdit && isViewMode)
-                {
-                    <button @onclick="EnableEdit">Edit</button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
-                }
-                else
-                {
-                    <button @onclick="CreateSubDistributor" disabled="@isSubmitting">
-                        @(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Subdistributor"))
-                    </button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
-                }
-            </div>
-        </div>
-    </div>
-</div>
+                <div class="form-group">
+                    <Input Label="Subdistributor Name" Required="true" @bind-Value="SubdName" Disabled="@isViewMode" Placeholder="Enter subdistributor name..." 
+                    ShowError="ShowValidationErrors" ErrorText="@GetFieldError(SubDistributorValidations.AddSubDistributor.subdname.Key)"/>
+                </div>
+
+                <div class="form-group">
+                    <AutoComplete 
+                        Label="Province" 
+                        Placeholder="Search province..."
+                        Items="Provinces" 
+                        SelectedValue="@Province"
+                        SelectedValueChanged="OnProvinceSelected"
+                        Disabled="@isViewMode"/>
+                </div>
+
+                <div class="form-group">
+                    <AutoComplete 
+                        Label="City / Municipality" 
+                        Placeholder="Search city/municipality..."
+                        Items="CitiesMunicipalities" 
+                        SelectedValue="@CityMunicipality"
+                        SelectedValueChanged="OnCityMunicipalitySelected"
+                        Disabled="@isViewMode"/>
+                </div>
+
+                <div class="form-group">
+                    <AutoComplete 
+                        Label="Encoder" 
+                        Placeholder="Search encoder..."
+                        Items="Encoders" 
+                        SelectedValue="@SelectedEncoderId"
+                        SelectedValueChanged="OnEncoderSelected"
+                        Disabled="@isViewMode"
+                        TextSelector="@(e => e.FullName ?? e.UserName)"
+                        ValueSelector="@(e => e.UserId.ToString())"
+                        ShowAllOnOpen="true"/>
+                </div>
+
+                <div class="form-group">
+                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
+                </div>
+           </ChildContent> 
+        </FormSection>
+
+        @if (isViewMode)
+        {
+            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="false">
+                <ChildContent>
+                    @if(CreatedByName != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Created By" Disabled="true" @bind-Value="@CreatedByName" />
+                    </div>
+                    }
+                    <div class="form-group">
+                        <Input Label="Created Date" Disabled="true" Value="CreatedDateDisplay" />
+                    </div>
+                    @if(UpdatedByName != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Updated By" Disabled="true" @bind-Value="@UpdatedByName" />
+                    </div>
+                    }
+                    @if(UpdatedDate != null)
+                    {
+                    <div class="form-group">
+                        <Input Label="Updated Date" Disabled="true" Value="UpdatedDateDisplay" />
+                    </div>
+                    }
+                </ChildContent>
+            </FormSection>
+        }
+    </ChildContent>
+    <FooterContent>
+        @if (isEdit && isViewMode)
+        {
+            <Button Title="Edit" OnClick="EnableEdit" Variant="ButtonVariant.Primary" />
+            <Button Title="Close" OnClick="Cancel" Variant="ButtonVariant.Secondary" />
+        }
+        else
+        {
+            <Button Title="@(isEdit ? "Save Changes" : "Create Subdistributor")" OnClick="CreateSubDistributor" Disabled="@isSubmitting" Variant="ButtonVariant.Primary" />
+            <Button Title="Cancel" OnClick="Cancel" Disabled="@isSubmitting" Variant="ButtonVariant.Secondary" />
+        }
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
@@ -133,7 +122,7 @@
 
     private int? EncoderId { get; set; }
     private string? SelectedEncoderName { get; set; }
-    private List<UserListDto> Encoders { get; set; } = new();
+    private List<EncoderUserDropdownDto> Encoders { get; set; } = new();
 
     // Audit fields (view mode only)
     private DateTime CreatedDate { get; set; }
@@ -171,46 +160,52 @@
                 Province = subd.Province;
                 CityMunicipality = subd.CityMunicipality;
                 IsActive = subd.IsActive;
-
                 EncoderId = subd.EncoderId;
-                SelectedEncoderName = subd.EncoderName;
+                SelectedEncoderId = subd.EncoderId?.ToString();  
 
-                if (subd.EncoderId.HasValue && !Encoders.Any(e => e.UserId == subd.EncoderId.Value))
-                {
-                    Encoders.Insert(0, new UserListDto
-                    {
-                        UserId = subd.EncoderId.Value,
-                        FullName = subd.EncoderName,
-                        UserName = subd.EncoderName,
-                        Role = EncoderRoleFallback
-                    });
-                }
-                
                 if (!string.IsNullOrWhiteSpace(Province))
                     CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
 
                 // Audit
                 CreatedDate = subd.CreatedDate;
                 UpdatedDate = subd.UpdatedDate;
+                CreatedByName = subd.CreatedByName;
+                UpdatedByName = subd.UpdatedByName;
             }
         }
     }
-
+    private string? SelectedEncoderId { get; set; }      
+    private string CreatedDateDisplay => CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
+    private string UpdatedDateDisplay => UpdatedDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty;
+    private int? CreatedBy { get; set; }
+    private int? UpdatedBy { get; set; }
+    private string? CreatedByName { get; set; }
+    private string? UpdatedByName { get; set; }
     private const string EncoderRoleFallback = "Encoder";
     private void EnableEdit() => isViewMode = false;
 
-    private Task OnEncoderSelected(UserListDto? selected)
+    private async Task OnEncoderSelected(string? selected)
     {
-        if (selected != null)
+        if (string.IsNullOrWhiteSpace(selected) || !int.TryParse(selected, out var userId))
         {
-            EncoderId = selected.UserId;
-            SelectedEncoderName = selected.FullName ?? selected.UserName;
+            EncoderId = null;
+            SelectedEncoderId = null;
         }
         else
         {
-            EncoderId = null;
+            var encoder = Encoders.FirstOrDefault(e => e.UserId == userId);
+            if (encoder != null)
+            {
+                EncoderId = encoder.UserId;
+                SelectedEncoderId = encoder.UserId.ToString();
+            }
+            else
+            {
+                EncoderId = null;
+                SelectedEncoderId = null;
+            }
         }
-        return Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task CreateSubDistributor()
@@ -224,7 +219,7 @@
             EncoderId = EncoderId,
         };
 
-        Errors = await SubDistributorValidations.ValidateAddSubDistributorAsync(subdToValidate, AdminSubDistributorService);
+        Errors = await SubDistributorValidations.ValidateAddSubDistributorAsync(subdToValidate);
         ShowValidationErrors = true;
 
         if (Errors.Any()) return;

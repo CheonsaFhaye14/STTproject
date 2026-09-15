@@ -139,10 +139,10 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 ("Principal", false) => query.OrderByDescending(c => c.Principal),
                 ("Category", true) => query.OrderBy(c => c.Category),
                 ("Category", false) => query.OrderByDescending(c => c.Category),
-                ("CreatedDate", true) => query.OrderBy(c => c.CreatedDate),
-                ("CreatedDate", false) => query.OrderByDescending(c => c.CreatedDate),
-                ("IsActive", true) => query.OrderBy(c => c.IsActive),
-                ("IsActive", false) => query.OrderByDescending(c => c.IsActive),
+                ("CreatedDate", false) => query.OrderBy(c => c.CreatedDate),
+                ("CreatedDate", true) => query.OrderByDescending(c => c.CreatedDate),
+                ("IsActive", false) => query.OrderBy(c => c.IsActive),
+                ("IsActive", true) => query.OrderByDescending(c => c.IsActive),
                 _ => query.OrderBy(c => c.ItemCode)
             };
 

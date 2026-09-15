@@ -207,12 +207,14 @@ namespace STTproject.Features.Admin.Users.Services
                 ("UserName", false) => query.OrderByDescending(u => u.Username),
                 ("FullName", true) => query.OrderBy(u => u.FullName),
                 ("FullName", false) => query.OrderByDescending(u => u.FullName),
+                ("Email", true) => query.OrderBy(u => u.Email),
+                ("Email", false) => query.OrderByDescending(u => u.Email),
                 ("Role", true) => query.OrderBy(u => u.Role),
                 ("Role", false) => query.OrderByDescending(u => u.Role),
-                ("CreatedDate", true) => query.OrderBy(u => u.CreatedDate),
-                ("CreatedDate", false) => query.OrderByDescending(u => u.CreatedDate),
-                ("IsActive", true) => query.OrderBy(u => u.IsActive),
-                ("IsActive", false) => query.OrderByDescending(u => u.IsActive),
+                ("CreatedDate", false) => query.OrderBy(u => u.CreatedDate),
+                ("CreatedDate", true) => query.OrderByDescending(u => u.CreatedDate),
+                ("IsActive", false) => query.OrderBy(u => u.IsActive),
+                ("IsActive", true) => query.OrderByDescending(u => u.IsActive),
                 _ => query.OrderBy(u => u.Username)
             };
 

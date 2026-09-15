@@ -68,7 +68,7 @@
             <!-- User Role filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="typeFilter">User Role</label>
-                <select id="typeFilter" class="clt-select"
+                <select id="typeFilter" class="clt-select" value="@SelectedRole"
                         @onchange="e => OnFilterChanged(role: e.Value?.ToString() ?? string.Empty)">
                     <option value="">All roles</option>
                     <option value="Admin" selected="@("Admin" == SelectedRole)">Admin</option>
@@ -128,10 +128,10 @@
                                 @foreach (var user in PagedUsers)
                                 {
                                     <tr class="@(!user.IsActive ? "clt-row-inactive" : "")">
-                                        <td><span class="clt-code">@user.UserId</span></td>
                                         <td class="clt-name">@user.UserName</td>
+                                        <td class="clt-name">@user.FullName</td>
                                         <td><span class="clt-type-badge">@user.Role</span></td> 
-                                        <td class="clt-muted">@user.Email</td>
+                                        <td class="clt-muted">@(user.Email ?? "No email available")</td>
                                         <td class="clt-muted">
                                             @user.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
                                         </td>
@@ -340,7 +340,7 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "UserName";
+    private string SortColumn { get; set; } = "CreatedDate";
     private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)

@@ -86,7 +86,9 @@
                                 <th @onclick='() => SortBy("SubdName")' style="cursor:pointer">
                                     Name @SortIndicator("SubdName")
                                 </th>
-                                <th>Encoder</th>
+                                <th @onclick='() => SortBy("EncoderName")' style="cursor:pointer">
+                                    Encoder @SortIndicator("EncoderName")
+                                </th>
                                 <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
                                     Created @SortIndicator("CreatedDate")
                                 </th>
@@ -125,7 +127,7 @@
                                     <tr class="@(!subd.IsActive ? "clt-row-inactive" : "")">
                                         <td><span class="clt-code">@subd.SubdCode</span></td>
                                         <td class="clt-name">@subd.SubdName</td>
-                                        <td class="clt-muted">@(subd.EncoderName ?? "—")</td>
+                                        <td class="clt-muted">@(subd.EncoderName ?? "Not Set")</td>
                                         <td class="clt-muted">
                                             @subd.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
                                         </td>
@@ -326,7 +328,7 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "SubdName";
+    private string SortColumn { get; set; } = "CreatedDate";
     private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)

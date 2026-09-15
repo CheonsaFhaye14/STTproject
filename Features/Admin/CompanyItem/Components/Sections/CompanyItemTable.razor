@@ -67,7 +67,7 @@
             <!-- Principal filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="principalFilter">Principal</label>
-                <select id="principalFilter" class="clt-select"
+                <select id="principalFilter" class="clt-select" value="@SelectedPrincipalId"
                         @onchange="e => OnFilterChanged(principal: e.Value?.ToString())">
                     <option value="">All</option>
                     @foreach (var principal in Principals)
@@ -343,7 +343,7 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "ItemCode";
+    private string SortColumn { get; set; } = "CreatedDate"; 
     private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)

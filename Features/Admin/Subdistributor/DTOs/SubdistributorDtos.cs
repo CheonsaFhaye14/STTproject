@@ -35,5 +35,14 @@ namespace STTproject.Features.Admin.Subdistributor.DTOs
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? UpdatedDate { get; set; }
+        public string? CreatedByName { get; set; }
+        public string? UpdatedByName { get; set; }
+    }
+
+    public class EncoderUserDropdownDto
+    {
+        public int UserId { get; set; }
+        public string? FullName { get; set; }
+        public string? UserName { get; set; }
     }
 }

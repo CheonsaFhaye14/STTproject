@@ -135,11 +135,11 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
         query = sortColumn switch
         {
             "SalesInvoiceCode" => sortAscending ? query.OrderBy(si => si.SalesInvoiceCode) : query.OrderByDescending(si => si.SalesInvoiceCode),
-            "SalesInvoiceDate" => sortAscending ? query.OrderBy(si => si.SalesInvoiceDate) : query.OrderByDescending(si => si.SalesInvoiceDate),
+            "SalesInvoiceDate" => sortAscending ? query.OrderByDescending(si => si.SalesInvoiceDate) : query.OrderBy(si => si.SalesInvoiceDate),
             "CustomerName" => sortAscending ? query.OrderBy(si => si.Customer.CustomerName) : query.OrderByDescending(si => si.Customer.CustomerName),
             "OrderType" => sortAscending ? query.OrderBy(si => si.OrderType) : query.OrderByDescending(si => si.OrderType),
             "SubDistributor" => sortAscending ? query.OrderBy(si => si.SubDistributor.SubdName) : query.OrderByDescending(si => si.SubDistributor.SubdName),
-            "CreatedDate" => sortAscending ? query.OrderBy(si => si.CreatedDate) : query.OrderByDescending(si => si.CreatedDate),
+            "CreatedDate" => sortAscending ? query.OrderByDescending(si => si.CreatedDate) : query.OrderBy(si => si.CreatedDate),
             _ => query.OrderByDescending(si => si.SalesInvoiceDate)
         };
 

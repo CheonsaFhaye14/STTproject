@@ -79,9 +79,9 @@
             <!-- Principal filter -->
             <div class="clt-filter-group">
                 <label class="clt-filter-label" for="principalFilter">Principal</label>
-                <select id="principalFilter" class="clt-select"
-                        @onchange="e => OnFilterChanged(principal: e.Value?.ToString())">
-                    <option value="">All</option>
+                <select id="principalFilter" class="clt-select" value="@SelectedPrincipalId"
+                        @onchange="e => OnFilterChanged(principal: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All Principals</option>
                     @foreach (var principal in Principals)
                     {
                         <option value="@principal" selected="@(SelectedPrincipalId == principal)">
@@ -363,7 +363,7 @@
 
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "CompanyItemCode";
+    private string SortColumn { get; set; } = "CreatedDate";
     private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)

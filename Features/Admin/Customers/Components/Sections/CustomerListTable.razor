@@ -34,7 +34,7 @@
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
                 <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
-                       placeholder="Name or code…" />
+                       placeholder="Search..." />
             </div>
         </div>
 
@@ -65,7 +65,7 @@
         <!-- Subdistributor filter -->
         <div class="clt-filter-group">
             <label class="clt-filter-label" for="subdistFilter">Subdistributor</label>
-            <select id="subdistFilter" class="clt-select"
+            <select id="subdistFilter" class="clt-select" value="@SelectedSubDistributorId?.ToString()"
                     @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
                 <option value="">All subdistributors</option>
                 @foreach (var sd in SubDistributors)
@@ -80,10 +80,10 @@
         <!-- Customer type filter -->
         <div class="clt-filter-group">
             <label class="clt-filter-label" for="typeFilter">Customer type</label>
-            <select id="typeFilter" class="clt-select"
+            <select id="typeFilter" class="clt-select" value="@SelectedCustomerType"
                     @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
                 <option value="">All types</option>
-                <option value=" ">Not set</option>
+                <option value="">Not set</option>
                 @foreach (var type in AllCustomerTypes)
                 {
                     <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
@@ -381,7 +381,7 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "CustomerName";
+    private string SortColumn { get; set; } = "CreatedDate";
     private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)

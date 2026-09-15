@@ -9,8 +9,7 @@ public static class SubDistributorValidations
     public static class AddSubDistributor
     {
         public static readonly SubDistributorField subdcode = new(nameof(subdcode), "Subdistributor Code", true, "Subdistributor code is required.");
-        public static readonly SubDistributorField subdname = new(nameof(subdname), "Subdistributor Name", true, "Subdistributor name is required.");
-        public static readonly SubDistributorField encoder = new(nameof(encoder), "Encoder", false, "Selected user is not a valid Encoder.");
+        public static readonly SubDistributorField subdname = new(nameof(subdname), "Subdistributor Name", true, "Subdistributor name is required.");        public static readonly SubDistributorField encoder = new(nameof(encoder), "Encoder", false, "Selected user is not a valid Encoder.");
     }
 
     public static string Label(SubDistributorField field)
@@ -19,8 +18,7 @@ public static class SubDistributorValidations
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddSubDistributorAsync(
-        SubDistributor subDistributor,
-        IAdminSubDistributorService subDistributorService
+        SubDistributor subDistributor
     )
     {
         var errors = new Dictionary<string, string>();
@@ -33,15 +31,6 @@ public static class SubDistributorValidations
         if (string.IsNullOrWhiteSpace(subDistributor.SubdName))
         {
             errors[AddSubDistributor.subdname.Key] = AddSubDistributor.subdname.ErrorMessage;
-        }
-
-        if (subDistributor.EncoderId.HasValue)
-        {
-            var isValidEncoder = await subDistributorService.IsValidEncoderAsync(subDistributor.EncoderId.Value);
-            if (!isValidEncoder)
-            {
-                errors[AddSubDistributor.encoder.Key] = AddSubDistributor.encoder.ErrorMessage;
-            }
         }
 
         return errors;

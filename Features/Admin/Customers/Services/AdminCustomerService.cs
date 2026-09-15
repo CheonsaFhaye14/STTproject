@@ -167,9 +167,10 @@ namespace STTproject.Features.Admin.Customers.Services
                     (status == "active" ? c.IsActive : !c.IsActive))
                 .Where(c => string.IsNullOrEmpty(search) ||
                     c.CustomerName.Contains(search) ||
-                    c.CustomerCode.Contains(search));
+                    c.CustomerCode.Contains(search) ||
+                    c.SubdCustCode.Contains(search) ||
+                    c.SubdCustName.Contains(search) || c.City.Contains(search) || c.Province.Contains(search));
 
-            // Flatten the join first so GroupBy doesn't have to touch the navigation property directly.
             var flat = filtered.Select(c => new
             {
                 c.CustomerId,
@@ -182,12 +183,11 @@ namespace STTproject.Features.Admin.Customers.Services
                 c.CreatedDate
             });
 
-            // One row per (CustomerCode, CustomerName, SubDistributorId) — collapses sibling Subd-mapping rows.
             var grouped = flat
                 .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
                 .Select(g => new CustomerListDto
                 {
-                    CustomerId = g.Min(c => c.CustomerId),           // anchor row id — used for View/navigation
+                    CustomerId = g.Min(c => c.CustomerId),           
                     CustomerCode = g.Key.CustomerCode,
                     CustomerName = g.Key.CustomerName,
                     SubDistributorId = g.Key.SubDistributorId,
@@ -209,10 +209,10 @@ namespace STTproject.Features.Admin.Customers.Services
                 ("CustomerType", false) => grouped.OrderByDescending(c => c.CustomerType),
                 ("SubDistributor", true) => grouped.OrderBy(c => c.SubDistributorName),
                 ("SubDistributor", false) => grouped.OrderByDescending(c => c.SubDistributorName),
-                ("CreatedDate", true) => grouped.OrderBy(c => c.CreatedDate),
-                ("CreatedDate", false) => grouped.OrderByDescending(c => c.CreatedDate),
-                ("IsActive", true) => grouped.OrderBy(c => c.IsActive),
-                ("IsActive", false) => grouped.OrderByDescending(c => c.IsActive),
+                ("CreatedDate", false) => grouped.OrderBy(c => c.CreatedDate),
+                ("CreatedDate", true) => grouped.OrderByDescending(c => c.CreatedDate),
+                ("IsActive", false) => grouped.OrderBy(c => c.IsActive),
+                ("IsActive", true) => grouped.OrderByDescending(c => c.IsActive),
                 _ => grouped.OrderBy(c => c.CustomerName)
             };
 

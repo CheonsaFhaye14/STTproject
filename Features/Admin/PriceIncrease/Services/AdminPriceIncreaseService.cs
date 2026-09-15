@@ -65,7 +65,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             string? search,
             string? status,
             string? principal,
-            string? sortColumn = "EffectivityDate",
+            string? sortColumn = "CreatedDate",
             bool sortAscending = true)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -78,7 +78,8 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 .Where(h => string.IsNullOrEmpty(search) ||
                     (h.CompanyItem.ItemCode != null && h.CompanyItem.ItemCode.Contains(search)) ||
                     (h.CompanyItem.ItemName != null && h.CompanyItem.ItemName.Contains(search)) ||
-                    (h.CompanyItem.Category != null && h.CompanyItem.Category.Contains(search)));
+                    (h.CompanyItem.Category != null && h.CompanyItem.Category.Contains(search)) ||
+                    (h.CompanyItem.SubdItems.Any(si => si.SubdItemCode.Contains(search) || si.ItemName.Contains(search))));
 
             query = status?.ToLowerInvariant() switch
             {
@@ -96,12 +97,12 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 ("CompanyItemCode", false) => query.OrderByDescending(h => h.CompanyItem.ItemCode),
                 ("CompanyItemName", true) => query.OrderBy(h => h.CompanyItem.ItemName),
                 ("CompanyItemName", false) => query.OrderByDescending(h => h.CompanyItem.ItemName),
-                ("Principal", true) => query.OrderBy(h => h.CompanyItem.Principal),
-                ("Principal", false) => query.OrderByDescending(h => h.CompanyItem.Principal),
-                ("EffectivityDate", true) => query.OrderBy(h => h.EffectivityDate),
-                ("EffectivityDate", false) => query.OrderByDescending(h => h.EffectivityDate),
-                ("CreatedDate", true) => query.OrderBy(h => h.CreatedDate),
-                ("CreatedDate", false) => query.OrderByDescending(h => h.CreatedDate),
+                ("PriceIncreaseAmount", false) => query.OrderBy(h => h.PriceIncreaseAmount),
+                ("PriceIncreaseAmount", true) => query.OrderByDescending(h => h.PriceIncreaseAmount),
+                ("EffectivityDate", false) => query.OrderBy(h => h.EffectivityDate),
+                ("EffectivityDate", true) => query.OrderByDescending(h => h.EffectivityDate),
+                ("CreatedDate", false) => query.OrderBy(h => h.CreatedDate),
+                ("CreatedDate", true) => query.OrderByDescending(h => h.CreatedDate),
                 _ => query.OrderByDescending(h => h.EffectivityDate)
             };
 

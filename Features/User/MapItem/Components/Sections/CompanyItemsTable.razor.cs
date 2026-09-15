@@ -26,12 +26,41 @@ public partial class CompanyItemsTable
     [Parameter] public EventCallback<MapCompanyItemViewRow> OnCompanyItemRowClicked { get; set; }
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
 
-    private string SearchText { get; set; } = string.Empty;
+    private string _searchText = "";
+    private System.Threading.Timer? _debounceTimer;
+
+    private string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            _searchText = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(StateHasChanged);
+            }, null, 300, Timeout.Infinite);
+        }
+    }
     private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
     private bool SortAscending { get; set; } = true;
 
-    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems => 
-        ApplySort(CompanyItems.Where(MatchesSearch).Where(MatchesFilter));
+    private List<MapCompanyItemViewRow>? _cachedFiltered;
+    private string? _cacheKey;
+
+    private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems
+    {
+        get
+        {
+            var key = $"{SearchText}|{SelectedCompanyItemsCategoryString}|{SelectedCompanyItemsFilterString}|{SortColumn}|{SortAscending}|{CompanyItems.Count}";
+            if (_cacheKey != key)
+            {
+                _cachedFiltered = ApplySort(CompanyItems.Where(MatchesSearch).Where(MatchesFilter)).ToList();
+                _cacheKey = key;
+            }
+            return _cachedFiltered!;
+        }
+    }
 
     private bool MatchesFilter(MapCompanyItemViewRow item)
     {

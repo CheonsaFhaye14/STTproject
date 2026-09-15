@@ -21,41 +21,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
         {
             _dbFactory = dbFactory;
         }
-
-        public async Task<IEnumerable<UserListDto>> GetEncoderUsersAsync()
-        {
-            await using var db = _dbFactory.CreateDbContext();
-            return await db.Users
-                .AsNoTracking()
-                .Where(u => u.Role == EncoderRole && u.IsActive)
-                .OrderBy(u => u.FullName)
-                .Select(u => new UserListDto
-                {
-                    UserId = u.UserId,
-                    UserName = u.Username,
-                    FullName = u.FullName,
-                    Email = u.Email,
-                    Role = u.Role,
-                    IsActive = u.IsActive,
-                    CreatedDate = u.CreatedDate,
-                    UpdatedDate = u.UpdatedDate,
-                })
-                .ToListAsync();
-        }
-
-        public async Task<bool> IsValidEncoderAsync(int userId)
-        {
-            await using var db = _dbFactory.CreateDbContext();
-            return await db.Users
-                .AsNoTracking()
-                .AnyAsync(u => u.UserId == userId && u.Role == EncoderRole && u.IsActive);
-        }
-
         public async Task<SubDistributorListDto?> CreateSubDistributorAsync(SubDistributorCreateDto dto)
         {
-            if (dto.EncoderId.HasValue && !await IsValidEncoderAsync(dto.EncoderId.Value))
-                throw new InvalidOperationException("Selected user is not an active Encoder.");
-
             await using var db = _dbFactory.CreateDbContext();
 
             var entity = new Data.SubDistributor
@@ -78,9 +45,6 @@ namespace STTproject.Features.Admin.Subdistributor.Services
 
         public async Task<SubDistributorUpdateDto?> UpdateSubDistributorAsync(SubDistributorUpdateDto dto)
         {
-            if (dto.EncoderId.HasValue && !await IsValidEncoderAsync(dto.EncoderId.Value))
-                throw new InvalidOperationException("Selected user is not an active Encoder.");
-
             await using var db = _dbFactory.CreateDbContext();
             var entity = await db.SubDistributors.FindAsync(dto.SubDistributorId);
             if (entity == null) return null;
@@ -125,6 +89,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     IsActive = s.IsActive,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
+                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
+                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
                 })
                 .ToListAsync();
         }
@@ -147,7 +113,10 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 .Where(s => string.IsNullOrEmpty(province) || s.Province == province)
                 .Where(s => string.IsNullOrEmpty(search) ||
                     s.SubdCode.Contains(search) ||
-                    s.SubdName.Contains(search));
+                    s.SubdName.Contains(search) ||
+                    (s.CityMunicipality != null && s.CityMunicipality.Contains(search)) ||
+                    (s.Province != null && s.Province.Contains(search)) ||
+                    (s.Encoder != null && (s.Encoder.FullName != null && s.Encoder.FullName.Contains(search) || s.Encoder.Username.Contains(search))));
 
             var total = await query.CountAsync();
 
@@ -157,12 +126,14 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 ("SubdCode", false) => query.OrderByDescending(s => s.SubdCode),
                 ("SubdName", true) => query.OrderBy(s => s.SubdName),
                 ("SubdName", false) => query.OrderByDescending(s => s.SubdName),
+                ("EncoderName", true) => query.OrderBy(s => s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null),
+                ("EncoderName", false) => query.OrderByDescending(s => s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null),
                 ("Province", true) => query.OrderBy(s => s.Province),
                 ("Province", false) => query.OrderByDescending(s => s.Province),
-                ("CreatedDate", true) => query.OrderBy(s => s.CreatedDate),
-                ("CreatedDate", false) => query.OrderByDescending(s => s.CreatedDate),
-                ("IsActive", true) => query.OrderBy(s => s.IsActive),
-                ("IsActive", false) => query.OrderByDescending(s => s.IsActive),
+                ("CreatedDate", false) => query.OrderBy(s => s.CreatedDate),
+                ("CreatedDate", true) => query.OrderByDescending(s => s.CreatedDate),
+                ("IsActive", false) => query.OrderBy(s => s.IsActive),
+                ("IsActive", true) => query.OrderByDescending(s => s.IsActive),
                 _ => query.OrderBy(s => s.SubdName)
             };
 
@@ -181,6 +152,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     IsActive = s.IsActive,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
+                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
+                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
                 })
                 .ToListAsync();
 
@@ -205,8 +178,27 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     IsActive = s.IsActive,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
+                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
+                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
                 })
                 .FirstOrDefaultAsync();
         }
+
+        public async Task<List<EncoderUserDropdownDto>> GetEncoderUsersAsync()
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.Users
+                .AsNoTracking()
+                .Where(u => u.Role == EncoderRole && u.IsActive)
+                .OrderBy(u => u.FullName)
+                .Select(u => new EncoderUserDropdownDto
+                {
+                    UserId = u.UserId,
+                    FullName = u.FullName,
+                    UserName = u.Username
+                })
+                .ToListAsync();
+        }
+
     }
 }
