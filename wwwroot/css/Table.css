@@ -249,10 +249,15 @@
     border: 1px solid var(--clt-line);
     border-radius: 10px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .clt-table-scroll {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 65vh; /* <-- this is what was missing; adjust to taste */
 }
 
 .clt-table {
@@ -273,6 +278,9 @@
         background: var(--clt-canvas);
         white-space: nowrap;
         user-select: none;
+        position: sticky;
+        top: 0;
+        z-index: 1;
     }
 
         .clt-table thead th:hover {

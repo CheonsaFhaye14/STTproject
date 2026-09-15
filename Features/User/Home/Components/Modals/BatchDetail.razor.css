@@ -122,7 +122,7 @@
     color: #2A1F0F;
     border: none;
     padding: 10px 20px;
-    border-radius: 999px;
+    border-radius: 20px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -146,11 +146,11 @@
 
 /* CLOSE BUTTON */
 .btn-secondary {
-    background: #FFFFFF;
-    color: #5F5E5A;
+    background: #B08D57;
+    color: #F7F6F4;
     border: 1px solid #E5E3DD;
     padding: 10px 22px;
-    border-radius: 999px;
+    border-radius: 20px;
     font-weight: 600;
     cursor: pointer;
     transition: 0.2s ease;
