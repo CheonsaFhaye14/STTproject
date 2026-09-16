@@ -16,6 +16,8 @@ public sealed class PreparedInvoice
 
 public sealed class ImportSalesInvoiceResult
 {
+    public List<ImportedInvoiceRow> Rows { get; } = new();
+    public int TotalRowsProcessed { get; set; }
     public List<string> OriginalHeaders { get; set; } = new();
     public List<PreparedInvoice> PreparedInvoices { get; } = new();
     public int ImportedInvoiceCount { get; set; }

@@ -1,5 +1,4 @@
-@using STTproject.Features.Admin.Subdistributor.Components.Pages
-@using STTproject.Features.User.SalesInvoice.Services
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 
 @if (Show)
 {
@@ -35,14 +34,18 @@
                     var hasSuccessCards = invoiceCards.Any(c => !c.HasErrors);
                     var hasErrorCards = invoiceCards.Any(c => c.HasErrors);
                     var filteredCards = GetFilteredCards(invoiceCards);
+                    // Split once instead of calling .Where() twice per render in the markup
+                    var successCards = filteredCards.Where(c => !c.HasErrors).ToList();
+                    var errorCards = filteredCards.Where(c => c.HasErrors).ToList();
                     var selectedCount = invoiceCards.Count(c => c.Prepared?.Selected == true && !c.HasErrors && c.Prepared?.IsSaved != true);
                     var selectableCount = invoiceCards.Count(c => c.Prepared != null && !c.HasErrors && c.Prepared.IsSaved != true);
+                    var totalRows = ImportResult.TotalRowsProcessed;
 
                     @* ── Summary stat bar ── *@
                     <div class="stat-bar">
                         <div class="sc">
                             <div class="sc-label">Total rows</div>
-                            <div class="sc-val">@(ImportResult.PreparedInvoices?.Sum(p => p.Items?.Count ?? 0) ?? 0)</div>
+                            <div class="sc-val">@totalRows</div>
                         </div>
                         <div class="sc">
                             <div class="sc-label">Invoices</div>
@@ -168,181 +171,218 @@
 
                         @* ── Invoice cards ── *@
                         <div class="import-results">
-                            @foreach (var card in filteredCards.Where(c => !c.HasErrors))
+                            @if (cardFilter != InvoiceCardFilter.ErrorOnly)
                             {
-                                var isExpanded = expandedCards.Contains(card.InvoiceNumber);
-                                <div class="icard">
-                                    <div class="ich ich-ok @(isExpanded ? "open" : "")"
-                                         @onclick="() => ToggleExpand(card.InvoiceNumber)">
-                                        <div class="ich-left">
-                                            <div class="iicon iicon-ok">
-                                                <i class="ti ti-file-check" aria-hidden="true"></i>
+                                <Virtualize Items="successCards" Context="card" ItemSize="72">
+                                    @{
+                                        var isExpanded = expandedCards.Contains(card.InvoiceNumber);
+                                    }
+                                    <div class="icard">
+                                        <div class="ich ich-ok @(isExpanded ? "open" : "")"
+                                             @onclick="() => ToggleExpand(card.InvoiceNumber)">
+                                            <div class="ich-left">
+                                                <div class="iicon iicon-ok">
+                                                    <i class="ti ti-file-check" aria-hidden="true"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="inv-num inv-ok">@card.InvoiceNumber</div>
+                                                    @if (card.Prepared?.Invoice != null)
+                                                    {
+                                                        <div class="inv-sub inv-sub-ok">
+                                                            <span>@card.Prepared.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
+                                                            <span class="sep">·</span>
+                                                            <span>@card.Prepared.Invoice.CustomerName</span>
+                                                            <span class="sep">·</span>
+                                                            <span>@(card.Prepared.Items?.Count ?? 0) item(s)</span>
+                                                        </div>
+                                                    }
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div class="inv-num inv-ok">@card.InvoiceNumber</div>
-                                                @if (card.Prepared?.Invoice != null)
+                                            <div class="ich-right">
+                                                @if (card.Prepared?.IsSaved == true)
                                                 {
-                                                    <div class="inv-sub inv-sub-ok">
-                                                        <span>@card.Prepared.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
-                                                        <span class="sep">·</span>
-                                                        <span>@card.Prepared.Invoice.CustomerName</span>
-                                                        <span class="sep">·</span>
-                                                        <span>₱@((card.Prepared.Items ?? Enumerable.Empty<InputItemModel>()).Sum(i => i.Amount).ToString("N2"))</span>
+                                                    <span class="badge badge-saved">
+                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                        Saved
+                                                    </span>
+                                                }
+                                                else if (card.Prepared != null)
+                                                {
+                                                    <span class="badge badge-ready">
+                                                        <i class="ti ti-check" aria-hidden="true"></i>
+                                                        Ready
+                                                    </span>
+                                                    <div class="chk" @onclick:stopPropagation="true">
+                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.InvoiceNumber" />
+                                                        <label for="chk-@card.InvoiceNumber">Select</label>
+                                                    </div>
+                                                }
+                                                <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                            </div>
+                                        </div>
+
+                                        @if (isExpanded && card.Prepared != null)
+                                        {
+                                            <div class="icb">
+                                                @if (card.Prepared.Invoice != null)
+                                                {
+                                                    <div class="cust-meta">
+                                                        <div>
+                                                            <span class="cust-meta-label">Customer</span>
+                                                            <strong>@card.Prepared.Invoice.CustomerCode – @card.Prepared.Invoice.CustomerName</strong>
+                                                        </div>
+                                                        @if(!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
+                                                        {
+                                                            <div>
+                                                                <span class="cust-meta-label">Customer Type</span>
+                                                                <strong>@card.Prepared.Invoice.CustomerType</strong>
+                                                            </div>
+                                                        }
+                                                        @if(!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
+                                                        {
+                                                            <div>
+                                                                <span class="cust-meta-label">Address</span>
+                                                                <strong>@card.Prepared.Invoice.CustomerAddress</strong>
+                                                            </div>
+                                                        }
+                                                        <div>
+                                                            <span class="cust-meta-label">Order type</span>
+                                                            <strong>@card.Prepared.Invoice.OrderType</strong>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                @if (card.Prepared.Items != null && card.Prepared.Items.Count > 0)
+                                                {
+                                                    <div class="itbl-wrap">
+                                                        <table class="itbl">
+                                                            <thead>
+                                                                <tr> 
+                                                                    <th>Row</th>
+                                                                    <th>SKU</th>
+                                                                    <th>Item Name</th>
+                                                                    <th class="r">UOM</th>
+                                                                    <th class="r">Qty</th>
+                                                                    <th class="r">Amount</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var it in card.Prepared.Items)
+                                                                {
+                                                                    <tr>
+                                                                        <td class="mono">@it.LineItemId</td>
+                                                                        <td class="mono">@it.ItemCode</td>
+                                                                        <td>@it.ItemName</td>
+                                                                        <td class="r">@it.UomName</td>
+                                                                        <td class="r">@it.Quantity</td>
+                                                                        <td class="r">₱@it.Amount.ToString("N2")</td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                            <tfoot>
+                                                                <tr class="itbl-total-row">
+                                                                    <td colspan="4" class="r"><strong>Total</strong></td>
+                                                                    <td class="r"><strong>₱@card.Prepared.Items.Sum(i => i.Amount).ToString("N2")</strong></td>
+                                                                </tr>
+                                                            </tfoot>
+                                                        </table>
                                                     </div>
                                                 }
                                             </div>
-                                        </div>
-                                        <div class="ich-right">
-                                            @if (card.Prepared?.IsSaved == true)
-                                            {
-                                                <span class="badge badge-saved">
-                                                    <i class="ti ti-circle-check" aria-hidden="true"></i>
-                                                    Saved
-                                                </span>
-                                            }
-                                            else if (card.Prepared != null)
-                                            {
-                                                <span class="badge badge-ready">
-                                                    <i class="ti ti-check" aria-hidden="true"></i>
-                                                    Ready
-                                                </span>
-                                                <div class="chk" @onclick:stopPropagation="true">
-                                                    <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.InvoiceNumber" />
-                                                    <label for="chk-@card.InvoiceNumber">Select</label>
-                                                </div>
-                                            }
-                                            <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
-                                        </div>
+                                        }
                                     </div>
-
-                                    @if (isExpanded && card.Prepared != null)
-                                    {
-                                        <div class="icb">
-                                            @if (card.Prepared.Invoice != null)
-                                            {
-                                                <div class="cust-meta">
-                                                    <div>
-                                                        <span class="cust-meta-label">Customer</span>
-                                                        <strong>@card.Prepared.Invoice.CustomerCode – @card.Prepared.Invoice.CustomerName</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span class="cust-meta-label">Type</span>
-                                                        <strong>@card.Prepared.Invoice.CustomerType</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span class="cust-meta-label">Address</span>
-                                                        <strong>@card.Prepared.Invoice.CustomerAddress</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span class="cust-meta-label">Order type</span>
-                                                        <strong>@card.Prepared.Invoice.OrderType</strong>
-                                                    </div>
-                                                </div>
-                                            }
-                                            @if (card.Prepared.Items != null && card.Prepared.Items.Count > 0)
-                                            {
-                                                <div class="itbl-wrap">
-                                                    <table class="itbl">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>SKU</th>
-                                                                <th>UOM</th>
-                                                                <th class="r">Qty</th>
-                                                                <th class="r">Amount</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @foreach (var it in card.Prepared.Items)
-                                                            {
-                                                                <tr>
-                                                                    <td class="mono">@it.ItemCode</td>
-                                                                    <td>@it.UomName</td>
-                                                                    <td class="r">@it.Quantity</td>
-                                                                    <td class="r">₱@it.Amount.ToString("N2")</td>
-                                                                </tr>
-                                                            }
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
+                                </Virtualize>
                             }
 
-                            @foreach (var card in filteredCards.Where(c => c.HasErrors))
+                            @if (cardFilter != InvoiceCardFilter.SuccessOnly)
                             {
-                                var visibleIssues = ((card.Issues ?? new List<ImportSalesInvoiceIssue>())
-                                    .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()));
-
-                                if (!string.IsNullOrWhiteSpace(selectedErrorFilter))
+                                @if (!string.IsNullOrWhiteSpace(selectedErrorFilter) && UsesItemGrouping(selectedErrorFilter))
                                 {
-                                    visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
-                                }
-
-                                var grouped = visibleIssues
-                                    .GroupBy(i => i.Message?.Trim())
-                                    .Select(g => new
-                                    {
-                                        Message = g.Key,
-                                        Rows = g.Select(i => i.RowNumber)
-                                                .Where(r => r > 0)
-                                                .Distinct()
-                                                .OrderBy(r => r)
-                                                .ToList()
-                                    })
-                                    .Where(g => !string.IsNullOrWhiteSpace(g.Message))
-                                    .OrderBy(g => g.Message)
-                                    .ToList();
-
-                                <div class="icard">
-                                    <div class="ich ich-er">
-                                        <div class="ich-left">
-                                            <div class="iicon iicon-er">
-                                                <i class="ti ti-file-alert" aria-hidden="true"></i>
-                                            </div>
-                                            <div>
-                                                <div class="inv-num inv-er">@card.InvoiceNumber</div>
-                                                @if (card.Prepared?.Invoice != null)
-                                                {
-                                                    <div class="inv-sub inv-sub-er">
-                                                        <span>@card.Prepared.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
-                                                        <span class="sep">·</span>
-                                                        <span>@card.Prepared.Invoice.CustomerName</span>
+                                    var itemGroups = GetItemGroupedCards(selectedErrorFilter);
+                                    <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
+                                        <div class="icard">
+                                            <div class="ich ich-er">
+                                                <div class="ich-left">
+                                                    <div class="iicon iicon-er">
+                                                        <i class="ti ti-file-alert" aria-hidden="true"></i>
                                                     </div>
-                                                }
+                                                    <div>
+                                                        <div class="inv-num inv-er">@grp.Title</div>
+                                                        @if (!string.IsNullOrWhiteSpace(grp.Subtitle))
+                                                        {
+                                                            <div class="inv-sub inv-sub-er">@grp.Subtitle</div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <span class="badge badge-err">
+                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                    @(grp.Occurrences.Count == 1 ? "1 row" : $"{grp.Occurrences.Count} rows")
+                                                </span>
                                             </div>
-                                        </div>
-                                        <span class="badge badge-err">
-                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                            @GetErrorBadgeText(card)
-                                        </span>
-                                    </div>
-
-                                    @if (grouped.Any())
-                                    {
-                                        <div class="icb-err-rows">
-                                            @foreach (var grp in grouped)
-                                            {
+                                            <div class="icb-err-rows">
                                                 <div class="err-msg-card">
                                                     <div class="err-msg-hdr">
                                                         <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
                                                         <div>
                                                             <div class="err-msg-text">@grp.Message</div>
-                                                            @if (grp.Rows.Count > 0)
-                                                            {
-                                                                <div class="err-rows-pill">
-                                                                    <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                    Row@(grp.Rows.Count > 1 ? "s" : ""): @string.Join(", ", grp.Rows)
-                                                                </div>
-                                                            }
+                                                            <div class="err-rows-pill">
+                                                                <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                @FormatRowList(grp.Occurrences)
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </Virtualize>
+                                }
+                                else
+                                {
+                                    <Virtualize Items="errorCards" Context="card" ItemSize="72">
+                                        @{
+                                            var grouped = GetGroupedIssues(card, selectedErrorFilter);
+                                        }
+                                        <div class="icard">
+                                            <div class="ich ich-er">
+                                                <div class="ich-left">
+                                                    <div class="iicon iicon-er">
+                                                        <i class="ti ti-file-alert" aria-hidden="true"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="inv-num inv-er">@card.InvoiceNumber</div>
+                                                    </div>
+                                                </div>
+                                                <span class="badge badge-err">
+                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                    @GetErrorBadgeText(card)
+                                                </span>
+                                            </div>
+
+                                            @if (grouped.Any())
+                                            {
+                                                <div class="icb-err-rows">
+                                                    @foreach (var grp in grouped)
+                                                    {
+                                                        <div class="err-msg-card">
+                                                            <div class="err-msg-hdr">
+                                                                <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                                <div>
+                                                                    <div class="err-msg-text">@grp.Message</div>
+                                                                    @if (grp.Rows.Count > 0)
+                                                                    {
+                                                                    <div class="err-rows-pill">
+                                                                        <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                        @FormatRowList(grp.Rows)
+                                                                    </div>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
                                             }
                                         </div>
-                                    }
-                                </div>
+                                    </Virtualize>
+                                }
                             }
                         </div>
                     }
@@ -384,6 +424,15 @@
     private string? selectedErrorFilter;
     private HashSet<string> expandedCards = new();
 
+    // ── Caches ────────────────────────────────────────────────────────────
+    private List<InvoiceCardViewModel>? _cachedCards;
+    private ImportSalesInvoiceResult? _cachedForResult;
+
+    private List<(string Message, int Count)>? _cachedErrorMessages;
+
+    private readonly Dictionary<string, List<GroupedIssue>> _groupedIssuesCache = new();
+    private string? _groupedIssuesCacheFilter;
+
     private bool CanCommit => ImportResult != null && ImportResult.PreparedInvoices != null &&
         ImportResult.PreparedInvoices.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
 
@@ -406,10 +455,35 @@
         selectedErrorFilter = null;
     }
 
+    private static string BuildCardKey(string invoiceNumber, PreparedInvoice? prepared)
+    {
+        if (prepared?.Invoice != null)
+        {
+            return string.Join("|",
+                (invoiceNumber ?? string.Empty).Trim().ToUpperInvariant(),
+                (prepared.Invoice.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
+                (prepared.Invoice.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
+                prepared.Invoice.InvoiceDate.ToString("yyyy-MM-dd"));
+        }
+
+        return (invoiceNumber ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
     private List<InvoiceCardViewModel> GetInvoiceCards()
     {
+        if (_cachedForResult == ImportResult && _cachedCards != null)
+            return _cachedCards;
+
         if (ImportResult == null)
-            return new List<InvoiceCardViewModel>();
+        {
+            _cachedCards = new List<InvoiceCardViewModel>();
+            _cachedForResult = ImportResult;
+            _cachedErrorMessages = null;
+            _groupedIssuesCache.Clear();
+            _cachedItemGroups = null;
+            _cachedItemGroupsFilter = null;
+            return _cachedCards;
+        }
 
         var cards = new List<InvoiceCardViewModel>();
 
@@ -426,9 +500,10 @@
             cards.Add(new InvoiceCardViewModel(prepared.InvoiceNumber, prepared, matchingIssues));
         }
 
-        // Merge cards with the same invoice number into one
+        // Merge cards using the SAME composite key the backend grouped by —
+        // InvoiceNumber alone can collide across different customers/dates/order types.
         var mergedCards = cards
-            .GroupBy(c => c.InvoiceNumber?.Trim(), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(c => BuildCardKey(c.InvoiceNumber, c.Prepared), StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
                 var first = g.First();
@@ -438,12 +513,18 @@
                     .OrderBy(i => i.RowNumber)
                     .ThenBy(i => i.Message)
                     .ToList();
-                return new InvoiceCardViewModel(g.Key ?? string.Empty, first.Prepared, allIssues);
+                return new InvoiceCardViewModel(first.InvoiceNumber, first.Prepared, allIssues);
             })
             .ToList();
 
+        var coveredIssueKeys = new HashSet<(int RowNumber, string InvoiceNumber, string? ColumnName, string? Message)>(
+            mergedCards.SelectMany(c => c.Issues)
+                .Select(i => (i.RowNumber, i.InvoiceNumber ?? string.Empty, i.ColumnName, (string?)i.Message)));
+
         var orphanIssues = (ImportResult.Issues ?? new List<ImportSalesInvoiceIssue>())
             .Where(issue => issue.RowNumber > 0)
+            .Where(issue => !coveredIssueKeys.Contains(
+                (issue.RowNumber, issue.InvoiceNumber ?? string.Empty, issue.ColumnName, (string?)issue.Message)))
             .GroupBy(issue => issue.RowNumber)
             .ToList();
 
@@ -465,11 +546,42 @@
             mergedCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
         }
 
-        return mergedCards
+        var finalCards = new List<InvoiceCardViewModel>();
+        finalCards.AddRange(mergedCards.Where(c => !c.HasErrors));
+
+        var mergedErrorCards = mergedCards
+            .Where(c => c.HasErrors)
+            .GroupBy(c => (c.InvoiceNumber ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var allIssues = g.SelectMany(c => c.Issues)
+                    .GroupBy(i => new { i.RowNumber, i.ColumnName, i.Message })
+                    .Select(ig => ig.First())
+                    .OrderBy(i => i.RowNumber)
+                    .ThenBy(i => i.Message)
+                    .ToList();
+
+                var preparedWithInvoice = g.Select(c => c.Prepared).FirstOrDefault(p => p?.Invoice != null);
+                var prepared = preparedWithInvoice ?? g.First().Prepared;
+
+                return new InvoiceCardViewModel(g.Key, prepared, allIssues);
+            })
+            .ToList();
+
+        finalCards.AddRange(mergedErrorCards);
+
+        _cachedCards = finalCards
             .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
             .ThenBy(card => card.InvoiceNumber)
             .ToList();
+        _cachedForResult = ImportResult;
+
+        _cachedErrorMessages = null;
+        _groupedIssuesCache.Clear();
+
+        return _cachedCards;
     }
+    
     private List<ImportSalesInvoiceIssue> GetGlobalIssues()
     {
         if (ImportResult == null)
@@ -502,8 +614,11 @@
         return ImportResult.PreparedInvoices.Count(p => p.Selected && !p.IsSaved && (p.Issues == null || p.Issues.Count == 0));
     }
 
-    private IEnumerable<(string Message, int Count)> GetDistinctErrorMessages()
+    private List<(string Message, int Count)> GetDistinctErrorMessages()
     {
+        if (_cachedErrorMessages != null)
+            return _cachedErrorMessages;
+
         var cards = GetInvoiceCards();
         var all = new List<string>();
 
@@ -515,12 +630,14 @@
                 all.AddRange(card.Prepared.Issues.Select(i => NormalizeSalesIssueType(i)));
         }
 
-        return all.Where(m => !string.IsNullOrWhiteSpace(m))
+        _cachedErrorMessages = all.Where(m => !string.IsNullOrWhiteSpace(m))
             .GroupBy(m => m)
             .Select(g => (Message: g.Key, Count: g.Count()))
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Message)
             .ToList();
+
+        return _cachedErrorMessages;
     }
 
     private void OnErrorFilterChanged(ChangeEventArgs e)
@@ -542,12 +659,54 @@
         return false;
     }
 
+    // ── Grouped issues cache (per error card) ────────────────────────────
+    private sealed record GroupedIssue(string? Message, List<int> Rows);
+
+    private List<GroupedIssue> GetGroupedIssues(InvoiceCardViewModel card, string? filter)
+    {
+        // Filter changed since last time — clear the whole cache
+        if (_groupedIssuesCacheFilter != filter)
+        {
+            _groupedIssuesCache.Clear();
+            _groupedIssuesCacheFilter = filter;
+        }
+
+        if (_groupedIssuesCache.TryGetValue(card.InvoiceNumber, out var cached))
+            return cached;
+
+        var visibleIssues = ((card.Issues ?? new List<ImportSalesInvoiceIssue>())
+            .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()));
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
+        }
+
+        var grouped = visibleIssues
+            .GroupBy(i => i.Message?.Trim())
+            .Select(g => new GroupedIssue(
+                g.Key,
+                g.Select(i => i.RowNumber)
+                    .Where(r => r > 0)
+                    .Distinct()
+                    .OrderBy(r => r)
+                    .ToList()))
+            .Where(g => !string.IsNullOrWhiteSpace(g.Message))
+            .OrderBy(g => g.Message, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _groupedIssuesCache[card.InvoiceNumber] = grouped;
+        return grouped;
+    }
+
     private static string NormalizeMessage(string? m) => (m ?? string.Empty).Trim();
 
     private static string NormalizeMessageType(string? m)
     {
         var msg = NormalizeMessage(m).ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
+
+        if (msg.Contains("has no valid item lines to import")) return "No Valid Items"; 
 
         if (msg.Contains("duplicat") && (msg.Contains("uploaded") || msg.Contains("excel")))
         {
@@ -595,7 +754,8 @@
             if (col.Contains("quantity")) return "Quantity Error";
             if (col.Contains("amount") || col.Contains("netamount")) return "Amount Error";
             if (col.Contains("ordertype")) return "Order Type Missing";
-            if (col.Contains("customercode") || col.Contains("customer")) return "Customer Error";
+            if (col.Contains("customercode") || col.Contains("customer")) return "Customer Not Found";
+
         }
 
         return NormalizeMessageType(issue.Message);
@@ -656,5 +816,129 @@
     private async Task HandleDownloadErrorReport()
     {
         if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex UomNotFoundRegex =
+        new(@"UOM '(?<uom>.+?)' was not found for SKU '(?<sku>.+?)'(?: \((?<item>.+?)\))?\.",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex SkuNotFoundRegex =
+    new(@"SKU code '(?<sku>.+?)'", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private delegate (string Key, string Title, string? Subtitle) IssueGroupParser(ImportSalesInvoiceIssue issue);
+
+    private static readonly Dictionary<string, IssueGroupParser> ItemGroupParsers =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["UOM Not Found"] = ParseUomIssue,
+            ["SKU Not Found"] = ParseSkuIssue,
+            ["Customer Not Found"] = ParseCustomerIssue,
+        };
+
+    private static bool UsesItemGrouping(string? filter) =>
+        !string.IsNullOrWhiteSpace(filter) && ItemGroupParsers.ContainsKey(filter);
+
+    private sealed record FilterGroupCardViewModel(
+        string Key,
+        string Title,
+        string? Subtitle,
+        string Message,
+        List<int> Occurrences);
+
+    private static (string Key, string Title, string? Subtitle) ParseUomIssue(ImportSalesInvoiceIssue issue)
+    {
+        var match = UomNotFoundRegex.Match(issue.Message ?? string.Empty);
+        if (!match.Success)
+        {
+            // Fallback: behaves like before — one card per distinct message text.
+            var msg = (issue.Message ?? string.Empty).Trim();
+            return (msg, msg, null);
+        }
+
+        var sku = match.Groups["sku"].Value;
+        var uom = match.Groups["uom"].Value;
+        var itemName = match.Groups["item"].Success ? match.Groups["item"].Value : null;
+
+        var title = string.IsNullOrWhiteSpace(itemName) ? sku : $"{sku} - {itemName}";
+        var subtitle = $"Missing UOM: '{uom}'";
+        var key = $"{sku}||{uom}";
+        return (key, title, subtitle);
+    }
+    private static (string Key, string Title, string? Subtitle) ParseSkuIssue(ImportSalesInvoiceIssue issue)
+    {
+        var match = SkuNotFoundRegex.Match(issue.Message ?? string.Empty);
+        if (!match.Success)
+        {
+            var msg = (issue.Message ?? string.Empty).Trim();
+            return (msg, msg, null);
+        }
+
+        var sku = match.Groups["sku"].Value;
+        return (sku, sku, null);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex CustomerNotFoundRegex =
+        new(@"Customer '(?<customer>.+?)'", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static (string Key, string Title, string? Subtitle) ParseCustomerIssue(ImportSalesInvoiceIssue issue)
+    {
+        var match = CustomerNotFoundRegex.Match(issue.Message ?? string.Empty);
+        if (!match.Success)
+        {
+            var msg = (issue.Message ?? string.Empty).Trim();
+            return (msg, msg, null);
+        }
+
+        var customer = match.Groups["customer"].Value;
+        return (customer, customer, null);
+    }
+
+    private List<FilterGroupCardViewModel>? _cachedItemGroups;
+    private string? _cachedItemGroupsFilter;
+
+    private List<FilterGroupCardViewModel> GetItemGroupedCards(string filter)
+    {
+        if (_cachedItemGroupsFilter == filter && _cachedItemGroups != null)
+            return _cachedItemGroups;
+
+        if (!ItemGroupParsers.TryGetValue(filter, out var parser))
+        {
+            _cachedItemGroups = new List<FilterGroupCardViewModel>();
+            _cachedItemGroupsFilter = filter;
+            return _cachedItemGroups;
+        }
+
+        var allIssues = GetInvoiceCards()
+            .Where(c => c.HasErrors)
+            .SelectMany(c => (c.Issues ?? new List<ImportSalesInvoiceIssue>())
+                .Concat(c.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()))
+            .Where(issue => NormalizeSalesIssueType(issue) == filter)
+            .ToList();
+
+        _cachedItemGroups = allIssues
+            .Select(issue => new { Issue = issue, Parsed = parser(issue) })
+            .GroupBy(x => x.Parsed.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                var occurrences = g.Select(x => x.Issue.RowNumber).Where(r => r > 0).Distinct().OrderBy(r => r).ToList();
+                return new FilterGroupCardViewModel(g.Key, first.Parsed.Title, first.Parsed.Subtitle, first.Issue.Message?.Trim() ?? string.Empty, occurrences);
+            })
+            .OrderBy(c => c.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _cachedItemGroupsFilter = filter;
+        return _cachedItemGroups;
+    }
+
+    private static string FormatRowList(IReadOnlyList<int> rows)
+    {
+        if (rows == null || rows.Count == 0)
+            return string.Empty;
+
+        if (rows.Count == 1)
+            return $"Row {rows[0]}";
+
+        return $"Rows: {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
     }
 }

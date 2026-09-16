@@ -169,7 +169,9 @@ public sealed class ImportSalesInvoiceService
 			customers,
 			subdItems,
 			headerRowNumber);
-		// If no rows were parsed, return early since there is nothing to prepare or commit, and this likely indicates an issue with the template or header detection that would cause a large number of downstream errors.
+
+		result.Rows.AddRange(parsedRows);
+
 		if (parsedRows.Count == 0)
 		{
 			if (!result.HasIssues)
@@ -177,8 +179,6 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		// Group by invoice code plus customer and key header fields so rows with the same invoice code
-		// but different customer/order/date are treated as separate prepared invoices.
 		foreach (var invoiceGroup in parsedRows.GroupBy(row =>
 					 string.Join("|",
 						 (row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
@@ -297,7 +297,8 @@ public sealed class ImportSalesInvoiceService
 
 					if (row.ResolvedItemsUomId == 0 || !itemsUomById.TryGetValue(row.ResolvedItemsUomId, out var uom))
 					{
-						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'.";
+						var itemNameSuffix = !string.IsNullOrWhiteSpace(subdItem.ItemName) ? $" ({subdItem.ItemName})" : string.Empty;
+						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'{itemNameSuffix}.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName)));
 						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
 						items.Clear();
@@ -315,6 +316,7 @@ public sealed class ImportSalesInvoiceService
 
 					items.Add(new InputItemModel
 					{
+						LineItemId = row.RowNumber,
 						ItemCode = subdItem.SubdItemCode,
 						ItemName = subdItem.ItemName,
 						SubdItemId = subdItem.SubdItemId,
@@ -327,6 +329,14 @@ public sealed class ImportSalesInvoiceService
 
 				if (items.Count == 0)
 				{
+					var msg = $"Invoice '{invoiceNumber}' has no valid item lines to import.";
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+						firstRow.RowNumber,
+						invoiceNumber,
+						msg,
+						string.Empty,
+						firstRowCustomerValue));
+					result.AddError(firstRow.RowNumber, invoiceNumber, msg);
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -335,6 +345,7 @@ public sealed class ImportSalesInvoiceService
 					.GroupBy(item => new { item.SubdItemId, item.ItemsUomId, item.ItemCode, item.ItemName, item.UomName })
 					.Select(group => new InputItemModel
 					{
+						LineItemId = group.Min(item => item.LineItemId),
 						ItemCode = group.Key.ItemCode,
 						ItemName = group.Key.ItemName,
 						SubdItemId = group.Key.SubdItemId,
@@ -540,6 +551,8 @@ public sealed class ImportSalesInvoiceService
 				{
 				continue;
 			}
+			
+			result.TotalRowsProcessed++;
 
 			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 			foreach (var kvp in headers)
@@ -701,10 +714,12 @@ public sealed class ImportSalesInvoiceService
 					// Quantity sign as final fallback for order type
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
-
 					var resolvedUomId = ResolveUomId(resolvedUom);
 					if (resolvedUomId == 0 && resolvedItem is not null)
-						AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'.", "UOM");
+					{
+						var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
+						AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM");
+					}
 
 					if (!rowHasErrors)
 					{
@@ -767,7 +782,8 @@ public sealed class ImportSalesInvoiceService
 
 					if (resolvedUomId == 0 && resolvedItem is not null)
 					{
-						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'.", errorField);
+						var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
+						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
 						return;
 					}
 
