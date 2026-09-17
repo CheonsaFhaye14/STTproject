@@ -164,11 +164,11 @@
                                         Clear
                                     </button>
                                 }
+                                <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                                    <i class="ti ti-download" aria-hidden="true"></i>
+                                    Download
+                                </button>
                             </div>
-                            <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
-                                <i class="ti ti-download" aria-hidden="true"></i>
-                                Download Error Report
-                            </button>
                         }
 
                         @* ── Select all (only on valid / all tab) ── *@
@@ -189,9 +189,9 @@
                                 <div class="search-input-wrap">
                                     <i class="ti ti-search" aria-hidden="true"></i>
                                     <input type="text"
-                                        placeholder="Search…"
-                                        value="@searchTerm"
-                                        @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
+                                           placeholder="Search…"
+                                           value="@searchTerm"
+                                           @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
                                 </div>
                                 <select @onchange="OnSortChanged" value="@sortMode">
                                     <option value="@InvoiceSortMode.RowAscending">Row order</option>
@@ -260,14 +260,14 @@
                                                             <span class="cust-meta-label">Customer</span>
                                                             <strong>@card.Prepared.Invoice.CustomerCode – @card.Prepared.Invoice.CustomerName</strong>
                                                         </div>
-                                                        @if(!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
+                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
                                                         {
                                                             <div>
                                                                 <span class="cust-meta-label">Customer Type</span>
                                                                 <strong>@card.Prepared.Invoice.CustomerType</strong>
                                                             </div>
                                                         }
-                                                        @if(!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
+                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
                                                         {
                                                             <div>
                                                                 <span class="cust-meta-label">Address</span>
@@ -316,7 +316,7 @@
                                                     <div class="itbl-wrap">
                                                         <table class="itbl">
                                                             <thead>
-                                                                <tr> 
+                                                                <tr>
                                                                     <th>Row</th>
                                                                     <th>SKU</th>
                                                                     <th>Item Name</th>
@@ -359,8 +359,12 @@
                                 {
                                     var itemGroups = GetItemGroupedCards(selectedErrorFilter);
                                     <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
+                                        @{
+                                            var isExpanded = expandedCards.Contains(grp.Title);
+                                        }
                                         <div class="icard">
-                                            <div class="ich ich-er">
+                                            <div class="ich ich-er @(isExpanded ? "open" : "")"
+                                                 @onclick="() => ToggleExpand(grp.Title)">
                                                 <div class="ich-left">
                                                     <div class="iicon iicon-er">
                                                         <i class="ti ti-file-alert" aria-hidden="true"></i>
@@ -373,25 +377,31 @@
                                                         }
                                                     </div>
                                                 </div>
-                                                <span class="badge badge-err">
-                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                    @(grp.Occurrences.Count == 1 ? "1 row" : $"{grp.Occurrences.Count} rows")
-                                                </span>
+                                                <div class="ich-right">
+                                                    <span class="badge badge-err">
+                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                        @(grp.Occurrences.Count == 1 ? "1 row" : $"{grp.Occurrences.Count} rows")
+                                                    </span>
+                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                                </div>
                                             </div>
-                                            <div class="icb-err-rows">
-                                                <div class="err-msg-card">
-                                                    <div class="err-msg-hdr">
-                                                        <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
-                                                        <div>
-                                                            <div class="err-msg-text">@grp.Message</div>
-                                                            <div class="err-rows-pill">
-                                                                <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                @FormatRowList(grp.Occurrences)
+                                            @if (isExpanded)
+                                            {
+                                                <div class="icb-err-rows">
+                                                    <div class="err-msg-card">
+                                                        <div class="err-msg-hdr">
+                                                            <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                            <div>
+                                                                <div class="err-msg-text">@grp.Message</div>
+                                                                <div class="err-rows-pill">
+                                                                    <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                    @FormatRowList(grp.Occurrences)
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            }
                                         </div>
                                     </Virtualize>
                                 }
@@ -400,9 +410,11 @@
                                     <Virtualize Items="errorCards" Context="card" ItemSize="72">
                                         @{
                                             var grouped = GetGroupedIssues(card, selectedErrorFilter);
+                                            var isExpanded = expandedCards.Contains(card.InvoiceNumber);
                                         }
                                         <div class="icard">
-                                            <div class="ich ich-er">
+                                            <div class="ich ich-er @(isExpanded ? "open" : "")"
+                                                 @onclick="() => ToggleExpand(card.InvoiceNumber)">
                                                 <div class="ich-left">
                                                     <div class="iicon iicon-er">
                                                         <i class="ti ti-file-alert" aria-hidden="true"></i>
@@ -411,13 +423,16 @@
                                                         <div class="inv-num inv-er">@card.InvoiceNumber</div>
                                                     </div>
                                                 </div>
-                                                <span class="badge badge-err">
-                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                    @GetErrorBadgeText(card)
-                                                </span>
+                                                <div class="ich-right">
+                                                    <span class="badge badge-err">
+                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                        @GetErrorBadgeText(card)
+                                                    </span>
+                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                                </div>
                                             </div>
 
-                                            @if (grouped.Any())
+                                            @if (isExpanded && grouped.Any())
                                             {
                                                 <div class="icb-err-rows">
                                                     @foreach (var grp in grouped)
@@ -429,10 +444,10 @@
                                                                     <div class="err-msg-text">@grp.Message</div>
                                                                     @if (grp.Rows.Count > 0)
                                                                     {
-                                                                    <div class="err-rows-pill">
-                                                                        <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                        @FormatRowList(grp.Rows)
-                                                                    </div>
+                                                                        <div class="err-rows-pill">
+                                                                            <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                            @FormatRowList(grp.Rows)
+                                                                        </div>
                                                                     }
                                                                 </div>
                                                             </div>
@@ -641,7 +656,7 @@
 
         return _cachedCards;
     }
-    
+
     private List<ImportSalesInvoiceIssue> GetGlobalIssues()
     {
         if (ImportResult == null)
@@ -733,6 +748,7 @@
             _ => cards.OrderBy(c => c.FirstRowNumber).ToList()
         };
     }
+
 
     private int GetSelectedInvoiceCount()
     {
@@ -833,7 +849,7 @@
         var msg = NormalizeMessage(m).ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
 
-        if (msg.Contains("has no valid item lines to import")) return "No Valid Items"; 
+        if (msg.Contains("has no valid item lines to import")) return "No Valid Items";
 
         if (msg.Contains("duplicat") && (msg.Contains("uploaded") || msg.Contains("excel")))
         {
