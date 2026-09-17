@@ -24,7 +24,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: #534AB7;
+    background: #b08d57;
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -36,7 +36,7 @@
 }
 
     .clt-add-btn:hover {
-        background: #3C3489;
+        background: #b08d57;
     }
 
 .clt-add-icon {

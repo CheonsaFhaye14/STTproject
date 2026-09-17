@@ -406,6 +406,8 @@
 ::deep .inv-num {
     font-size: 13px;
     font-weight: 600;
+    user-select: text;
+    cursor: text;
 }
 
     ::deep .inv-num.inv-ok {
@@ -423,6 +425,8 @@
     align-items: center;
     gap: 4px;
     flex-wrap: wrap;
+    user-select: text;
+    cursor: text;
 }
 
     ::deep .inv-sub.inv-sub-ok {

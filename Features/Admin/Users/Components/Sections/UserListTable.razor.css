@@ -141,17 +141,17 @@
 }
 
     .clt-radio-option:hover {
-        background: #f5f3ff;
+        background: #f3e8d6;
     }
 
     .clt-radio-option.selected {
-        background: #EEEDFE;
-        color: #3C3489;
+        background: #f3e8d6;
+        color: #000000;
         font-weight: 500;
     }
 
     .clt-radio-option input[type="radio"] {
-        accent-color: #534AB7;
+        accent-color: #b08d57;
         margin: 0;
         width: 14px;
         height: 14px;
@@ -334,8 +334,8 @@
 /* Type / role badge */
 .clt-type-badge {
     display: inline-block;
-    background: #EEEDFE;
-    color: #3C3489;
+    background: #f3e8d6;
+    color: #000000;
     border-radius: 99px;
     font-size: 11px;
     font-weight: 500;
@@ -391,13 +391,12 @@
     }
 
 .clt-btn-deactivate {
-    background: transparent;
-    border: 1px solid #C9B8E8;
-    color: #534AB7;
+    background: #b08d57;
+    color: #000000;
 }
 
     .clt-btn-deactivate:hover {
-        background: #f5f3ff;
+        background: #d8cbb8;
     }
 
 .clt-btn-activate {

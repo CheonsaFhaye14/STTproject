@@ -1,4 +1,4 @@
-﻿/* ── Page shell ────────────────────────────────────────────── */
+﻿/* ── Page shell  */
 .clt-page {
     padding: 1.5rem;
     font-family: inherit;
@@ -9,7 +9,7 @@
     overflow: hidden;
 }
 
-/* ── Layout: sidebar + main ────────────────────────────────── */
+/* ── Layout: sidebar + main */
 .clt-layout {
     display: grid;
     grid-template-columns: 220px 1fr;
@@ -19,7 +19,7 @@
     min-height: 0;
 }
 
-/* ── Sidebar ───────────────────────────────────────────────── */
+/* ── Sidebar  */
 .clt-sidebar {
     background: #fff;
     border: 1px solid #E5E3DD;
@@ -210,7 +210,7 @@
         background: #F7F6F4;
     }
 
-/* ── Main table area ───────────────────────────────────────── */
+/* ── Main table area */
 .clt-main {
     display: flex;
     font-weight: 300;
