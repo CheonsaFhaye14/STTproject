@@ -19,6 +19,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerName"] = new[] { "lst_cust2" };
 				map["NetAmount"] = new[] { "lst_net2" };
 				map["SkuCode"] = new[] { "lst_head1" };
+				map["ItemName"] = new[] { "lst_desc" };
 				map["SalesManName"] = new[] { "lst_agent2" };
 				map["CaseQuantity"] = new[] { "lst_qnty1" };
 				map["PieceQuantity"] = new[] { "lst_qnty2" };
@@ -105,6 +106,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["InvoiceDate"] = new[] { "invoice_date" };
 				map["CustomerName"] = new[] { "customer_name" };
 				map["SkuCode"] = new[] { "item_code" };
+				map["ItemName"] = new[] { "item_description" };
 				map["Quantity"] = new[] { "qty" };
 				map["UnitofMeasure"] = new[] { "unit" };
 				map["SalesManName"] = new[] { "salesrep" };
@@ -136,6 +138,14 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["PieceQuantity"] = new[] { "item_qty_piece" };
 				return map;
 			}
+			if (isGranvilleLaUnion(subDistributor))
+			{
+				map["InvoiceCode"] = new[] { "invoice" };
+				map["InvoiceDate"] = new[] { "invoicedate" };
+				map["CustomerName"] = new[] { "customername" };
+				map["OrderType"] = new[] { "type" };
+			}
+			
 			if (isNEMarketing(subDistributor))
 			{
 				map["InvoiceCode"] = new[] { "invoice no" };
@@ -213,6 +223,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["PieceQuantity"] = new[] { "pcs" };
 				map["CaseQuantity"] = new[] { "case" };
 				map["NetAmount"] = new[] { "amount" };
+				map["FreeItems"] = new[] { "unit price" };
 				return map;
 			}
 			if (isZCFirstStepConsumerMarketing(subDistributor))
@@ -379,6 +390,11 @@ namespace STTproject.Features.User.SalesInvoice.Services
 		{
 			return string.Equals(subDistributor.SubdCode?.Trim(), "02NCL09", StringComparison.OrdinalIgnoreCase)
 				|| string.Equals(subDistributor.SubdName?.Trim(), "GRANVILLE SUPPLY CHAIN MGMT-DAGUPAN", StringComparison.OrdinalIgnoreCase);
+		}
+		private static bool isGranvilleLaUnion(SubDistributor subDistributor)
+		{
+			return string.Equals(subDistributor.SubdCode?.Trim(), "02NCL02-1", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(subDistributor.SubdName?.Trim(), "GRANVILLE SUPPLY CHAIN MGMT- LA UNION", StringComparison.OrdinalIgnoreCase);
 		}
 		private static bool isNEMarketing(SubDistributor subDistributor)
 		{

@@ -75,7 +75,8 @@ public sealed record ImportedInvoiceRow(
     string ResolvedCustomerName,
     int ResolvedSubdItemId,
     string ResolvedSubdItemCode,
-    int ResolvedItemsUomId);
+    int ResolvedItemsUomId,
+    bool IsFreeItem);
 
 public sealed record ImportSalesInvoiceIssue(
     int RowNumber,

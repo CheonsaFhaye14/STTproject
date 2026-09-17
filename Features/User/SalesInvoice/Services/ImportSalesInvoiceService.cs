@@ -267,7 +267,7 @@ public sealed class ImportSalesInvoiceService
 					}.Where(s => !string.IsNullOrWhiteSpace(s)))
 				};
 
-				var items = new List<InputItemModel>();
+				var items = new List<(InputItemModel Item, bool IsFreeItem)>();
 				var unitPriceCache = new Dictionary<int, decimal>();
 				var reportedMissingSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				async Task<decimal> GetUnitPriceAsync(int itemsUomId, DateOnly invoiceDate)
@@ -307,14 +307,15 @@ public sealed class ImportSalesInvoiceService
 
 					if (row.Quantity <= 0)
 					{
-							continue;
-						
+						continue;
 					}
 
-					var unitPrice = await GetUnitPriceAsync(uom.ItemsUomId, firstRow.InvoiceDate);
+					var unitPrice = row.IsFreeItem
+						? 0m
+						: await GetUnitPriceAsync(uom.ItemsUomId, firstRow.InvoiceDate);
 					var absoluteQuantity = Math.Abs(row.Quantity);
 
-					items.Add(new InputItemModel
+					items.Add((new InputItemModel
 					{
 						LineItemId = row.RowNumber,
 						ItemCode = subdItem.SubdItemCode,
@@ -324,7 +325,7 @@ public sealed class ImportSalesInvoiceService
 						UomName = uom.UomName,
 						Quantity = absoluteQuantity,
 						Amount = unitPrice * absoluteQuantity
-					});
+					}, row.IsFreeItem));
 				}
 
 				if (items.Count == 0)
@@ -342,17 +343,25 @@ public sealed class ImportSalesInvoiceService
 				}
 
 				var aggregatedItems = items
-					.GroupBy(item => new { item.SubdItemId, item.ItemsUomId, item.ItemCode, item.ItemName, item.UomName })
+					.GroupBy(entry => new
+					{
+						entry.Item.SubdItemId,
+						entry.Item.ItemsUomId,
+						entry.Item.ItemCode,
+						entry.Item.ItemName,
+						entry.Item.UomName,
+						entry.IsFreeItem
+					})
 					.Select(group => new InputItemModel
 					{
-						LineItemId = group.Min(item => item.LineItemId),
+						LineItemId = group.Min(entry => entry.Item.LineItemId),
 						ItemCode = group.Key.ItemCode,
-						ItemName = group.Key.ItemName,
+						ItemName = group.Key.IsFreeItem ? $"{group.Key.ItemName} (Free)" : group.Key.ItemName,
 						SubdItemId = group.Key.SubdItemId,
 						ItemsUomId = group.Key.ItemsUomId,
 						UomName = group.Key.UomName,
-						Quantity = group.Sum(item => item.Quantity),
-						Amount = group.Sum(item => item.Amount)
+						Quantity = group.Sum(entry => entry.Item.Quantity),
+						Amount = group.Sum(entry => entry.Item.Amount)
 					})
 					.ToList();
 
@@ -514,6 +523,7 @@ public sealed class ImportSalesInvoiceService
 		var hasOrderTypeColumn = headers.TryGetValue("OrderType", out var orderTypeColumn);
 		var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
 
+
 		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
@@ -532,6 +542,9 @@ public sealed class ImportSalesInvoiceService
 			var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
 			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
+			var freeitemsCell = headers.TryGetValue("FreeItems", out var freeItemsCol) ? row.Cell(freeItemsCol) : null;
+			var freeItemsRaw = freeitemsCell != null ? GetString(row, freeItemsCol) : string.Empty;
+			var isFreeItem = InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
 
 			// ── Skip completely empty rows ───────────────────────────────────────
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
@@ -744,21 +757,18 @@ public sealed class ImportSalesInvoiceService
 							ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
 							ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 							ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-							ResolvedItemsUomId: resolvedUomId));
+							ResolvedItemsUomId: resolvedUomId,
+							IsFreeItem: isFreeItem));
 					}
 				}
 			}
 			else
 			{
-				// Split-quantity path: one ImportedInvoiceRow emitted per non-zero UOM column.
-				// TryResolveQuantity is not used here because we intentionally emit one row
-				// per UOM type rather than collapsing them into one.
 				void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
 				{
 					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
 						return;
 
-					// Use the same missing-value rule as the validator (handles "-", "–", "n/a")
 					var rawValue = row.Cell(columnIndex).GetString().Trim();
 					if (InvoiceDataValidator.IsMissingUomValue(rawValue))
 						return;
@@ -808,7 +818,8 @@ public sealed class ImportSalesInvoiceService
 						ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
 						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-						ResolvedItemsUomId: resolvedUomId));
+						ResolvedItemsUomId: resolvedUomId,
+						IsFreeItem: isFreeItem));
 				}
 
 				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
@@ -1037,7 +1048,6 @@ public sealed class ImportSalesInvoiceService
 		return int.TryParse(cell.GetString().Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
 	}
 
-
 	private static bool TryGetDecimal(IXLCell cell, out decimal value)
 	{
 		if (cell.HasFormula)
@@ -1181,22 +1191,6 @@ public sealed class ImportSalesInvoiceService
 			" ").Trim();
 	}
 
-	private static bool IsRowLikelyEmpty(IXLRow row)
-	{
-		var usedCells = row.CellsUsed().Count();
-		var totalCells = row.LastCellUsed()?.Address.ColumnNumber ?? 1;
-		return usedCells < (totalCells * 0.3);
-	}
-
-	private static bool IsRowLikelyTitle(IXLRow row)
-	{
-		var cellCount = row.CellsUsed().Count();
-		if (cellCount > 3) return false;
-
-		var allText = string.Join(" ", row.CellsUsed().Select(c => c.GetString().Trim()));
-		return allText.Length < 15 || allText.ToLowerInvariant().Contains("report");
-	}
-
 	private static string BuildCustomerDisplayValue(string? customerCode, string? customerName)
 	{
 		var code = string.IsNullOrWhiteSpace(customerCode) ? string.Empty : customerCode.Trim();
@@ -1239,8 +1233,5 @@ public sealed class ImportSalesInvoiceService
 			return string.IsNullOrWhiteSpace(cell.CachedValue.ToString());
 		return cell.IsEmpty();
 	}
-
-
-
 
 }

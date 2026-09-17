@@ -371,6 +371,17 @@ public sealed class InvoiceDataValidator
         normalizedOrderType = string.Empty;
         return false;
     }
+
+    public static bool IsFreeItemValue(string? value)
+    {
+        value = value?.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return value == "free" || value == "tdi-claims";
+    }
+
     public static bool TryParseOrderType(string orderType, out string normalizedOrderType)
     {
         // Invoice aliases: Invoice, Order, Sales
@@ -585,6 +596,7 @@ public sealed class InvoiceDataValidator
 
         return false;
     }
+   
     public static bool TryResolveQuantity(
         int? quantity,
         string? unitOfMeasure,
@@ -714,7 +726,6 @@ public sealed class InvoiceDataValidator
         }
     }
 
-    // Helpers (can move to ImportSalesInvoiceHelpers.cs later)
     private static string Normalize(string value)
         => value?.Trim().ToLowerInvariant() ?? string.Empty;
 
@@ -804,7 +815,7 @@ public sealed class InvoiceDataValidator
 
         return cleaned;
     }
-    // After apostrophe removal, strip ALL spaces for comparison purposes
+
     private static string NormalizeCustomerLookupCompact(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;

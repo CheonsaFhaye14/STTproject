@@ -33,6 +33,15 @@
                     var globalIssues = GetGlobalIssues();
                     var hasSuccessCards = invoiceCards.Any(c => !c.HasErrors);
                     var hasErrorCards = invoiceCards.Any(c => c.HasErrors);
+                    if (cardFilter == InvoiceCardFilter.SuccessOnly && !hasSuccessCards && hasErrorCards)
+                    {
+                        cardFilter = InvoiceCardFilter.ErrorOnly;
+                    }
+                    else if (cardFilter == InvoiceCardFilter.ErrorOnly && !hasErrorCards && hasSuccessCards)
+                    {
+                        cardFilter = InvoiceCardFilter.SuccessOnly;
+                    }
+
                     var filteredCards = GetFilteredCards(invoiceCards);
                     // Split once instead of calling .Where() twice per render in the markup
                     var successCards = filteredCards.Where(c => !c.HasErrors).ToList();
@@ -101,31 +110,26 @@
                     @* ── Tabs ── *@
                     @if (invoiceCards.Any())
                     {
-                        <div class="tabs">
+                    <div class="tabs">
+                        @if (hasSuccessCards)
+                        {
                             <button type="button"
-                                    class="tab @GetTabClass(InvoiceCardFilter.All)"
-                                    @onclick='() => SetTab(InvoiceCardFilter.All)'>
-                                All (@invoiceCards.Count)
+                                    class="tab @GetTabClass(InvoiceCardFilter.SuccessOnly)"
+                                    @onclick='() => SetTab(InvoiceCardFilter.SuccessOnly)'>
+                                <span class="dot dot-ok"></span>
+                                Valid (@invoiceCards.Count(c => !c.HasErrors))
                             </button>
-                            @if (hasSuccessCards)
-                            {
-                                <button type="button"
-                                        class="tab @GetTabClass(InvoiceCardFilter.SuccessOnly)"
-                                        @onclick='() => SetTab(InvoiceCardFilter.SuccessOnly)'>
-                                    <span class="dot dot-ok"></span>
-                                    Valid (@invoiceCards.Count(c => !c.HasErrors))
-                                </button>
-                            }
-                            @if (hasErrorCards)
-                            {
-                                <button type="button"
-                                        class="tab @GetTabClass(InvoiceCardFilter.ErrorOnly)"
-                                        @onclick='() => SetTab(InvoiceCardFilter.ErrorOnly)'>
-                                    <span class="dot dot-er"></span>
-                                    Errors (@invoiceCards.Count(c => c.HasErrors))
-                                </button>
-                            }
-                        </div>
+                        }
+                        @if (hasErrorCards)
+                        {
+                            <button type="button"
+                                    class="tab @GetTabClass(InvoiceCardFilter.ErrorOnly)"
+                                    @onclick='() => SetTab(InvoiceCardFilter.ErrorOnly)'>
+                                <span class="dot dot-er"></span>
+                                Errors (@invoiceCards.Count(c => c.HasErrors))
+                            </button>
+                        }
+                    </div>
 
                         @* ── Error filter bar (only on error tab) ── *@
                         @if (cardFilter == InvoiceCardFilter.ErrorOnly)
@@ -171,6 +175,21 @@
 
                         @* ── Invoice cards ── *@
                         <div class="import-results">
+                            <div class="search-sort-bar">
+                                <div class="search-input-wrap">
+                                    <i class="ti ti-search" aria-hidden="true"></i>
+                                    <input type="text"
+                                        placeholder="Search…"
+                                        value="@searchTerm"
+                                        @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
+                                </div>
+                                <select @onchange="OnSortChanged" value="@sortMode">
+                                    <option value="@InvoiceSortMode.RowAscending">Row order</option>
+                                    <option value="@InvoiceSortMode.InvoiceNumber">Invoice number</option>
+                                    <option value="@InvoiceSortMode.InvoiceDateAscending">Invoice date (oldest first)</option>
+                                    <option value="@InvoiceSortMode.InvoiceDateDescending">Invoice date (newest first)</option>
+                                </select>
+                            </div>
                             @if (cardFilter != InvoiceCardFilter.ErrorOnly)
                             {
                                 <Virtualize Items="successCards" Context="card" ItemSize="72">
@@ -419,7 +438,7 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
 
-    private InvoiceCardFilter cardFilter = InvoiceCardFilter.All;
+    private InvoiceCardFilter cardFilter = InvoiceCardFilter.SuccessOnly;
     private bool showCommitConfirmModal;
     private string? selectedErrorFilter;
     private HashSet<string> expandedCards = new();
@@ -444,9 +463,8 @@
 
     private string GetTabClass(InvoiceCardFilter filter) => filter switch
     {
-        InvoiceCardFilter.SuccessOnly => cardFilter == filter ? "tab act-ok" : "tab",
         InvoiceCardFilter.ErrorOnly => cardFilter == filter ? "tab act-er" : "tab",
-        _ => cardFilter == filter ? "tab act-all" : "tab"
+        _ => cardFilter == filter ? "tab act-ok" : "tab"
     };
 
     private void SetTab(InvoiceCardFilter filter)
@@ -595,19 +613,82 @@
             .ThenBy(issue => issue.Message)
             .ToList();
     }
-
+    private string searchTerm = string.Empty;
+    private InvoiceSortMode sortMode = InvoiceSortMode.RowAscending;
+    private enum InvoiceSortMode { RowAscending, InvoiceNumber, InvoiceDateAscending, InvoiceDateDescending }
     private List<InvoiceCardViewModel> GetFilteredCards(List<InvoiceCardViewModel> cards)
     {
-        return cardFilter switch
-        {
-            InvoiceCardFilter.SuccessOnly => cards.Where(card => !card.HasErrors).ToList(),
-            InvoiceCardFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
+        var filtered = cardFilter == InvoiceCardFilter.ErrorOnly
+            ? (!string.IsNullOrWhiteSpace(selectedErrorFilter)
                 ? cards.Where(card => CardContainsError(card, selectedErrorFilter)).ToList()
-                : cards.Where(card => card.HasErrors).ToList(),
-            _ => cards
-        };
+                : cards.Where(card => card.HasErrors).ToList())
+            : cards.Where(card => !card.HasErrors).ToList();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim();
+            var termIsRowNumber = int.TryParse(term, out var rowNum);
+            filtered = filtered.Where(card => CardMatchesSearch(card, term, termIsRowNumber, rowNum)).ToList();
+        }
+
+        return ApplySort(filtered);
     }
 
+    private static bool CardMatchesSearch(InvoiceCardViewModel card, string term, bool termIsRowNumber, int rowNum)
+    {
+        if (card.InvoiceNumber.Contains(term, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var inv = card.Prepared?.Invoice;
+        if (inv != null)
+        {
+            if ((inv.CustomerCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (inv.CustomerName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (inv.SalesManName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                return true;
+        }
+
+        if (card.Prepared?.Items != null)
+        {
+            foreach (var item in card.Prepared.Items)
+            {
+                if ((item.ItemCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (item.ItemName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                    return true;
+                if (termIsRowNumber && item.LineItemId == rowNum)
+                    return true;
+            }
+        }
+
+        var allIssues = (card.Issues ?? new List<ImportSalesInvoiceIssue>())
+            .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>());
+
+        foreach (var issue in allIssues)
+        {
+            if (issue.Message?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                return true;
+            if (termIsRowNumber && issue.RowNumber == rowNum)
+                return true;
+        }
+
+        return false;
+    }
+
+    private List<InvoiceCardViewModel> ApplySort(List<InvoiceCardViewModel> cards)
+    {
+        return sortMode switch
+        {
+            InvoiceSortMode.InvoiceNumber => cards.OrderBy(c => c.InvoiceNumber, StringComparer.OrdinalIgnoreCase).ToList(),
+            InvoiceSortMode.InvoiceDateAscending => cards
+                .OrderBy(c => c.Prepared?.Invoice?.InvoiceDate ?? DateOnly.MaxValue)
+                .ToList(),
+            InvoiceSortMode.InvoiceDateDescending => cards
+                .OrderByDescending(c => c.Prepared?.Invoice?.InvoiceDate ?? DateOnly.MinValue)
+                .ToList(),
+            _ => cards.OrderBy(c => c.FirstRowNumber).ToList()
+        };
+    }
+    
     private int GetSelectedInvoiceCount()
     {
         if (ImportResult?.PreparedInvoices == null) return 0;
@@ -658,13 +739,14 @@
         if (card.Prepared?.Issues != null && card.Prepared.Issues.Any(i => NormalizeSalesIssueType(i) == norm)) return true;
         return false;
     }
-
-    // ── Grouped issues cache (per error card) ────────────────────────────
     private sealed record GroupedIssue(string? Message, List<int> Rows);
-
+    private void OnSortChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<InvoiceSortMode>(e.Value?.ToString(), out var mode))
+            sortMode = mode;
+    }
     private List<GroupedIssue> GetGroupedIssues(InvoiceCardViewModel card, string? filter)
     {
-        // Filter changed since last time — clear the whole cache
         if (_groupedIssuesCacheFilter != filter)
         {
             _groupedIssuesCache.Clear();
@@ -809,10 +891,15 @@
         List<ImportSalesInvoiceIssue> Issues)
     {
         public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
+
+        public int FirstRowNumber => Issues.Count > 0
+            ? Issues.Min(i => i.RowNumber)
+            : (Prepared?.Items != null && Prepared.Items.Count > 0
+                ? Prepared.Items.Min(i => i.LineItemId)
+                : int.MaxValue);
     }
 
-    private enum InvoiceCardFilter { All, SuccessOnly, ErrorOnly }
-
+    private enum InvoiceCardFilter { SuccessOnly, ErrorOnly }
     private async Task HandleDownloadErrorReport()
     {
         if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
