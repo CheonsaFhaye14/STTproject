@@ -200,7 +200,9 @@ public sealed class ImportMapItemService
 			SubDistributorCode = Normalize(row.SubDistributorCode),
 			Principal = Normalize(row.Principal),
 			CompanyItemCode = Normalize(row.CompanyItemCode),
-			CompanyItemName = Normalize(row.CompanyItemName)
+			CompanyItemName = Normalize(row.CompanyItemName),
+			SubdItemCode = Normalize(row.SubdItemCode),    
+			SubdItemName = Normalize(row.SubdItemName)      
 		}))
 		{
 			var groupRows = ResolveConversionsForGroup(rowGroup.OrderBy(row => row.RowNumber).ToList());

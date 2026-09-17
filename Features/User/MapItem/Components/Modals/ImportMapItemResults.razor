@@ -12,7 +12,8 @@
                 </div>
                 <div>
                     <div class="mh-title">Import results</div>
-                    <div class="mh-sub">Subdistributor Item mapping</div>
+                    <div class="mh-sub">Subdistributor Item mapping</div> 
+                    @*TODO: Change Subdistributor Item mapping if not multiple different subdistributors are being used. Example: "01GMA06 - STARWIDE DISTRIBUTION" if multiple change back to "Subdistributor Item mapping"*@
                 </div>
             </div>
             <button type="button" class="mh-close" @onclick="HandleClose" aria-label="Close">
@@ -122,9 +123,6 @@
                 @if (groups.Any())
                 {
                     <div class="tabs">
-                        <button type="button" class="tab @GetTabClass(GroupFilter.All)" @onclick='() => SetTab(GroupFilter.All)'>
-                            All (@groups.Count)
-                        </button>
                         @if (hasSuccessGroups)
                         {
                             <button type="button" class="tab @GetTabClass(GroupFilter.SuccessOnly)" @onclick='() => SetTab(GroupFilter.SuccessOnly)'>
@@ -155,7 +153,7 @@
                     <div class="err-filter-bar">
                         <span class="err-filter-label">
                             <i class="ti ti-filter" aria-hidden="true"></i>
-                            Rows with Errors: @GetTotalErrorCount()
+                            Filter by error
                         </span>
                         <select @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
                             <option value="">All errors</option>
@@ -175,7 +173,7 @@
                     </div>
                     <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
                         <i class="ti ti-download" aria-hidden="true"></i>
-                        Download @(!string.IsNullOrEmpty(selectedErrorFilter) ? $"'{selectedErrorFilter}'" : "all") errors
+                        Download
                     </button>
                 }
 
@@ -226,6 +224,22 @@
 
                 @* ── Item cards ── *@
                 <div class="import-results">
+                    @* TODO: Add Search and Sort 
+                        <div class="search-sort-bar">
+                            <div class="search-input-wrap">
+                                <i class="ti ti-search" aria-hidden="true"></i>
+                                <input type="text"
+                                        placeholder="Search…"
+                                        value="@searchTerm"
+                                        @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
+                            </div>
+                            <select @onchange="OnSortChanged" value="@sortMode">
+                                <option value="@ItemSortMode.RowAscending">Row order</option>
+                                <option value="@ItemSortMode.CompanyItem">Company Item Code</option> //Include both code and name?
+                                <option value="@ItemSortMode.SubdItem">Subd Item Code</option> //Include both code and name?
+                            </select>
+                        </div>
+                    *@
                     @foreach (var group in groups.Where(ShouldShowGroup).OrderBy(GetGroupSortKey))
                     {
                         var groupRows = group.Rows!;
@@ -239,6 +253,7 @@
 
                         @if (!hasErrors)
                         {
+                            @* <Virtualize Items="successCards" Context="card" ItemSize="72"> TODO: Implement virtualization so it doesn't impact performance and not laggy *@
                             <div class="icard">
                                 <div class="ich ich-ok @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
                                     <div class="ich-left">
@@ -250,9 +265,11 @@
                                             @if (first != null)
                                             {
                                                 <div class="inv-sub inv-sub-ok">
-                                                    <span>@first.SubDistributorCode - @first.SubDistributorName</span>
+                                                    <span>@first.Principal</span>
                                                     <span class="sep">·</span>
-                                                    <span>@groupRows.Count row(s)</span>
+                                                    <span>@first.SubdItemCode - @first.SubdItemName</span>
+                                                    <span class="sep">·</span>
+                                                    <span>@groupRows.Count uom @(groupRows.Count == 1 ? "" : "s")</span>
                                                 </div>
                                             }
                                         </div>
@@ -266,7 +283,7 @@
                                             </span>
                                         }
                                         else
-                                        {
+                                        {   
                                             <span class="badge badge-ready">
                                                 <i class="ti ti-check" aria-hidden="true"></i>
                                                 Ready
@@ -291,13 +308,15 @@
                                                 <strong>@first.Principal</strong>
                                             </div>
                                             <div>
-                                                <span class="cust-meta-label">Subdistributor</span>
-                                                <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
-                                            </div>
-                                            <div style="grid-column: 1 / -1;">
                                                 <span class="cust-meta-label">Subdistributor Item</span>
                                                 <strong>@first.SubdItemCode - @first.SubdItemName</strong>
                                             </div>
+                                            @* TODO: if all Subdistributor used is same dont show *@
+                                            <div style="grid-column: 1 / -1;">
+                                                <span class="cust-meta-label">Subdistributor</span>
+                                                <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
+                                            </div>
+
                                         </div>
                                         @{
                                             var groupWarnings2 = groupRows.SelectMany(r => r.Warnings).Distinct().ToList();
@@ -549,7 +568,7 @@
         }
 
         return messageTypes
-            .Select(type => (Message: type, Count: groups.Sum(g => GetGroupErrorRowCount(g, type))))
+            .Select(type => (Message: type, Count: groups.Count(g => GroupContainsError(g, type)))) // CHANGED: per-card count
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Message)
             .ToList();
@@ -619,7 +638,12 @@
     private static string BuildGroupKey(ImportMapItemRowResult row)
     {
         static string NormalizePart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
-        return string.Join("|", NormalizePart(row.SubDistributorCode), NormalizePart(row.CompanyItemCode), NormalizePart(row.CompanyItemName));
+        return string.Join("|",
+            NormalizePart(row.SubDistributorCode),
+            NormalizePart(row.CompanyItemCode),
+            NormalizePart(row.CompanyItemName),
+            NormalizePart(row.SubdItemCode),      
+            NormalizePart(row.SubdItemName));   
     }
 
     private void OpenCommitConfirmModal() => showCommitConfirmModal = true;
