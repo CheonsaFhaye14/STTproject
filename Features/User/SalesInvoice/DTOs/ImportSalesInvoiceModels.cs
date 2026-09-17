@@ -9,6 +9,9 @@ public sealed class PreparedInvoice
     public InputInvoiceModel Invoice { get; set; } = null!;
     public List<InputItemModel> Items { get; set; } = new();
     public List<ImportSalesInvoiceIssue> Issues { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
+    public List<(InputItemModel Item, bool IsFreeItem)> RawItems { get; set; } = new();
+    public List<PendingItemChoice> ItemChoices { get; set; } = new();
     public bool Selected { get; set; }
     public bool IsSaved { get; set; }
     public string? SaveErrorMessage { get; set; }
@@ -76,7 +79,9 @@ public sealed record ImportedInvoiceRow(
     int ResolvedSubdItemId,
     string ResolvedSubdItemCode,
     int ResolvedItemsUomId,
-    bool IsFreeItem);
+    bool IsFreeItem,
+    string? AmbiguousItemWarning = null,
+    List<int>? AmbiguousSubdItemIds = null);
 
 public sealed record ImportSalesInvoiceIssue(
     int RowNumber,
@@ -87,4 +92,20 @@ public sealed record ImportSalesInvoiceIssue(
     string? ColumnName = null)
 {
     public string Message => Header;
+}
+
+public sealed record ItemCandidateOption(
+    int SubdItemId,
+    string SubdItemCode,
+    string ItemName,
+    int ItemsUomId,
+    string UomName,
+    decimal UnitPrice);
+
+public sealed class PendingItemChoice
+{
+    public int LineItemId { get; init; }
+    public string SkuCode { get; init; } = string.Empty;
+    public List<ItemCandidateOption> Candidates { get; init; } = new();
+    public int SelectedSubdItemId { get; set; }
 }

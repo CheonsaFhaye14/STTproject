@@ -149,8 +149,7 @@ public sealed class ImportSalesInvoiceService
 
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
-		var subdItemByCode = BuildLookupDictionary(subdItems, item => item.SubdItemCode, Normalize);
-		var subdItemById = subdItems.ToDictionary(item => item.SubdItemId);
+		var subdItemsBySkuGroup = subdItems.ToLookup(item => Normalize(item.SubdItemCode ?? string.Empty));		var subdItemById = subdItems.ToDictionary(item => item.SubdItemId);
 		var uomLookup = uoms
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
@@ -164,7 +163,7 @@ public sealed class ImportSalesInvoiceService
 			result,
 			customerByCode,
 			customerByName,
-			subdItemByCode,
+			subdItemsBySkuGroup,
 			uomLookup,
 			customers,
 			subdItems,
@@ -270,6 +269,7 @@ public sealed class ImportSalesInvoiceService
 				var items = new List<(InputItemModel Item, bool IsFreeItem)>();
 				var unitPriceCache = new Dictionary<int, decimal>();
 				var reportedMissingSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				var reportedItemWarnings = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				async Task<decimal> GetUnitPriceAsync(int itemsUomId, DateOnly invoiceDate)
 				{
 					if (!unitPriceCache.TryGetValue(itemsUomId, out var cachedPrice))
@@ -303,6 +303,42 @@ public sealed class ImportSalesInvoiceService
 						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
 						items.Clear();
 						break;
+					}
+					
+					if (!string.IsNullOrWhiteSpace(row.AmbiguousItemWarning) && reportedItemWarnings.Add(row.AmbiguousItemWarning))
+					{
+						preparedInvoice.Warnings.Add(row.AmbiguousItemWarning);
+					}
+					if (row.AmbiguousSubdItemIds != null && row.AmbiguousSubdItemIds.Count > 1 &&
+					!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
+					{
+						var options = new List<ItemCandidateOption>();
+						foreach (var candidateId in row.AmbiguousSubdItemIds)
+						{
+							if (!subdItemById.TryGetValue(candidateId, out var candidateItem)) continue;
+
+							int candidateUomId = 0; string candidateUomName = row.UOM;
+							foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(row.UOM))
+							{
+								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m) && m is not null)
+								{ candidateUomId = m.ItemsUomId; candidateUomName = m.UomName; break; }
+							}
+							if (candidateUomId == 0) continue;
+
+							var price = row.IsFreeItem ? 0m : await GetUnitPriceAsync(candidateUomId, firstRow.InvoiceDate);
+							options.Add(new ItemCandidateOption(candidateItem.SubdItemId, candidateItem.SubdItemCode, candidateItem.ItemName, candidateUomId, candidateUomName, price));
+						}
+
+						if (options.Count > 1)
+						{
+							preparedInvoice.ItemChoices.Add(new PendingItemChoice
+							{
+								LineItemId = row.RowNumber,
+								SkuCode = row.SkuCode,
+								Candidates = options,
+								SelectedSubdItemId = row.ResolvedSubdItemId
+							});
+						}
 					}
 
 					if (row.Quantity <= 0)
@@ -341,43 +377,9 @@ public sealed class ImportSalesInvoiceService
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
-
-				var aggregatedItems = items
-					.GroupBy(entry => new
-					{
-						entry.Item.SubdItemId,
-						entry.Item.ItemsUomId,
-						entry.Item.ItemCode,
-						entry.Item.ItemName,
-						entry.Item.UomName,
-						entry.IsFreeItem
-					})
-					.Select(group => new InputItemModel
-					{
-						LineItemId = group.Min(entry => entry.Item.LineItemId),
-						ItemCode = group.Key.ItemCode,
-						ItemName = group.Key.IsFreeItem ? $"{group.Key.ItemName} (Free)" : group.Key.ItemName,
-						SubdItemId = group.Key.SubdItemId,
-						ItemsUomId = group.Key.ItemsUomId,
-						UomName = group.Key.UomName,
-						Quantity = group.Sum(entry => entry.Item.Quantity),
-						Amount = group.Sum(entry => entry.Item.Amount)
-					})
-					.ToList();
-
-				// If the invoice OrderType is Credit, ensure amounts are negative
-				if (string.Equals(preparedInvoice.Invoice?.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))
-				{
-					for (int i = 0; i < aggregatedItems.Count; i++)
-					{
-						var it = aggregatedItems[i];
-						it.Amount = -Math.Abs(it.Amount);
-						aggregatedItems[i] = it;
-					}
-				}
-
-				preparedInvoice.Items.AddRange(aggregatedItems);
-
+				preparedInvoice.RawItems = items;
+				preparedInvoice.Items = BuildAggregatedItems(items, preparedInvoice.Invoice?.OrderType);
+		
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
 					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, 0, cancellationToken));
@@ -414,6 +416,30 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		return result;
+	}
+
+	public static List<InputItemModel> BuildAggregatedItems(
+    List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
+	{
+		var aggregated = rawItems
+			.GroupBy(e => new { e.Item.SubdItemId, e.Item.ItemsUomId, e.Item.ItemCode, e.Item.ItemName, e.Item.UomName, e.IsFreeItem })
+			.Select(g => new InputItemModel
+			{
+				LineItemId = g.Min(e => e.Item.LineItemId),
+				ItemCode = g.Key.ItemCode,
+				ItemName = g.Key.IsFreeItem ? $"{g.Key.ItemName} (Free)" : g.Key.ItemName,
+				SubdItemId = g.Key.SubdItemId,
+				ItemsUomId = g.Key.ItemsUomId,
+				UomName = g.Key.UomName,
+				Quantity = g.Sum(e => e.Item.Quantity),
+				Amount = g.Sum(e => e.Item.Amount)
+			})
+			.ToList();
+
+		if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase))
+			foreach (var it in aggregated) it.Amount = -Math.Abs(it.Amount);
+
+		return aggregated;
 	}
 
 	public async Task<ImportSalesInvoiceResult> CommitPreparedInvoicesAsync(IEnumerable<PreparedInvoice> preparedInvoices, int currentUserId, CancellationToken cancellationToken = default)
@@ -484,7 +510,7 @@ public sealed class ImportSalesInvoiceService
 		ImportSalesInvoiceResult result,
 		IReadOnlyDictionary<string, Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, Data.Customer> customerByName,
-		IReadOnlyDictionary<string, SubdItem> subdItemByCode,
+		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		IEnumerable<Data.Customer> allCustomers,
 		IEnumerable<SubdItem> allSubdItems,
@@ -640,11 +666,11 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			// ── SKU / Item Resolution ────────────────────────────────────────────
-			if (!InvoiceDataValidator.TryResolveItem(
-					skuCode, itemName,
-					subdItemByCode, allSubdItems,
-					out var resolvedItem, out var itemSuggestions))
-			{
+				if (!InvoiceDataValidator.TryResolveItem(
+						skuCode, itemName,
+						subdItemsBySkuGroup, allSubdItems,
+						out var resolvedItem, out var itemSuggestions, out var itemWarning, out var ambiguousCandidates))
+				{
 				if (string.IsNullOrWhiteSpace(skuCode) && string.IsNullOrWhiteSpace(itemName))
 				{
 					AddRowError("SKU code or Item name is required.", hasItemNameColumn ? "ItemName" : "SkuCode");
@@ -758,7 +784,9 @@ public sealed class ImportSalesInvoiceService
 							ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 							ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
 							ResolvedItemsUomId: resolvedUomId,
-							IsFreeItem: isFreeItem));
+							IsFreeItem: isFreeItem,
+							AmbiguousItemWarning: itemWarning,
+							AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList()));
 					}
 				}
 			}
@@ -819,7 +847,9 @@ public sealed class ImportSalesInvoiceService
 						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
 						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
 						ResolvedItemsUomId: resolvedUomId,
-						IsFreeItem: isFreeItem));
+						IsFreeItem: isFreeItem,
+						AmbiguousItemWarning: itemWarning,
+						AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList()));
 				}
 
 				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");

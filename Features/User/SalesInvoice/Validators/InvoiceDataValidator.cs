@@ -418,19 +418,49 @@ public sealed class InvoiceDataValidator
     public static bool TryResolveItem(
         string? skuCode,
         string? itemName,
-        IReadOnlyDictionary<string, Data.SubdItem> itemBySku,
+        ILookup<string, Data.SubdItem> itemsBySku,
         IEnumerable<Data.SubdItem> allItems,
         out Data.SubdItem? item,
-        out List<Data.SubdItem>? suggestions)
+        out List<Data.SubdItem>? suggestions,
+        out string? warning,
+        out List<Data.SubdItem>? ambiguousCandidates)
     {
         suggestions = null;
+        warning = null;
+        ambiguousCandidates = null;
 
-        // STEP 1: SKU lookup (authoritative)
-        if (!string.IsNullOrWhiteSpace(skuCode) &&
-            itemBySku.TryGetValue(skuCode.Trim(), out var found))
+        if (!string.IsNullOrWhiteSpace(skuCode))
         {
-            item = found;
-            return true;
+            var skuMatches = itemsBySku[Normalize(skuCode.Trim())].ToList();
+
+            if (skuMatches.Count == 1)
+            {
+                item = skuMatches[0];
+                return true;
+            }
+
+            if (skuMatches.Count > 1)
+            {
+                var effectiveCandidates = skuMatches;
+
+                if (!string.IsNullOrWhiteSpace(itemName))
+                {
+                    var normalizedName = NormalizeItemName(itemName);
+                    var narrowed = skuMatches.Where(i => NormalizeItemName(i.ItemName) == normalizedName).ToList();
+                    if (narrowed.Count >= 1)
+                        effectiveCandidates = narrowed;
+                }
+
+                item = effectiveCandidates.OrderBy(i => i.SubdItemId).First();
+
+                if (effectiveCandidates.Count > 1)
+                {
+                    ambiguousCandidates = effectiveCandidates;
+                    warning = $"SKU '{skuCode}' matched {effectiveCandidates.Count} records with the same code/name; used '{item.ItemName}' by default. Review under Warnings to pick a different one.";
+                }
+
+                return true;
+            }
         }
 
         // STEP 1.5: The generated template's item picker (column E) stores the item as a
@@ -439,11 +469,41 @@ public sealed class InvoiceDataValidator
         if (string.IsNullOrWhiteSpace(skuCode) && !string.IsNullOrWhiteSpace(itemName))
         {
             var extractedCode = ExtractLeadingCode(itemName);
-            if (!string.IsNullOrWhiteSpace(extractedCode) &&
-                itemBySku.TryGetValue(extractedCode!.Trim(), out var foundByCode))
+            if (!string.IsNullOrWhiteSpace(extractedCode))
             {
-                item = foundByCode;
-                return true;
+                var matchesByExtractedCode = itemsBySku[Normalize(extractedCode!.Trim())].ToList();
+
+                if (matchesByExtractedCode.Count == 1)
+                {
+                    item = matchesByExtractedCode[0];
+                    return true;
+                }
+
+                if (matchesByExtractedCode.Count > 1)
+                {
+                    var normalizedName = NormalizeItemName(itemName);
+                    var narrowed = matchesByExtractedCode
+                        .Where(i => NormalizeItemName(i.ItemName) == normalizedName)
+                        .ToList();
+
+                    if (narrowed.Count == 1)
+                    {
+                        item = narrowed[0];
+                        return true;
+                    }
+
+                    if (narrowed.Count > 1)
+                    {
+                        item = null;
+                        suggestions = narrowed;
+                        return false;
+                    }
+
+                    item = matchesByExtractedCode.OrderBy(i => i.SubdItemId).First();
+                    var candidateNames = string.Join(" / ", matchesByExtractedCode.Select(i => i.ItemName));
+                    warning = $"Extracted code '{extractedCode}' matched multiple items ({candidateNames}); used '{item.ItemName}' by default.";
+                    return true;
+                }
             }
         }
 

@@ -31,20 +31,19 @@
                 {
                     var invoiceCards = GetInvoiceCards();
                     var globalIssues = GetGlobalIssues();
-                    var hasSuccessCards = invoiceCards.Any(c => !c.HasErrors);
+                    var hasSuccessCards = invoiceCards.Any(c => !c.HasErrors && !HasWarningOnly(c));
                     var hasErrorCards = invoiceCards.Any(c => c.HasErrors);
-                    if (cardFilter == InvoiceCardFilter.SuccessOnly && !hasSuccessCards && hasErrorCards)
-                    {
-                        cardFilter = InvoiceCardFilter.ErrorOnly;
-                    }
-                    else if (cardFilter == InvoiceCardFilter.ErrorOnly && !hasErrorCards && hasSuccessCards)
-                    {
-                        cardFilter = InvoiceCardFilter.SuccessOnly;
-                    }
+                    var hasWarningCards = invoiceCards.Any(HasWarningOnly);
+                    if (cardFilter == InvoiceCardFilter.SuccessOnly && !hasSuccessCards)
+                        cardFilter = hasWarningCards ? InvoiceCardFilter.WarningOnly : (hasErrorCards ? InvoiceCardFilter.ErrorOnly : cardFilter);
+                    else if (cardFilter == InvoiceCardFilter.WarningOnly && !hasWarningCards)
+                        cardFilter = hasSuccessCards ? InvoiceCardFilter.SuccessOnly : (hasErrorCards ? InvoiceCardFilter.ErrorOnly : cardFilter);
+                    else if (cardFilter == InvoiceCardFilter.ErrorOnly && !hasErrorCards)
+                        cardFilter = hasSuccessCards ? InvoiceCardFilter.SuccessOnly : (hasWarningCards ? InvoiceCardFilter.WarningOnly : cardFilter);
 
                     var filteredCards = GetFilteredCards(invoiceCards);
                     // Split once instead of calling .Where() twice per render in the markup
-                    var successCards = filteredCards.Where(c => !c.HasErrors).ToList();
+                    var successCards = filteredCards.Where(c => !c.HasErrors).ToList();                    
                     var errorCards = filteredCards.Where(c => c.HasErrors).ToList();
                     var selectedCount = invoiceCards.Count(c => c.Prepared?.Selected == true && !c.HasErrors && c.Prepared?.IsSaved != true);
                     var selectableCount = invoiceCards.Count(c => c.Prepared != null && !c.HasErrors && c.Prepared.IsSaved != true);
@@ -62,7 +61,11 @@
                         </div>
                         <div class="sc">
                             <div class="sc-label">Valid</div>
-                            <div class="sc-val sc-ok">@invoiceCards.Count(c => !c.HasErrors)</div>
+                            <div class="sc-val sc-ok">@invoiceCards.Count(c => !c.HasErrors && !HasWarningOnly(c))</div>                        
+                        </div>
+                        <div class="sc">
+                            <div class="sc-label">With warnings</div>
+                            <div class="sc-val sc-warn">@invoiceCards.Count(HasWarningOnly)</div>
                         </div>
                         <div class="sc">
                             <div class="sc-label">With errors</div>
@@ -120,6 +123,13 @@
                                 Valid (@invoiceCards.Count(c => !c.HasErrors))
                             </button>
                         }
+                        @if (hasWarningCards)
+                        {
+                            <button type="button" class="tab @GetTabClass(InvoiceCardFilter.WarningOnly)" @onclick='() => SetTab(InvoiceCardFilter.WarningOnly)'>
+                                <span class="dot dot-warn"></span>
+                                Warnings (@invoiceCards.Count(HasWarningOnly))
+                            </button>
+                        }
                         @if (hasErrorCards)
                         {
                             <button type="button"
@@ -162,7 +172,7 @@
                         }
 
                         @* ── Select all (only on valid / all tab) ── *@
-                        @if (cardFilter != InvoiceCardFilter.ErrorOnly && selectableCount > 0)
+                        @if (cardFilter == InvoiceCardFilter.SuccessOnly && selectableCount > 0)
                         {
                             <div class="sel-all-bar">
                                 <input type="checkbox"
@@ -268,6 +278,37 @@
                                                             <span class="cust-meta-label">Order type</span>
                                                             <strong>@card.Prepared.Invoice.OrderType</strong>
                                                         </div>
+                                                    </div>
+                                                }
+                                                @if (card.Prepared.ItemChoices != null && card.Prepared.ItemChoices.Count > 0)
+                                                {
+                                                    @foreach (var choice in card.Prepared.ItemChoices)
+                                                    {
+                                                        <div class="item-choice-card">
+                                                            <div class="cust-meta-label">
+                                                                SKU '@choice.SkuCode' has multiple matching records — choose which one to use:
+                                                            </div>
+                                                            <select value="@choice.SelectedSubdItemId"
+                                                                    @onchange="(e) => OnItemChoiceChanged(card.Prepared, choice, e.Value)">
+                                                                @foreach (var candidate in choice.Candidates)
+                                                                {
+                                                                    <option value="@candidate.SubdItemId">
+                                                                        @candidate.SubdItemCode - @candidate.ItemName (@candidate.UomName @@ ₱@candidate.UnitPrice.ToString("N2"))
+                                                                    </option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    }
+                                                }
+                                                @if (card.Prepared.Warnings != null && card.Prepared.Warnings.Count > 0)
+                                                {
+                                                    <div class="warn-block">
+                                                        @foreach (var w in card.Prepared.Warnings)
+                                                        {
+                                                            <div class="warn-msg">
+                                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i> @w
+                                                            </div>
+                                                        }
                                                     </div>
                                                 }
                                                 @if (card.Prepared.Items != null && card.Prepared.Items.Count > 0)
@@ -464,6 +505,7 @@
     private string GetTabClass(InvoiceCardFilter filter) => filter switch
     {
         InvoiceCardFilter.ErrorOnly => cardFilter == filter ? "tab act-er" : "tab",
+        InvoiceCardFilter.WarningOnly => cardFilter == filter ? "tab act-warn" : "tab",
         _ => cardFilter == filter ? "tab act-ok" : "tab"
     };
 
@@ -618,11 +660,14 @@
     private enum InvoiceSortMode { RowAscending, InvoiceNumber, InvoiceDateAscending, InvoiceDateDescending }
     private List<InvoiceCardViewModel> GetFilteredCards(List<InvoiceCardViewModel> cards)
     {
-        var filtered = cardFilter == InvoiceCardFilter.ErrorOnly
-            ? (!string.IsNullOrWhiteSpace(selectedErrorFilter)
+        var filtered = cardFilter switch
+        {
+            InvoiceCardFilter.ErrorOnly => !string.IsNullOrWhiteSpace(selectedErrorFilter)
                 ? cards.Where(card => CardContainsError(card, selectedErrorFilter)).ToList()
-                : cards.Where(card => card.HasErrors).ToList())
-            : cards.Where(card => !card.HasErrors).ToList();
+                : cards.Where(card => card.HasErrors).ToList(),
+            InvoiceCardFilter.WarningOnly => cards.Where(HasWarningOnly).ToList(),
+            _ => cards.Where(card => !card.HasErrors && !HasWarningOnly(card)).ToList()
+        };
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -688,7 +733,7 @@
             _ => cards.OrderBy(c => c.FirstRowNumber).ToList()
         };
     }
-    
+
     private int GetSelectedInvoiceCount()
     {
         if (ImportResult?.PreparedInvoices == null) return 0;
@@ -899,7 +944,7 @@
                 : int.MaxValue);
     }
 
-    private enum InvoiceCardFilter { SuccessOnly, ErrorOnly }
+    private enum InvoiceCardFilter { SuccessOnly, ErrorOnly, WarningOnly }
     private async Task HandleDownloadErrorReport()
     {
         if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
@@ -1027,5 +1072,27 @@
             return $"Row {rows[0]}";
 
         return $"Rows: {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
+    }
+    private static bool HasWarningOnly(InvoiceCardViewModel c) =>
+    !c.HasErrors && ((c.Prepared?.Warnings.Count ?? 0) > 0 || (c.Prepared?.ItemChoices.Count ?? 0) > 0);
+
+    private void OnItemChoiceChanged(PreparedInvoice? prepared, PendingItemChoice choice, object? value)
+    {
+        if (prepared == null || !int.TryParse(value?.ToString(), out var newId)) return;
+        var candidate = choice.Candidates.FirstOrDefault(c => c.SubdItemId == newId);
+        if (candidate == null) return;
+
+        foreach (var raw in prepared.RawItems.Where(r => r.Item.LineItemId == choice.LineItemId))
+        {
+            raw.Item.SubdItemId = candidate.SubdItemId;
+            raw.Item.ItemCode = candidate.SubdItemCode;
+            raw.Item.ItemName = candidate.ItemName;
+            raw.Item.ItemsUomId = candidate.ItemsUomId;
+            raw.Item.UomName = candidate.UomName;
+            raw.Item.Amount = (raw.IsFreeItem ? 0m : candidate.UnitPrice) * raw.Item.Quantity;
+        }
+
+        choice.SelectedSubdItemId = newId;
+        prepared.Items = ImportSalesInvoiceService.BuildAggregatedItems(prepared.RawItems, prepared.Invoice?.OrderType);
     }
 }
