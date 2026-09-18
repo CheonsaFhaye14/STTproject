@@ -98,11 +98,30 @@
     background: #FAFAF8;
 }
 
+::deep .sticky-controls {
+    position: sticky;
+    top: -1.1rem;
+    margin: -1.1rem -1.4rem 0;
+    padding: 1.1rem 1.4rem 0.9rem;
+    background: #FAFAF8;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    border-bottom: 0.5px solid #EBE7DC;
+}
+
+    ::deep .sticky-controls .stat-bar {
+        margin-bottom: 0;
+    }
+
 /* ── Stat bar ── */
 ::deep .stat-bar {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 16px;
 }
 
 ::deep .sc {
@@ -121,12 +140,18 @@
 
 ::deep .sc-val {
     font-size: 22px;
+    flex: 0 0 auto;
+    width: 135px;
     font-weight: 600;
     color: #1B1B1F;
 }
 
     ::deep .sc-val.sc-ok {
         color: #085041;
+    }
+
+    ::deep .sc-val.sc-warn {
+        color: #6B5410;
     }
 
     ::deep .sc-val.sc-er {
@@ -269,6 +294,10 @@
 
 ::deep .dot-ok {
     background: #1D9E75;
+}
+
+::deep .dot-warn {
+    background: #C9A227;
 }
 
 ::deep .dot-er {
@@ -440,8 +469,18 @@
 
 ::deep .import-results .ich-er {
     background: #fdf2f2;
-    cursor: default;
+    cursor: pointer;
+    border-bottom: 0.5px solid transparent;
+    transition: background 0.15s;
 }
+
+    ::deep .import-results .ich-er.open {
+        border-bottom-color: #f2b0b0;
+    }
+
+    ::deep .import-results .ich-er:hover {
+        background: #fce4e4;
+    }
 
 ::deep .ich-left {
     display: flex;
@@ -776,4 +815,254 @@
 
     ::deep .btn-download-errors:hover {
         background: #791F1F;
+    }
+
+/* ── Conflict filter + bulk-apply combo (Warnings tab) — one seamless box ── */
+::deep .warn-combo-box {
+    background: #fff;
+    border: 0.5px solid #E8D48A;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+::deep .warn-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+}
+
+    ::deep .warn-filter-row > i {
+        font-size: 14px;
+        color: #9C7F1E;
+        flex-shrink: 0;
+    }
+
+    ::deep .warn-filter-row select {
+        font-size: 12px;
+        border: none;
+        background: transparent;
+        color: #1B1B1F;
+        padding: 4px 4px;
+        height: 26px;
+        flex: 1;
+        min-width: 0;
+    }
+
+::deep .bulk-apply-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: #FBF6E4;
+    border-top: 0.5px solid #E8D48A;
+    padding: 8px 12px;
+}
+
+::deep .bulk-apply-count {
+    font-size: 11px;
+    color: #6B5410;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+::deep .bulk-apply-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+    ::deep .bulk-apply-actions select {
+        font-size: 12px;
+        border: 0.5px solid #EBE7DC;
+        border-radius: 8px;
+        background: #fff;
+        color: #1B1B1F;
+        padding: 5px 8px;
+        height: 30px;
+        align-items: center;
+        min-width: 200px;
+    }
+
+::deep .btn-bulk-apply,
+::deep .btn-bulk-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 12px;
+    height: 30px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, opacity 0.15s;
+}
+
+::deep .btn-bulk-apply {
+    background: #C9A227;
+    color: #fff;
+}
+
+    ::deep .btn-bulk-apply:hover:not(:disabled) {
+        background: #B8911D;
+    }
+
+    ::deep .btn-bulk-apply:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+::deep .btn-bulk-confirm {
+    background: #C9A227;
+    color: #fff;
+}
+
+    ::deep .btn-bulk-confirm:hover:not(:disabled) {
+        background: #B8911D;
+    }
+
+    ::deep .btn-bulk-confirm:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+/* ── Item conflict card ── */
+::deep .item-choice-card {
+    background: #FBF6E4;
+    border: 0.5px solid #E8D48A;
+    border-radius: 10px;
+    padding: 0.65rem 0.8rem;
+    margin-bottom: 0.6rem;
+}
+
+    ::deep .item-choice-card.confirmed {
+        background: #fff;
+        border-color: #EBE7DC;
+    }
+
+::deep .item-choice-hdr {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+::deep .item-choice-card select {
+    width: 100%;
+    font-size: 12px;
+    border: 0.5px solid #EBE7DC;
+    border-radius: 8px;
+    background: #fff;
+    color: #1B1B1F;
+    padding: 6px 8px;
+    height: 32px;
+}
+
+::deep .badge-confirmed {
+    background: #F5EECB;
+    color: #6B5410;
+    flex-shrink: 0;
+}
+
+::deep .btn-done-reviewing {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 0 12px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #C9A227;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+    ::deep .btn-done-reviewing:hover {
+        background: #B8911D;
+    }
+
+/* ── Highlight the exact row that has an item conflict, inside the full item table ── */
+::deep .itbl tr.itbl-conflict-row td {
+    background: #FBF6E4;
+    border-left: 3px solid #C9A227;
+    box-shadow: inset 0 0 0 9999px rgba(201, 162, 39, 0.06);
+}
+
+::deep .itbl tr.itbl-conflict-row.confirmed td {
+    background: #fff;
+    border-left: 3px solid #E8D48A;
+}
+
+/* ── Warning-card variant: visually distinct from the green "Valid" styling ── */
+::deep .import-results .ich-warn {
+    background: #FBF6E4;
+    border-bottom: 0.5px solid transparent;
+}
+
+    ::deep .import-results .ich-warn.open {
+        border-bottom-color: #E8D48A;
+    }
+
+::deep .iicon-warn {
+    background: #F5EECB;
+    color: #6B5410;
+}
+
+::deep .inv-num.inv-warn {
+    color: #6B5410;
+}
+
+::deep .inv-sub.inv-sub-warn {
+    color: #9C7F1E;
+}
+
+::deep .badge-needs-review {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #F5EECB;
+    color: #6B5410;
+}
+
+/* ── Free-text warning messages ── */
+::deep .warn-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 0.75rem;
+}
+
+::deep .warn-msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    color: #6B5410;
+    background: #FBF6E4;
+    border: 0.5px solid #E8D48A;
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+    ::deep .warn-msg.resolved {
+        color: #8E897C;
+        background: #fff;
+        border-color: #EBE7DC;
+        text-decoration: line-through;
+        text-decoration-color: #D8D3C6;
     }

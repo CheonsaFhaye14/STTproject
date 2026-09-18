@@ -409,7 +409,7 @@ public sealed class ImportMapItemService
 				{
 					// Valid, but worth flagging — could be an intentional price-only row,
 					// or a forgotten conversion. Non-blocking.
-					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has no conversion — only a price was provided. Double-check this was intentional.");
+					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has no conversion — only a price was provided. Double-check if this was intentional.");
 				}
 
 				// Validate price — 0 is a valid price now, only negative/missing is an error.
