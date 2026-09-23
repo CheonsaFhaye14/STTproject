@@ -168,8 +168,8 @@ namespace STTproject.Features.Admin.Customers.Services
                 .Where(c => string.IsNullOrEmpty(search) ||
                     c.CustomerName.Contains(search) ||
                     c.CustomerCode.Contains(search) ||
-                    c.SubdCustCode.Contains(search) ||
-                    c.SubdCustName.Contains(search) || c.City.Contains(search) || c.Province.Contains(search));
+                    c.SubdCustCode != null && c.SubdCustCode.Contains(search) ||
+                    c.SubdCustName != null && c.SubdCustName.Contains(search) || c.City != null && c.City.Contains(search) || c.Province != null && c.Province.Contains(search));
 
             var flat = filtered.Select(c => new
             {

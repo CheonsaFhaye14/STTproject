@@ -379,33 +379,49 @@ public sealed class InvoiceDataValidator
         if (string.IsNullOrWhiteSpace(value))
             return false;
 
-        return value == "free" || value == "tdi-claims";
+        if (value == "free" || value == "tdi-claims")
+            return true;
+
+        if (decimal.TryParse(
+                value,
+                System.Globalization.NumberStyles.Number | System.Globalization.NumberStyles.AllowCurrencySymbol | System.Globalization.NumberStyles.AllowParentheses,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var numericValue))
+        {
+            return numericValue == 0;
+        }
+
+        return false;
     }
 
     public static bool TryParseOrderType(string orderType, out string normalizedOrderType)
     {
+        var normalized = orderType?.Trim().ToLowerInvariant() ?? string.Empty;
         // Invoice aliases: Invoice, Order, Sales
-        if (string.Equals(orderType, "Invoice", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "Order", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "CS", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "INV", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "2I", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "2R", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "ML2I", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "VS2", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "VS1", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "Sales", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "Sales Receipt", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(normalized, "Invoice", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Order", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "CS", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "INV", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "2I", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "2R", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ML2I", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "VS2", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "VS1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Sales", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Sales Receipt", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "TDI-Claims", StringComparison.OrdinalIgnoreCase) ||   
+            string.Equals(normalized, "TDI Claims", StringComparison.OrdinalIgnoreCase))    
         {
             normalizedOrderType = "Invoice";
             return true;
         }
 
         // Credit aliases: Credit, Returns, CN
-        if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "Returns", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "BRG", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(orderType, "CN", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(normalized, "Credit", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Returns", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Return", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "BRG", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "CN", StringComparison.OrdinalIgnoreCase))
         {
             normalizedOrderType = "Credit";
             return true;
@@ -550,6 +566,31 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
+    public static bool TryResolveFallbackUom(
+        int subdItemId,
+        string requestedUom,
+        ILookup<int, Data.ItemsUom> uomsBySubdItemId,
+        IReadOnlySet<int> knownConversionsForItem,
+        out Data.ItemsUom? uom,
+        out string? warning,
+        out List<Data.ItemsUom>? reviewCandidates)
+    {
+        uom = null;
+        warning = null;
+        reviewCandidates = null;
+
+        var candidates = uomsBySubdItemId[subdItemId].ToList();
+        if (candidates.Count == 0)
+            return false; // genuinely nothing configured — stays a hard error, as before
+
+        // No auto-substitution: matching by conversion number alone can pick the wrong
+        // SubdItem's UOM when two records share a SKU/name but have different UOM sets
+        // (e.g. one uses Case/Piece, another uses cs/pc). Always surface every UOM
+        // actually configured for this item and let the user pick.
+        reviewCandidates = candidates;
+        return false;
+    }
+    
     private static string? ExtractLeadingCode(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;

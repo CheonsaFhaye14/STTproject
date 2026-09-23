@@ -114,7 +114,7 @@
                                         Filter by error
                                     </span>
                                     <select @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
-                                        <option value="">All error types</option>
+                                        <option value="">All errors</option>
                                         @foreach (var entry in GetDistinctErrorMessages())
                                         {
                                             var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
@@ -135,32 +135,57 @@
                                 </div>
                             }
 
-                            @* ── Conflict filter + bulk-apply bar (only on warnings tab) ── *@
-                            @if (cardFilter == InvoiceCardFilter.WarningOnly)
+                        @if (cardFilter == InvoiceCardFilter.WarningOnly)
+                        {
+                            var warningKinds = GetDistinctWarningKinds();
+                            if (warningKinds.Any())
                             {
-                                var conflictSkus = GetDistinctConflictSkus();
-                                if (conflictSkus.Any())
-                                {
-                                    <div class="warn-combo-box">
-                                        <div class="warn-filter-row">
-                                            <i class="ti ti-filter" aria-hidden="true"></i>
-                                            <select @onchange="OnConflictFilterChanged" value="@(selectedConflictFilter ?? string.Empty)">
-                                                <option value="">All conflicts (@conflictSkus.Sum(s => s.InvoiceCount) occurrence(s))</option>
-                                                @foreach (var entry in conflictSkus)
-                                                {
-                                                    <option value="@entry.SkuCode">@entry.SkuCode &mdash; @entry.InvoiceCount invoice@(entry.InvoiceCount == 1 ? "" : "s")</option>
-                                                }
-                                            </select>
-                                            @if (!string.IsNullOrEmpty(selectedConflictFilter))
+                                <div class="warn-combo-box">
+                                    @* ── First filter: which kind of warning ── *@
+                                    <div class="warn-filter-row">
+                                        <i class="ti ti-filter" aria-hidden="true"></i>
+                                        <select @onchange="OnWarningKindFilterChanged" value="@(selectedWarningKindFilter ?? string.Empty)">
+                                            <option value="">All warnings (@warningKinds.Sum(k => k.InvoiceCount) invoice(s))</option>
+                                            @foreach (var entry in warningKinds)
                                             {
-                                                <button type="button" class="clear-filter-btn" @onclick="ClearConflictFilter">
-                                                    <i class="ti ti-x" aria-hidden="true"></i>
-                                                    Clear
-                                                </button>
+                                                <option value="@entry.Kind">@WarningKindLabel(entry.Kind) (@entry.InvoiceCount invoice@(entry.InvoiceCount == 1 ? "" : "s"))</option>
                                             }
-                                        </div>
+                                        </select>
+                                        @if (!string.IsNullOrEmpty(selectedWarningKindFilter))
+                                        {
+                                            <button type="button" class="clear-filter-btn" @onclick="ClearWarningKindFilter">
+                                                <i class="ti ti-x" aria-hidden="true"></i>
+                                                Clear
+                                            </button>
+                                            
+                                            @* ── Second filter: which conflicting SKU — only once "SKU Conflicts" is chosen ── *@
+                                            @if (selectedWarningKindFilter == nameof(WarningKind.SkuConflict))
+                                            {
+                                                var conflictSkus = GetDistinctConflictSkus();
+                                                if (conflictSkus.Any())
+                                                {
+                                                
+                                                        <select @onchange="OnConflictFilterChanged" value="@(selectedConflictFilter ?? string.Empty)">
+                                                            <option value="">All conflicts (@conflictSkus.Sum(s => s.InvoiceCount) occurrence(s))</option>
+                                                            @foreach (var entry in conflictSkus)
+                                                            {
+                                                                <option value="@entry.SkuCode">@entry.SkuCode &mdash; @entry.InvoiceCount invoice@(entry.InvoiceCount == 1 ? "" : "s")</option>
+                                                            }
+                                                        </select>
+                                                        @if (!string.IsNullOrEmpty(selectedConflictFilter))
+                                                        {
+                                                            <button type="button" class="clear-filter-btn" @onclick="ClearConflictFilter">
+                                                                <i class="ti ti-x" aria-hidden="true"></i>
+                                                                Clear
+                                                            </button>
+                                                        }
 
-                                        @if (!string.IsNullOrEmpty(selectedConflictFilter))
+     
+                                                }
+                                            }
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(selectedConflictFilter))
                                         {
                                             var bulkCandidates = GetCandidatesForSku(selectedConflictFilter);
                                             var affectedCount = CountInvoicesWithSku(selectedConflictFilter);
@@ -196,9 +221,9 @@
                                                 </div>
                                             </div>
                                         }
-                                    </div>
-                                }
+                                </div>
                             }
+                        }
                         
 
                         @* ── Select all (only on valid / all tab) ── *@
@@ -271,7 +296,7 @@
                         </div>
                     }
 
-                    @* ── Invoice cards (scrollable) ── *@
+                    @* Invoice cards *@
                     @if (invoiceCards.Any())
                     {
                         <div class="import-results">
@@ -296,74 +321,14 @@
                                                         <div class="inv-sub @(isWarn ? "inv-sub-warn" : "inv-sub-ok")">
                                                             <span>@card.Prepared.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
                                                             <span class="sep">·</span>
-                                                            <span>@card.Prepared.Invoice.CustomerName</span>
+                                                            <span>@card.Prepared.Invoice.CustomerCode - @card.Prepared.Invoice.CustomerName</span>
                                                             <span class="sep">·</span>
-                                                            <span>@(card.Prepared.Items?.Count ?? 0) item(s)</span>
+                                                            <span>@(card.Prepared.Items?.Count ?? 0) item@(card.Prepared.Items?.Count == 1 ? "" : "s")</span>
                                                         </div>
                                                     }
                                                 </div>
                                             </div>
-                                            <div class="ich-right">
-                                                @if (card.Prepared?.IsSaved == true)
-                                                {
-                                                    <span class="badge badge-saved">
-                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
-                                                        Saved
-                                                    </span>
-                                                }
-                                                else if (isWarn)
-                                                {
-                                                    <span class="badge badge-needs-review">
-                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        Needs review
-                                                    </span>
-                                                }
-                                                else if (card.Prepared != null)
-                                                {
-                                                    <span class="badge badge-ready">
-                                                        <i class="ti ti-check" aria-hidden="true"></i>
-                                                        Ready
-                                                    </span>
-                                                    <div class="chk" @onclick:stopPropagation="true">
-                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.InvoiceNumber" />
-                                                        <label for="chk-@card.InvoiceNumber">Select</label>
-                                                    </div>
-                                                }
-                                                <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
-                                            </div>
-                                        </div>
-
-                                        @if (isExpanded && card.Prepared != null)
-                                        {
-                                            <div class="icb">
-                                                @if (card.Prepared.Invoice != null)
-                                                {
-                                                    <div class="cust-meta">
-                                                        <div>
-                                                            <span class="cust-meta-label">Customer:</span>
-                                                            <strong>@card.Prepared.Invoice.CustomerCode – @card.Prepared.Invoice.CustomerName</strong>
-                                                        </div>
-                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
-                                                        {
-                                                            <div>
-                                                                <span class="cust-meta-label">Customer Type:</span>
-                                                                <strong>@card.Prepared.Invoice.CustomerType</strong>
-                                                            </div>
-                                                        }
-                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
-                                                        {
-                                                            <div>
-                                                                <span class="cust-meta-label">Address:</span>
-                                                                <strong>@card.Prepared.Invoice.CustomerAddress</strong>
-                                                            </div>
-                                                        }
-                                                        <div>
-                                                            <span class="cust-meta-label">Order type:</span>
-                                                            <strong>@card.Prepared.Invoice.OrderType</strong>
-                                                        </div>
-                                                    </div>
-                                                }
-                                                @if (card.Prepared.ItemChoices != null && card.Prepared.ItemChoices.Count > 0)
+                                            @if (card?.Prepared?.ItemChoices != null && card.Prepared.ItemChoices.Count > 0)
                                                 {
                                                     @foreach (var choice in card.Prepared.ItemChoices)
                                                     {
@@ -371,7 +336,9 @@
                                                         <div class="item-choice-card @(isConfirmed ? "confirmed" : "")">
                                                             <div class="item-choice-hdr">
                                                                 <div class="cust-meta-label">
-                                                                    SKU '@choice.SkuCode' has multiple matching records — choose which one to use:
+                                                                    @(choice.Candidates.Select(x => x.SubdItemId).Distinct().Count() > 1
+                                                                        ? $"SKU '{choice.SkuCode}' has multiple matching records — choose which one to use:"
+                                                                        : $"UOM isn't defined for SKU '{choice.SkuCode}' — choose which one to use:")
                                                                 </div>
                                                                 @if (isConfirmed)
                                                                 {
@@ -399,6 +366,73 @@
                                                             }
                                                         </div>
                                                     }
+                                                }
+                                            <div class="ich-right">
+                                                @if (card?.Prepared?.IsSaved == true)
+                                                {
+                                                    <span class="badge badge-saved">
+                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                        Saved
+                                                    </span>
+                                                }
+                                                else if (isWarn)
+                                                {
+                                                    <span class="badge badge-needs-review">
+                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                        Needs review
+                                                    </span>
+                                                }
+                                                else if (card?.Prepared != null)
+                                                {
+                                                    <span class="badge badge-ready">
+                                                        <i class="ti ti-check" aria-hidden="true"></i>
+                                                        Ready
+                                                    </span>
+                                                    <div class="chk" @onclick:stopPropagation="true">
+                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.InvoiceNumber" />
+                                                        <label for="chk-@card.InvoiceNumber">Select</label>
+                                                    </div>
+                                                }
+                                                <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                            </div>
+                                        </div>
+
+                                        @if (isExpanded && card?.Prepared != null)
+                                        {
+                                            <div class="icb">
+                                                @if (card.Prepared.Invoice != null)
+                                                {
+                                                    <div class="cust-meta">
+                                                        <div>
+                                                            <span class="cust-meta-label">Customer:</span>
+                                                            <strong>@card.Prepared.Invoice.CustomerCode - @card.Prepared.Invoice.CustomerName</strong>
+                                                        </div>
+                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
+                                                        {
+                                                            <div>
+                                                                <span class="cust-meta-label">Customer Type:</span>
+                                                                <strong>@card.Prepared.Invoice.CustomerType</strong>
+                                                            </div>
+                                                        }
+                                                        @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
+                                                        {
+                                                            <div>
+                                                                <span class="cust-meta-label">Address:</span>
+                                                                <strong>@card.Prepared.Invoice.CustomerAddress</strong>
+                                                            </div>
+                                                        }
+                                                        <div>
+                                                            <span class="cust-meta-label">Order type:</span>
+                                                            <strong>@card.Prepared.Invoice.OrderType</strong>
+                                                        </div>
+                                                        @if(!string.IsNullOrWhiteSpace(card.Prepared.Invoice.SalesManName))
+                                                        {
+                                                            <div>
+                                                                <span class="cust-meta-label">Salesman</span>
+                                                                <strong>@card.Prepared.Invoice.SalesManName</strong>
+                                                            </div>
+                                                        }
+                                                    </div>
                                                 }
                                                 @if (card.Prepared.Warnings != null && card.Prepared.Warnings.Count > 0)
                                                 {
@@ -462,6 +496,7 @@
                                 @if (!string.IsNullOrWhiteSpace(selectedErrorFilter) && UsesItemGrouping(selectedErrorFilter))
                                 {
                                     var itemGroups = GetItemGroupedCards(selectedErrorFilter);
+                                    @* Error cards (item-grouped) *@
                                     <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
                                         @{
                                             var isExpanded = expandedCards.Contains(grp.Title);
@@ -602,6 +637,7 @@
     private bool showCommitConfirmModal;
     private string? selectedErrorFilter;
     private string? selectedConflictFilter;
+    private string? selectedWarningKindFilter;
     private HashSet<string> confirmedChoiceKeys = new();
     private int? bulkApplyCandidateId;
     private HashSet<string> expandedCards = new();
@@ -635,6 +671,7 @@
     {
         cardFilter = filter;
         selectedErrorFilter = null;
+        selectedWarningKindFilter = null; 
         selectedConflictFilter = null;
         bulkApplyCandidateId = null;
     }
@@ -765,6 +802,20 @@
 
         return _cachedCards;
     }
+    private void OnWarningKindFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        selectedWarningKindFilter = string.IsNullOrWhiteSpace(value) ? null : value;
+        selectedConflictFilter = null;
+        bulkApplyCandidateId = null;
+    }
+
+    private void ClearWarningKindFilter()
+    {
+        selectedWarningKindFilter = null;
+        selectedConflictFilter = null;
+        bulkApplyCandidateId = null;
+    }
 
     private List<ImportSalesInvoiceIssue> GetGlobalIssues()
     {
@@ -790,7 +841,8 @@
                 ? cards.Where(card => CardContainsError(card, selectedErrorFilter)).ToList()
                 : cards.Where(card => card.HasErrors).ToList(),
             InvoiceCardFilter.WarningOnly => cards.Where(HasWarningOnly)
-                .Where(card => string.IsNullOrWhiteSpace(selectedConflictFilter) || CardHasConflict(card, selectedConflictFilter))
+                .Where(card => CardHasWarningKind(card, selectedWarningKindFilter))
+                .Where(CardMatchesSelectedWarningValue)
                 .ToList(),
             _ => cards.Where(card => !card.HasErrors && !HasWarningOnly(card)).ToList()
         };
@@ -815,7 +867,8 @@
         {
             if ((inv.CustomerCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (inv.CustomerName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (inv.SalesManName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                (inv.SalesManName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (inv.OrderType?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
                 return true;
         }
 
@@ -995,11 +1048,6 @@
                 if (msg.Contains("invalid")) return "Invalid UOM";
                 return "UOM Error";
             }
-            if (col.Contains("sku") || col.Contains("itemcode") || col.Contains("skucode"))
-            {
-                if (msg.Contains("not found") || msg.Contains("missing")) return "SKU Not Found";
-                return "SKU Error";
-            }
             if (col.Contains("quantity") && (msg.Contains("uom") || msg.Contains("unit")))
             {
                 if (msg.Contains("not found") || msg.Contains("missing")) return "UOM Not Found";
@@ -1008,7 +1056,8 @@
             if (col.Contains("quantity")) return "Quantity Error";
             if (col.Contains("amount") || col.Contains("netamount")) return "Amount Error";
             if (col.Contains("ordertype")) return "Order Type Missing";
-            if (col.Contains("customercode") || col.Contains("customer")) return "Customer Not Found";
+            if (col.Contains("customercode") || col.Contains("customer") && msg.Contains("not found")) return "Customer Not Found";
+            if (col.Contains("skucode") || col.Contains("itemname") && msg.Contains("not found")) return "SKU Not Found";
 
         }
 
@@ -1082,7 +1131,7 @@
             System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly System.Text.RegularExpressions.Regex SkuNotFoundRegex =
-    new(@"SKU code '(?<sku>.+?)'", System.Text.RegularExpressions.RegexOptions.Compiled);
+    new(@"SKU '(?<sku>.+?)'", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private delegate (string Key, string Title, string? Subtitle) IssueGroupParser(ImportSalesInvoiceIssue issue);
 
@@ -1200,17 +1249,7 @@
 
         return $"Rows: {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
     }
-    // A card only counts as "warning" while it still has an item conflict the user
-    // hasn't explicitly confirmed — picking a value in the dropdown updates the data,
-    // but the card stays in Warnings until "Done reviewing" is clicked for every
-    // conflict on it. That's what keeps an accidental dropdown change from silently
-    // moving an invoice to Valid.
-    //
-    // Some entries in Prepared.Warnings are just the free-text explanation of the very
-    // same conflict already tracked in ItemChoices (e.g. "SKU 'X' matched 2 records...
-    // used 'Y' by default."). Those shouldn't block the move to Valid on their own once
-    // the matching choice has been confirmed — otherwise a card could stay "Needs review"
-    // forever even after every conflict on it has been resolved.
+
     private bool HasWarningOnly(InvoiceCardViewModel c) =>
         !c.HasErrors && ((c.Prepared?.Warnings.Count(w => !IsWarningResolved(c, w)) ?? 0) > 0 ||
             (c.Prepared?.ItemChoices.Count(ch => !confirmedChoiceKeys.Contains(ChoiceKey(c.InvoiceNumber, ch))) ?? 0) > 0);
@@ -1218,12 +1257,24 @@
     private static readonly System.Text.RegularExpressions.Regex DefaultMatchWarningRegex =
         new(@"SKU '(?<sku>.+?)' matched \d+ records", System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    private static readonly System.Text.RegularExpressions.Regex UomChoiceWarningRegex =
+        new(@"UOM '(?<uom>.+?)' has multiple possible matches for SKU '(?<sku>.+?)'",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
     private bool IsWarningResolved(InvoiceCardViewModel c, string warning)
     {
-        var match = DefaultMatchWarningRegex.Match(warning ?? string.Empty);
-        if (!match.Success) return false; // unrelated warning type — always keep blocking until we know what it is
+        string? sku = null;
 
-        var sku = match.Groups["sku"].Value;
+        var skuMatch = DefaultMatchWarningRegex.Match(warning ?? string.Empty);
+        if (skuMatch.Success) sku = skuMatch.Groups["sku"].Value;
+        else
+        {
+            var uomMatch = UomChoiceWarningRegex.Match(warning ?? string.Empty);
+            if (uomMatch.Success) sku = uomMatch.Groups["sku"].Value;
+        }
+
+        if (sku is null) return false; // unrelated warning type — always keep blocking until we know what it is
+
         var choice = c.Prepared?.ItemChoices?.FirstOrDefault(ch => ch.SkuCode.Equals(sku, StringComparison.OrdinalIgnoreCase));
         return choice != null && confirmedChoiceKeys.Contains(ChoiceKey(c.InvoiceNumber, choice));
     }
@@ -1283,10 +1334,6 @@
         bulkApplyCandidateId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
     }
 
-    // Pre-fills the chosen candidate on every invoice sharing this SKU conflict — except
-    // ones the user already confirmed individually. A card someone has already reviewed
-    // and marked "Done reviewing" keeps its own choice; bulk apply only touches the
-    // still-unconfirmed ones, so it can never quietly overwrite a deliberate manual pick.
     private void ApplyToAllWithSku(string skuCode)
     {
         if (bulkApplyCandidateId is not int candidateId) return;
@@ -1305,9 +1352,6 @@
         }
     }
 
-    // Explicit, separate action from applying a value — confirms every already-chosen
-    // conflict for this SKU across all invoices in one deliberate click. Choices that were
-    // already confirmed individually are simply left alone (no-op), never re-applied.
     private void ConfirmAllWithSku(string skuCode)
     {
         foreach (var card in GetInvoiceCards())
@@ -1353,5 +1397,144 @@
 
         choice.SelectedSubdItemId = candidate.SubdItemId;
         prepared.Items = ImportSalesInvoiceService.BuildAggregatedItems(prepared.RawItems, prepared.Invoice?.OrderType);
+    }
+    private enum WarningKind { SkuConflict, UomFallback, Other }
+
+    private static string WarningKindLabel(WarningKind kind) => kind switch
+    {
+        WarningKind.SkuConflict => "SKU Conflicts",
+        WarningKind.UomFallback => "UOM Fallbacks",
+        _ => "Other"
+    };
+
+    private static readonly System.Text.RegularExpressions.Regex UomFallbackWarningRegex =
+        new(@"isn't defined for this SKU", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static WarningKind ClassifyWarning(string? warning)
+    {
+        if (DefaultMatchWarningRegex.IsMatch(warning ?? string.Empty)) return WarningKind.SkuConflict;
+        if (UomChoiceWarningRegex.IsMatch(warning ?? string.Empty)) return WarningKind.SkuConflict;
+        if (UomFallbackWarningRegex.IsMatch(warning ?? string.Empty)) return WarningKind.UomFallback;
+        return WarningKind.Other;
+    }
+
+    private List<(WarningKind Kind, int InvoiceCount)> GetDistinctWarningKinds()
+    {
+        var counts = new Dictionary<WarningKind, HashSet<string>>();
+
+        void Track(WarningKind kind, string invoiceNumber)
+        {
+            if (!counts.TryGetValue(kind, out var set))
+            {
+                set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                counts[kind] = set;
+            }
+            set.Add(invoiceNumber);
+        }
+
+        foreach (var card in GetInvoiceCards().Where(HasWarningOnly))
+        {
+            if (card.Prepared?.ItemChoices != null &&
+                card.Prepared.ItemChoices.Any(ch => !confirmedChoiceKeys.Contains(ChoiceKey(card.InvoiceNumber, ch))))
+                Track(WarningKind.SkuConflict, card.InvoiceNumber);
+
+            foreach (var w in card.Prepared?.Warnings ?? new List<string>())
+            {
+                if (IsWarningResolved(card, w)) continue;
+                Track(ClassifyWarning(w), card.InvoiceNumber);
+            }
+        }
+
+        return counts
+            .Select(kv => (Kind: kv.Key, InvoiceCount: kv.Value.Count))
+            .OrderByDescending(x => x.InvoiceCount)
+            .ThenBy(x => x.Kind)
+            .ToList();
+    }
+
+    private bool CardHasWarningKind(InvoiceCardViewModel c, string? kindName)
+    {
+        if (string.IsNullOrWhiteSpace(kindName)) return true;
+        if (!Enum.TryParse<WarningKind>(kindName, out var kind)) return true;
+
+        if (kind == WarningKind.SkuConflict &&
+            c.Prepared?.ItemChoices != null &&
+            c.Prepared.ItemChoices.Any(ch => !confirmedChoiceKeys.Contains(ChoiceKey(c.InvoiceNumber, ch))))
+            return true;
+
+        return c.Prepared?.Warnings != null &&
+            c.Prepared.Warnings.Any(w => !IsWarningResolved(c, w) && ClassifyWarning(w) == kind);
+    }
+
+    // Generalizes GetDistinctConflictSkus to any warning kind. For SkuConflict, the
+    // "value" is the conflicting SKU code (so bulk-apply can act on it). For every
+    // other kind, there's nothing structured to bulk-apply to, so the "value" is just
+    // the distinct warning text itself — enough to filter down to one specific case.
+    private List<(string Value, int InvoiceCount)> GetDistinctWarningValues(WarningKind kind)
+    {
+        if (kind == WarningKind.SkuConflict)
+        {
+            return GetDistinctConflictSkus()
+                .Select(x => (Value: x.SkuCode, x.InvoiceCount))
+                .ToList();
+        }
+
+        var counts = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var card in GetInvoiceCards().Where(HasWarningOnly))
+        {
+            foreach (var w in card.Prepared?.Warnings ?? new List<string>())
+            {
+                if (IsWarningResolved(card, w)) continue;
+                if (ClassifyWarning(w) != kind) continue;
+
+                var key = w.Trim();
+                if (!counts.TryGetValue(key, out var set))
+                {
+                    set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    counts[key] = set;
+                }
+                set.Add(card.InvoiceNumber);
+            }
+        }
+
+        return counts
+            .Select(kv => (Value: kv.Key, InvoiceCount: kv.Value.Count))
+            .OrderByDescending(x => x.InvoiceCount)
+            .ThenBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private bool CardHasWarningValue(InvoiceCardViewModel c, WarningKind kind, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return true;
+
+        if (kind == WarningKind.SkuConflict)
+            return CardHasConflict(c, value);
+
+        return c.Prepared?.Warnings != null &&
+            c.Prepared.Warnings.Any(w => !IsWarningResolved(c, w) && ClassifyWarning(w) == kind &&
+                w.Trim().Equals(value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // The bulk-apply bar only ever makes sense for SkuConflict (it needs structured
+    // candidates to offer). When there's exactly one conflicting SKU, treat it as
+    // selected automatically so the bar shows without an extra click.
+    private string? GetEffectiveConflictFilter()
+    {
+        if (selectedWarningKindFilter != nameof(WarningKind.SkuConflict))
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(selectedConflictFilter))
+            return selectedConflictFilter;
+
+        var values = GetDistinctWarningValues(WarningKind.SkuConflict);
+        return values.Count == 1 ? values[0].Value : null;
+    }
+
+    private bool CardMatchesSelectedWarningValue(InvoiceCardViewModel card)
+    {
+        if (string.IsNullOrWhiteSpace(selectedConflictFilter)) return true;
+        if (!Enum.TryParse<WarningKind>(selectedWarningKindFilter, out var kind)) return true;
+        return CardHasWarningValue(card, kind, selectedConflictFilter);
     }
 }

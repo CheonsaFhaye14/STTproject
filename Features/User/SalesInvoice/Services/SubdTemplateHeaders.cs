@@ -86,20 +86,6 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["PieceQuantity"] = new[] { "qtypc" };
 				return map;
 			}
-			if (isGranvilleBaguio(subDistributor))
-			{
-				map["InvoiceCode"] = new[] { "so" };
-				map["InvoiceDate"] = new[] { "invoicedate" };
-				map["CustomerName"] = new[] { "customername" };
-				map["OrderType"] = new[] { "trxtype" };
-				map["SkuCode"] = new[] { "item_code" };
-				map["SalesManName"] = new[] { "salesrep" };
-				map["Province"] = new[] { "province" };
-				map["CityMunicipality"] = new[] { "town_or_city" };
-				map["AddressLine"] = new[] { "address1" };
-				map["PieceQuantity"] = new[] { "item_qty_piece" };
-				return map;
-			}
 			if (isGranvilleIlocos(subDistributor))
 			{
 				map["InvoiceCode"] = new[] { "so_number" };
@@ -127,24 +113,24 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["UnitofMeasure"] = new[] { "unit" };
 				return map;
 			}
-			if (isGranvilleDagupan(subDistributor))
-			{
-				map["InvoiceCode"] = new[] { "so" };
-				map["InvoiceDate"] = new[] { "invoicedate" };
-				map["CustomerName"] = new[] { "customername" };
-				map["CustomerType"] = new[] { "subcategory" };
-				map["SkuCode"] = new[] { "item_code" };
-				map["SalesManName"] = new[] { "salesrep" };
-				map["PieceQuantity"] = new[] { "item_qty_piece" };
-				return map;
-			}
-			if (isGranvilleLaUnion(subDistributor))
+			if (isGranvilleDagupan(subDistributor) || isGranvilleLaUnion(subDistributor) || isGranvilleBaguio(subDistributor))
 			{
 				map["InvoiceCode"] = new[] { "invoice" };
 				map["InvoiceDate"] = new[] { "invoicedate" };
+				map["CustomerCode"] = new[] { "customer_id" };
 				map["CustomerName"] = new[] { "customername" };
-				map["OrderType"] = new[] { "type" };
-			}
+				map["CustomerType"] = new[] { "subcategory" };
+				map["OrderType"] = new[] { "trxtype" };
+				map["SkuCode"] = new[] { "item_id" };
+				map["ItemName"] = new[] { "product" };
+				map["SalesManName"] = new[] { "salesrep" };
+				map["PieceQuantity"] = new[] { "item_qty_piece" };
+				map["Province"] = new[] { "province" };
+				map["CityMunicipality"] = new[] { "town_or_city" };
+				map["AddressLine"] = new[] { "address1" };
+				map["FreeItems"] = new[] { "gross" };
+				return map;
+			} 
 			
 			if (isNEMarketing(subDistributor))
 			{

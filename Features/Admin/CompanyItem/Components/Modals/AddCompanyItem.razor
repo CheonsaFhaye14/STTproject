@@ -10,7 +10,7 @@
     <ChildContent>
         <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="@isEdit" IsExpanded="true">
             <ChildContent>
-                <div class="form-group">
+                <div class="form-group"
                     <Input Label="Sku Code" Required="true" @bind-Value="ItemCode" Disabled="@isViewMode" Placeholder="Enter SKU Code" 
                     ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
                 </div>

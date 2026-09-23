@@ -81,7 +81,9 @@ public sealed record ImportedInvoiceRow(
     int ResolvedItemsUomId,
     bool IsFreeItem,
     string? AmbiguousItemWarning = null,
-    List<int>? AmbiguousSubdItemIds = null);
+    List<int>? AmbiguousSubdItemIds = null,
+    string? UomFallbackWarning = null,
+    List<int>? UomReviewCandidateIds = null );
 
 public sealed record ImportSalesInvoiceIssue(
     int RowNumber,

@@ -1,3 +1,4 @@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @using STTproject.Features.User.MapItem.DTOs
 
 <div id="import-results-overlay" class="modal-overlay @(Show ? "show" : "")"
@@ -12,8 +13,7 @@
                 </div>
                 <div>
                     <div class="mh-title">Import results</div>
-                    <div class="mh-sub">Subdistributor Item mapping</div> 
-                    @*TODO: Change Subdistributor Item mapping if not multiple different subdistributors are being used. Example: "01GMA06 - STARWIDE DISTRIBUTION" if multiple change back to "Subdistributor Item mapping"*@
+                    <div class="mh-sub">@GetHeaderSubtitle()</div>
                 </div>
             </div>
             <button type="button" class="mh-close" @onclick="HandleClose" aria-label="Close">
@@ -40,7 +40,7 @@
             else
             {
                 var globalIssues = GetGlobalIssues();
-                var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+                var groups = GetGroups();
 
                 foreach (var g in groups)
                 {
@@ -224,36 +224,38 @@
 
                 @* ── Item cards ── *@
                 <div class="import-results">
-                    @* TODO: Add Search and Sort 
-                        <div class="search-sort-bar">
-                            <div class="search-input-wrap">
-                                <i class="ti ti-search" aria-hidden="true"></i>
-                                <input type="text"
-                                        placeholder="Search…"
-                                        value="@searchTerm"
-                                        @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
-                            </div>
-                            <select @onchange="OnSortChanged" value="@sortMode">
-                                <option value="@ItemSortMode.RowAscending">Row order</option>
-                                <option value="@ItemSortMode.CompanyItem">Company Item Code</option> //Include both code and name?
-                                <option value="@ItemSortMode.SubdItem">Subd Item Code</option> //Include both code and name?
-                            </select>
+                    <div class="search-sort-bar">
+                        <div class="search-input-wrap">
+                            <i class="ti ti-search" aria-hidden="true"></i>
+                            <input type="text"
+                                   placeholder="Search…"
+                                   value="@searchTerm"
+                                   @oninput="(e) => searchTerm = e.Value?.ToString() ?? string.Empty" />
                         </div>
-                    *@
-                    @foreach (var group in groups.Where(ShouldShowGroup).OrderBy(GetGroupSortKey))
-                    {
-                        var groupRows = group.Rows!;
-                        var hasErrors = (group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0);
-                        var first = groupRows.FirstOrDefault();
-                        var displayName = first == null
-                            ? "[Orphan]"
-                            : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} - {first.CompanyItemName}");
-                        var groupKey = first != null ? BuildGroupKey(first) : Guid.NewGuid().ToString();
-                        var isExpanded = expandedGroups.Contains(groupKey) || groupFilter == GroupFilter.WarningOnly;
+                        <select @onchange="OnSortChanged" value="@sortMode">
+                            <option value="@ItemSortMode.RowAscending">Row order</option>
+                            <option value="@ItemSortMode.CompanyItem">Company Item Code</option>
+                            <option value="@ItemSortMode.SubdItem">Subd Item Code</option>
+                        </select>
+                    </div>
+
+                    @{
+                        var displayedGroups = GetFilteredAndSortedGroups(groups);
+                    }
+                    <Virtualize Items="displayedGroups" Context="group" ItemSize="72">
+                        @{
+                            var groupRows = group.Rows!;
+                            var hasErrors = (group.Issues?.Count ?? 0) > 0 || groupRows.Any(r => r.Issues.Count > 0);
+                            var first = groupRows.FirstOrDefault();
+                            var displayName = first == null
+                                ? "[Orphan]"
+                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} - {first.CompanyItemName}");
+                            var groupKey = first != null ? BuildGroupKey(first) : Guid.NewGuid().ToString();
+                            var isExpanded = expandedGroups.Contains(groupKey) || groupFilter == GroupFilter.WarningOnly;
+                        }
 
                         @if (!hasErrors)
                         {
-                            @* <Virtualize Items="successCards" Context="card" ItemSize="72"> TODO: Implement virtualization so it doesn't impact performance and not laggy *@
                             <div class="icard">
                                 <div class="ich ich-ok @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(groupKey)">
                                     <div class="ich-left">
@@ -311,11 +313,13 @@
                                                 <span class="cust-meta-label">Subdistributor Item</span>
                                                 <strong>@first.SubdItemCode - @first.SubdItemName</strong>
                                             </div>
-                                            @* TODO: if all Subdistributor used is same dont show *@
-                                            <div style="grid-column: 1 / -1;">
-                                                <span class="cust-meta-label">Subdistributor</span>
-                                                <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
-                                            </div>
+                                            @if (HasMultipleSubdistributors())
+                                            {
+                                                <div style="grid-column: 1 / -1;">
+                                                    <span class="cust-meta-label">Subdistributor</span>
+                                                    <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
+                                                </div>
+                                            }
 
                                         </div>
                                         @{
@@ -443,7 +447,7 @@
                                 }
                             </div>
                         }
-                    }
+                    </Virtualize>
                 </div>
 
             }
@@ -482,14 +486,155 @@
     private string? selectedErrorFilter;
     private HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     private string? selectedWarningFilter;
+    private string searchTerm = string.Empty;
+    private ItemSortMode sortMode = ItemSortMode.RowAscending;
+
+    private enum ItemSortMode { RowAscending, CompanyItem, SubdItem }
 
     protected override void OnParametersSet()
     {
-        if (Show && !wasShown) { groupFilter = GroupFilter.All; wasShown = true; }
+        if (Show && !wasShown) { groupFilter = GroupFilter.All; searchTerm = string.Empty; wasShown = true; }
         else if (!Show) { wasShown = false; }
     }
 
     private bool CanCommit => ImportResult != null && GetSelectedCardCount() > 0;
+
+    // ── Caches ────────────────────────────────────────────────────────────
+    // Mirrors ImportSalesInvoiceResults.razor's GetInvoiceCards() caching:
+    // the underlying group list is only rebuilt when ImportResult itself changes,
+    // and the filtered/sorted/searched view is only rebuilt when the filter,
+    // search term, or sort mode actually changes.
+    private ImportMapItemResult? _cachedGroupsForResult;
+    private List<PreparedItemGroup>? _cachedGroups;
+
+    private List<PreparedItemGroup>? _cachedFilteredGroups;
+    private string? _cachedFilterKey;
+
+    private ImportMapItemResult? _cachedForMultiSubdResult;
+    private bool? _cachedHasMultipleSubds;
+
+    private List<PreparedItemGroup> GetGroups()
+    {
+        if (_cachedGroupsForResult == ImportResult && _cachedGroups != null)
+            return _cachedGroups;
+
+        _cachedGroups = ImportResult?.PreparedGroups ?? new List<PreparedItemGroup>();
+        _cachedGroupsForResult = ImportResult;
+
+        // Underlying result changed — dependent caches are stale.
+        _cachedFilteredGroups = null;
+        _cachedFilterKey = null;
+
+        return _cachedGroups;
+    }
+
+    private List<PreparedItemGroup> GetFilteredAndSortedGroups(List<PreparedItemGroup> groups)
+    {
+        var key = $"{groupFilter}|{selectedErrorFilter}|{selectedWarningFilter}|{searchTerm}|{sortMode}";
+        if (_cachedFilterKey == key && _cachedFilteredGroups != null)
+            return _cachedFilteredGroups;
+
+        var filtered = groups.Where(ShouldShowGroup);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim();
+            var termIsRowNumber = int.TryParse(term, out var rowNum);
+            filtered = filtered.Where(g => GroupMatchesSearch(g, term, termIsRowNumber, rowNum));
+        }
+
+        _cachedFilteredGroups = ApplySort(filtered.ToList());
+        _cachedFilterKey = key;
+        return _cachedFilteredGroups;
+    }
+
+    private static bool GroupMatchesSearch(PreparedItemGroup group, string term, bool termIsRowNumber, int rowNum)
+    {
+        var first = group.Rows.FirstOrDefault();
+        if (first != null)
+        {
+            if ((first.CompanyItemCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.CompanyItemName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.SubdItemCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.SubdItemName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.Principal?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.SubDistributorCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (first.SubDistributorName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                return true;
+        }
+
+        foreach (var row in group.Rows)
+        {
+            if (row.UomName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                return true;
+            if (termIsRowNumber && row.RowNumber == rowNum)
+                return true;
+            if (row.Issues.Any(i => i.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+
+        if (group.Issues != null && group.Issues.Any(i => i.Message?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+            return true;
+
+        return false;
+    }
+
+    private List<PreparedItemGroup> ApplySort(List<PreparedItemGroup> groups)
+    {
+        return sortMode switch
+        {
+            ItemSortMode.CompanyItem => groups
+                .OrderBy(g => g.Rows.FirstOrDefault()?.CompanyItemCode, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            ItemSortMode.SubdItem => groups
+                .OrderBy(g => g.Rows.FirstOrDefault()?.SubdItemCode, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            _ => groups.OrderBy(GetGroupSortKey).ToList()
+        };
+    }
+
+    private void OnSortChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ItemSortMode>(e.Value?.ToString(), out var mode))
+            sortMode = mode;
+    }
+
+    // Whether more than one distinct subdistributor appears in this import.
+    // Drives both the modal subtitle and whether the per-card Subdistributor
+    // row needs to be shown at all.
+    private bool HasMultipleSubdistributors()
+    {
+        if (_cachedForMultiSubdResult == ImportResult && _cachedHasMultipleSubds.HasValue)
+            return _cachedHasMultipleSubds.Value;
+
+        var distinctCount = (ImportResult?.Rows ?? new List<ImportMapItemRowResult>())
+            .Where(r => !string.IsNullOrWhiteSpace(r.SubDistributorCode))
+            .Select(r => r.SubDistributorCode.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        _cachedHasMultipleSubds = distinctCount > 1;
+        _cachedForMultiSubdResult = ImportResult;
+        return _cachedHasMultipleSubds.Value;
+    }
+
+    private string GetHeaderSubtitle()
+    {
+        if (!HasMultipleSubdistributors())
+        {
+            var first = (ImportResult?.Rows ?? new List<ImportMapItemRowResult>())
+                .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.SubDistributorCode));
+
+            if (first != null)
+            {
+                return string.IsNullOrWhiteSpace(first.SubDistributorName)
+                    ? first.SubDistributorCode
+                    : $"{first.SubDistributorCode} - {first.SubDistributorName}";
+            }
+        }
+
+        return "Subdistributor Item mapping";
+    }
 
     private void ToggleExpand(string key)
     {
@@ -525,7 +670,7 @@
             .SelectMany(row => row.Issues.Select(issue => new ImportMapItemIssue(row.RowNumber, row.SubdItemCode, issue)))
             .ToList();
 
-        var preparedHeaderIssues = ImportResult.PreparedGroups
+        var preparedHeaderIssues = GetGroups()
             .SelectMany(g => g.Issues)
             .Where(i => i.RowNumber == 0)
             .ToList();
@@ -540,10 +685,10 @@
 
     private IEnumerable<(string Message, int Count)> GetDistinctErrorMessages()
     {
-        if (ImportResult?.PreparedGroups == null)
+        if (ImportResult == null)
             return Enumerable.Empty<(string, int)>();
 
-        var groups = ImportResult.PreparedGroups;
+        var groups = GetGroups();
         var messageTypes = new HashSet<string>();
 
         foreach (var g in groups)
@@ -568,7 +713,7 @@
         }
 
         return messageTypes
-            .Select(type => (Message: type, Count: groups.Count(g => GroupContainsError(g, type)))) // CHANGED: per-card count
+            .Select(type => (Message: type, Count: groups.Count(g => GroupContainsError(g, type))))
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Message)
             .ToList();
@@ -606,7 +751,7 @@
     private int GetSelectedCardCount()
     {
         if (ImportResult == null) return 0;
-        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        var groups = GetGroups();
         return groups.Count(g => g.Rows.Any() && SelectedGroupKeys.Contains(BuildGroupKey(g.Rows.First()))
             && (g.Issues?.Count ?? 0) == 0 && g.Rows.All(r => r.Issues.Count == 0) && !g.IsSaved);
     }
@@ -614,7 +759,7 @@
     private int GetTotalErrorCount()
     {
         if (ImportResult == null) return 0;
-        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        var groups = GetGroups();
         return groups.Sum(g => GetGroupErrorRowCount(g, null));
     }
 
@@ -622,7 +767,7 @@
     {
         if (checkedValue is not bool isChecked || ImportResult == null) return;
 
-        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        var groups = GetGroups();
         foreach (var g in groups)
         {
             if (g.Rows == null || g.Rows.Count == 0) continue;
@@ -642,8 +787,8 @@
             NormalizePart(row.SubDistributorCode),
             NormalizePart(row.CompanyItemCode),
             NormalizePart(row.CompanyItemName),
-            NormalizePart(row.SubdItemCode),      
-            NormalizePart(row.SubdItemName));   
+            NormalizePart(row.SubdItemCode),
+            NormalizePart(row.SubdItemName));
     }
 
     private void OpenCommitConfirmModal() => showCommitConfirmModal = true;
@@ -727,10 +872,10 @@
 
     private IEnumerable<(string Message, int Count)> GetDistinctWarningMessages()
     {
-        if (ImportResult?.PreparedGroups == null)
+        if (ImportResult == null)
             return Enumerable.Empty<(string, int)>();
 
-        var groups = ImportResult.PreparedGroups.Where(GroupHasWarningOnly).ToList();
+        var groups = GetGroups().Where(GroupHasWarningOnly).ToList();
         var messageTypes = new HashSet<string>();
 
         foreach (var g in groups)
@@ -761,7 +906,7 @@
 
     private int GetTotalWarningCount()
     {
-        var groups = ImportResult?.PreparedGroups?.Where(GroupHasWarningOnly) ?? Enumerable.Empty<PreparedItemGroup>();
+        var groups = GetGroups().Where(GroupHasWarningOnly);
         return groups.Sum(g => GetGroupWarningRowCount(g, null));
     }
 
@@ -783,7 +928,7 @@
     {
         if (checkedValue is not bool isChecked || ImportResult == null) return;
 
-        var groups = ImportResult.PreparedGroups ?? new List<PreparedItemGroup>();
+        var groups = GetGroups();
         foreach (var g in groups)
         {
             if (g.Rows == null || g.Rows.Count == 0) continue;

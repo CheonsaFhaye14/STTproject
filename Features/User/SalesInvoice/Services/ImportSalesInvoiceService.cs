@@ -153,10 +153,15 @@ public sealed class ImportSalesInvoiceService
 		var uomLookup = uoms
 			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
 			.ToDictionary(group => group.Key, group => group.First());
+		var uomsBySubdItemId = uoms.Where(u => u.IsActive).ToLookup(u => u.SubdItemId);
 		var customerById = customers.ToDictionary(customer => customer.CustomerId);
 		var itemsUomById = uoms.ToDictionary(uom => uom.ItemsUomId);
 
-		// Read and parse rows from the worksheet starting after the header row, performing validations and lookups to enrich the data, and collecting any issues found along the way.
+		// ADDED — pre-scan the sheet once to know which conversions each item actually uses,
+		// so the fallback in ReadRows can restrict itself to a confirmed match instead of a guess.
+		var knownConversionsBySubdItem = BuildKnownConversionsBySubdItem(
+			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, headerRowNumber);
+
 		var parsedRows = ReadRows(
 			worksheet,
 			headers,
@@ -165,6 +170,8 @@ public sealed class ImportSalesInvoiceService
 			customerByName,
 			subdItemsBySkuGroup,
 			uomLookup,
+			uomsBySubdItemId,
+			knownConversionsBySubdItem,   // ADDED
 			customers,
 			subdItems,
 			headerRowNumber);
@@ -304,10 +311,14 @@ public sealed class ImportSalesInvoiceService
 						items.Clear();
 						break;
 					}
-					
 					if (!string.IsNullOrWhiteSpace(row.AmbiguousItemWarning) && reportedItemWarnings.Add(row.AmbiguousItemWarning))
 					{
 						preparedInvoice.Warnings.Add(row.AmbiguousItemWarning);
+					}
+
+					if (!string.IsNullOrWhiteSpace(row.UomFallbackWarning) && reportedItemWarnings.Add(row.UomFallbackWarning))   // ← new
+					{
+						preparedInvoice.Warnings.Add(row.UomFallbackWarning);
 					}
 					if (row.AmbiguousSubdItemIds != null && row.AmbiguousSubdItemIds.Count > 1 &&
 					!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
@@ -340,8 +351,36 @@ public sealed class ImportSalesInvoiceService
 							});
 						}
 					}
+					if (row.UomReviewCandidateIds is { Count: > 0 } &&
+						!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
+					{
+						var options = new List<ItemCandidateOption>();
+						foreach (var uomId in row.UomReviewCandidateIds)
+						{
+							if (!itemsUomById.TryGetValue(uomId, out var candidateUom)) continue;
+							var price = row.IsFreeItem ? 0m : await GetUnitPriceAsync(candidateUom.ItemsUomId, firstRow.InvoiceDate);
+							// Same SubdItemId/Code/Name for every option — only the UOM/price differs.
+							options.Add(new ItemCandidateOption(subdItem.SubdItemId, subdItem.SubdItemCode, subdItem.ItemName,
+								candidateUom.ItemsUomId, candidateUom.UomName, price));
+						}
 
-					if (row.Quantity <= 0)
+						if (options.Count > 0)
+						{
+							var msg = $"UOM '{row.UOM}' has multiple possible matches for SKU '{row.SkuCode}' — review under Warnings.";
+							if (reportedItemWarnings.Add(msg))
+								preparedInvoice.Warnings.Add(msg);
+
+							preparedInvoice.ItemChoices.Add(new PendingItemChoice
+							{
+								LineItemId = row.RowNumber,
+								SkuCode = row.SkuCode,
+								Candidates = options,
+								SelectedSubdItemId = row.ResolvedSubdItemId
+							});
+						}
+					}
+
+					if (row.Quantity == 0)
 					{
 						continue;
 					}
@@ -512,6 +551,8 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, Data.Customer> customerByName,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		ILookup<int, ItemsUom> uomsBySubdItemId,
+		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem, 
 		IEnumerable<Data.Customer> allCustomers,
 		IEnumerable<SubdItem> allSubdItems,
 		int headerRowNumber)
@@ -677,22 +718,24 @@ public sealed class ImportSalesInvoiceService
 				}
 				else if (!string.IsNullOrWhiteSpace(skuCode) && !string.IsNullOrWhiteSpace(itemName))
 				{
+					var label = BuildCustomerDisplayValue(skuCode, itemName);
+					var colName = string.IsNullOrWhiteSpace(itemName) ? "skuCode" : "itemName";
 					var message = itemSuggestions is { Count: > 0 }
-						? $"SKU code '{skuCode}' and item name '{itemName}' were not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => s.SubdItemCode))}?"
-						: $"SKU code '{skuCode}' and item name '{itemName}' were not found.";
-					AddRowError(message, "SkuCode");
+						? $"SKU '{label}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
+						: $"SKU '{label}' was not found.";
+					AddRowError(message, colName);
 				}
 				else if (!string.IsNullOrWhiteSpace(skuCode))
 				{
 					var message = itemSuggestions is { Count: > 0 }
-						? $"SKU code '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => s.SubdItemCode))}?"
+						? $"SKU code '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU code '{skuCode}' was not found.";
 					AddRowError(message, "SkuCode");
 				}
 				else
 				{
 					var message = itemSuggestions is { Count: > 0 }
-						? $"Item name '{itemName}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => s.ItemName))}?"
+						? $"Item name '{itemName}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"Item name '{itemName}' was not found.";
 					AddRowError(message, "ItemName");
 				}
@@ -750,14 +793,31 @@ public sealed class ImportSalesInvoiceService
 					if (resolvedQty == 0)
 						continue;
 
-					// Quantity sign as final fallback for order type
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
+
 					var resolvedUomId = ResolveUomId(resolvedUom);
+					var finalUomName = resolvedUom;
+					string? uomFallbackWarning = null;
+					List<int>? uomReviewCandidateIds = null; 
+					
 					if (resolvedUomId == 0 && resolvedItem is not null)
 					{
-						var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-						AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM");
+						InvoiceDataValidator.TryResolveFallbackUom(
+							resolvedItem.SubdItemId, uom, uomsBySubdItemId, new HashSet<int>(), out _, out _, out var reviewUoms);
+
+						if (reviewUoms is { Count: > 0 })
+						{
+							var tentative = reviewUoms[0];
+							resolvedUomId = tentative.ItemsUomId;
+							finalUomName = tentative.UomName;
+							uomReviewCandidateIds = reviewUoms.Select(u => u.ItemsUomId).ToList();
+						}
+						else
+						{
+							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
+							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM");
+						}
 					}
 
 					if (!rowHasErrors)
@@ -772,7 +832,7 @@ public sealed class ImportSalesInvoiceService
 							SalesManName: salesManName,
 							SkuCode: skuCode,
 							ItemName: itemName,
-							UOM: resolvedUom,
+							UOM: finalUomName,
 							Quantity: resolvedQty,
 							Province: province ?? string.Empty,
 							CityMunicipality: city ?? string.Empty,
@@ -786,71 +846,90 @@ public sealed class ImportSalesInvoiceService
 							ResolvedItemsUomId: resolvedUomId,
 							IsFreeItem: isFreeItem,
 							AmbiguousItemWarning: itemWarning,
-							AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList()));
+							AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
+							UomFallbackWarning: uomFallbackWarning,
+							UomReviewCandidateIds: uomReviewCandidateIds));
 					}
 				}
 			}
 			else
 			{
-				void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
+			void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
+			{
+				if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
+					return;
+
+				var rawValue = row.Cell(columnIndex).GetString().Trim();
+				if (InvoiceDataValidator.IsMissingUomValue(rawValue))
+					return;
+
+				if (!TryGetInt(row.Cell(columnIndex), out var qty))
 				{
-					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
-						return;
+					AddRowError($"{errorField} must be a whole number.", errorField);
+					return;
+				}
 
-					var rawValue = row.Cell(columnIndex).GetString().Trim();
-					if (InvoiceDataValidator.IsMissingUomValue(rawValue))
-						return;
+				if (qty == 0)
+					return;
 
-					if (!TryGetInt(row.Cell(columnIndex), out var qty))
+				var rowOrderType = string.IsNullOrWhiteSpace(normalizedOrderType)
+					? (qty < 0 ? "Credit" : "Invoice")
+					: normalizedOrderType;
+
+				// Normalize the UOM label and resolve its ID via synonyms
+				var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
+				var resolvedUomId = ResolveUomId(normalizedUomName);
+				var finalUomName = normalizedUomName;
+				List<int>? uomReviewCandidateIds = null;
+
+				if (resolvedUomId == 0 && resolvedItem is not null)
+				{
+					InvoiceDataValidator.TryResolveFallbackUom(
+						resolvedItem.SubdItemId, normalizedUomName, uomsBySubdItemId, new HashSet<int>(), out _, out _, out var reviewUoms);
+
+					if (reviewUoms is { Count: > 0 })
 					{
-						AddRowError($"{errorField} must be a whole number.", errorField);
-						return;
+						var tentative = reviewUoms[0];
+						resolvedUomId = tentative.ItemsUomId;
+						finalUomName = tentative.UomName;
+						uomReviewCandidateIds = reviewUoms.Select(u => u.ItemsUomId).ToList();
 					}
-
-					if (qty == 0)
-						return;
-
-					var rowOrderType = string.IsNullOrWhiteSpace(normalizedOrderType)
-						? (qty < 0 ? "Credit" : "Invoice")
-						: normalizedOrderType;
-
-					// Normalize the UOM label and resolve its ID via synonyms
-					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
-					var resolvedUomId = ResolveUomId(normalizedUomName);
-
-					if (resolvedUomId == 0 && resolvedItem is not null)
+					else
 					{
 						var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
 						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
 						return;
 					}
-
-					emittedRows.Add(new ImportedInvoiceRow(
-						RowNumber: rowNumber,
-						InvoiceCode: invoiceCode,
-						InvoiceDate: invoiceDate,
-						CustomerCode: customerCode,
-						CustomerName: customerName,
-						OrderType: rowOrderType,
-						SalesManName: salesManName,
-						SkuCode: skuCode,
-						ItemName: itemName,
-						UOM: normalizedUomName,
-						Quantity: qty,
-						Province: province ?? string.Empty,
-						CityMunicipality: city ?? string.Empty,
-						CustomerType: customerType,
-						AddressLine: addressLine,
-						ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
-						ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
-						ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
-						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-						ResolvedItemsUomId: resolvedUomId,
-						IsFreeItem: isFreeItem,
-						AmbiguousItemWarning: itemWarning,
-						AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList()));
 				}
+
+				emittedRows.Add(new ImportedInvoiceRow(
+					RowNumber: rowNumber,
+					InvoiceCode: invoiceCode,
+					InvoiceDate: invoiceDate,
+					CustomerCode: customerCode,
+					CustomerName: customerName,
+					OrderType: rowOrderType,
+					SalesManName: salesManName,
+					SkuCode: skuCode,
+					ItemName: itemName,
+					UOM: finalUomName,
+					Quantity: qty,
+					Province: province ?? string.Empty,
+					CityMunicipality: city ?? string.Empty,
+					CustomerType: customerType,
+					AddressLine: addressLine,
+					ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
+					ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
+					ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
+					ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
+					ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
+					ResolvedItemsUomId: resolvedUomId,
+					IsFreeItem: isFreeItem,
+					AmbiguousItemWarning: itemWarning,
+					AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
+					UomFallbackWarning: null,
+					UomReviewCandidateIds: uomReviewCandidateIds));
+			}
 
 				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
 				TryEmitSplitRow(hasDozenQuantityColumn, dozenQuantityColumn, "dozen", "DozenQuantity");
@@ -1051,7 +1130,6 @@ public sealed class ImportSalesInvoiceService
 
 	private static bool TryGetInt(IXLCell cell, out int value)
 	{
-		// Resolve formula cached value first
 		if (cell.HasFormula)
 		{
 			var cached = cell.CachedValue.ToString().Trim();
@@ -1059,6 +1137,11 @@ public sealed class ImportSalesInvoiceService
 				return true;
 			if (double.TryParse(cached, NumberStyles.Number, CultureInfo.InvariantCulture, out var d))
 			{
+				if (d != Math.Truncate(d))
+				{
+					value = 0;
+					return false;
+				}
 				value = (int)d;
 				return true;
 			}
@@ -1068,7 +1151,13 @@ public sealed class ImportSalesInvoiceService
 
 		if (cell.DataType == XLDataType.Number)
 		{
-			value = (int)cell.GetDouble();
+			var d = cell.GetDouble();
+			if (d != Math.Truncate(d))
+			{
+				value = 0;
+				return false;
+			}
+			value = (int)d;
 			return true;
 		}
 
@@ -1262,6 +1351,91 @@ public sealed class ImportSalesInvoiceService
 		if (cell.HasFormula)
 			return string.IsNullOrWhiteSpace(cell.CachedValue.ToString());
 		return cell.IsEmpty();
+	}
+
+	// Scans the whole sheet once, before the main row loop, to record which UOM
+	// conversions have actually been confirmed for each SubdItem (i.e. some other row
+	// for that item named a UOM that matched a real ItemsUom entry). This is what lets
+	// TryResolveFallbackUom later distinguish "a conversion this item genuinely uses"
+	// from "any random UOM entry that happens to exist in the DB for it."
+	private static Dictionary<int, HashSet<int>> BuildKnownConversionsBySubdItem(
+		IXLWorksheet worksheet,
+		IReadOnlyDictionary<string, int> headers,
+		ILookup<string, SubdItem> subdItemsBySkuGroup,
+		IEnumerable<SubdItem> allSubdItems,
+		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		int headerRowNumber)
+	{
+		var result = new Dictionary<int, HashSet<int>>();
+		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+
+		var hasSkuCodeColumn = headers.ContainsKey("SkuCode");
+		var hasItemNameColumn = headers.TryGetValue("ItemName", out var itemNameColumn);
+		var hasUomColumn = headers.TryGetValue("UnitOfMeasure", out var uomColumn);
+		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
+		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
+		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
+		var hasInBoxQuantityColumn = headers.TryGetValue("InBoxQuantity", out var inBoxQuantityColumn);
+		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
+
+		void Record(int subdItemId, int conversion)
+		{
+			if (!result.TryGetValue(subdItemId, out var set))
+			{
+				set = new HashSet<int>();
+				result[subdItemId] = set;
+			}
+			set.Add(conversion);
+		}
+
+		int? TryMatchConversion(SubdItem item, string uomString)
+		{
+			foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
+			{
+				if (InvoiceDataValidator.TryResolveUom(item.SubdItemId, synonym, uomLookup, out var matched) && matched is not null)
+					return matched.ConversionToBase;
+			}
+			return null;
+		}
+
+		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
+		{
+			var row = worksheet.Row(rowNumber);
+			if (row.CellsUsed().All(c => c.IsEmpty())) continue;
+
+			var skuCode = hasSkuCodeColumn ? GetString(row, headers["SkuCode"]) : string.Empty;
+			var itemName = hasItemNameColumn ? GetString(row, itemNameColumn) : string.Empty;
+
+			if (!InvoiceDataValidator.TryResolveItem(
+					skuCode, itemName, subdItemsBySkuGroup, allSubdItems,
+					out var resolvedItem, out _, out _, out _) || resolvedItem is null)
+				continue;
+
+			if (!useSplitQuantities)
+			{
+				var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
+				if (string.IsNullOrWhiteSpace(uom)) continue;
+				var conversion = TryMatchConversion(resolvedItem, uom);
+				if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);
+			}
+			else
+			{
+				void CheckSplit(bool hasColumn, int columnIndex, string uomLabel)
+				{
+					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex))) return;
+					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
+					var conversion = TryMatchConversion(resolvedItem, normalizedUomName);
+					if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);
+				}
+
+				CheckSplit(hasCaseQuantityColumn, caseQuantityColumn, "case");
+				CheckSplit(hasDozenQuantityColumn, dozenQuantityColumn, "dozen");
+				CheckSplit(hasPieceQuantityColumn, pieceQuantityColumn, "piece");
+				CheckSplit(hasInBoxQuantityColumn, inBoxQuantityColumn, "inbox");
+			}
+		}
+
+		return result;
 	}
 
 }

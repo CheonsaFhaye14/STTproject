@@ -1,44 +1,58 @@
-<div class="modal-overlay" id="customer-details-modal-overlay" tabindex="0" @ref="overlayRef" @onclick="CloseModal" @onkeydown="HandleKeyDown">
-    <div class="modal-box" @onclick:stopPropagation="true">
-        <div class="modal-header">
-            <h4>Customer Details: @Customer?.CustomerName</h4>
-        </div>
-        <div class="modal-body">
-            <p>Customer ID: @Customer?.CustomerId</p>
-            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerCode))
-            {
-                <p>Customer Code: @Customer.CustomerCode</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerName))
-            {
-                <p>Customer Name: @Customer.CustomerName</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(Customer?.CustomerType))
-            {
-                <p>Type: @Customer.CustomerType</p>
-            }
-            <p>Status: @(Customer != null ? (Customer.IsActive ? "Active" : "Inactive") : string.Empty)</p>
-            @if (!string.IsNullOrWhiteSpace(Customer?.AddressLine))
-            {
-                <p>AddressLine: @Customer.AddressLine</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(Customer?.City))
-            {
-                <p>City: @Customer.City</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(Customer?.Province))
-            {
-                <p>Province: @Customer.Province</p>
-            }
-            @if (Customer?.ZipCode != null)
-            {
-                <p>Zip Code: @Customer.ZipCode</p>
-            }
-        </div>
-        <div class="modal-actions">
-            <button class="btn-secondary" @onclick="CloseModal">Close (Esc)</button>
-        </div>
-    </div>
+<div @ref="overlayRef" tabindex="-1" @onkeydown="HandleKeyDown" style="outline: none;">
+    <Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" Title="Customer Details" OnClose="CloseModal" IconType="ModalIconType.UserView">
+        <ChildContent>
+            <FormSection Icon="ti ti-user" Title="Customer Information" Expandable="true" IsExpanded="true">
+                <ChildContent>
+                    <div class="form-group">
+                        <Input Label="Customer Code" Value="@Customer?.CustomerCode" Disabled="true" />
+                    </div>
+                    <div class="form-group">
+                        <Input Label="Customer Name" Value="@Customer?.CustomerName" Disabled="true" />
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Customer?.CustomerType))
+                    {
+                        <div class="form-group">
+                            <Input Label="Customer Type" Value="@Customer?.CustomerType" Disabled="true" />
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Customer?.Province))
+                    {
+                        <div class="form-group">
+                            <Input Label="Province" Value="@Customer?.Province" Disabled="true" />
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Customer?.City))
+                    {
+                        <div class="form-group">
+                            <Input Label="City" Value="@Customer?.City" Disabled="true" />
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Customer?.AddressLine))
+                    {
+                        <div class="form-group">
+                            <Input Label="Address Line" Value="@Customer?.AddressLine" Disabled="true" />
+                        </div>
+                    }
+                    @if (Customer?.ZipCode != null)
+                    {
+                        <div class="form-group">
+                            <Input Label="Zip Code" Value="@Customer?.ZipCode.ToString()" Disabled="true" />
+                        </div>
+                    }
+                </ChildContent>
+            </FormSection>
+            <FormSection Icon="ti ti-link" Title="Subd Customer" Expandable="true" IsExpanded="true">
+                <ChildContent>
+                    <AddTable TItem="SubdCustInfoDto" Items="Customer?.SubdCustomers"
+                     Columns="@(new List<string> { "SubdCustCode", "SubdCustName" })"
+                     ColumnLabels="@(new Dictionary<string,string> { ["SubdCustCode"] = "Subd Customer Code", ["SubdCustName"] = "Subd Customer Name" })"/>
+                </ChildContent>
+            </FormSection>
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Close" OnClick="CloseModal" Variant="ButtonVariant.Secondary" />
+        </FooterContent>
+    </Modal>
 </div>
 
 @code {
@@ -54,7 +68,17 @@
     {
         if (firstRender)
         {
-            await overlayRef.FocusAsync();
+            try
+            {
+                await overlayRef.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+
+            }
+            catch (JSDisconnectedException)
+            {
+            }
         }
     }
 

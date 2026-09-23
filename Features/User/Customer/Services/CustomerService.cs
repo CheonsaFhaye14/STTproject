@@ -16,7 +16,7 @@ public class CustomerService : ICustomerService
     public async Task<CustomerListResponseDto?> GetCustomersWithBranchesAsync(int userId, CancellationToken cancellationToken = default)
     {
         using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        // Get all active sub-distributors for this user
+
         var subDistributors = await context.SubDistributors
             .AsNoTracking()
             .Where(s => s.EncoderId == userId && s.IsActive)
@@ -28,7 +28,6 @@ public class CustomerService : ICustomerService
             return null;
         }
 
-        // Map sub-distributors
         var subdDtos = subDistributors.Select(s => new SubDistributorInfoDto
         {
             SubDistributorId = s.SubDistributorId,
@@ -38,27 +37,9 @@ public class CustomerService : ICustomerService
             Province = s.Province ?? null
         }).ToList();
 
-        // Choose the first sub-distributor as default
         var selected = subDistributors.First();
 
-        // Get all active customers for the selected sub-distributor
-        var customers = await context.Customers
-            .AsNoTracking()
-            .Where(c => c.SubDistributorId == selected.SubDistributorId && c.IsActive)
-            .OrderBy(c => c.CustomerName)
-            .Select(c => new CustomerInfoDto
-            {
-                CustomerId = c.CustomerId,
-                CustomerCode = c.CustomerCode,
-                CustomerName = c.CustomerName,
-                CustomerType = c.CustomerType,
-                IsActive = c.IsActive,
-                AddressLine = c.AddressLine,
-                City = c.City,
-                Province = c.Province,
-                ZipCode = c.ZipCode
-            })
-            .ToListAsync(cancellationToken);
+        var customers = await GetGroupedCustomersAsync(context, selected.SubDistributorId, cancellationToken);
 
         var subdDto = subdDtos.First(s => s.SubDistributorId == selected.SubDistributorId);
 
@@ -74,7 +55,6 @@ public class CustomerService : ICustomerService
     {
         using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // Ensure the sub-distributor belongs to the user and is active
         var subd = await context.SubDistributors
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.SubDistributorId == subDistributorId && s.EncoderId == userId && s.IsActive, cancellationToken);
@@ -84,24 +64,62 @@ public class CustomerService : ICustomerService
             return new List<CustomerInfoDto>();
         }
 
-        var customers = await context.Customers
+        return await GetGroupedCustomersAsync(context, subDistributorId, cancellationToken);
+    }
+
+    // Pulls the flat customer rows for a subdistributor, then groups them by
+    // (CustomerCode, CustomerName) so every SubdCust mapping for the same logical
+    // customer lands together in one CustomerInfoDto.SubdCustomers list, instead
+    // of each mapping producing its own duplicate customer row.
+    private static async Task<List<CustomerInfoDto>> GetGroupedCustomersAsync(
+        SttprojectContext context,
+        int subDistributorId,
+        CancellationToken cancellationToken)
+    {
+        var flat = await context.Customers
             .AsNoTracking()
             .Where(c => c.SubDistributorId == subDistributorId && c.IsActive)
-            .OrderBy(c => c.CustomerName)
-            .Select(c => new CustomerInfoDto
+            .Select(c => new
             {
-                CustomerId = c.CustomerId,
-                CustomerCode = c.CustomerCode,
-                CustomerName = c.CustomerName,
-                CustomerType = c.CustomerType,
-                IsActive = c.IsActive,
-                AddressLine = c.AddressLine,
-                City = c.City,
-                Province = c.Province,
-                ZipCode = c.ZipCode
+                c.CustomerId,
+                c.CustomerCode,
+                c.CustomerName,
+                c.CustomerType,
+                c.IsActive,
+                c.Province,
+                c.City,
+                c.AddressLine,
+                c.ZipCode,
+                c.SubdCustCode,
+                c.SubdCustName
             })
             .ToListAsync(cancellationToken);
 
-        return customers;
+        return flat
+            .GroupBy(c => new { c.CustomerCode, c.CustomerName })
+            .Select(g => new CustomerInfoDto
+            {
+                CustomerId = g.Min(c => c.CustomerId),
+                CustomerCode = g.Key.CustomerCode,
+                CustomerName = g.Key.CustomerName,
+                CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
+                IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
+                Province = g.Select(c => c.Province).FirstOrDefault(),
+                City = g.Select(c => c.City).FirstOrDefault(),
+                AddressLine = g.Select(c => c.AddressLine).FirstOrDefault(),
+                ZipCode = g.Select(c => c.ZipCode).FirstOrDefault(),
+                SubdCustomers = g
+                    .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustCode) || !string.IsNullOrWhiteSpace(c.SubdCustName))
+                    .Select(c => (Code: c.SubdCustCode ?? string.Empty, Name: c.SubdCustName ?? string.Empty))
+                    .Distinct()
+                    .Select(x => new SubdCustInfoDto
+                    {
+                        SubdCustCode = x.Code,
+                        SubdCustName = x.Name
+                    })
+                    .ToList()
+            })
+            .OrderBy(c => c.CustomerName)
+            .ToList();
     }
 }

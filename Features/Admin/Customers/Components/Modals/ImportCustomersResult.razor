@@ -275,15 +275,17 @@
                                         <div>
                                             <div class="inv-num @(hasWarning ? "inv-warn" : "inv-ok")">@first?.CustomerCode - @first?.CustomerName</div>
                                             <div class="inv-sub @(hasWarning ? "inv-sub-warn" : "inv-sub-ok")">
-                                                <span>@groupRows.Count subd store(s)</span>
-                                                @if (!string.IsNullOrWhiteSpace(ImportResult?.SubDistributorName))
-                                                {
-                                                    <span class="sep">·</span><span>@ImportResult.SubDistributorName</span>
-                                                }
                                                 @if (!string.IsNullOrWhiteSpace(first?.CustomerType))
                                                 {
-                                                    <span class="sep">·</span><span>@first.CustomerType</span>
+                                                    <span>@first.CustomerType</span>
+                                                    <span class="sep">·</span>
                                                 }
+                                                @if(!string.IsNullOrWhiteSpace(first?.Province) || !string.IsNullOrWhiteSpace(first?.City) || !string.IsNullOrWhiteSpace(first?.AddressLine) || first?.ZipCode != null)
+                                                {
+                                                    <span>@(string.Join(", ", new[] { first?.Province, first?.City, first?.ZipCode?.ToString() }.Where(s => !string.IsNullOrWhiteSpace(s))))</span>
+                                                    <span class="sep">·</span>
+                                                }
+                                                <span>@groupRows.Count subd@(groupRows.Count == 1 ? "" : "s")</span>
                                             </div>
                                         </div>
                                     </div>
@@ -323,32 +325,41 @@
                                             </div>
                                         }
                                         <div class="cust-meta">
-                                            <div>
-                                                <span class="cust-meta-label">Subdistributor</span>
-                                                <strong>@(ImportResult?.SubDistributorName ?? "—")</strong>
-                                            </div>
+                                            @if(!string.IsNullOrWhiteSpace(first?.CustomerType))
+                                            {
                                             <div>
                                                 <span class="cust-meta-label">Type</span>
-                                                <strong>@(first?.CustomerType ?? "—")</strong>
+                                                <strong>@(first?.CustomerType)</strong>
                                             </div>
+                                            }
+                                            @if(!string.IsNullOrWhiteSpace(first?.Province))
+                                            {
                                             <div>
                                                 <span class="cust-meta-label">Province</span>
-                                                <strong>@(first?.Province ?? "—")</strong>
+                                                <strong>@(first?.Province)</strong>
                                             </div>
+                                            }
+                                            @if(!string.IsNullOrWhiteSpace(first?.City))
+                                            {
                                             <div>
                                                 <span class="cust-meta-label">City / Municipality</span>
-                                                <strong>@(first?.City ?? "—")</strong>
+                                                <strong>@(first?.City)</strong>
                                             </div>
+                                            }
+                                            @if(!string.IsNullOrWhiteSpace(first?.AddressLine))
+                                            {
+                                            <div>
+                                                <span class="cust-meta-label">AddressLine</span>
+                                                <strong>@(first?.AddressLine)</strong>
+                                            </div>
+                                            }
+                                            @if(first?.ZipCode != null)
+                                            {
                                             <div>
                                                 <span class="cust-meta-label">Zip Code</span>
-                                                <strong>@(first?.ZipCode?.ToString() ?? "—")</strong>
+                                                <strong>@(first?.ZipCode)</strong>
                                             </div>
-                                       @if(!string.IsNullOrWhiteSpace(first?.AddressLine)){
-                                            <div style="grid-column: 1 / -1;">
-                                                <span class="cust-meta-label">Address Line</span>
-                                                <strong>@(first?.AddressLine ?? "—")</strong>
-                                            </div>
-                                       }    
+                                            }
                                         </div>
 
                                         <div class="itbl-wrap">

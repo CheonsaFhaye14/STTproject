@@ -29,13 +29,11 @@
         @* Customer type filter *@
         <div class="filter-group">
             <label>Customer Type:</label>
-
             <select @bind="typeFilter" @bind:after="ResetPage">
-                <option value="">All types</option>
-
-                @foreach (var t in Types)
+                <option value="">All</option>
+                @foreach (var type in Types)
                 {
-                    <option value="@t">@t</option>
+                    <option value="@type">@type</option>
                 }
             </select>
         </div>
@@ -161,16 +159,14 @@
     private string sortColumn = "CustomerCode";
     private bool sortAscending = true;
 
-    private const int pageSize = 25;
+    private const int pageSize = 50;
     private int currentPage = 1;
 
     private IEnumerable<string> Types =>
-        Model?.Customers?
-        .Select(c => c.CustomerType)
-        .Where(t => !string.IsNullOrEmpty(t))
-        .Distinct()
-        .OrderBy(t => t)
-        ?? Enumerable.Empty<string>();
+        Model?.Customers?.Select(c => c.CustomerType ?? string.Empty)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct()
+            .OrderBy(t => t) ?? Enumerable.Empty<string>();
 
     private IEnumerable<CustomerInfoDto> FilteredCustomers
     {
@@ -182,7 +178,7 @@
             {
                 var s = searchTerm.Trim();
 
-                items = items.Where(c =>
+                items = items.Where(c =>    
                     (c.CustomerCode ?? string.Empty)
                         .IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
 
