@@ -58,9 +58,30 @@ public partial class SubdItemTable
         return entries;
     }
 
-    private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch));
+    private IReadOnlyList<MapSubDistributorItemRow>? _lastSubdItemsRef;
 
-    private Task SetSortByColumnAsync(SubItemSortColumn column)
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_lastSubdItemsRef, SubdItems))
+        {
+            return;
+        }
+
+        _lastSubdItemsRef = SubdItems;
+        CurrentPage = 1;
+        RefreshFilteredItems();
+    }
+
+    private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch));
+    private List<MapSubDistributorItemRow> _filteredSubdItems = new();
+    private void RefreshFilteredItems()
+    {
+        var items = SubdItems.Where(MatchesSearch);
+
+        _filteredSubdItems = ApplySort(items).ToList();
+    }
+
+    private void SetSortByColumn(SubItemSortColumn column)
     {
         if (SortColumn == column)
         {
@@ -71,8 +92,17 @@ public partial class SubdItemTable
             SortColumn = column;
             SortAscending = true;
         }
+        CurrentPage = 1;
+        RefreshFilteredItems();
+    }
 
-        return Task.CompletedTask;
+    private void HandleSearchChanged(ChangeEventArgs e)
+    {
+        SearchText = e.Value?.ToString() ?? string.Empty;
+
+        CurrentPage = 1;
+
+        RefreshFilteredItems();
     }
 
     private Task HandleSortOrderChanged()
@@ -90,6 +120,21 @@ public partial class SubdItemTable
         }
 
         return SortAscending ? " ▲" : " ▼";
+    }
+    private readonly Dictionary<string, List<(string Label, string Value)>> _uomCache = new();
+    private List<(string Label, string Value)> GetUomEntries(string? uomText)
+    {
+        if (string.IsNullOrWhiteSpace(uomText))
+            return new();
+
+        if (_uomCache.TryGetValue(uomText, out var cached))
+            return cached;
+
+        var entries = ParseUomEntries(uomText);
+
+        _uomCache[uomText] = entries;
+
+        return entries;
     }
 
     private async Task HandleEditClicked(MapSubDistributorItemRow item)
@@ -120,6 +165,17 @@ public partial class SubdItemTable
             await OnClearCompanyItemFilter.InvokeAsync();
         }
     }
+    private int CurrentPage { get; set; } = 1;
+    private const int PageSize = 50;
+
+    private int TotalPages =>
+        Math.Max(1, (int)Math.Ceiling(
+            _filteredSubdItems.Count / (double)PageSize));
+
+    private IEnumerable<MapSubDistributorItemRow> PagedItems =>
+        _filteredSubdItems
+            .Skip((CurrentPage - 1) * PageSize)
+            .Take(PageSize);
 
     private async Task MapSelectedCompanyItemAsync()
     {

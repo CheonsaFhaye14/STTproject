@@ -194,7 +194,11 @@ public sealed class ImportCustomersService
                 rowResult.SubdCustCode, rowResult.SubdCustName);
 
             if (dupCheck.Outcome == ImportDuplicateOutcome.ExactDuplicate)
-                rowResult.Issues.Add(dupCheck.IssueMessage!);
+            {
+                rowResult.Warnings.Add(dupCheck.IssueMessage!);
+                rowResult.IsAlreadyImported = true;
+                rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
+            }
             else if (dupCheck.Outcome == ImportDuplicateOutcome.FillableBlank)
                 rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
 
@@ -217,8 +221,10 @@ public sealed class ImportCustomersService
             }
             var dupKey = $"{rowResult.CustomerCode}|{rowResult.CustomerName}|{rowResult.SubdCustCode}|{rowResult.SubdCustName}";
             if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !seenInFile.Add(dupKey))
-                rowResult.Issues.Add($"Row is an exact duplicate of another row in this file: Customer Code '{rowResult.CustomerCode}', Subd Customer Code '{rowResult.SubdCustCode}', Subd Store Name '{rowResult.SubdCustName}' all match another row.");
-                
+            {
+                rowResult.Warnings.Add($"Row is an exact duplicate of another row in this file: Customer Code '{rowResult.CustomerCode}', Subd Customer Code '{rowResult.SubdCustCode}', Subd Store Name '{rowResult.SubdCustName}' all match another row.");
+                rowResult.IsDuplicateInFile = true;
+            }
             rowResult.IsSuccess = rowResult.Issues.Count == 0;
             result.Rows.Add(rowResult);
         }
@@ -358,10 +364,31 @@ public sealed class ImportCustomersService
         if (validRows.Count == 0) return 0;
 
         var committed = 0;
+        // Reuses the first-created customer for any later row that's an exact duplicate
+        // within this same commit batch, instead of inserting it again.
+        var createdByDupKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var row in validRows)
         {
+            var dupKey = $"{row.CustomerCode}|{row.CustomerName}|{row.SubdCustCode}|{row.SubdCustName}";
+
             try
             {
+                if (row.IsDuplicateInFile && createdByDupKey.TryGetValue(dupKey, out var reusedId))
+                {
+                    row.CustomerId = reusedId;
+                    committed++;
+                    continue;
+                }
+
+                if (row.IsAlreadyImported && row.ExistingCustomerIdToUpdate is int alreadyExistingId)
+                {
+                    // Already exists in the database exactly as-is — nothing to save.
+                    row.CustomerId = alreadyExistingId;
+                    committed++;
+                    continue;
+                }
+
                 if (row.ExistingCustomerIdToUpdate is int existingId)
                 {
                     var updated = await _customerService.FillBlankSubdMappingAsync(
@@ -387,6 +414,10 @@ public sealed class ImportCustomersService
                     });
                     row.CustomerId = created?.CustomerId;
                 }
+
+                if (row.CustomerId is int newId)
+                    createdByDupKey[dupKey] = newId;
+
                 committed++;
             }
             catch (Exception ex)
@@ -398,7 +429,7 @@ public sealed class ImportCustomersService
 
         return committed;
     }
-
+    
     // PHASE 3 — build a downloadable Excel report: original columns + an "Error" column, failed rows only.
     public byte[] GenerateErrorReportExcel(CustomerImportResult result)
     {

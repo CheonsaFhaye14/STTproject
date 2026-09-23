@@ -314,7 +314,7 @@ public sealed class ImportMapItemService
 				}
 			}
 
-			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors.Values.SelectMany(x => x).ToList());
+			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors);
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
 			{
@@ -648,7 +648,6 @@ public sealed class ImportMapItemService
 					conversion = parsedConversion;
 				}
 			}
-
 			decimal? price = null;
 			if (!row.Cell(headers["Price"]).IsEmpty())
 			{
@@ -656,11 +655,6 @@ public sealed class ImportMapItemService
 				{
 					price = parsedPrice;
 				}
-			}
-
-			if (price.HasValue && price.Value <= 0)
-			{
-				continue; 
 			}
 
 			var rawValues = headers.ToDictionary(
@@ -918,20 +912,31 @@ public sealed class ImportMapItemService
 		}
 	}
 
-	private static Dictionary<int, decimal> ComputeMissingPrices(List<ImportedMapItemRow> rows, List<string> errors)
+	private static Dictionary<int, decimal> ComputeMissingPrices(
+		List<ImportedMapItemRow> rows,
+		Dictionary<int, List<string>> rowErrors)
 	{
 		var computedPricesByRow = new Dictionary<int, decimal>();
 
+		void AddError(int rowNumber, string message)
+		{
+			if (!rowErrors.TryGetValue(rowNumber, out var list))
+			{
+				list = new List<string>();
+				rowErrors[rowNumber] = list;
+			}
+			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
+			{
+				list.Add(message);
+			}
+		}
 
 		var pricedRows = rows
 			.Where(row => row.Price.HasValue && row.Conversion.HasValue && row.Conversion.Value > 0)
 			.OrderBy(row => row.RowNumber)
 			.ToList();
 
-		var missingPriceRows = rows
-			.Where(row => !row.Price.HasValue)
-			.ToList();
-
+		var missingPriceRows = rows.Where(row => !row.Price.HasValue).ToList();
 		if (missingPriceRows.Count == 0)
 		{
 			return computedPricesByRow;
@@ -940,7 +945,7 @@ public sealed class ImportMapItemService
 		var unresolvable = missingPriceRows.Where(row => !row.Conversion.HasValue).ToList();
 		foreach (var row in unresolvable)
 		{
-			errors.Add($"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
+			AddError(row.RowNumber, $"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
 		}
 
 		var resolvableMissingPriceRows = missingPriceRows.Except(unresolvable).ToList();
@@ -951,7 +956,10 @@ public sealed class ImportMapItemService
 
 		if (pricedRows.Count == 0)
 		{
-			errors.Add("At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
+			foreach (var row in resolvableMissingPriceRows)
+			{
+				AddError(row.RowNumber, "At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
+			}
 			return computedPricesByRow;
 		}
 
@@ -963,7 +971,7 @@ public sealed class ImportMapItemService
 			var computedPrice = Math.Round(unitPrice * row.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
 			if (computedPrice < 0)
 			{
-				errors.Add($"Unable to compute a valid price for row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}).");
+				AddError(row.RowNumber, $"Unable to compute a valid price for row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}).");
 				continue;
 			}
 

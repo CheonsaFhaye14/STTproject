@@ -3,7 +3,7 @@ using STTproject.Features.User.MapItem.DTOs;
 
 namespace STTproject.Features.User.MapItem.Components.Sections;
 
-public partial class CompanyItemsTable
+public partial class CompanyItemsTable : IDisposable
 {
     private enum CompanyItemSortColumn
     {
@@ -26,33 +26,71 @@ public partial class CompanyItemsTable
     [Parameter] public EventCallback<MapCompanyItemViewRow> OnCompanyItemRowClicked { get; set; }
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
 
-    private string _searchText = "";
-    private System.Threading.Timer? _debounceTimer;
+    // ── Search (debounced) ──
+    private string _searchInput = "";
+    private string _committedSearch = "";
+    private CancellationTokenSource? _debounceCts;
 
     private string SearchText
     {
-        get => _searchText;
+        get => _searchInput;
         set
         {
-            _searchText = value;
-            _debounceTimer?.Dispose();
-            _debounceTimer = new System.Threading.Timer(async _ =>
-            {
-                await InvokeAsync(StateHasChanged);
-            }, null, 300, Timeout.Infinite);
+            _searchInput = value;
+
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = new CancellationTokenSource();
+            _ = DebounceSearchAsync(value, _debounceCts.Token);
         }
     }
-    private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
-    private bool SortAscending { get; set; } = true;
 
+    public void Dispose()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+    }
+
+    private async Task DebounceSearchAsync(string value, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(250, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (token.IsCancellationRequested) return;
+
+        _committedSearch = value;
+        CurrentPage = 1;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Pagination ──
+    private int CurrentPage { get; set; } = 1;
+    private const int PageSize = 50;
+
+    private int TotalPages =>
+        Math.Max(1, (int)Math.Ceiling(FilteredCompanyItems.Count() / (double)PageSize));
+
+    private IEnumerable<MapCompanyItemViewRow> PagedCompanyItems =>
+        FilteredCompanyItems.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+
+    // ── Filter/sort cache (single declaration) ──
     private List<MapCompanyItemViewRow>? _cachedFiltered;
     private string? _cacheKey;
+
+    private CompanyItemSortColumn SortColumn { get; set; } = CompanyItemSortColumn.CompanyItemCode;
+    private bool SortAscending { get; set; } = true;
 
     private IEnumerable<MapCompanyItemViewRow> FilteredCompanyItems
     {
         get
         {
-            var key = $"{SearchText}|{SelectedCompanyItemsCategoryString}|{SelectedCompanyItemsFilterString}|{SortColumn}|{SortAscending}|{CompanyItems.Count}";
+            var key = $"{_committedSearch}|{SelectedCompanyItemsCategoryString}|{SelectedCompanyItemsFilterString}|{SortColumn}|{SortAscending}|{CompanyItems.Count}";
             if (_cacheKey != key)
             {
                 _cachedFiltered = ApplySort(CompanyItems.Where(MatchesSearch).Where(MatchesFilter)).ToList();
@@ -68,21 +106,15 @@ public partial class CompanyItemsTable
         {
             "Unmapped" => !item.IsMapped,
             "Mapped" => item.IsMapped,
-            _ => true // "All"
+            _ => true 
         };
     }
+
     private Task SetSortByColumnAsync(CompanyItemSortColumn column)
     {
-        if (SortColumn == column)
-        {
-            SortAscending = !SortAscending;
-        }
-        else
-        {
-            SortColumn = column;
-            SortAscending = true;
-        }
-
+        if (SortColumn == column) SortAscending = !SortAscending;
+        else { SortColumn = column; SortAscending = true; }
+        CurrentPage = 1;
         return Task.CompletedTask;
     }
 
@@ -98,28 +130,20 @@ public partial class CompanyItemsTable
 
     private async Task HandleCategoryChanged()
     {
+        CurrentPage = 1;
         if (SelectedCompanyItemsCategoryStringChanged.HasDelegate)
-        {
             await SelectedCompanyItemsCategoryStringChanged.InvokeAsync(SelectedCompanyItemsCategoryString);
-        }
-
         if (OnCompanyItemsCategoryChanged.HasDelegate)
-        {
             await OnCompanyItemsCategoryChanged.InvokeAsync();
-        }
     }
 
     private async Task HandleFilterChanged()
     {
+        CurrentPage = 1;
         if (SelectedCompanyItemsFilterStringChanged.HasDelegate)
-        {
             await SelectedCompanyItemsFilterStringChanged.InvokeAsync(SelectedCompanyItemsFilterString);
-        }
-
         if (OnCompanyItemsFilterStringChanged.HasDelegate)
-        {
             await OnCompanyItemsFilterStringChanged.InvokeAsync();
-        }
     }
 
     private async Task HandleRowClicked(MapCompanyItemViewRow item)
@@ -145,12 +169,12 @@ public partial class CompanyItemsTable
 
     private bool MatchesSearch(MapCompanyItemViewRow item)
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
+        if (string.IsNullOrWhiteSpace(_committedSearch))
         {
             return true;
         }
 
-        var search = SearchText.Trim();
+        var search = _committedSearch.Trim();
         return ContainsIgnoreCase(item.CompanyItemCode, search)
             || ContainsIgnoreCase(item.Category, search)
             || ContainsIgnoreCase(item.ItemName, search);

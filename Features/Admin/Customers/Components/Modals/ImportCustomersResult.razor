@@ -677,6 +677,8 @@
 
         if (msg.Contains("not found in the geographic")) return "Province Not Found";
         if (msg.Contains("does not match province")) return "City/Province Mismatch";
+        if (msg.Contains("already exists for this subdistributor")) return "Duplicate Customer";
+        if (msg.Contains("exact duplicate of another row in this file")) return "Duplicate Customer";
 
         return NormalizeMessage(m);
     }

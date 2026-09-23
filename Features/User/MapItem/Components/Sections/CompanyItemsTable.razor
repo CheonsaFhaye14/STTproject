@@ -45,7 +45,7 @@
             <tbody>
                 @if (FilteredCompanyItems.Any())
                 {
-                    @foreach (var item in FilteredCompanyItems)
+                    @foreach (var item in PagedCompanyItems)
                     {
                         var isSelected = SelectedCompanyItemIdForFilter == item.CompanyItemId;
                         var isPriceIncreasePending = item.EffectivityDate.HasValue;
@@ -72,7 +72,6 @@
                             </td>
                         </tr>
                     }
-
                 }
                 else
                 {
@@ -83,4 +82,12 @@
             </tbody>
         </table>
     </div>
+    @if (TotalPages > 1)
+    {
+        <div class="filters" style="justify-content: flex-end; gap: 8px;">
+            <button class="btn-secondary" disabled="@(CurrentPage <= 1)" @onclick="() => CurrentPage--">Prev</button>
+            <span>Page @CurrentPage of @TotalPages</span>
+            <button class="btn-secondary" disabled="@(CurrentPage >= TotalPages)" @onclick="() => CurrentPage++">Next</button>
+        </div>
+    }
 </div>

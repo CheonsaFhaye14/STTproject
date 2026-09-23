@@ -1,7 +1,7 @@
 ﻿@using STTproject.Shared.Components.Buttons
 <div class="card-section">
 	<h3 class="subd-items-title">
-		SUB DISTRIBUTOR ITEMS
+		(@_filteredSubdItems.Count) SUB DISTRIBUTOR ITEMS 
 		@if (SelectedCompanyItemIdForFilter.HasValue)
 		{
 			var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
@@ -34,7 +34,10 @@
 	</h3>
 	<div class="filters">
 		<div class="filter-group">
-			<input type="text" placeholder="Search" @bind="SearchText" @bind:event="oninput" />
+			<input type="text"
+				placeholder="Search"
+				value="@SearchText"
+				@oninput="HandleSearchChanged" />
 		</div>
 		<div class="filter-group">
 			<select @bind="SortOrder" @bind:after="HandleSortOrderChanged">
@@ -50,20 +53,20 @@
 				<tr>
 					@if (!IsSubDistributorSelected)
 					{
-						<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubdName)">
+						<th class="text-col" @onclick="() => SetSortByColumn(SubItemSortColumn.SubdName)">
 							SUB DISTRIBUTOR NAME
 							@GetSortIndicator(SubItemSortColumn.SubdName)
 						</th>
 					}
-					<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.SubItemCode)">
+					<th class="text-col" @onclick="() => SetSortByColumn(SubItemSortColumn.SubItemCode)">
 						SUB ITEM CODE
 						@GetSortIndicator(SubItemSortColumn.SubItemCode)
 					</th>
-					<th class="text-col" @onclick="() => SetSortByColumnAsync(SubItemSortColumn.Description)">
+					<th class="text-col" @onclick="() => SetSortByColumn(SubItemSortColumn.Description)">
 						ITEM NAME
 						@GetSortIndicator(SubItemSortColumn.Description)
 					</th>
-					<th @onclick="() => SetSortByColumnAsync(SubItemSortColumn.UomName)">
+					<th @onclick="() => SetSortByColumn(SubItemSortColumn.UomName)">
 						UNIT OF MEASURES
 						@GetSortIndicator(SubItemSortColumn.UomName)
 					</th>
@@ -71,11 +74,11 @@
 				</tr>
 			</thead>
 			<tbody>
-				@if (FilteredSubdItems.Any())
+				@if (_filteredSubdItems.Count > 0)
 				{
-					@foreach (MapSubDistributorItemRow item in FilteredSubdItems)
+					@foreach (var item in PagedItems)
 					{
-						var uomEntries = ParseUomEntries(item.UomName);
+						var uomEntries = GetUomEntries(item.UomName);
 						<tr>
 							@if (!IsSubDistributorSelected)
 							{
@@ -131,4 +134,12 @@
 			</tbody>
 		</table>
 	</div>
+	@if (TotalPages > 1)
+    {
+        <div class="filters" style="justify-content: flex-end; gap: 8px;">
+            <button class="btn-secondary" disabled="@(CurrentPage <= 1)" @onclick="() => CurrentPage--">Prev</button>
+            <span>Page @CurrentPage of @TotalPages</span>
+            <button class="btn-secondary" disabled="@(CurrentPage >= TotalPages)" @onclick="() => CurrentPage++">Next</button>
+        </div>
+    }
 </div>

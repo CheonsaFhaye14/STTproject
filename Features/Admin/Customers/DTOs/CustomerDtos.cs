@@ -157,6 +157,8 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public List<string> Warnings { get; } = new();
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int? ExistingCustomerIdToUpdate { get; set; }
+        public bool IsAlreadyImported { get; set; }
+        public bool IsDuplicateInFile { get; set; }
     }
 
     public sealed class PreparedCustomerGroup
