@@ -1138,42 +1138,28 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
         if (existingUoms is not null && existingUoms.Any())
         {
-            var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1 || IsBaseUom(u.UomName));
-            
-            string NormalizeForEdit(string? name) =>
-                IsBaseUom(name) ? BaseUomName : (name ?? string.Empty).Trim();
+            var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1);
 
-            availableUoms = new List<string>(existingUoms
-                .Select(u => NormalizeForEdit(u.UomName))
-                .Concat(hasBaseUnit ? Enumerable.Empty<string>() : new[] { BaseUomName })
+            availableUoms = existingUoms
+                .Select(u => (u.UomName ?? string.Empty).Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(u => u));
+                .OrderBy(u => u)
+                .ToList();
 
             uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-            foreach (var u in availableUoms)
+            foreach (var name in availableUoms)
             {
                 var matched = existingUoms.FirstOrDefault(e =>
-                    string.Equals(NormalizeForEdit(e.UomName), u, StringComparison.OrdinalIgnoreCase));
+                    string.Equals((e.UomName ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
 
-                if (IsBaseUom(u))
+                if (matched != null)
                 {
-                    var price = matched != null && matched.ConversionToBase != 0
-                        ? matched.Price / matched.ConversionToBase
-                        : matched?.Price;
-                    uomEntries[u] = new UomEntry { ItemsUomId = matched?.ItemsUomId, Conversion = 1, Price = price };
-                }
-                else if (matched != null)
-                {
-                    uomEntries[u] = new UomEntry
+                    uomEntries[name] = new UomEntry
                     {
                         ItemsUomId = matched.ItemsUomId,
                         Conversion = matched.ConversionToBase,
                         Price = matched.Price
                     };
-                }
-                else
-                {
-                    uomEntries[u] = new UomEntry { Conversion = 1, Price = null };
                 }
             }
         }

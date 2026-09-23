@@ -455,27 +455,16 @@ public partial class AddUom
     
     private async Task AddAsync()
     {
-        var baseEntry = workingUomEntries.TryGetValue(BaseUomName, out var byName)
-            ? byName
-            : workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
+        var baseEntry = workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
 
-        if (baseEntry is null)
-        {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
-            baseEntry = workingUomEntries[BaseUomName];
-        }
-
-        if (!baseEntry.Price.HasValue)
+        if (baseEntry is not null && !baseEntry.Price.HasValue)
         {
             var sourceEntry = workingUomEntries.Values.FirstOrDefault(entry =>
-                entry != baseEntry &&
-                entry.Price.HasValue &&
-                entry.Conversion.HasValue &&
-                entry.Conversion.Value != 0);
+                entry != baseEntry && entry.Price.HasValue && entry.Conversion.HasValue && entry.Conversion.Value != 0);
 
             if (sourceEntry != null)
             {
-                baseEntry.Price = (sourceEntry.Price!.Value / sourceEntry.Conversion!.Value) * 1;
+                baseEntry.Price = Math.Round(sourceEntry.Price!.Value / sourceEntry.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
                 baseEntry.IsAutoCalculated = true;
             }
         }
@@ -638,23 +627,14 @@ public partial class AddUom
             };
         }
 
-        if (!HasBaseUnit(workingUomEntries))
-        {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
-        }
     }
-
+    
     private void ApplyDraftState(AddUomModalDraftState draft)
     {
         workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in draft.WorkingUomEntries)
         {
             workingUomEntries[NormalizeBaseUomName(entry.Key)] = entry.Value;
-        }
-
-        if (!HasBaseUnit(workingUomEntries))
-        {
-            workingUomEntries[BaseUomName] = new UomEntry { Conversion = null, Price = null };
         }
 
         selectedUomOption = draft.SelectedUomOption;

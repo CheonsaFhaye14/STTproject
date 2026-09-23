@@ -980,47 +980,31 @@ public sealed class ImportMapItemService
 			return;
 		}
 
-		// The base unit is identified purely by Conversion == 1 — any UOM name can hold
-		// that role, so there's no more forcing everything into a fixed "PC" key.
+		// The base unit is identified purely by Conversion == 1. If no row claims
+		// that role, the SubdItem simply has no base unit — we no longer force one
+		// into existence by repurposing or synthesizing an entry.
 		var existingBaseKey = uomEntries.FirstOrDefault(kv => kv.Value.Conversion == 1).Key;
-		if (!string.IsNullOrWhiteSpace(existingBaseKey) && uomEntries.TryGetValue(existingBaseKey, out var baseEntry))
+		if (string.IsNullOrWhiteSpace(existingBaseKey) || !uomEntries.TryGetValue(existingBaseKey, out var baseEntry))
 		{
-			if (!baseEntry.Price.HasValue)
-			{
-				var pricedSource = uomEntries
-					.Where(entry => !string.Equals(entry.Key, existingBaseKey, StringComparison.OrdinalIgnoreCase))
-					.Where(entry => entry.Value.Price.HasValue && entry.Value.Conversion > 0)
-					.OrderBy(entry => entry.Value.Conversion)
-					.FirstOrDefault();
-
-				if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
-				{
-					baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
-					baseEntry.IsAutoCalculated = true;
-				}
-			}
-
 			return;
 		}
 
-		// No row explicitly claimed conversion 1 — fall back to promoting the
-		// cheapest-conversion priced entry in place, keeping its original name.
-		var sourceEntry = uomEntries
+		if (baseEntry.Price.HasValue)
+		{
+			return;
+		}
+
+		var pricedSource = uomEntries
+			.Where(entry => !string.Equals(entry.Key, existingBaseKey, StringComparison.OrdinalIgnoreCase))
 			.Where(entry => entry.Value.Price.HasValue && entry.Value.Conversion > 0)
 			.OrderBy(entry => entry.Value.Conversion)
 			.FirstOrDefault();
 
-		if (sourceEntry.Value == null || !sourceEntry.Value.Price.HasValue || sourceEntry.Value.Conversion is not > 0)
+		if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
 		{
-			return;
+			baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
+			baseEntry.IsAutoCalculated = true;
 		}
-
-		var originalConversion = sourceEntry.Value.Conversion!.Value;
-		var unitPrice = Math.Round(sourceEntry.Value.Price!.Value / originalConversion, 2, MidpointRounding.AwayFromZero);
-
-		sourceEntry.Value.Conversion = 1;
-		sourceEntry.Value.Price = unitPrice;
-		sourceEntry.Value.IsAutoCalculated = true;
 	}
 
 	private static List<ImportedMapItemRow> ResolveConversionsForGroup(List<ImportedMapItemRow> groupRows)

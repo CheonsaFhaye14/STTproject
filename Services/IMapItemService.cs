@@ -392,16 +392,17 @@ public class MapItemService : IMapItemService
                         existing = nameOwner;
                     }
 
+                    var isBaseUnit = entry.Conversion == 1;
+
                     if (existing != null)
                     {
                         matchedExistingIds.Add(existing.ItemsUomId);
 
-    
                         existing.UomName = name;
                         existing.ConversionToBase = entry.Conversion;
                         existing.Price = entry.Price ?? 0m;
-                        existing.IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase);
-                        existing.IsActive = true; // reclaiming (or normally updating) always reactivates
+                        existing.IsBaseUnit = isBaseUnit;
+                        existing.IsActive = true;
                         existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
                         existing.UpdatedDate = now;
                         context.ItemsUoms.Update(existing);
@@ -413,7 +414,7 @@ public class MapItemService : IMapItemService
                             UomName = name,
                             ConversionToBase = entry.Conversion,
                             Price = entry.Price ?? 0m,
-                            IsBaseUnit = string.Equals(name, "PC", StringComparison.OrdinalIgnoreCase),
+                            IsBaseUnit = isBaseUnit,
                             IsActive = entry.IsActive,
                             SubdItemId = subdItemId,
                             CreatedDate = now,
