@@ -458,13 +458,17 @@ public sealed class InvoiceDataValidator
             if (skuMatches.Count > 1)
             {
                 var effectiveCandidates = skuMatches;
+                var narrowedByName = false;
 
                 if (!string.IsNullOrWhiteSpace(itemName))
                 {
                     var normalizedName = NormalizeItemName(itemName);
                     var narrowed = skuMatches.Where(i => NormalizeItemName(i.ItemName) == normalizedName).ToList();
                     if (narrowed.Count >= 1)
+                    {
                         effectiveCandidates = narrowed;
+                        narrowedByName = true;
+                    }
                 }
 
                 item = effectiveCandidates.OrderBy(i => i.SubdItemId).First();
@@ -472,7 +476,10 @@ public sealed class InvoiceDataValidator
                 if (effectiveCandidates.Count > 1)
                 {
                     ambiguousCandidates = effectiveCandidates;
-                    warning = $"SKU '{skuCode}' matched {effectiveCandidates.Count} records with the same code/name; used '{item.ItemName}' by default. Review under Warnings to pick a different one.";
+
+                    warning = narrowedByName
+                        ? $"SKU '{skuCode}' matched {effectiveCandidates.Count} records with the same code and name; used '{item.ItemName}' by default. Review under Warnings to pick a different one."
+                        : $"SKU '{skuCode}' matched {effectiveCandidates.Count} different products under the same code; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
                 }
 
                 return true;
@@ -827,9 +834,11 @@ public sealed class InvoiceDataValidator
             case "pack":
             case "pck":
             case "packs":
+            case "pk":
                 yield return "pack";
                 yield return "packs";
                 yield return "pck";
+                yield return "pk";
                 yield break;
             case "ib":
             case "inbox":
@@ -837,6 +846,11 @@ public sealed class InvoiceDataValidator
                 yield return "innerbox";
                 yield return "inbox";
                 yield return "ib";
+                yield break;
+            case "tie":
+            case "ties":
+                yield return "tie";
+                yield return "ties";
                 yield break;
             default:
                 yield return value.Trim();

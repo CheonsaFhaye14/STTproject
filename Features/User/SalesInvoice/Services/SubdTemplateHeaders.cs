@@ -268,6 +268,23 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["FreeItems"] = new[] { "amount" };
 				return map;
 			}
+			if (isApexFoods(subDistributor))
+			{
+				map["InvoiceCode"] = new[] { "Doc No." };
+				map["InvoiceDate"] = new[] { "date" };
+				map["CustomerCode"] = new[] { "customer code" };
+				map["CustomerName"] = new[] { "name" };
+				map["SalesManName"] = new[] { "sales rep" };
+				// Item No/Name = 4806527480082 PERLA LAU BAR 110G X 144 BLUEx 144 / Pringles Snack Cheese 12 x 102gx 12
+				map["SkuCode"] = new[] { "item code" };
+				map["ItemName"] = new[] { "product desc" };
+				map["CaseQuantity"] = new[] { "Qty Invoiced (in cases)" };
+				map["UnitofMeasure"] = new[] { "UOM" }; //CS ( 576 Pcs )
+				// Qty Invoiced (in Cases) * Config == pc quantity
+				map["Quantity"] = new[] { "quantity" };
+
+				return map;
+			}
 			return map;
 		}
 
@@ -457,6 +474,11 @@ namespace STTproject.Features.User.SalesInvoice.Services
 		{
 			return string.Equals(subDistributor.SubdCode?.Trim(), "03SL04", StringComparison.OrdinalIgnoreCase)
 				|| string.Equals(subDistributor.SubdName?.Trim(), "KING ALTON BATANGAS", StringComparison.OrdinalIgnoreCase);
+		}
+		private static bool isApexFoods(SubDistributor subDistributor)
+		{
+			return string.Equals(subDistributor.SubdCode?.Trim(), "04VIS07", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(subDistributor.SubdName?.Trim(), "APEX FOODS DISTRIBUTION CORP.", StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }
