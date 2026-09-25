@@ -79,11 +79,10 @@
 
         <!-- Customer type filter -->
         <div class="clt-filter-group">
-            <label class="clt-filter-label" for="typeFilter">Customer type</label>
             <select id="typeFilter" class="clt-select" value="@SelectedCustomerType"
                     @onchange="e => OnFilterChanged(customerType: e.Value?.ToString() ?? string.Empty)">
                 <option value="">All types</option>
-                <option value="">Not set</option>
+                <option value="__NOTSET__" selected="@(SelectedCustomerType == "__NOTSET__")">Not set</option>
                 @foreach (var type in AllCustomerTypes)
                 {
                     <option value="@type" selected="@(SelectedCustomerType == type)">@type</option>
@@ -247,7 +246,7 @@
             _debounceTimer = new System.Threading.Timer(async _ =>
             {
                 currentPage = 1;
-                await InvokeAsync(LoadPageAsync); // ← add InvokeAsync here
+                await InvokeAsync(LoadPageAsync); 
             }, null, 400, Timeout.Infinite);
         }
     }
@@ -307,7 +306,7 @@
             var (items, total) = await AdminCustomerService.GetPagedAsync(
                 currentPage, pageSize, _searchTerm, SelectedStatus,
                 SelectedCustomerType, SelectedSubDistributorId,
-                SortColumn, SortAscending); // ← add these
+                SortColumn, SortAscending);
 
             PagedCustomers = items.ToList();
             totalCount = total;

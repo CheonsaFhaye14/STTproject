@@ -162,14 +162,19 @@ namespace STTproject.Features.Admin.Customers.Services
             var filtered = db.Customers
                 .AsNoTracking()
                 .Where(c => subDistributorId == null || c.SubDistributorId == subDistributorId)
-                .Where(c => string.IsNullOrEmpty(customerType) || c.CustomerType == customerType)
+                .Where(c => string.IsNullOrEmpty(customerType) ||
+                    (customerType == "__NOTSET__"
+                        ? string.IsNullOrWhiteSpace(c.CustomerType)
+                        : c.CustomerType == customerType))
                 .Where(c => string.IsNullOrEmpty(status) ||
                     (status == "active" ? c.IsActive : !c.IsActive))
                 .Where(c => string.IsNullOrEmpty(search) ||
                     c.CustomerName.Contains(search) ||
                     c.CustomerCode.Contains(search) ||
                     c.SubdCustCode != null && c.SubdCustCode.Contains(search) ||
-                    c.SubdCustName != null && c.SubdCustName.Contains(search) || c.City != null && c.City.Contains(search) || c.Province != null && c.Province.Contains(search));
+                    c.SubdCustName != null && c.SubdCustName.Contains(search) ||
+                    c.City != null && c.City.Contains(search) ||
+                    c.Province != null && c.Province.Contains(search));
 
             var flat = filtered.Select(c => new
             {
