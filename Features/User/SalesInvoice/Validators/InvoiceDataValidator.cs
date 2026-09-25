@@ -567,10 +567,6 @@ public sealed class InvoiceDataValidator
     }
 
     public static bool TryResolveFallbackUom(
-        int subdItemId,
-        string requestedUom,
-        ILookup<int, Data.ItemsUom> uomsBySubdItemId,
-        IReadOnlySet<int> knownConversionsForItem,
         out Data.ItemsUom? uom,
         out string? warning,
         out List<Data.ItemsUom>? reviewCandidates)
@@ -578,16 +574,6 @@ public sealed class InvoiceDataValidator
         uom = null;
         warning = null;
         reviewCandidates = null;
-
-        var candidates = uomsBySubdItemId[subdItemId].ToList();
-        if (candidates.Count == 0)
-            return false; // genuinely nothing configured — stays a hard error, as before
-
-        // No auto-substitution: matching by conversion number alone can pick the wrong
-        // SubdItem's UOM when two records share a SKU/name but have different UOM sets
-        // (e.g. one uses Case/Piece, another uses cs/pc). Always surface every UOM
-        // actually configured for this item and let the user pick.
-        reviewCandidates = candidates;
         return false;
     }
     

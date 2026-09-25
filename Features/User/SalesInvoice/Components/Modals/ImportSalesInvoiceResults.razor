@@ -45,8 +45,8 @@
                     // Split once instead of calling .Where() twice per render in the markup
                     var successCards = filteredCards.Where(c => !c.HasErrors).ToList();
                     var errorCards = filteredCards.Where(c => c.HasErrors).ToList();
-                    var selectedCount = invoiceCards.Count(c => c.Prepared?.Selected == true && !c.HasErrors && c.Prepared?.IsSaved != true);
-                    var selectableCount = invoiceCards.Count(c => c.Prepared != null && !c.HasErrors && c.Prepared.IsSaved != true);
+                    var selectedCount = successCards.Count(c => c.Prepared?.Selected == true && c.Prepared?.IsSaved != true);
+                    var selectableCount = successCards.Count(c => c.Prepared != null && c.Prepared.IsSaved != true);
                     var totalRows = ImportResult.TotalRowsProcessed;
 
                     @* ── Sticky header controls (stay in place while cards scroll) ── *@
@@ -226,15 +226,16 @@
                         }
                         
 
-                        @* ── Select all (only on valid / all tab) ── *@
-                        @if (cardFilter == InvoiceCardFilter.SuccessOnly && selectableCount > 0)
+                        @* ── Select all (only on valid) ── *@
+                        @if ((cardFilter == InvoiceCardFilter.SuccessOnly || cardFilter == InvoiceCardFilter.WarningOnly) && selectableCount > 0)
                         {
+                            var label = cardFilter == InvoiceCardFilter.WarningOnly ? "Select all filtered" : "Select all valid";
                             <div class="sel-all-bar">
                                 <input type="checkbox"
-                                       id="select-all-check"
-                                       checked="@(selectedCount == selectableCount)"
-                                       @onchange="(e) => ToggleSelectAllInvoices(e.Value)" />
-                                <label for="select-all-check">Select all valid (@selectedCount / @selectableCount ready)</label>
+                                    id="select-all-check"
+                                    checked="@(selectedCount == selectableCount)"
+                                    @onchange="(e) => ToggleSelectAllInvoices(successCards, e.Value)" />
+                                <label for="select-all-check">@label (@selectedCount / @selectableCount)</label>
                             </div>
                         }
 
@@ -304,12 +305,12 @@
                             {
                                 <Virtualize Items="successCards" Context="card" ItemSize="72">
                                     @{
-                                        var isExpanded = expandedCards.Contains(card.InvoiceNumber);
+                                        var isExpanded = expandedCards.Contains(card.CardKey);
                                         var isWarn = HasWarningOnly(card);
                                     }
                                     <div class="icard">
                                         <div class="ich @(isWarn ? "ich-warn" : "ich-ok") @(isExpanded ? "open" : "")"
-                                             @onclick="() => ToggleExpand(card.InvoiceNumber)">
+                                             @onclick="() => ToggleExpand(card.CardKey)">
                                             <div class="ich-left">
                                                 <div class="iicon @(isWarn ? "iicon-warn" : "iicon-ok")">
                                                     <i class="ti @(isWarn ? "ti-file-alert" : "ti-file-check")" aria-hidden="true"></i>
@@ -377,10 +378,14 @@
                                                 }
                                                 else if (isWarn)
                                                 {
-                                                    <span class="badge badge-needs-review">
-                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        Needs review
-                                                    </span>
+                                                    <span class="badge badge-needs-review">...</span>
+                                                    @if (card?.Prepared != null)
+                                                    {
+                                                        <div class="chk" @onclick:stopPropagation="true">
+                                                            <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.CardKey" />
+                                                            <label for="chk-@card.CardKey">Select</label>
+                                                        </div>
+                                                    }
                                                 }
                                                 else if (card?.Prepared != null)
                                                 {
@@ -389,8 +394,8 @@
                                                         Ready
                                                     </span>
                                                     <div class="chk" @onclick:stopPropagation="true">
-                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.InvoiceNumber" />
-                                                        <label for="chk-@card.InvoiceNumber">Select</label>
+                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.CardKey" />
+                                                        <label for="chk-@card.CardKey">Select</label>
                                                     </div>
                                                 }
                                                 <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
@@ -549,11 +554,11 @@
                                     <Virtualize Items="errorCards" Context="card" ItemSize="72">
                                         @{
                                             var grouped = GetGroupedIssues(card, selectedErrorFilter);
-                                            var isExpanded = expandedCards.Contains(card.InvoiceNumber);
+                                            var isExpanded = expandedCards.Contains(card.CardKey);
                                         }
                                         <div class="icard">
                                             <div class="ich ich-er @(isExpanded ? "open" : "")"
-                                                 @onclick="() => ToggleExpand(card.InvoiceNumber)">
+                                                 @onclick="() => ToggleExpand(card.CardKey)">
                                                 <div class="ich-left">
                                                     <div class="iicon iicon-er">
                                                         <i class="ti ti-file-alert" aria-hidden="true"></i>
@@ -651,9 +656,13 @@
     private readonly Dictionary<string, List<GroupedIssue>> _groupedIssuesCache = new();
     private string? _groupedIssuesCacheFilter;
 
-    private bool CanCommit => ImportResult != null && ImportResult.PreparedInvoices != null &&
-        ImportResult.PreparedInvoices.Any(p => p.Selected && (p.Issues == null || p.Issues.Count == 0) && !p.IsSaved);
+    private bool CanCommit => GetInvoiceCards().Any(c =>
+        !c.HasErrors && !HasWarningOnly(c) &&
+        c.Prepared != null && c.Prepared.Selected && !c.Prepared.IsSaved);
 
+    private InvoiceCardViewModel? detailCard;
+    private void OpenDetail(InvoiceCardViewModel card) => detailCard = card;
+    private void CloseDetail() => detailCard = null;
     private void ToggleExpand(string invoiceNumber)
     {
         if (!expandedCards.Remove(invoiceNumber))
@@ -914,11 +923,9 @@
     }
 
 
-    private int GetSelectedInvoiceCount()
-    {
-        if (ImportResult?.PreparedInvoices == null) return 0;
-        return ImportResult.PreparedInvoices.Count(p => p.Selected && !p.IsSaved && (p.Issues == null || p.Issues.Count == 0));
-    }
+    private int GetSelectedInvoiceCount() => GetInvoiceCards().Count(c =>
+        !c.HasErrors && !HasWarningOnly(c) &&
+        c.Prepared != null && c.Prepared.Selected && !c.Prepared.IsSaved);
 
     private List<(string Message, int Count)> GetDistinctErrorMessages()
     {
@@ -1050,22 +1057,28 @@
         return NormalizeMessageType(issue.Message);
     }
 
-    private void ToggleSelectAllInvoices(object? checkedValue)
+    private void ToggleSelectAllInvoices(List<InvoiceCardViewModel> cards, object? checkedValue)
     {
-        if (checkedValue is not bool isChecked || ImportResult?.PreparedInvoices == null) return;
-        foreach (var prepared in ImportResult.PreparedInvoices)
+        if (checkedValue is not bool isChecked) return;
+        foreach (var card in cards)
         {
-            if (prepared.IsSaved || (prepared.Issues?.Count ?? 0) > 0) continue;
-            prepared.Selected = isChecked;
+            if (card.Prepared == null || card.Prepared.IsSaved) continue;
+            card.Prepared.Selected = isChecked;
         }
     }
 
     private void OpenCommitConfirmModal() => showCommitConfirmModal = true;
     private void CancelCommit() => showCommitConfirmModal = false;
-
     private async Task ConfirmCommit()
     {
         showCommitConfirmModal = false;
+
+        foreach (var card in GetInvoiceCards())
+        {
+            if (card.Prepared != null && (card.HasErrors || HasWarningOnly(card)))
+                card.Prepared.Selected = false;
+        }
+
         await Commit();
     }
 
@@ -1089,6 +1102,8 @@
         PreparedInvoice? Prepared,
         List<ImportSalesInvoiceIssue> Issues)
     {
+        public string CardKey => BuildCardKey(InvoiceNumber, Prepared);
+
         public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
 
         public int FirstRowNumber => Issues.Count > 0

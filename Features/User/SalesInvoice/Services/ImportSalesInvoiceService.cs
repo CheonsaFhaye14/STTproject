@@ -310,15 +310,8 @@ public sealed class ImportSalesInvoiceService
 						items.Clear();
 						break;
 					}
-					if (!string.IsNullOrWhiteSpace(row.AmbiguousItemWarning) && reportedItemWarnings.Add(row.AmbiguousItemWarning))
-					{
-						preparedInvoice.Warnings.Add(row.AmbiguousItemWarning);
-					}
+					bool skuChoiceAdded = false;
 
-					if (!string.IsNullOrWhiteSpace(row.UomFallbackWarning) && reportedItemWarnings.Add(row.UomFallbackWarning))   // ← new
-					{
-						preparedInvoice.Warnings.Add(row.UomFallbackWarning);
-					}
 					if (row.AmbiguousSubdItemIds != null && row.AmbiguousSubdItemIds.Count > 1 &&
 					!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
 					{
@@ -348,7 +341,20 @@ public sealed class ImportSalesInvoiceService
 								Candidates = options,
 								SelectedSubdItemId = row.ResolvedSubdItemId
 							});
+							skuChoiceAdded = true;
 						}
+					}
+
+					if (skuChoiceAdded &&
+						!string.IsNullOrWhiteSpace(row.AmbiguousItemWarning) &&
+						reportedItemWarnings.Add(row.AmbiguousItemWarning))
+					{
+						preparedInvoice.Warnings.Add(row.AmbiguousItemWarning);
+					}
+
+					if (!string.IsNullOrWhiteSpace(row.UomFallbackWarning) && reportedItemWarnings.Add(row.UomFallbackWarning))
+					{
+						preparedInvoice.Warnings.Add(row.UomFallbackWarning);
 					}
 					if (row.UomReviewCandidateIds is { Count: > 0 } &&
 						!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
@@ -798,8 +804,7 @@ public sealed class ImportSalesInvoiceService
 					if (resolvedUomId == 0 && resolvedItem is not null)
 					{
 						// Not found at all → stays an ERROR (unchanged)
-						InvoiceDataValidator.TryResolveFallbackUom(
-							resolvedItem.SubdItemId, uom, uomsBySubdItemId, new HashSet<int>(), out _, out _, out var reviewUoms);
+						InvoiceDataValidator.TryResolveFallbackUom(out _, out _, out var reviewUoms);
 
 						if (reviewUoms is { Count: > 0 })
 						{
@@ -884,8 +889,7 @@ public sealed class ImportSalesInvoiceService
 
 				if (resolvedUomId == 0 && resolvedItem is not null)
 				{
-					InvoiceDataValidator.TryResolveFallbackUom(
-						resolvedItem.SubdItemId, normalizedUomName, uomsBySubdItemId, new HashSet<int>(), out _, out _, out var reviewUoms);
+					InvoiceDataValidator.TryResolveFallbackUom( out _, out _, out var reviewUoms);
 
 					if (reviewUoms is { Count: > 0 })
 					{
@@ -1357,11 +1361,6 @@ public sealed class ImportSalesInvoiceService
 		return cell.IsEmpty();
 	}
 
-	// Scans the whole sheet once, before the main row loop, to record which UOM
-	// conversions have actually been confirmed for each SubdItem (i.e. some other row
-	// for that item named a UOM that matched a real ItemsUom entry). This is what lets
-	// TryResolveFallbackUom later distinguish "a conversion this item genuinely uses"
-	// from "any random UOM entry that happens to exist in the DB for it."
 	private static Dictionary<int, HashSet<int>> BuildKnownConversionsBySubdItem(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
