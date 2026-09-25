@@ -1,0 +1,205 @@
+@using STTproject.Services
+@using STTproject.Features.User.SalesInvoice.DTOs
+@using STTproject.Features.Admin.Customers.Services
+@inject STTproject.Features.User.SalesInvoice.Services.ImportSalesInvoiceService ImportSalesInvoiceService
+@inject STTproject.Features.User.SalesInvoice.Services.DownloadTemplateService DownloadTemplateService
+@inject IAdminCustomerService AdminCustomerService
+@inject IUserContextService UserContext
+@inject IJSRuntime JS
+
+@using STTproject.Features.User.SalesInvoice.Components.Modals
+
+<LoadingOverlay Show="isPreparing"
+                Title="Checking your file…"
+                Subtitle="Validating headers, rows, and data. This may take a moment."
+                IconClass="fa-solid fa-file-arrow-up" />
+
+@if (Show && !showResults)
+{
+    <Modal ShowModal="Show"
+           Title="Import Sales Invoices"
+           Subtitle="Import invoice rows from an Excel file for a sub-distributor."
+           IconType="ModalIconType.Upload"
+           Details="Excel should contain: Invoice Code, Invoice Date, Customer, SKU/Item, UOM, Quantity (required)."
+           OnClose="HandleClose">
+        <ChildContent>
+            <AutoComplete
+                Label="Sub-distributor"
+                TItem="STTproject.Features.Admin.Customers.DTOs.SubDistributorDto"
+                Required="true"
+                Items="subDistributors"
+                ValueSelector="x => x.SubDistributorId.ToString()"
+                TextSelector="x => x.SubDistributorName ?? string.Empty"
+                SelectedValue="@(selectedSubDistributorId?.ToString() ?? string.Empty)"
+                SelectedValueChanged="OnSubDistributorChanged" />
+
+            <FileInput OnFileSelected="HandleFileSelected" />
+
+            @if (selectedSubDistributorId is null or <= 0)
+            {
+                <p class="text-muted" style="font-size:13px;">Select a sub-distributor before importing.</p>
+            }
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Cancel" OnClick="HandleClose" Variant="ButtonVariant.Secondary" />
+            <Button Title="Check File"
+                    OnClick="OnPrepare"
+                    Disabled="@(selectedFile == null || isPreparing || selectedSubDistributorId is null or <= 0)"
+                    Icon="fa-solid fa-check"
+                    Variant="ButtonVariant.Primary" />
+        </FooterContent>
+    </Modal>
+}
+
+<ImportSalesInvoiceResults Show="showResults"
+                           ImportResult="importResult"
+                           OnCommit="HandleCommitAsync"
+                           OnClose="CloseResults"
+                           OnDownloadErrorReport="HandleDownloadErrorReport" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnImportCompleted { get; set; }
+
+    private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> subDistributors = new();
+    private int? selectedSubDistributorId;
+    private bool hasLoadedSubDistributors;
+
+    private IBrowserFile? selectedFile;
+    private bool isPreparing;
+    private bool showResults;
+    private ImportSalesInvoiceResult? importResult;
+
+    private const long MaxFileSizeBytes = 20 * 1024 * 1024;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Load once, lazily, the first time the modal is actually opened —
+        // no point fetching the subdistributor list before the user asks to import.
+        if (Show && !hasLoadedSubDistributors)
+        {
+            hasLoadedSubDistributors = true;
+            subDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
+        }
+    }
+
+    private void OnSubDistributorChanged(string value)
+    {
+        selectedSubDistributorId = int.TryParse(value, out var id) ? id : null;
+        // Switching subdistributor invalidates whatever was already checked/prepared.
+        selectedFile = null;
+        importResult = null;
+    }
+
+    private void HandleFileSelected(IBrowserFile file)
+    {
+        selectedFile = file;
+        importResult = null;
+    }
+
+    private async Task OnPrepare()
+    {
+        if (selectedFile == null || selectedSubDistributorId is null or <= 0) return;
+
+        isPreparing = true;
+        importResult = null;
+        StateHasChanged();
+
+        try
+        {
+            byte[] fileBytes;
+            await using (var stream = selectedFile.OpenReadStream(MaxFileSizeBytes))
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+            }
+
+            using var importStream = new MemoryStream(fileBytes);
+            importResult = await ImportSalesInvoiceService.PrepareFromExcelAsync(
+                importStream, selectedSubDistributorId.Value, UserContext.UserId ?? 0);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            importResult = new ImportSalesInvoiceResult();
+            importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
+        }
+        finally
+        {
+            isPreparing = false;
+            showResults = importResult != null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleCommitAsync()
+    {
+        if (importResult == null || !UserContext.UserId.HasValue) return;
+
+        var toCommit = importResult.PreparedInvoices
+            .Where(p => p.Selected && (p.Issues == null || p.Issues.Count == 0))
+            .ToList();
+
+        if (toCommit.Count == 0) return;
+
+        var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
+
+        foreach (var prepared in toCommit)
+        {
+            var existing = importResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
+            if (existing != null)
+            {
+                existing.IsSaved = prepared.IsSaved;
+                existing.SaveErrorMessage = prepared.SaveErrorMessage;
+                existing.Selected = !existing.IsSaved;
+            }
+        }
+
+        if (commitResult.HasIssues)
+        {
+            foreach (var issue in commitResult.Issues)
+            {
+                importResult.Issues.Add(issue);
+            }
+        }
+
+        if (commitResult.ImportedInvoiceCount > 0)
+        {
+            await OnImportCompleted.InvokeAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleDownloadErrorReport()
+    {
+        if (importResult == null) return;
+
+        var bytes = DownloadTemplateService.GenerateErrorReportExcel(importResult);
+        var fileName = $"SalesInvoice-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBytes",
+            fileName,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
+
+    private async Task CloseResults()
+    {
+        showResults = false;
+        selectedFile = null;
+        importResult = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleClose()
+    {
+        selectedFile = null;
+        importResult = null;
+        selectedSubDistributorId = null;
+        await OnClose.InvokeAsync();
+    }
+}

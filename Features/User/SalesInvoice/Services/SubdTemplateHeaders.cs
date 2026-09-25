@@ -151,11 +151,12 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerCode"] = new[] { "customer code" };
 				map["CustomerName"] = new[] { "name" };
 				map["CustomerType"] = new[] { "channel" };
-				map["SalesManName"] = new[] { "sales rep" };
+				map["SalesManName"] = new[] { "rep" };
 				map["Province"] = new[] { "province" };
 				map["CityMunicipality"] = new[] { "town" };
 				map["AddressLine"] = new[] { "address" };
-				map["SkuCode"] = new[] { "padsa item code" };
+				map["SkuCode"] = new[] { "item" };
+				map["ItemName"] = new[] { "item description" };
 				map["Quantity"] = new[] { "qty" };
 				map["UnitofMeasure"] = new[] { "u/m" };
 				return map;
@@ -236,15 +237,35 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["Quantity"] = new[] { "qty" };
 				return map;
 			}
-			if (isKRNMarketing(subDistributor))
+			if (isPeaseCorp(subDistributor))
 			{
-				map["InvoiceCode"] = new[] { "sales no." };
-				map["InvoiceDate"] = new[] { "date-no." };
-				map["CustomerName"] = new[] { "customer/vendor name" };
-				map["SalesManName"] = new[] { "pic name" };
-				map["SkuCode"] = new[] { "item code" };
+				map["InvoiceCode"] = new[] { "ref_no" };
+				map["InvoiceDate"] = new[] { "ref_date" };
+				map["CustomerCode"] = new[] { "customer_code" };
+				map["CustomerName"] = new[] { "customer_name" };
+				map["CustomerType"] = new[] { "customer_group" };
+				map["SalesManName"] = new[] { "salesman_name" };
+				map["SkuCode"] = new[] { " item_code " };
+				map["ItemName"] = new[] { " item_desc " };
 				map["Quantity"] = new[] { "qty" };
-				map["UnitofMeasure"] = new[] { "item name (spec)" };
+				map["UnitofMeasure"] = new[] { "symbol" };
+				return map;
+			}
+			if (isKingAltonBatangas(subDistributor))
+			{
+				map["InvoiceCode"] = new[] { "inv nbr" };
+				map["InvoiceDate"] = new[] { "inv date" };
+				map["CustomerCode"] = new[] { "custid" };
+				map["CustomerName"] = new[] { "customer name" };
+				map["CustomerType"] = new[] { "trade" };
+				map["CityMunicipality"] = new[] { "town" };
+				map["AddressLine"] = new[] { "address" };
+				map["SalesManName"] = new[] { "agent" };
+				map["SkuCode"] = new[] { "skuid" };
+				map["ItemName"] = new[] { "sku" };
+				map["PieceQuantity"] = new[] { "qty (pcs)" };
+				map["CaseQuantity"] = new[] { "qty (cs)" };
+				map["FreeItems"] = new[] { "amount" };
 				return map;
 			}
 			return map;
@@ -427,10 +448,15 @@ namespace STTproject.Features.User.SalesInvoice.Services
 			return string.Equals(subDistributor.SubdCode?.Trim(), "05MIN06", StringComparison.OrdinalIgnoreCase)
 				|| string.Equals(subDistributor.SubdName?.Trim(), "G.Y. TRADING", StringComparison.OrdinalIgnoreCase);
 		}
-		private static bool isKRNMarketing(SubDistributor subDistributor)
+		private static bool isPeaseCorp(SubDistributor subDistributor)
 		{
-			return string.Equals(subDistributor.SubdCode?.Trim(), "05MIN07", StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(subDistributor.SubdName?.Trim(), "KRN MARKETING", StringComparison.OrdinalIgnoreCase);
+			return string.Equals(subDistributor.SubdCode?.Trim(), "05MIN11", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(subDistributor.SubdName?.Trim(), "PEASE CORP.", StringComparison.OrdinalIgnoreCase);
+		}
+		private static bool isKingAltonBatangas(SubDistributor subDistributor)
+		{
+			return string.Equals(subDistributor.SubdCode?.Trim(), "03SL04", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(subDistributor.SubdName?.Trim(), "KING ALTON BATANGAS", StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }

@@ -379,7 +379,7 @@ public sealed class InvoiceDataValidator
         if (string.IsNullOrWhiteSpace(value))
             return false;
 
-        if (value == "free" || value == "tdi-claims")
+        if (value == "free" || value == "tdi-claims" || value == "0")
             return true;
 
         if (decimal.TryParse(
@@ -823,6 +823,20 @@ public sealed class InvoiceDataValidator
                 yield return "package";
                 yield return "packages";
                 yield return "pckg";
+                yield break;
+            case "pack":
+            case "pck":
+            case "packs":
+                yield return "pack";
+                yield return "packs";
+                yield return "pck";
+                yield break;
+            case "ib":
+            case "inbox":
+            case "innerbox":
+                yield return "innerbox";
+                yield return "inbox";
+                yield return "ib";
                 yield break;
             default:
                 yield return value.Trim();

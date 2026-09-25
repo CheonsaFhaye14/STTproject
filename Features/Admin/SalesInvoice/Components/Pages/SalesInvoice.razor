@@ -18,15 +18,19 @@
                 <h1 class="clt-page-title">Sales Invoices</h1>
                 <p class="clt-page-sub">@totalCount total sales invoices</p>
             </div>
-            <button class="clt-add-btn" @onclick="OpenAddModal">
-                <span class="clt-add-icon">+</span> Add invoice
-            </button>
+            <Button Title="Import invoices"
+                    OnClick="@(() => showImportModal = true)"
+                    Icon="fa-solid fa-file-arrow-up"
+                    Variant="ButtonVariant.Secondary" />
+            <Button OnClick="OpenAddModal" Title="Add invoice"
+                    Icon="fa-solid fa-plus"
+                    Variant="ButtonVariant.Primary" />
         </div>
 
         <!-- List table -->
         <SalesInvoiceTable @ref="invoiceTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                            OnViewInvoice="OpenEditModal" />
-
+ 
         <!-- Confirm create/update modal -->
         <ConfirmModal @ref="confirmModal" Show="showConfirmModal"
                       Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
@@ -34,6 +38,10 @@
                                                                                                                                                                         ? "Are you sure you want to save changes to this sales invoice?"
                                                                                                                                                                         : "Are you sure you want to create this sales invoice?")"
                       OnYes="ConfirmSave" OnNo="CancelConfirm" />
+
+        <ImportSalesInvoice Show="showImportModal"
+                    OnClose="@(() => showImportModal = false)"
+                    OnImportCompleted="OnImportCompletedAsync" />              
 
         <!-- Add / Edit modal -->
         @if (showAddModal)
@@ -100,6 +108,12 @@
             if (invoiceTable is not null)
                 await invoiceTable.LoadPageAsync();
         }
-        // on failure: confirm closes, form stays open showing inline errors
+    }
+    private bool showImportModal = false;
+
+    private async Task OnImportCompletedAsync()
+    {
+        if (invoiceTable is not null)
+            await invoiceTable.LoadPageAsync();
     }
 }
