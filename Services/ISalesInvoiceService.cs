@@ -6,7 +6,7 @@ namespace STTproject.Services;
 public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
-    Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
+    Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId, int customerId, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
     Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
     Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
@@ -65,11 +65,11 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         };
     }
 
-    public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
+    public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId, int customerId, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
         return await context.SalesInvoices
-            .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.OrderType == orderType && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+            .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.OrderType == orderType && x.SubDistributorId == subDistributorId && x.CustomerId == customerId && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
     }
 
     public async Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default)
@@ -181,8 +181,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             await NormalizeItemAmountsAsync(context, invoice, items, cancellationToken);
 
             var duplicateExists = await context.SalesInvoices
-                .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.OrderType == invoice.OrderType && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
-
+                .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.OrderType == invoice.OrderType && x.SubDistributorId == invoice.SubdistributorId && x.CustomerId == invoice.CustomerId && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+           
             if (duplicateExists)
             {
                 return new SaveInvoiceResult

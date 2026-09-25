@@ -1,8 +1,8 @@
-
 using STTproject.Features.User.SalesInvoice.DTOs;
 using System.Text.RegularExpressions;
+using System.Globalization;
 
-using System.Diagnostics;
+
 namespace STTproject.Features.User.SalesInvoice.Services;
 
 public sealed class InvoiceDataValidator
@@ -654,13 +654,15 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
-    public static bool TryResolveUom(
+        public static bool TryResolveUom(
         int subdItemId,
         string? unitOfMeasure,
-        IReadOnlyDictionary<(int subdItemId, string UomName), Data.ItemsUom> uomLookup,
-        out Data.ItemsUom? uom)
+        ILookup<(int subdItemId, string UomName), Data.ItemsUom> uomLookup,
+        out Data.ItemsUom? uom,
+        out List<Data.ItemsUom>? ambiguousMatches)
     {
         uom = null;
+        ambiguousMatches = null;
 
         if (string.IsNullOrWhiteSpace(unitOfMeasure))
             return false;
@@ -669,13 +671,21 @@ public sealed class InvoiceDataValidator
             unitOfMeasure = bracketedUom;
 
         var normalizedUom = Normalize(unitOfMeasure);
+        var matches = uomLookup[(subdItemId, normalizedUom)].Where(u => u.IsActive).ToList();
 
-        if (!uomLookup.TryGetValue((subdItemId, normalizedUom), out var found) || !found.IsActive)
+        if (matches.Count == 0)
+            return false; // genuinely missing — stays an ERROR
+
+        if (matches.Count > 1)
         {
-            return false;
+            // Same UOM name configured more than once for this item — not missing,
+            // just ambiguous. Surface as a WARNING and let the user pick.
+            ambiguousMatches = matches;
+            uom = matches.OrderBy(u => u.ItemsUomId).First();
+            return true;
         }
 
-        uom = found;
+        uom = matches[0];
         return true;
     }
 
@@ -778,9 +788,16 @@ public sealed class InvoiceDataValidator
         if (rows.Select(row => row.InvoiceDate).Distinct().Count() > 1)
             return "Invoice date values must be the same for all rows in the same invoice.";
 
-        // All rows must have same CustomerCode
-        if (rows.Select(row => Normalize(row.CustomerCode)).Distinct().Count() > 1)
-            return "Customer code values must be the same for all rows in the same invoice.";
+        // All rows must resolve to the same customer
+        var distinctCustomerKeys = rows
+            .Select(row => row.ResolvedCustomerId > 0
+                ? row.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture)
+                : Normalize(row.ResolvedCustomerCode ?? row.CustomerCode ?? row.CustomerName ?? string.Empty))
+            .Distinct()
+            .Count();
+
+        if (distinctCustomerKeys > 1)
+            return "Customer values must be the same for all rows in the same invoice.";
 
         return string.Empty;
     }

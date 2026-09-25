@@ -922,25 +922,14 @@
 
     private List<(string Message, int Count)> GetDistinctErrorMessages()
     {
-        if (_cachedErrorMessages != null)
-            return _cachedErrorMessages;
+        if (_cachedErrorMessages != null) return _cachedErrorMessages;
 
-        var cards = GetInvoiceCards();
-        var all = new List<string>();
-
-        foreach (var card in cards)
-        {
-            if (card.Issues != null)
-                all.AddRange(card.Issues.Select(i => NormalizeSalesIssueType(i)));
-            if (card.Prepared?.Issues != null)
-                all.AddRange(card.Prepared.Issues.Select(i => NormalizeSalesIssueType(i)));
-        }
+        var all = GetInvoiceCards().SelectMany(EffectiveIssues).Select(NormalizeSalesIssueType).ToList();
 
         _cachedErrorMessages = all.Where(m => !string.IsNullOrWhiteSpace(m))
             .GroupBy(m => m)
             .Select(g => (Message: g.Key, Count: g.Count()))
-            .OrderByDescending(x => x.Count)
-            .ThenBy(x => x.Message)
+            .OrderByDescending(x => x.Count).ThenBy(x => x.Message)
             .ToList();
 
         return _cachedErrorMessages;
@@ -981,13 +970,10 @@
         if (_groupedIssuesCache.TryGetValue(card.InvoiceNumber, out var cached))
             return cached;
 
-        var visibleIssues = ((card.Issues ?? new List<ImportSalesInvoiceIssue>())
-            .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>()));
+        var visibleIssues = EffectiveIssues(card).AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(filter))
+                visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
 
-        if (!string.IsNullOrWhiteSpace(filter))
-        {
-            visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
-        }
 
         var grouped = visibleIssues
             .GroupBy(i => i.Message?.Trim())
@@ -1085,18 +1071,10 @@
 
     private string GetErrorBadgeText(InvoiceCardViewModel card)
     {
-        int errorCount;
-        if (string.IsNullOrWhiteSpace(selectedErrorFilter))
-        {
-            errorCount = card.Issues.Count > 0 ? card.Issues.Count : card.Prepared?.Issues?.Count ?? 0;
-        }
-        else
-        {
-            var visible = (card.Issues ?? new List<ImportSalesInvoiceIssue>())
-                .Concat(card.Prepared?.Issues ?? Enumerable.Empty<ImportSalesInvoiceIssue>())
-                .Count(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
-            errorCount = visible;
-        }
+        var issues = EffectiveIssues(card);
+        int errorCount = string.IsNullOrWhiteSpace(selectedErrorFilter)
+            ? issues.Count
+            : issues.Count(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
         return errorCount == 1 ? "1 error" : $"{errorCount} errors";
     }
 
@@ -1537,4 +1515,6 @@
         if (!Enum.TryParse<WarningKind>(selectedWarningKindFilter, out var kind)) return true;
         return CardHasWarningValue(card, kind, selectedConflictFilter);
     }
+    private static List<ImportSalesInvoiceIssue> EffectiveIssues(InvoiceCardViewModel card) =>
+    card.Issues.Count > 0 ? card.Issues : (card.Prepared?.Issues ?? new List<ImportSalesInvoiceIssue>());
 }

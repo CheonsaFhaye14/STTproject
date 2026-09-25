@@ -150,9 +150,7 @@ public sealed class ImportSalesInvoiceService
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
 		var subdItemsBySkuGroup = subdItems.ToLookup(item => Normalize(item.SubdItemCode ?? string.Empty));		var subdItemById = subdItems.ToDictionary(item => item.SubdItemId);
-		var uomLookup = uoms
-			.GroupBy(uom => (uom.SubdItemId, Normalize(uom.UomName)))
-			.ToDictionary(group => group.Key, group => group.First());
+		var uomLookup = uoms.ToLookup(uom => (uom.SubdItemId, Normalize(uom.UomName)));
 		var uomsBySubdItemId = uoms.Where(u => u.IsActive).ToLookup(u => u.SubdItemId);
 		var customerById = customers.ToDictionary(customer => customer.CustomerId);
 		var itemsUomById = uoms.ToDictionary(uom => uom.ItemsUomId);
@@ -184,13 +182,14 @@ public sealed class ImportSalesInvoiceService
 				result.AddError(0, string.Empty, "No invoice rows were found in the template.");
 			return result;
 		}
-
 		foreach (var invoiceGroup in parsedRows.GroupBy(row =>
-					 string.Join("|",
-						 (row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
-						 (row.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
-						 (row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
-		 row.InvoiceDate.ToString("yyyy-MM-dd")), StringComparer.OrdinalIgnoreCase))
+					string.Join("|",
+						(row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
+						row.ResolvedCustomerId > 0
+							? row.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture)
+							: (row.ResolvedCustomerCode ?? row.CustomerCode ?? row.CustomerName ?? string.Empty).Trim().ToUpperInvariant(),
+						(row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
+						row.InvoiceDate.ToString("yyyy-MM-dd")), StringComparer.OrdinalIgnoreCase))
 		{
 			var invoiceRows = invoiceGroup.ToList();
 			var invoiceNumber = invoiceRows.First().InvoiceCode.Trim();
@@ -294,7 +293,7 @@ public sealed class ImportSalesInvoiceService
 						var itemKey = string.IsNullOrWhiteSpace(row.ResolvedSubdItemCode) ? row.SkuCode : row.ResolvedSubdItemCode;
 						if (reportedMissingSkus.Add(itemKey))
 						{
-							var msg = $"SKU code '{row.SkuCode}' was not found.";
+							var msg = $"SKU '{itemKey}' was not found.";
 							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), row.SkuCode));
 							result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
 						}
@@ -331,7 +330,7 @@ public sealed class ImportSalesInvoiceService
 							int candidateUomId = 0; string candidateUomName = row.UOM;
 							foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(row.UOM))
 							{
-								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m) && m is not null)
+								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m, out _) && m is not null)
 								{ candidateUomId = m.ItemsUomId; candidateUomName = m.UomName; break; }
 							}
 							if (candidateUomId == 0) continue;
@@ -402,17 +401,15 @@ public sealed class ImportSalesInvoiceService
 						Amount = unitPrice * absoluteQuantity
 					}, row.IsFreeItem));
 				}
-
 				if (items.Count == 0)
 				{
-					var msg = $"Invoice '{invoiceNumber}' has no valid item lines to import.";
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
-						firstRow.RowNumber,
-						invoiceNumber,
-						msg,
-						string.Empty,
-						firstRowCustomerValue));
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg);
+					if (preparedInvoice.Issues.Count == 0)
+					{
+						var msg = $"Invoice '{invoiceNumber}' has no valid item lines to import.";
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+							firstRow.RowNumber, invoiceNumber, msg, string.Empty, firstRowCustomerValue));
+						result.AddError(firstRow.RowNumber, invoiceNumber, msg);
+					}
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -421,8 +418,8 @@ public sealed class ImportSalesInvoiceService
 		
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
-					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, 0, cancellationToken));
-
+					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, preparedInvoice.Invoice!.SubdistributorId, preparedInvoice.Invoice!.CustomerId, 0, cancellationToken));
+								
 				if (validationErrors.Count > 0)
 				{
 					var msg = string.Join(" ", validationErrors.Values);
@@ -550,7 +547,7 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, Data.Customer> customerByName,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
-		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		ILookup<int, ItemsUom> uomsBySubdItemId,
 		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem, 
 		IEnumerable<Data.Customer> allCustomers,
@@ -728,8 +725,8 @@ public sealed class ImportSalesInvoiceService
 				else if (!string.IsNullOrWhiteSpace(skuCode))
 				{
 					var message = itemSuggestions is { Count: > 0 }
-						? $"SKU code '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
-						: $"SKU code '{skuCode}' was not found.";
+						? $"SKU '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
+						: $"SKU '{skuCode}' was not found.";
 					AddRowError(message, "SkuCode");
 				}
 				else
@@ -743,24 +740,21 @@ public sealed class ImportSalesInvoiceService
 
 			// ── Quantity & UOM ───────────────────────────────────────────────────
 
-			int ResolveUomId(string uomString)
+			(int UomId, List<Data.ItemsUom>? Ambiguous) ResolveUomWithMatches(string uomString)
 			{
 				if (resolvedItem is null)
-					return 0;
+					return (0, null);
 
 				foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
 				{
 					if (InvoiceDataValidator.TryResolveUom(
-							resolvedItem.SubdItemId,
-							synonym,
-							uomLookup,
-							out var matched) && matched is not null)
+							resolvedItem.SubdItemId, synonym, uomLookup, out var matched, out var ambiguous) && matched is not null)
 					{
-						return matched.ItemsUomId;
+						return (matched.ItemsUomId, ambiguous);
 					}
 				}
 
-				return 0;
+				return (0, null);
 			}
 
 			if (!useSplitQuantities)
@@ -796,13 +790,14 @@ public sealed class ImportSalesInvoiceService
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
 
-					var resolvedUomId = ResolveUomId(resolvedUom);
+					var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(resolvedUom);
 					var finalUomName = resolvedUom;
 					string? uomFallbackWarning = null;
-					List<int>? uomReviewCandidateIds = null; 
-					
+					List<int>? uomReviewCandidateIds = null;
+
 					if (resolvedUomId == 0 && resolvedItem is not null)
 					{
+						// Not found at all → stays an ERROR (unchanged)
 						InvoiceDataValidator.TryResolveFallbackUom(
 							resolvedItem.SubdItemId, uom, uomsBySubdItemId, new HashSet<int>(), out _, out _, out var reviewUoms);
 
@@ -818,6 +813,11 @@ public sealed class ImportSalesInvoiceService
 							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
 							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM");
 						}
+					}
+					else if (uomAmbiguousMatches is { Count: > 1 })
+					{
+						// Found, but more than one active record for the same UOM name → WARNING
+						uomReviewCandidateIds = uomAmbiguousMatches.Select(u => u.ItemsUomId).ToList();
 					}
 
 					if (!rowHasErrors)
@@ -878,7 +878,7 @@ public sealed class ImportSalesInvoiceService
 
 				// Normalize the UOM label and resolve its ID via synonyms
 				var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
-				var resolvedUomId = ResolveUomId(normalizedUomName);
+				var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(normalizedUomName);
 				var finalUomName = normalizedUomName;
 				List<int>? uomReviewCandidateIds = null;
 
@@ -900,6 +900,10 @@ public sealed class ImportSalesInvoiceService
 						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
 						return;
 					}
+				}
+				else if (uomAmbiguousMatches is { Count: > 1 })
+				{
+					uomReviewCandidateIds = uomAmbiguousMatches.Select(u => u.ItemsUomId).ToList();
 				}
 
 				emittedRows.Add(new ImportedInvoiceRow(
@@ -1363,7 +1367,7 @@ public sealed class ImportSalesInvoiceService
 		IReadOnlyDictionary<string, int> headers,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IEnumerable<SubdItem> allSubdItems,
-		IReadOnlyDictionary<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		int headerRowNumber)
 	{
 		var result = new Dictionary<int, HashSet<int>>();
@@ -1392,7 +1396,7 @@ public sealed class ImportSalesInvoiceService
 		{
 			foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
 			{
-				if (InvoiceDataValidator.TryResolveUom(item.SubdItemId, synonym, uomLookup, out var matched) && matched is not null)
+				if (InvoiceDataValidator.TryResolveUom(item.SubdItemId, synonym, uomLookup, out var matched, out _) && matched is not null)
 					return matched.ConversionToBase;
 			}
 			return null;
