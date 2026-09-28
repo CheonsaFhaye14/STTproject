@@ -1059,50 +1059,52 @@ public sealed class ImportSalesInvoiceService
 		var templateAliases = SubdTemplateHeaders.GetTemplateAliases(subDistributor);
 		var globalAliases = SubdTemplateHeaders.GetGlobalAliases();
 
-		// Single-write rule: template > detected > global
-		var assignedCanonicalKeys = new HashSet<string>();
+		// Case-insensitive: template keys like "UnitofMeasure" vs global "UnitOfMeasure"
+		var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var usedColumns = new HashSet<int>();
 
-		foreach (var cell in headerRow.CellsUsed())
+		var cells = headerRow.CellsUsed()
+			.Select(c => (Col: c.Address.ColumnNumber, Norm: NormalizeHeader(c.GetString())))
+			.Where(x => !string.IsNullOrWhiteSpace(x.Norm))
+			.ToList();
+
+		// Pass 1: subd template headers
+		foreach (var (col, norm) in cells)
 		{
-			var rawHeader = cell.GetString();
-			if (string.IsNullOrWhiteSpace(rawHeader))
-				continue;
-
-			var normalized = NormalizeHeader(rawHeader);
-			if (string.IsNullOrWhiteSpace(normalized))
-				continue;
-
-			// Priority 1: Check template aliases
 			foreach (var kvp in templateAliases)
 			{
-				if (assignedCanonicalKeys.Contains(kvp.Key)) continue;
-				foreach (var templateAlias in kvp.Value)
+				if (assigned.Contains(kvp.Key)) continue;
+				if (kvp.Value.Any(alias => NormalizeHeader(alias) == norm))
 				{
-					if (NormalizeHeader(templateAlias) == normalized)
-					{
-						headers[kvp.Key] = cell.Address.ColumnNumber;
-						assignedCanonicalKeys.Add(kvp.Key);
-						goto NextCell;
-					}
+					headers[kvp.Key] = col;
+					assigned.Add(kvp.Key);
+					usedColumns.Add(col);
+					break;
 				}
 			}
+		}
 
-			// Priority 2: Check global aliases
+		// Pass 2: global aliases are only an alternate, used when the subd has no
+		// template, or one or more of its template headers weren't found.
+		var needGlobal = templateAliases.Count == 0 || !templateAliases.Keys.All(assigned.Contains);
+		if (!needGlobal)
+			return headers;
+
+		foreach (var (col, norm) in cells)
+		{
+			if (usedColumns.Contains(col)) continue;
+
 			foreach (var kvp in globalAliases)
 			{
-				if (assignedCanonicalKeys.Contains(kvp.Key)) continue;
-				foreach (var globalAlias in kvp.Value)
+				if (assigned.Contains(kvp.Key)) continue;
+				if (kvp.Value.Any(alias => NormalizeHeader(alias) == norm))
 				{
-					if (NormalizeHeader(globalAlias) == normalized)
-					{
-						headers[kvp.Key] = cell.Address.ColumnNumber;
-						assignedCanonicalKeys.Add(kvp.Key);
-						goto NextCell;
-					}
+					headers[kvp.Key] = col;
+					assigned.Add(kvp.Key);
+					usedColumns.Add(col);
+					break;
 				}
 			}
-
-		NextCell:;
 		}
 
 		return headers;
@@ -1115,10 +1117,6 @@ public sealed class ImportSalesInvoiceService
 			if (string.IsNullOrWhiteSpace(cached))
 				return true;
 
-			// GenerateAndDownloadExcelAsync fills every row up to 2000 with
-			// =IFERROR(...,0) regardless of whether the user entered anything, so a
-			// formula-derived 0 here means "nothing typed in this row yet", not a real
-			// zero-amount invoice line. Treat it as empty for blank-row detection only.
 			if (decimal.TryParse(cached, NumberStyles.Number | NumberStyles.AllowLeadingSign,
 					CultureInfo.InvariantCulture, out var d) && d == 0)
 				return true;

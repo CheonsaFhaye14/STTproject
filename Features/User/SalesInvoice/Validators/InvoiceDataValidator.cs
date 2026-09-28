@@ -107,12 +107,23 @@ public sealed class InvoiceDataValidator
             {
                 if (!string.IsNullOrWhiteSpace(customerName))
                 {
-                    var normalizedSearchName = NormalizeCustomerLookup(customerName);
+                    var searchName = NormalizeCustomerLookup(StripCodePrefix(customerName));
+
                     var narrowed = subdCodeMatches
-                        .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
+                        .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == searchName ||
                                     (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                                    NormalizeCustomerLookup(c.SubdCustName) == normalizedSearchName))
+                                    NormalizeCustomerLookup(c.SubdCustName) == searchName))
                         .ToList();
+
+                    if (narrowed.Count == 0)
+                    {
+                        narrowed = subdCodeMatches.Where(c =>
+                        {
+                            if (string.IsNullOrWhiteSpace(c.SubdCustName)) return false;
+                            var sub = NormalizeCustomerLookup(c.SubdCustName);
+                            return sub.Length >= 8 && searchName.EndsWith(sub);
+                        }).ToList();
+                    }
 
                     if (TryCollapseToSingleLogicalCustomer(narrowed, out var collapsedNarrowed))
                     {
@@ -123,9 +134,10 @@ public sealed class InvoiceDataValidator
                     if (narrowed.Count > 0)
                         candidates = narrowed;
                 }
-
-                if (candidates.Count == 0)
+                else
+                {
                     candidates = subdCodeMatches;
+                }
             }
         }
 
@@ -538,36 +550,27 @@ public sealed class InvoiceDataValidator
         }
 
         var normalized = NormalizeItemName(itemName);
-
         var matches = allItems
             .Where(i => NormalizeItemName(i.ItemName) == normalized)
             .ToList();
+        var nameUsed = itemName;
 
-        // STEP 2.5: No raw match — strip a leading "Code - " prefix and retry against the name.
+        // STEP 2.5: strip a leading item no / "Code - " prefix and retry against the name.
         if (matches.Count == 0)
         {
-            var strippedName = StripCodePrefix(itemName);
+            var strippedName = StripItemCodePrefix(itemName, skuCode);
             if (!string.Equals(strippedName, itemName.Trim(), StringComparison.Ordinal))
             {
                 var normalizedStripped = NormalizeItemName(strippedName);
                 matches = allItems
                     .Where(i => NormalizeItemName(i.ItemName) == normalizedStripped)
                     .ToList();
+                nameUsed = strippedName;
             }
         }
 
-        if (matches.Count == 1)
-        {
-            item = matches[0];
-            return true;
-        }
-
-        if (matches.Count > 1)
-        {
-            item = null;
-            suggestions = matches;
-            return false;
-        }
+        if (matches.Count > 0)
+            return ResolveNameMatches(matches, nameUsed, out item, out warning, out ambiguousCandidates);
 
         item = null;
         return false;
@@ -584,12 +587,6 @@ public sealed class InvoiceDataValidator
         return false;
     }
     
-    private static string? ExtractLeadingCode(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var dashIndex = value.IndexOf(" - ", StringComparison.Ordinal);
-        return dashIndex >= 0 ? value[..dashIndex].Trim() : null;
-    }
     public static bool IsMissingUomValue(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -662,6 +659,8 @@ public sealed class InvoiceDataValidator
 
         if (TryExtractBracketedUom(unitOfMeasure, out var bracketedUom))
             unitOfMeasure = bracketedUom;
+
+        unitOfMeasure = UomParenRegex.Replace(unitOfMeasure, string.Empty).Trim();
 
         var normalizedUom = Normalize(unitOfMeasure);
         var matches = uomLookup[(subdItemId, normalizedUom)].Where(u => u.IsActive).ToList();
@@ -797,6 +796,7 @@ public sealed class InvoiceDataValidator
 
     public static IEnumerable<string> GetUomSynonyms(string value)
     {
+        value = UomParenRegex.Replace(value ?? string.Empty, string.Empty).Trim(); 
         var normalized = Normalize(value);
 
         switch (normalized)
@@ -965,7 +965,6 @@ public sealed class InvoiceDataValidator
         return dashIndex >= 0 ? value[(dashIndex + 3)..].Trim() : value.Trim();
     }
 
-    // Collapses a list of candidates to a single logical customer if they all share the same CustomerCode, CustomerName, and SubDistributorId.
     private static bool TryCollapseToSingleLogicalCustomer(List<Data.Customer> candidates, out Data.Customer? customer)
     {
         if (candidates.Count == 0)
@@ -982,7 +981,7 @@ public sealed class InvoiceDataValidator
 
         if (allSameLogicalCustomer)
         {
-            customer = candidates.OrderBy(c => c.CustomerId).First(); // anchor row
+            customer = candidates.OrderBy(c => c.CustomerId).First();
             return true;
         }
 
@@ -990,6 +989,66 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
+    private static readonly Regex BarcodePrefixRegex =
+        new(@"^\s*(?<code>\d{5,})\s+(?<rest>.+)$", RegexOptions.Compiled);
+
+    private static string StripItemCodePrefix(string value, string? skuCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        value = value.Trim();
+
+        if (!string.IsNullOrWhiteSpace(skuCode))
+        {
+            var code = skuCode.Trim();
+            if (value.StartsWith(code + " ", StringComparison.OrdinalIgnoreCase))
+                return value[code.Length..].Trim();
+        }
+
+        var dashIndex = value.IndexOf(" - ", StringComparison.Ordinal);
+        if (dashIndex >= 0) return value[(dashIndex + 3)..].Trim();
+
+        var m = BarcodePrefixRegex.Match(value);
+        return m.Success ? m.Groups["rest"].Value.Trim() : value;
+    }
+    private static string? ExtractLeadingCode(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        var dashIndex = value.IndexOf(" - ", StringComparison.Ordinal);
+        if (dashIndex >= 0) return value[..dashIndex].Trim();
+
+        var m = BarcodePrefixRegex.Match(value);
+        return m.Success ? m.Groups["code"].Value : null;
+    }
+
+    private static bool ResolveNameMatches(
+        List<Data.SubdItem> matches,
+        string rawName,
+        out Data.SubdItem? item,
+        out string? warning,
+        out List<Data.SubdItem>? ambiguousCandidates)
+    {
+        warning = null;
+        ambiguousCandidates = null;
+        item = null;
+
+        if (matches.Count == 0) return false;
+        if (matches.Count == 1) { item = matches[0]; return true; }
+
+        var exact = matches
+            .Where(i => string.Equals(i.ItemName?.Trim(), rawName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (exact.Count == 1) { item = exact[0]; return true; }
+
+        var candidates = exact.Count > 1 ? exact : matches;
+        item = candidates.OrderBy(i => i.SubdItemId).First();
+        ambiguousCandidates = candidates;
+        warning = $"Item name '{rawName.Trim()}' matched {candidates.Count} records; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
+        return true;
+    }
+    private static readonly Regex UomParenRegex =
+        new(@"\s*\(.*?\)\s*$", RegexOptions.Compiled);
 }
 
 

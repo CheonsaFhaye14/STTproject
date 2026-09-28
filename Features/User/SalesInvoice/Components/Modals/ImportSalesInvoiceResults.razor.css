@@ -934,18 +934,68 @@
 
 /* ── Item conflict card ── */
 ::deep .item-choice-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: #FBF6E4;
     border: 0.5px solid #E8D48A;
-    border-radius: 10px;
-    padding: 0.65rem 0.8rem;
-    margin-bottom: 0.6rem;
+    border-radius: 8px;
+    padding: 3px 6px 3px 8px;
+    margin: 0 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 420px;
 }
 
     ::deep .item-choice-card.confirmed {
         background: #fff;
         border-color: #EBE7DC;
     }
+::deep .item-choice-icon {
+    font-size: 13px;
+    color: #9C7F1E;
+    flex-shrink: 0;
+}
 
+    ::deep .item-choice-card.confirmed .item-choice-icon {
+        color: #085041;
+    }
+::deep .item-choice-select {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+    border: 0.5px solid #EBE7DC;
+    border-radius: 6px;
+    background: #fff;
+    color: #1B1B1F;
+    padding: 2px 6px;
+    height: 26px;
+}
+
+::deep .item-choice-badge {
+    flex-shrink: 0;
+    padding: 3px 6px;
+}
+
+::deep .btn-done-reviewing-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    font-size: 12px;
+    background: #C9A227;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+    ::deep .btn-done-reviewing-sm:hover {
+        background: #B8911D;
+    }
 ::deep .item-choice-hdr {
     display: flex;
     align-items: flex-start;

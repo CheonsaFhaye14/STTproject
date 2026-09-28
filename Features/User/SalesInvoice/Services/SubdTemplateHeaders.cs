@@ -275,12 +275,8 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["CustomerCode"] = new[] { "customer code" };
 				map["CustomerName"] = new[] { "name" };
 				map["SalesManName"] = new[] { "sales rep" };
-				// Item No/Name = 4806527480082 PERLA LAU BAR 110G X 144 BLUEx 144 / Pringles Snack Cheese 12 x 102gx 12
-				map["SkuCode"] = new[] { "item code" };
-				map["ItemName"] = new[] { "product desc" };
-				map["CaseQuantity"] = new[] { "Qty Invoiced (in cases)" };
-				map["UnitofMeasure"] = new[] { "UOM" }; //CS ( 576 Pcs )
-				// Qty Invoiced (in Cases) * Config == pc quantity
+				map["ItemName"] = new[] { "item no/name" };
+				map["UnitofMeasure"] = new[] { "UOM" };
 				map["Quantity"] = new[] { "quantity" };
 
 				return map;
