@@ -120,8 +120,13 @@ public sealed class ImportSalesInvoiceService
 		result.OriginalHeaders = headers
 			.OrderBy(kvp => kvp.Value)
 			.Select(kvp => kvp.Key)
-			.ToList();		
+			.ToList();	
 
+		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+		result.RawSheetHeaders = Enumerable.Range(1, sheetLastColumn)
+			.Select(c => worksheet.Cell(headerRowNumber, c).GetString().Trim())
+			.ToList();
+			
 		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
 		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
 		if (!isValid)
@@ -575,6 +580,7 @@ public sealed class ImportSalesInvoiceService
 		// Reads and validates rows from the worksheet starting after the header row, returning a list of parsed invoice rows along with any issues found.
 		var rows = new List<ImportedInvoiceRow>();
 		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 
 		// Customer Columns
 		var hasCustomerCodeColumn = headers.ContainsKey("CustomerCode");
@@ -656,6 +662,11 @@ public sealed class ImportSalesInvoiceService
 			}
 			result.RawValuesByRow[rowNumber] = rawValues;
 
+			var sheetCells = new string[sheetLastColumn];
+			for (int c = 1; c <= sheetLastColumn; c++)
+				sheetCells[c - 1] = GetString(row, c);
+			result.RawSheetRowsByRow[rowNumber] = sheetCells;
+			
 			DateOnly invoiceDate = default;
 			var emittedRows = new List<ImportedInvoiceRow>();
 			var rowHasErrors = false;

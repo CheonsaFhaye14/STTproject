@@ -124,11 +124,11 @@
         StateHasChanged();
     }
 
-    private async Task HandleDownloadErrorReport()
+    private async Task HandleDownloadErrorReport(List<ErrorReportEntry> entries)
     {
-        if (importResult == null) return;
+        if (importResult == null || entries.Count == 0) return;
 
-        var bytes = DownloadTemplateService.GenerateErrorReportExcel(importResult);
+        var bytes = DownloadTemplateService.GenerateErrorReportExcel(importResult, entries);
         var fileName = $"SalesInvoice-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
 
         await JS.InvokeVoidAsync(

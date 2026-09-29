@@ -29,7 +29,8 @@ public sealed class ImportSalesInvoiceResult
     public List<ImportSalesInvoiceIssue> Issues { get; } = new();
     public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
     public Dictionary<string, List<int>> ErroredRowsByInvoiceCode { get; } = new(StringComparer.OrdinalIgnoreCase);
-
+    public List<string> RawSheetHeaders { get; set; } = new();
+    public Dictionary<int, string[]> RawSheetRowsByRow { get; } = new();
     public bool HasIssues => Issues.Count > 0;
 
     public void AddError(
@@ -60,7 +61,7 @@ public sealed class ImportSalesInvoiceResult
     }
 
 }
-
+public sealed record ErrorReportEntry(int RowNumber, string ErrorType, string Message);
 public sealed record ImportedInvoiceRow(
     int RowNumber,
     string InvoiceCode,

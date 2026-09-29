@@ -333,52 +333,63 @@ namespace STTproject.Features.User.SalesInvoice.Services
             }
         }
 
-        public byte[] GenerateErrorReportExcel(ImportSalesInvoiceResult result)
+        public byte[] GenerateErrorReportExcel(
+            ImportSalesInvoiceResult result,
+            IEnumerable<ErrorReportEntry>? entries = null)
         {
-            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var list = (entries ?? result.Issues
+                    .Where(i => i.RowNumber > 0)
+                    .Select(i => new ErrorReportEntry(i.RowNumber, string.Empty, i.Message)))
+                .ToList();
+
+            using var workbook = new XLWorkbook();
             var sheet = workbook.Worksheets.Add("Errors");
 
-            var headers = result.OriginalHeaders.Count > 0 ? result.OriginalHeaders : new List<string>
-            {
-                "InvoiceCode", "InvoiceDate", "CustomerCode", "OrderType",
-                "SalesManName", "SkuCode", "UOM", "Quantity"
-            };
+            var hasRaw = result.RawSheetHeaders.Count > 0;
+            var headers = hasRaw ? result.RawSheetHeaders : result.OriginalHeaders;
 
             for (int i = 0; i < headers.Count; i++)
-                sheet.Cell(1, i + 1).Value = headers[i];
+                sheet.Cell(1, i + 1).Value = string.IsNullOrWhiteSpace(headers[i]) ? $"Column {i + 1}" : headers[i];
 
-            var errorColumn = headers.Count + 1;
-            sheet.Cell(1, errorColumn).Value = "Error";
-            sheet.Row(1).Style.Font.Bold = true;
-            sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
-            sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#ffffff");
+            var typeCol = headers.Count + 1;
+            var errorCol = headers.Count + 2;
+            var rowCol = headers.Count + 3;
+            sheet.Cell(1, typeCol).Value = "Error Type";
+            sheet.Cell(1, errorCol).Value = "Error";
+            sheet.Cell(1, rowCol).Value = "Source Row";
+
+            var header = sheet.Row(1);
+            header.Style.Font.Bold = true;
+            header.Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
+            header.Style.Font.FontColor = XLColor.FromHtml("#ffffff");
             sheet.SheetView.FreezeRows(1);
 
-            var issuesByRow = result.Issues
-                .GroupBy(issue => issue.RowNumber)
-                .OrderBy(group => group.Key);
-
             int excelRow = 2;
-            foreach (var group in issuesByRow)
+            foreach (var group in list.GroupBy(e => e.RowNumber).OrderBy(g => g.Key))
             {
-                result.RawValuesByRow.TryGetValue(group.Key, out var rawValues);
-
-                for (int i = 0; i < headers.Count; i++)
+                if (hasRaw && result.RawSheetRowsByRow.TryGetValue(group.Key, out var cells))
                 {
-                    string? value = null;
-                    rawValues?.TryGetValue(headers[i], out value);
-                    sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
+                    for (int i = 0; i < headers.Count && i < cells.Length; i++)
+                        sheet.Cell(excelRow, i + 1).Value = cells[i];
+                }
+                else if (result.RawValuesByRow.TryGetValue(group.Key, out var raw))
+                {
+                    for (int i = 0; i < headers.Count; i++)
+                        sheet.Cell(excelRow, i + 1).Value = raw.TryGetValue(headers[i], out var v) ? v ?? string.Empty : string.Empty;
                 }
 
-                var errorCell = sheet.Cell(excelRow, errorColumn);
-                errorCell.Value = string.Join("; ", group.Select(issue => issue.Message).Distinct());
+                sheet.Cell(excelRow, typeCol).Value = string.Join("; ", group.Select(e => e.ErrorType).Where(t => t.Length > 0).Distinct());
+
+                var errorCell = sheet.Cell(excelRow, errorCol);
+                errorCell.Value = string.Join("; ", group.Select(e => e.Message).Distinct());
                 errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D");
                 errorCell.Style.Font.Bold = true;
 
+                sheet.Cell(excelRow, rowCol).Value = group.Key;
                 excelRow++;
             }
 
-            sheet.Columns().AdjustToContents();
+            sheet.Columns().AdjustToContents(1, 60);
 
             using var ms = new MemoryStream();
             workbook.SaveAs(ms);

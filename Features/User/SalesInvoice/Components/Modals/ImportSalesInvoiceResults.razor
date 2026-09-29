@@ -128,7 +128,7 @@
                                             Clear
                                         </button>
                                     }
-                                    <button type="button" class="btn-download-errors" @onclick="HandleDownloadErrorReport">
+                                    <button type="button" class="btn-download-errors" @onclick="OpenDownloadModal">
                                         <i class="ti ti-download" aria-hidden="true"></i>
                                         Download
                                     </button>
@@ -616,6 +616,61 @@
 
         </div>
     </div>
+    
+}
+@if (showDownloadModal)
+{
+    var downloadTypes = GetDistinctErrorMessages();
+    var previewCount = BuildReportEntries(downloadScopeAll ? null : downloadErrorType)
+        .Select(e => e.RowNumber).Distinct().Count();
+    <div class="modal-overlay" style="z-index:1100;">
+        <div class="modal-box" style="max-width:460px;">
+            <div class="modal-header-ent">
+                <div class="mh-left">
+                    <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
+                    <div>
+                        <div class="mh-title">Download error report</div>
+                        <div class="mh-sub">Includes every original column from your file</div>
+                    </div>
+                </div>
+                <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
+                    <i class="ti ti-x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body-ent">
+                <label style="display:block;margin-bottom:8px;">
+                    <input type="radio" name="dl-scope" checked="@downloadScopeAll"
+                           @onchange="() => downloadScopeAll = true" />
+                    All errors
+                </label>
+                <label style="display:block;margin-bottom:8px;">
+                    <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
+                           @onchange="() => downloadScopeAll = false" />
+                    Only a specific error
+                </label>
+                @if (!downloadScopeAll)
+                {
+                    <select style="width:100%;" value="@downloadErrorType"
+                            @onchange="e => downloadErrorType = e.Value?.ToString()">
+                        <option value="">-- select error --</option>
+                        @foreach (var t in downloadTypes)
+                        {
+                            <option value="@t.Message">@t.Message (@t.Count)</option>
+                        }
+                    </select>
+                }
+                <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
+            </div>
+            <div class="modal-footer-ent">
+                <button type="button" class="btn-commit"
+                        disabled="@(!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))"
+                        @onclick="ConfirmDownload">
+                    <i class="ti ti-download" aria-hidden="true"></i> Download
+                </button>
+                <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
+            </div>
+        </div>
+    </div>
 }
 
 <ConfirmModal Show="showCommitConfirmModal"
@@ -630,7 +685,7 @@
     [Parameter] public ImportSalesInvoiceResult? ImportResult { get; set; }
     [Parameter] public EventCallback OnCommit { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
-    [Parameter] public EventCallback OnDownloadErrorReport { get; set; }
+    [Parameter] public EventCallback<List<ErrorReportEntry>> OnDownloadErrorReport { get; set; }
 
     private InvoiceCardFilter cardFilter = InvoiceCardFilter.SuccessOnly;
     private bool showCommitConfirmModal;
@@ -1121,9 +1176,36 @@
     }
 
     private enum InvoiceCardFilter { SuccessOnly, ErrorOnly, WarningOnly }
-    private async Task HandleDownloadErrorReport()
+    private bool showDownloadModal;
+    private bool downloadScopeAll = true;
+    private string? downloadErrorType;
+
+    private void OpenDownloadModal()
     {
-        if (OnDownloadErrorReport.HasDelegate) await OnDownloadErrorReport.InvokeAsync();
+        // Pre-select whatever error the user is already filtering by
+        downloadErrorType = selectedErrorFilter;
+        downloadScopeAll = string.IsNullOrWhiteSpace(selectedErrorFilter);
+        showDownloadModal = true;
+    }
+
+    private void CloseDownloadModal() => showDownloadModal = false;
+
+    private List<ErrorReportEntry> BuildReportEntries(string? errorType) =>
+        GetInvoiceCards()
+            .Where(c => c.HasErrors)
+            .SelectMany(EffectiveIssues)
+            .Where(i => i.RowNumber > 0)
+            .Select(i => new ErrorReportEntry(i.RowNumber, NormalizeSalesIssueType(i), i.Message))
+            .Where(e => string.IsNullOrWhiteSpace(errorType) || e.ErrorType == errorType)
+            .Distinct()
+            .ToList();
+
+    private async Task ConfirmDownload()
+    {
+        var entries = BuildReportEntries(downloadScopeAll ? null : downloadErrorType);
+        showDownloadModal = false;
+        if (OnDownloadErrorReport.HasDelegate)
+            await OnDownloadErrorReport.InvokeAsync(entries);
     }
 
     private static readonly System.Text.RegularExpressions.Regex UomNotFoundRegex =
