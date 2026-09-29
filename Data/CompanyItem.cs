@@ -26,7 +26,7 @@ public partial class CompanyItem
     public string Category { get; set; } = null!;
 
     public decimal? StockPrice { get; set; }
-    
+
     public virtual ICollection<CompanyItemPriceHistory> CompanyItemPriceHistories { get; set; } = new List<CompanyItemPriceHistory>();
 
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();

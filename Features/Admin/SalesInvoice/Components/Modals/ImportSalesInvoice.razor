@@ -147,15 +147,7 @@
         var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
 
         foreach (var prepared in toCommit)
-        {
-            var existing = importResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
-            if (existing != null)
-            {
-                existing.IsSaved = prepared.IsSaved;
-                existing.SaveErrorMessage = prepared.SaveErrorMessage;
-                existing.Selected = !existing.IsSaved;
-            }
-        }
+            prepared.Selected = !prepared.IsSaved;
 
         if (commitResult.HasIssues)
         {

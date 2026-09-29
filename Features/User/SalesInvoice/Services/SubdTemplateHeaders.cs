@@ -281,6 +281,23 @@ namespace STTproject.Features.User.SalesInvoice.Services
 
 				return map;
 			}
+			// if (isKingAltonMindoro(subDistributor))
+			// {
+			// map["InvoiceCode"] = new[] { "inv nbr" };
+			// map["InvoiceDate"] = new[] { "inv date" };
+			// map["CustomerCode"] = new[] { "custid" };
+			// map["CustomerName"] = new[] { "customer name" };
+			// map["CustomerType"] = new[] { "trade" };
+			// map["CityMunicipality"] = new[] { "town" };
+			// map["AddressLine"] = new[] { "addr1" };
+			// map["SalesManName"] = new[] { "agent" };
+			// map["SkuCode"] = new[] { "skuid" };
+			// map["ItemName"] = new[] { "sku" };
+			// map["PieceQuantity"] = new[] { "qty (pcs)" };
+			// map["CaseQuantity"] = new[] { "qty (cs)" };
+			// map["FreeItems"] = new[] { "amt" };
+			// return map;
+			// }
 			return map;
 		}
 

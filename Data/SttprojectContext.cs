@@ -21,6 +21,12 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
+    public virtual DbSet<ImportFile> ImportFiles { get; set; }
+
+    public virtual DbSet<ImportTemplate> ImportTemplates { get; set; }
+
+    public virtual DbSet<ImportTemplateColumn> ImportTemplateColumns { get; set; }
+
     public virtual DbSet<ItemsUom> ItemsUoms { get; set; }
 
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
@@ -33,14 +39,15 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
+    public virtual DbSet<SubdSellout> SubdSellouts { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer("Name=DefaultConnection");
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+
         modelBuilder.Entity<CompanyItem>(entity =>
         {
             entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E983839E2C7B0");
@@ -99,7 +106,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.City).HasMaxLength(100);
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("(getdate())", "DF__Customer__Create__3E52440B")
                 .HasColumnType("datetime");
             entity.Property(e => e.CustomerCode)
                 .HasMaxLength(50)
@@ -110,10 +117,14 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CustomerType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__Customer__IsActi__3D5E1FD2");
             entity.Property(e => e.Province).HasMaxLength(100);
-            entity.Property(e => e.SubdCustCode).HasMaxLength(50);
-            entity.Property(e => e.SubdCustName).HasMaxLength(200);
+            entity.Property(e => e.SubdCustCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SubdCustName)
+                .HasMaxLength(200)
+                .IsUnicode(false);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CustomerCreatedByNavigations)
@@ -130,6 +141,88 @@ public partial class SttprojectContext : DbContext
                 .HasConstraintName("FK_Customer_UpdatedBy");
         });
 
+        modelBuilder.Entity<ImportFile>(entity =>
+        {
+            entity.HasKey(e => e.ImportFileId).HasName("PK__ImportFi__D9EEC2447618FE08");
+
+            entity.ToTable("ImportFiles", "dbo");
+
+            entity.HasIndex(e => e.Sha256, "IX_ImportFiles_Hash");
+
+            entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.UploadedDate }, "IX_ImportFiles_Lookup").IsDescending(false, false, true);
+
+            entity.Property(e => e.ImportType)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            entity.Property(e => e.Sha256)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Prepared", "DF_ImportFiles_Status");
+            entity.Property(e => e.StoredPath).HasMaxLength(500);
+            entity.Property(e => e.UploadedDate).HasDefaultValueSql("(sysutcdatetime())", "DF_ImportFiles_Uploaded");
+
+            entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportFiles)
+                .HasForeignKey(d => d.ImportTemplateId)
+                .HasConstraintName("FK_ImportFiles_Template");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.ImportFiles)
+                .HasForeignKey(d => d.SubDistributorId)
+                .HasConstraintName("FK_ImportFiles_SubDistributors");
+        });
+
+        modelBuilder.Entity<ImportTemplate>(entity =>
+        {
+            entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2C460E88B6");
+
+            entity.ToTable("ImportTemplates", "dbo");
+
+            entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.Principal }, "UX_ImportTemplates_ActiveScope")
+                .IsUnique()
+                .HasFilter("([IsActive]=(1))");
+
+            entity.Property(e => e.AllowGlobalFallback).HasDefaultValue(true, "DF_ImportTemplates_Fallback");
+            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(sysutcdatetime())", "DF_ImportTemplates_Created");
+            entity.Property(e => e.ImportType)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_ImportTemplates_Active");
+            entity.Property(e => e.Principal).HasMaxLength(100);
+            entity.Property(e => e.SheetName).HasMaxLength(100);
+            entity.Property(e => e.TemplateName).HasMaxLength(150);
+            entity.Property(e => e.Version).HasDefaultValue(1, "DF_ImportTemplates_Version");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.ImportTemplates)
+                .HasForeignKey(d => d.SubDistributorId)
+                .HasConstraintName("FK_ImportTemplates_SubDistributors");
+        });
+
+        modelBuilder.Entity<ImportTemplateColumn>(entity =>
+        {
+            entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E0938AC37EE");
+
+            entity.ToTable("ImportTemplateColumns", "dbo");
+
+            entity.HasIndex(e => new { e.ImportTemplateId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
+
+            entity.Property(e => e.FieldKey)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.HeaderText).HasMaxLength(200);
+            entity.Property(e => e.ReadMode)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("Text", "DF_ITC_ReadMode");
+
+            entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportTemplateColumns)
+                .HasForeignKey(d => d.ImportTemplateId)
+                .HasConstraintName("FK_ITC_Template");
+        });
+
         modelBuilder.Entity<ItemsUom>(entity =>
         {
             entity.HasKey(e => e.ItemsUomId).HasName("PK__ItemsUom__537249573414BFF9");
@@ -142,11 +235,10 @@ public partial class SttprojectContext : DbContext
                 .IsUnique()
                 .HasFilter("([IsBaseUnit]=(1))");
 
-            entity.Property(e => e.ConversionToBase).HasColumnType("int");
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("(getdate())", "DF__ItemsUom__Create__18EBB532")
                 .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__ItemsUom__IsActi__690797E6");
             entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UomName)
                 .HasMaxLength(50)
@@ -204,8 +296,8 @@ public partial class SttprojectContext : DbContext
 
             entity.ToTable("SalesInvoice");
 
-            entity.HasIndex(e => new { e.SalesInvoiceCode, e.OrderType, e.SubDistributorId, e.CustomerId }, "UQ_SalesInvoice_Code_OrderType_Subd_Customer").IsUnique();
-            
+            entity.HasIndex(e => new { e.SalesInvoiceCode, e.OrderType, e.SubDistributorId, e.CustomerId, e.SalesMan }, "UQ_SalesInvoice_Code_OrderType_Customer_SalesMan").IsUnique();
+
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -271,15 +363,17 @@ public partial class SttprojectContext : DbContext
             entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD15E8FA9F");
 
             entity.ToTable("SubDistributor");
+
             entity.HasIndex(e => e.SubdCode, "UQ_SubDistributor_SubdCode").IsUnique();
+
             entity.Property(e => e.CityMunicipality).HasMaxLength(100);
             entity.Property(e => e.CompanySubdCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("(getdate())", "DF__SubDistri__Creat__10566F31")
                 .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__SubDistri__IsAct__0F624AF8");
             entity.Property(e => e.Province).HasMaxLength(100);
             entity.Property(e => e.SubdCode)
                 .HasMaxLength(50)
@@ -336,7 +430,77 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
         });
-         
+
+        modelBuilder.Entity<SubdSellout>(entity =>
+        {
+            entity.HasKey(e => e.SdsId).HasName("PK_SubdSelloutFY2026");
+
+            entity.ToTable("SubdSellout", "dbo");
+
+            entity.Property(e => e.SdsId).HasColumnName("SdsID");
+            entity.Property(e => e.AbfCases).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.AbfItemWeight).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.AbfTon).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.AmountDiscount).HasColumnType("decimal(19, 6)");
+            entity.Property(e => e.AmountWithVat).HasColumnType("decimal(19, 6)");
+            entity.Property(e => e.AmountWoVat).HasColumnType("decimal(19, 6)");
+            entity.Property(e => e.ArTermsCd).HasMaxLength(20);
+            entity.Property(e => e.BillToName).HasMaxLength(100);
+            entity.Property(e => e.BlitzName).HasMaxLength(100);
+            entity.Property(e => e.BlitzNote).HasMaxLength(255);
+            entity.Property(e => e.Brand).HasMaxLength(50);
+            entity.Property(e => e.Brand0001).HasMaxLength(20);
+            entity.Property(e => e.Cal).HasMaxLength(10);
+            entity.Property(e => e.CalendarPeriod).HasMaxLength(20);
+            entity.Property(e => e.CaseKelloggs).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.Country).HasMaxLength(50);
+            entity.Property(e => e.CusNo).HasMaxLength(30);
+            entity.Property(e => e.CusTypeCd).HasMaxLength(20);
+            entity.Property(e => e.CusTypeDesc).HasMaxLength(30);
+            entity.Property(e => e.CustTypeDescRevised).HasMaxLength(30);
+            entity.Property(e => e.CustTypeDescRevisedUsed).HasMaxLength(30);
+            entity.Property(e => e.DbsCalPeriod).HasMaxLength(20);
+            entity.Property(e => e.HansaCs).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.InsertDate).HasDefaultValueSql("(CONVERT([date],sysdatetime()))", "DF_SubdSelloutFY2026_InsertDate");
+            entity.Property(e => e.ItemDescription).HasMaxLength(150);
+            entity.Property(e => e.ItemNo).HasMaxLength(50);
+            entity.Property(e => e.ItemWeight).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.Loc).HasMaxLength(50);
+            entity.Property(e => e.Lookup).HasMaxLength(100);
+            entity.Property(e => e.MitraCases).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.NiveaCs).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.OrdNo).HasMaxLength(25);
+            entity.Property(e => e.OrigOrdType).HasMaxLength(20);
+            entity.Property(e => e.PeriodPrin).HasMaxLength(30);
+            entity.Property(e => e.PriceWithVat).HasColumnType("decimal(19, 6)");
+            entity.Property(e => e.Principal).HasMaxLength(50);
+            entity.Property(e => e.Principal2).HasMaxLength(10);
+            entity.Property(e => e.QtyOrdered).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.QtyReturnToStk).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.QtyToShip).HasMaxLength(10);
+            entity.Property(e => e.QuantitySellingUnit).HasMaxLength(20);
+            entity.Property(e => e.Real).HasMaxLength(50);
+            entity.Property(e => e.SageItemDesc).HasMaxLength(100);
+            entity.Property(e => e.SageItemNo).HasMaxLength(30);
+            entity.Property(e => e.Salesperson).HasMaxLength(50);
+            entity.Property(e => e.ScpCs).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.ShipInstruction1).HasMaxLength(255);
+            entity.Property(e => e.ShipInstruction2).HasMaxLength(255);
+            entity.Property(e => e.ShipToAddress1).HasMaxLength(120);
+            entity.Property(e => e.ShipToAddress2).HasMaxLength(80);
+            entity.Property(e => e.ShipToAddress3).HasMaxLength(80);
+            entity.Property(e => e.ShipToCountry).HasMaxLength(50);
+            entity.Property(e => e.ShipToName).HasMaxLength(100);
+            entity.Property(e => e.ShipViaCd).HasMaxLength(20);
+            entity.Property(e => e.Slm).HasMaxLength(50);
+            entity.Property(e => e.SlspsnName).HasMaxLength(50);
+            entity.Property(e => e.SlspsnNo).HasMaxLength(20);
+            entity.Property(e => e.SlspsnNo2).HasMaxLength(20);
+            entity.Property(e => e.SubD).HasMaxLength(50);
+            entity.Property(e => e.TonsKelloggs).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.Trim).HasMaxLength(50);
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4CD89976AC");

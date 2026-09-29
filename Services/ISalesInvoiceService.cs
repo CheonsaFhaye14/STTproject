@@ -6,8 +6,8 @@ namespace STTproject.Services;
 public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
-    Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId, int customerId, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
-    Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
+    Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId,
+    int customerId, string? salesMan, int currentInvoiceId = 0, CancellationToken cancellationToken = default);    Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
     Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
         List<InputItemModel> items,
@@ -65,11 +65,20 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         };
     }
 
-    public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId, int customerId, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
+    public static string? NormalizeSalesMan(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : System.Text.RegularExpressions.Regex.Replace(value.Trim(), @"\s+", " ");
+
+    public async Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId,
+        int customerId, string? salesMan, int currentInvoiceId = 0, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
-        return await context.SalesInvoices
-            .AnyAsync(x => x.SalesInvoiceCode == invoiceNumber && x.OrderType == orderType && x.SubDistributorId == subDistributorId && x.CustomerId == customerId && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+        var sm = NormalizeSalesMan(salesMan);
+        return await context.SalesInvoices.AnyAsync(x =>
+            x.SalesInvoiceCode == invoiceNumber && x.OrderType == orderType &&
+            x.SubDistributorId == subDistributorId && x.CustomerId == customerId &&
+            x.SalesMan == sm && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
     }
 
     public async Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default)
@@ -105,8 +114,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 InvoiceId = currentInvoiceId,
                 ErrorMessage = "Invoice data is missing."
             };
+            
         }
-
+        invoice.SalesManName = NormalizeSalesMan(invoice.SalesManName);
         if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
         {
             return new SaveInvoiceResult
@@ -115,6 +125,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 InvoiceId = currentInvoiceId,
                 ErrorMessage = "Invoice number is required."
             };
+            
         }
 
         if (invoice.InvoiceDate == default)
@@ -180,9 +191,11 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         {
             await NormalizeItemAmountsAsync(context, invoice, items, cancellationToken);
 
-            var duplicateExists = await context.SalesInvoices
-                .AnyAsync(x => x.SalesInvoiceCode == invoice.InvoiceNumber && x.OrderType == invoice.OrderType && x.SubDistributorId == invoice.SubdistributorId && x.CustomerId == invoice.CustomerId && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
-           
+            var duplicateExists = await context.SalesInvoices.AnyAsync(x =>
+                x.SalesInvoiceCode == invoice.InvoiceNumber && x.OrderType == invoice.OrderType &&
+                x.SubDistributorId == invoice.SubdistributorId && x.CustomerId == invoice.CustomerId &&
+                x.SalesMan == invoice.SalesManName && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
+                
             if (duplicateExists)
             {
                 return new SaveInvoiceResult
@@ -218,7 +231,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                         OrderType = invoice.OrderType,
                         CustomerId = invoice.CustomerId,
                         SubDistributorId = invoice.SubdistributorId,
-                        SalesMan = invoice.SalesManName,
+                        SalesMan = NormalizeSalesMan(invoice.SalesManName),
                         CreatedBy = currentUserId,
                         UpdatedBy = currentUserId,
                         CreatedDate = DateTime.Now,
@@ -286,7 +299,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 existing.OrderType = invoice.OrderType;
                 existing.CustomerId = invoice.CustomerId;
                 existing.SubDistributorId = invoice.SubdistributorId;
-                existing.SalesMan = invoice.SalesManName;
+                existing.SalesMan = NormalizeSalesMan(invoice.SalesManName);
                 existing.UpdatedBy = currentUserId;
                 existing.UpdatedDate = DateTime.Now;
 

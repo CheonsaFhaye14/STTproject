@@ -189,7 +189,8 @@ public sealed class ImportSalesInvoiceService
 							? row.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture)
 							: (row.ResolvedCustomerCode ?? row.CustomerCode ?? row.CustomerName ?? string.Empty).Trim().ToUpperInvariant(),
 						(row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
-						row.InvoiceDate.ToString("yyyy-MM-dd")), StringComparer.OrdinalIgnoreCase))
+						(row.SalesManName ?? string.Empty).Trim().ToUpperInvariant()),
+					StringComparer.OrdinalIgnoreCase))
 		{
 			var invoiceRows = invoiceGroup.ToList();
 			var invoiceNumber = invoiceRows.First().InvoiceCode.Trim();
@@ -198,6 +199,7 @@ public sealed class ImportSalesInvoiceService
 			{
 				SubDistributor = subDistributor.SubdCode + " - " + subDistributor.SubdName,
 				InvoiceNumber = invoiceNumber,
+				GroupKey = invoiceGroup.Key,  
 				Items = new List<InputItemModel>(),
 				Issues = new List<ImportSalesInvoiceIssue>(),
 				Selected = true
@@ -205,6 +207,15 @@ public sealed class ImportSalesInvoiceService
 
 			try
 			{
+				if (result.ErroredRowsByInvoiceCode.TryGetValue(invoiceNumber, out var badRows))
+				{
+					const string msg = "Invoice has rows with errors and can't be imported partially. Fix the file and re-upload.";
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+						badRows.Min(), invoiceNumber, msg, string.Empty, string.Empty));
+					result.AddError(badRows.Min(), invoiceNumber, msg);
+					result.PreparedInvoices.Add(preparedInvoice);
+					continue;
+				}
 				var groupConsistencyError = InvoiceDataValidator.ValidateGroupConsistency(invoiceRows);
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
@@ -261,8 +272,8 @@ public sealed class ImportSalesInvoiceService
 					CustomerCode = customer.CustomerCode,
 					CustomerName = customer.CustomerName,
 					CustomerType = customer.CustomerType ?? string.Empty,
-					SubdistributorId = subDistributorId,
-					SalesManName = firstRow.SalesManName,
+					SubdistributorId = subDistributorId, 
+					SalesManName = SalesInvoiceService.NormalizeSalesMan(firstRow.SalesManName) ?? string.Empty,					
 					CustomerAddress = string.Join(", ", new[]
 					{
 						customer.AddressLine,
@@ -424,7 +435,7 @@ public sealed class ImportSalesInvoiceService
 		
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
-					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, preparedInvoice.Invoice!.SubdistributorId, preparedInvoice.Invoice!.CustomerId, 0, cancellationToken));
+					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, preparedInvoice.Invoice!.SubdistributorId, preparedInvoice.Invoice!.CustomerId, preparedInvoice.Invoice!.SalesManName, 0, cancellationToken));
 								
 				if (validationErrors.Count > 0)
 				{
@@ -493,6 +504,15 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
+		void FailInvoice(PreparedInvoice p, string msg)
+		{
+			var row = p.Items.FirstOrDefault()?.LineItemId ?? 0;
+			p.Issues.Add(new ImportSalesInvoiceIssue(row, p.InvoiceNumber, msg, string.Empty, string.Empty));
+			result.AddError(row, p.InvoiceNumber, msg);
+			p.IsSaved = false;
+			p.SaveErrorMessage = msg;
+		}
+
 		foreach (var prepared in preparedInvoices)
 		{
 			if (prepared is null || !prepared.Selected)
@@ -514,19 +534,12 @@ public sealed class ImportSalesInvoiceService
 
 				if (saveResult.IsDuplicate)
 				{
-					var msg = $"Sales invoice '{prepared.InvoiceNumber}' already exists for this order type.";
-					result.AddError(0, prepared.InvoiceNumber, msg);
-					prepared.IsSaved = false;
-					prepared.SaveErrorMessage = msg;
+					FailInvoice(prepared, $"Sales invoice '{prepared.InvoiceNumber}' already exists for this order type, customer and salesman.");
 					continue;
 				}
-
 				if (!saveResult.IsSaved)
 				{
-					var msg = saveResult.ErrorMessage ?? "Unable to save invoice.";
-					result.AddError(0, prepared.InvoiceNumber, msg);
-					prepared.IsSaved = false;
-					prepared.SaveErrorMessage = msg;
+					FailInvoice(prepared, saveResult.ErrorMessage ?? "Unable to save invoice.");
 					continue;
 				}
 
@@ -537,14 +550,13 @@ public sealed class ImportSalesInvoiceService
 			catch (Exception ex)
 			{
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
-				result.AddError(0, prepared.InvoiceNumber, $"Unexpected error while saving invoice '{prepared.InvoiceNumber}': {baseMsg}");
-				prepared.IsSaved = false;
-				prepared.SaveErrorMessage = baseMsg;
+				FailInvoice(prepared, $"Unexpected error while saving invoice '{prepared.InvoiceNumber}': {baseMsg}");
 			}
 		}
 
 		return result;
 	}
+
 
 	private static List<ImportedInvoiceRow> ReadRows(
 		IXLWorksheet worksheet,
@@ -649,10 +661,18 @@ public sealed class ImportSalesInvoiceService
 			var rowHasErrors = false;
 
 			// Local function to add an error for the current row and mark it as having errors, which will prevent it from being emitted.
-			void AddRowError(string message, string? columnName = null)
+			void AddRowError(string message, string? columnName = null, int? suggestionCount = null)
 			{
-				result.AddError(rowNumber, invoiceCode, message, columnName);
+				result.AddError(rowNumber, invoiceCode, message, columnName, suggestionCount);
 				rowHasErrors = true;
+
+				if (!string.IsNullOrWhiteSpace(invoiceCode))
+				{
+					var key = invoiceCode.Trim();
+					if (!result.ErroredRowsByInvoiceCode.TryGetValue(key, out var list))
+						result.ErroredRowsByInvoiceCode[key] = list = new List<int>();
+					if (!list.Contains(rowNumber)) list.Add(rowNumber);
+				}
 			}
 
 			//-------Validate required fields------------
@@ -681,7 +701,7 @@ public sealed class ImportSalesInvoiceService
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
 						: $"Customer '{label}' was not found.";
-					AddRowError(message, colName);
+					AddRowError(message, colName, customerSuggestions?.Count);
 				}
 			}
 
@@ -726,21 +746,21 @@ public sealed class ImportSalesInvoiceService
 					var message = itemSuggestions is { Count: > 0 }
 						? $"SKU '{label}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU '{label}' was not found.";
-					AddRowError(message, colName);
+					AddRowError(message, colName, itemSuggestions?.Count);
 				}
 				else if (!string.IsNullOrWhiteSpace(skuCode))
 				{
 					var message = itemSuggestions is { Count: > 0 }
 						? $"SKU '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU '{skuCode}' was not found.";
-					AddRowError(message, "SkuCode");
+					AddRowError(message, "SkuCode", itemSuggestions?.Count);
 				}
 				else
 				{
 					var message = itemSuggestions is { Count: > 0 }
 						? $"Item name '{itemName}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"Item name '{itemName}' was not found.";
-					AddRowError(message, "ItemName");
+					AddRowError(message, "ItemName", itemSuggestions?.Count);
 				}
 			}
 

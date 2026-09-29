@@ -84,7 +84,7 @@
                                             class="tab @GetTabClass(InvoiceCardFilter.SuccessOnly)"
                                             @onclick='() => SetTab(InvoiceCardFilter.SuccessOnly)'>
                                         <span class="dot dot-ok"></span>
-                                        Valid (@invoiceCards.Count(c => !c.HasErrors))
+                                        Valid (@invoiceCards.Count(c => !c.HasErrors && !HasWarningOnly(c)))
                                     </button>
                                 }
                                 @if (hasWarningCards)
@@ -324,6 +324,11 @@
                                                             <span>@card.Prepared.Invoice.CustomerCode - @card.Prepared.Invoice.CustomerName</span>
                                                             <span class="sep">·</span>
                                                             <span>@(card.Prepared.Items?.Count ?? 0) item@(card.Prepared.Items?.Count == 1 ? "" : "s")</span>
+                                                            @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.SalesManName))
+                                                            {
+                                                                <span class="sep">·</span>
+                                                                <span>@card.Prepared.Invoice.SalesManName</span>
+                                                            }                                                        
                                                         </div>
                                                     }
                                                 </div>
@@ -489,7 +494,7 @@
                             {
                                 @if (!string.IsNullOrWhiteSpace(selectedErrorFilter) && UsesItemGrouping(selectedErrorFilter))
                                 {
-                                    var itemGroups = GetItemGroupedCards(selectedErrorFilter);
+                                    var itemGroups = ApplyGroupSearch(GetItemGroupedCards(selectedErrorFilter));
                                     @* Error cards (item-grouped) *@
                                     <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
                                         @{
@@ -669,25 +674,32 @@
     {
         cardFilter = filter;
         selectedErrorFilter = null;
-        selectedWarningKindFilter = null; 
+        selectedWarningKindFilter = null;  
         selectedConflictFilter = null;
         bulkApplyCandidateId = null;
     }
 
     private static string BuildCardKey(string invoiceNumber, PreparedInvoice? prepared)
     {
-        if (prepared?.Invoice != null)
-        {
-            return string.Join("|",
-                (invoiceNumber ?? string.Empty).Trim().ToUpperInvariant(),
-                (prepared.Invoice.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
-                (prepared.Invoice.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
-                prepared.Invoice.InvoiceDate.ToString("yyyy-MM-dd"));
-        }
-
+        if (!string.IsNullOrWhiteSpace(prepared?.GroupKey))
+            return prepared!.GroupKey;
         return (invoiceNumber ?? string.Empty).Trim().ToUpperInvariant();
     }
 
+    private string BuildRawRowKey(int rowNumber, string invoiceNumber)
+    {
+        var inv = (invoiceNumber ?? string.Empty).Trim().ToUpperInvariant();
+        if (ImportResult?.RawValuesByRow == null ||
+            !ImportResult.RawValuesByRow.TryGetValue(rowNumber, out var raw))
+            return inv;
+
+        string Get(string k) => raw.TryGetValue(k, out var v) ? (v ?? string.Empty).Trim().ToUpperInvariant() : string.Empty;
+
+        var customer = Get("CustomerCode");
+        if (customer.Length == 0) customer = Get("CustomerName");
+
+        return string.Join("|", inv, customer, Get("OrderType"), Get("SalesManName"));
+    }
     private List<InvoiceCardViewModel> GetInvoiceCards()
     {
         if (_cachedForResult == ImportResult && _cachedCards != null)
@@ -719,42 +731,30 @@
             cards.Add(new InvoiceCardViewModel(prepared.InvoiceNumber, prepared, matchingIssues));
         }
 
-        // Merge cards using the SAME composite key the backend grouped by —
-        // InvoiceNumber alone can collide across different customers/dates/order types.
-        var mergedCards = cards
-            .GroupBy(c => BuildCardKey(c.InvoiceNumber, c.Prepared), StringComparer.OrdinalIgnoreCase)
-            .Select(g =>
-            {
-                var first = g.First();
-                var allIssues = g.SelectMany(c => c.Issues)
-                    .GroupBy(i => new { i.RowNumber, i.ColumnName, i.Message })
-                    .Select(ig => ig.First())
-                    .OrderBy(i => i.RowNumber)
-                    .ThenBy(i => i.Message)
-                    .ToList();
-                return new InvoiceCardViewModel(first.InvoiceNumber, first.Prepared, allIssues);
-            })
-            .ToList();
+        var allCards = new List<InvoiceCardViewModel>(cards);
+
+        // Invoice number → the card keys that already exist for it (from prepared invoices)
+        var keysByInvoice = cards
+            .Where(c => c.Prepared != null)
+            .GroupBy(c => (c.InvoiceNumber ?? string.Empty).Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.Select(c => c.CardKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
 
         var coveredIssueKeys = new HashSet<(int RowNumber, string InvoiceNumber, string? ColumnName, string? Message)>(
-            mergedCards.SelectMany(c => c.Issues)
+            cards.SelectMany(c => c.Issues)
                 .Select(i => (i.RowNumber, i.InvoiceNumber ?? string.Empty, i.ColumnName, (string?)i.Message)));
 
-        var orphanIssues = (ImportResult.Issues ?? new List<ImportSalesInvoiceIssue>())
+        var orphanGroups = (ImportResult.Issues ?? new List<ImportSalesInvoiceIssue>())
             .Where(issue => issue.RowNumber > 0)
             .Where(issue => !coveredIssueKeys.Contains(
                 (issue.RowNumber, issue.InvoiceNumber ?? string.Empty, issue.ColumnName, (string?)issue.Message)))
-            .GroupBy(issue => issue.RowNumber)
-            .ToList();
+            .GroupBy(issue => issue.RowNumber);
 
-        foreach (var group in orphanIssues)
+        foreach (var group in orphanGroups)
         {
             var issues = group
-                .GroupBy(issue => new { issue.RowNumber, issue.InvoiceNumber, issue.ColumnName, issue.Message })
+                .GroupBy(i => new { i.RowNumber, i.InvoiceNumber, i.ColumnName, i.Message })
                 .Select(g => g.First())
-                .OrderBy(issue => issue.RowNumber)
-                .ThenBy(issue => issue.ColumnName)
-                .ThenBy(issue => issue.Message)
+                .OrderBy(i => i.RowNumber).ThenBy(i => i.ColumnName).ThenBy(i => i.Message)
                 .ToList();
 
             var firstIssue = group.First();
@@ -762,32 +762,28 @@
                 ? "[Blank invoice code]"
                 : firstIssue.InvoiceNumber;
 
-            mergedCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues));
+            var invKey = displayInvoiceNumber.Trim().ToUpperInvariant();
+            var key = keysByInvoice.TryGetValue(invKey, out var keys) && keys.Count == 1
+                ? keys[0]
+                : BuildRawRowKey(firstIssue.RowNumber, firstIssue.InvoiceNumber ?? string.Empty);
+
+            allCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues, key));
         }
 
-        var finalCards = new List<InvoiceCardViewModel>();
-        finalCards.AddRange(mergedCards.Where(c => !c.HasErrors));
-
-        var mergedErrorCards = mergedCards
-            .Where(c => c.HasErrors)
-            .GroupBy(c => (c.InvoiceNumber ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)
+        var finalCards = allCards
+            .GroupBy(c => c.CardKey, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
-                var allIssues = g.SelectMany(c => c.Issues)
+                var primary = g.OrderBy(c => c.Prepared == null).First();
+                var prepared = g.Select(c => c.Prepared).FirstOrDefault(p => p != null);
+                var issues = g.SelectMany(c => c.Issues)
                     .GroupBy(i => new { i.RowNumber, i.ColumnName, i.Message })
                     .Select(ig => ig.First())
-                    .OrderBy(i => i.RowNumber)
-                    .ThenBy(i => i.Message)
+                    .OrderBy(i => i.RowNumber).ThenBy(i => i.Message)
                     .ToList();
-
-                var preparedWithInvoice = g.Select(c => c.Prepared).FirstOrDefault(p => p?.Invoice != null);
-                var prepared = preparedWithInvoice ?? g.First().Prepared;
-
-                return new InvoiceCardViewModel(g.Key, prepared, allIssues);
+                return new InvoiceCardViewModel(primary.InvoiceNumber, prepared, issues, g.Key);
             })
             .ToList();
-
-        finalCards.AddRange(mergedErrorCards);
 
         _cachedCards = finalCards
             .OrderBy(card => card.Issues.Count > 0 ? card.Issues.Min(issue => issue.RowNumber) : int.MaxValue)
@@ -823,7 +819,7 @@
         return ImportResult.Issues
             .Concat((ImportResult.PreparedInvoices ?? new List<PreparedInvoice>())
                 .SelectMany(prepared => prepared.Issues ?? new List<ImportSalesInvoiceIssue>()))
-            .Where(issue => issue.RowNumber == 0)
+            .Where(issue => issue.RowNumber == 0 && string.IsNullOrWhiteSpace(issue.InvoiceNumber))
             .OrderBy(issue => issue.RowNumber)
             .ThenBy(issue => issue.Message)
             .ToList();
@@ -855,7 +851,7 @@
         return ApplySort(filtered);
     }
 
-    private static bool CardMatchesSearch(InvoiceCardViewModel card, string term, bool termIsRowNumber, int rowNum)
+    private bool CardMatchesSearch(InvoiceCardViewModel card, string term, bool termIsRowNumber, int rowNum)
     {
         if (card.InvoiceNumber.Contains(term, StringComparison.OrdinalIgnoreCase))
             return true;
@@ -887,10 +883,9 @@
 
         foreach (var issue in allIssues)
         {
-            if (issue.Message?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
-                return true;
-            if (termIsRowNumber && issue.RowNumber == rowNum)
-                return true;
+            if (issue.Message?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) return true;
+            if (termIsRowNumber && issue.RowNumber == rowNum) return true;
+            if (issue.RowNumber > 0 && RawRowContains(issue.RowNumber, term)) return true;
         }
 
         return false;
@@ -963,8 +958,7 @@
             _groupedIssuesCacheFilter = filter;
         }
 
-        if (_groupedIssuesCache.TryGetValue(card.InvoiceNumber, out var cached))
-            return cached;
+        if (_groupedIssuesCache.TryGetValue(card.CardKey, out var cached)) return cached;
 
         var visibleIssues = EffectiveIssues(card).AsEnumerable();
             if (!string.IsNullOrWhiteSpace(filter))
@@ -984,7 +978,7 @@
             .OrderBy(g => g.Message, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        _groupedIssuesCache[card.InvoiceNumber] = grouped;
+        _groupedIssuesCache[card.CardKey] = grouped;
         return grouped;
     }
 
@@ -1079,6 +1073,29 @@
             : issues.Count(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
         return errorCount == 1 ? "1 error" : $"{errorCount} errors";
     }
+    private List<FilterGroupCardViewModel> ApplyGroupSearch(List<FilterGroupCardViewModel> groups)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm)) return groups;
+
+        var term = searchTerm.Trim();
+        var isRow = int.TryParse(term, out var rowNum);
+
+        return groups.Where(g =>
+            g.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+            (g.Subtitle?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            g.Message.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+            (isRow && g.Occurrences.Contains(rowNum)) ||
+            g.Occurrences.Any(r => RawRowContains(r, term)))
+        .ToList();
+    }
+
+    private bool RawRowContains(int rowNumber, string term)
+    {
+        if (ImportResult?.RawValuesByRow == null ||
+            !ImportResult.RawValuesByRow.TryGetValue(rowNumber, out var raw)) return false;
+
+        return raw.Values.Any(v => v?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
 
     private async Task Commit()
     {
@@ -1089,9 +1106,10 @@
     private sealed record InvoiceCardViewModel(
         string InvoiceNumber,
         PreparedInvoice? Prepared,
-        List<ImportSalesInvoiceIssue> Issues)
+        List<ImportSalesInvoiceIssue> Issues,
+        string? KeyOverride = null)
     {
-        public string CardKey => BuildCardKey(InvoiceNumber, Prepared);
+        public string CardKey => KeyOverride ?? BuildCardKey(InvoiceNumber, Prepared);
 
         public bool HasErrors => Issues.Count > 0 || (Prepared?.Issues?.Count ?? 0) > 0;
 
@@ -1140,7 +1158,6 @@
         var match = UomNotFoundRegex.Match(issue.Message ?? string.Empty);
         if (!match.Success)
         {
-            // Fallback: behaves like before — one card per distinct message text.
             var msg = (issue.Message ?? string.Empty).Trim();
             return (msg, msg, null);
         }
@@ -1157,6 +1174,7 @@
     private static (string Key, string Title, string? Subtitle) ParseSkuIssue(ImportSalesInvoiceIssue issue)
     {
         var match = SkuNotFoundRegex.Match(issue.Message ?? string.Empty);
+        var SuggCount = issue.SuggestionCount ?? 0;
         if (!match.Success)
         {
             var msg = (issue.Message ?? string.Empty).Trim();
@@ -1164,7 +1182,8 @@
         }
 
         var sku = match.Groups["sku"].Value;
-        return (sku, sku, null);
+        var subtitle = SuggCount > 0 ? $"{SuggCount} suggestion" + (SuggCount == 1 ? "" : "s") + " available" : null;
+        return (sku, sku, subtitle);
     }
 
     private static readonly System.Text.RegularExpressions.Regex CustomerNotFoundRegex =
@@ -1173,6 +1192,8 @@
     private static (string Key, string Title, string? Subtitle) ParseCustomerIssue(ImportSalesInvoiceIssue issue)
     {
         var match = CustomerNotFoundRegex.Match(issue.Message ?? string.Empty);
+        var SuggCount = issue.SuggestionCount ?? 0;
+
         if (!match.Success)
         {
             var msg = (issue.Message ?? string.Empty).Trim();
@@ -1180,7 +1201,8 @@
         }
 
         var customer = match.Groups["customer"].Value;
-        return (customer, customer, null);
+        var subtitle = SuggCount > 0 ? $"{SuggCount} suggestion" + (SuggCount == 1 ? "" : "s") + " available" : null;
+        return (customer, customer, subtitle);
     }
 
     private List<FilterGroupCardViewModel>? _cachedItemGroups;
@@ -1269,14 +1291,12 @@
     private static string ChoiceKey(string invoiceNumber, PendingItemChoice choice) =>
         $"{invoiceNumber}|{choice.LineItemId}";
 
-    // Distinct conflicting SKUs across all invoices, with how many invoices each appears in —
-    // powers the "filter by conflicting item" dropdown on the Warnings tab.
     private List<(string SkuCode, int InvoiceCount)> GetDistinctConflictSkus() =>
         GetInvoiceCards()
             .Where(c => c.Prepared?.ItemChoices != null && c.Prepared.ItemChoices.Count > 0)
-            .SelectMany(c => c.Prepared!.ItemChoices.Select(ch => (ch.SkuCode, c.InvoiceNumber)))
+            .SelectMany(c => c.Prepared!.ItemChoices.Select(ch => (ch.SkuCode, Key: c.CardKey)))
             .GroupBy(x => x.SkuCode, StringComparer.OrdinalIgnoreCase)
-            .Select(g => (SkuCode: g.Key, InvoiceCount: g.Select(x => x.InvoiceNumber).Distinct().Count()))
+            .Select(g => (SkuCode: g.Key, InvoiceCount: g.Select(x => x.Key).Distinct().Count()))
             .OrderByDescending(x => x.InvoiceCount)
             .ThenBy(x => x.SkuCode, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1285,8 +1305,6 @@
         !string.IsNullOrWhiteSpace(skuCode) &&
         (c.Prepared?.ItemChoices?.Any(ch => ch.SkuCode.Equals(skuCode, StringComparison.OrdinalIgnoreCase)) ?? false);
 
-    // The candidate list to show in the bulk-apply bar — every invoice with this SKU
-    // conflict should offer the same set of matching records, so the first one found is enough.
     private List<ItemCandidateOption> GetCandidatesForSku(string skuCode) =>
         GetInvoiceCards()
             .SelectMany(c => c.Prepared?.ItemChoices ?? new List<PendingItemChoice>())
@@ -1296,8 +1314,6 @@
     private int CountInvoicesWithSku(string skuCode) =>
         GetInvoiceCards().Count(c => CardHasConflict(c, skuCode));
 
-    // Only counts invoices whose matching choice for this SKU hasn't been individually
-    // confirmed yet — this is the number bulk apply/confirm will actually touch.
     private int CountUnconfirmedInvoicesWithSku(string skuCode) =>
         GetInvoiceCards().Count(c => c.Prepared?.ItemChoices != null &&
             c.Prepared.ItemChoices.Any(ch => ch.SkuCode.Equals(skuCode, StringComparison.OrdinalIgnoreCase) &&
@@ -1351,7 +1367,6 @@
         }
     }
 
-    // Changing the dropdown only updates the data — it never confirms the choice by itself.
     private void OnItemChoiceChanged(InvoiceCardViewModel card, PendingItemChoice choice, object? value)
     {
         var prepared = card.Prepared;
@@ -1360,11 +1375,9 @@
         if (candidate == null) return;
 
         ApplyCandidate(prepared, choice, candidate);
-        // Picking a different value invalidates any earlier confirmation for this exact choice.
         confirmedChoiceKeys.Remove(ChoiceKey(card.InvoiceNumber, choice));
     }
 
-    // The only action that lets a conflict count as resolved for the Warnings → Valid transition.
     private void ConfirmChoice(InvoiceCardViewModel card, PendingItemChoice choice)
     {
         confirmedChoiceKeys.Add(ChoiceKey(card.InvoiceNumber, choice));
@@ -1423,12 +1436,12 @@
         {
             if (card.Prepared?.ItemChoices != null &&
                 card.Prepared.ItemChoices.Any(ch => !confirmedChoiceKeys.Contains(ChoiceKey(card.InvoiceNumber, ch))))
-                Track(WarningKind.SkuConflict, card.InvoiceNumber);
+                Track(WarningKind.SkuConflict, card.CardKey);
 
             foreach (var w in card.Prepared?.Warnings ?? new List<string>())
             {
                 if (IsWarningResolved(card, w)) continue;
-                Track(ClassifyWarning(w), card.InvoiceNumber);
+                Track(ClassifyWarning(w), card.CardKey);
             }
         }
 
@@ -1453,10 +1466,6 @@
             c.Prepared.Warnings.Any(w => !IsWarningResolved(c, w) && ClassifyWarning(w) == kind);
     }
 
-    // Generalizes GetDistinctConflictSkus to any warning kind. For SkuConflict, the
-    // "value" is the conflicting SKU code (so bulk-apply can act on it). For every
-    // other kind, there's nothing structured to bulk-apply to, so the "value" is just
-    // the distinct warning text itself — enough to filter down to one specific case.
     private List<(string Value, int InvoiceCount)> GetDistinctWarningValues(WarningKind kind)
     {
         if (kind == WarningKind.SkuConflict)
@@ -1480,7 +1489,7 @@
                     set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     counts[key] = set;
                 }
-                set.Add(card.InvoiceNumber);
+                set.Add(card.CardKey);
             }
         }
 
@@ -1503,9 +1512,6 @@
                 w.Trim().Equals(value, StringComparison.OrdinalIgnoreCase));
     }
 
-    // The bulk-apply bar only ever makes sense for SkuConflict (it needs structured
-    // candidates to offer). When there's exactly one conflicting SKU, treat it as
-    // selected automatically so the bar shows without an extra click.
     private string? GetEffectiveConflictFilter()
     {
         if (selectedWarningKindFilter != nameof(WarningKind.SkuConflict))

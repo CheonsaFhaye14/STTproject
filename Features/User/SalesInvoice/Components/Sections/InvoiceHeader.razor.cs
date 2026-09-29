@@ -404,7 +404,7 @@ SalesInvoiceValidation.Header.InvoiceNumber.ErrorMessage);
 
     private Task<bool> InvoiceNumberExistsAsync(CancellationToken cancellationToken = default)
     {
-        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, Invoice.OrderType, Invoice.CustomerId, Invoice.SubdistributorId, CurrentInvoiceId, cancellationToken);
+        return salesInvoiceService.InvoiceNumberExistsAsync(Invoice.InvoiceNumber, Invoice.OrderType, SelectedSubdistributorId, Invoice.CustomerId, Invoice.SalesManName, CurrentInvoiceId, cancellationToken);    
     }
 
     [Parameter] public List<CustomerDataModel> Customers { get; set; } = new();

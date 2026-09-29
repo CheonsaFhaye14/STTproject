@@ -1,0 +1,147 @@
+@using System.Text.Json
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle mb-2">
+        <thead>
+            <tr>
+                <th style="width:30%">Header in the file</th>
+                <th style="width:30%">Equals (field in the app)</th>
+                <th style="width:24%">How to read it</th>
+                <th style="width:8%" title="The header exists in the file but must not be used">Ignore</th>
+                <th style="width:8%"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var col in Columns)
+            {
+                <tr @key="col.RowKey">
+                    <td>
+                        <input class="form-control form-control-sm" placeholder="e.g. Inv No"
+                               @bind="col.HeaderText" @bind:event="oninput" />
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" value="@col.FieldKey"
+                                @onchange="e => FieldChanged(col, e)">
+                            <option value="">— choose a field —</option>
+                            @foreach (var f in Fields)
+                            {
+                                <option value="@f.Key">@f.Display</option>
+                            }
+                        </select>
+                        @if (NoteFor(col) is { } note)
+                        {
+                            <div class="form-text">@note</div>
+                        }
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" value="@col.ReadMode"
+                                @onchange="e => ModeChanged(col, e)">
+                            @foreach (var m in ModesFor(col))
+                            {
+                                <option value="@m">@ModeLabel(m)</option>
+                            }
+                        </select>
+                        @if (col.ReadMode == "Regex")
+                        {
+                            <input class="form-control form-control-sm mt-1" placeholder="Regex pattern"
+                                   value="@GetPattern(col)"
+                                   @onchange="e => SetPattern(col, e.Value?.ToString())" />
+                        }
+                    </td>
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input"
+                            checked="@col.IsIgnored" @onchange="e => IgnoredChanged(col, e)" />
+                    </td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                title="Remove this row" @onclick="() => Remove(col)">✕</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+<button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddRow">+ Add row</button>
+
+@code {
+    [Parameter, EditorRequired] public string ImportType { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public List<ImportTemplateColumnEditDto> Columns { get; set; } = new();
+
+    private IReadOnlyList<ImportField> Fields =>
+        ImportFieldRegistry.Get(ImportType)?.Fields ?? Array.Empty<ImportField>();
+
+    private void AddRow() => Columns.Add(new ImportTemplateColumnEditDto());
+
+    private void Remove(ImportTemplateColumnEditDto col) => Columns.Remove(col);
+
+    private void FieldChanged(ImportTemplateColumnEditDto col, ChangeEventArgs e)
+    {
+        var key = e.Value?.ToString();
+        col.FieldKey = string.IsNullOrWhiteSpace(key) ? null : key;
+
+        var modes = ModesFor(col);
+        if (!modes.Contains(col.ReadMode))
+            col.ReadMode = modes[0];
+        if (col.ReadMode != "Regex")
+            col.OptionsJson = null;
+    }
+
+    private void ModeChanged(ImportTemplateColumnEditDto col, ChangeEventArgs e)
+    {
+        col.ReadMode = e.Value?.ToString() ?? "Text";
+        if (col.ReadMode != "Regex")
+            col.OptionsJson = null;
+    }
+
+    private IReadOnlyList<string> ModesFor(ImportTemplateColumnEditDto col) =>
+        ImportFieldRegistry.GetField(ImportType, col.FieldKey)?.ReadModes ?? new[] { "Text" };
+
+    private string? NoteFor(ImportTemplateColumnEditDto col) =>
+        ImportFieldRegistry.GetField(ImportType, col.FieldKey)?.Note;
+
+    private static string ModeLabel(string mode) => mode switch
+    {
+        "Text"               => "Text as-is",
+        "Integer"            => "Whole number",
+        "Decimal"            => "Number with decimals",
+        "Date"               => "Date",
+        "StripLeadingCode"   => "Remove leading code",
+        "StripParenthetical" => "Remove text in ( )",
+        "ExtractBracketed"   => "Take text inside [ ]",
+        "Regex"              => "Regex pattern",
+        _ => mode
+    };
+
+    private static string GetPattern(ImportTemplateColumnEditDto col)
+    {
+        if (string.IsNullOrWhiteSpace(col.OptionsJson)) return string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(col.OptionsJson);
+            return doc.RootElement.ValueKind == JsonValueKind.Object &&
+                   doc.RootElement.TryGetProperty("pattern", out var p)
+                ? p.GetString() ?? string.Empty
+                : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void SetPattern(ImportTemplateColumnEditDto col, string? value) =>
+        col.OptionsJson = string.IsNullOrWhiteSpace(value)
+            ? null
+            : JsonSerializer.Serialize(new { pattern = value });
+
+    private void IgnoredChanged(ImportTemplateColumnEditDto col, ChangeEventArgs e)
+    {
+        col.IsIgnored = e.Value is bool b && b;
+        if (col.IsIgnored)
+        {
+            col.FieldKey = null;     
+            col.ReadMode = "Text";
+            col.OptionsJson = null;
+        }
+    }
+}

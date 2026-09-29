@@ -790,6 +790,14 @@ public sealed class InvoiceDataValidator
 
         if (distinctCustomerKeys > 1)
             return "Customer values must be the same for all rows in the same invoice.";
+        
+        var salesmen = rows
+            .Select(r => r.SalesManName?.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (salesmen > 1)
+            return "Salesman values must be the same for all rows in the same invoice.";
 
         return string.Empty;
     }

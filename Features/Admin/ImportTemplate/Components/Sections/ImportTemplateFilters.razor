@@ -1,0 +1,56 @@
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Import type</label>
+                <select class="form-select form-select-sm" @bind="Filter.ImportType">
+                    <option value="">All</option>
+                    @foreach (var d in ImportFieldRegistry.All)
+                    {
+                        <option value="@d.Type">@d.Display</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Subdistributor</label>
+                <select class="form-select form-select-sm" @bind="Filter.SubDistributorId">
+                    <option value="">All</option>
+                    @foreach (var s in Subds)
+                    {
+                        <option value="@s.SubDistributorId">@s.Display</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Principal</label>
+                <select class="form-select form-select-sm" @bind="Filter.Principal">
+                    <option value="">All</option>
+                    @foreach (var p in Principals)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small mb-1">Status</label>
+                <select class="form-select form-select-sm" @bind="Filter.IsActive">
+                    <option value="">All</option>
+                    <option value="True">Active</option>
+                    <option value="False">Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-sm btn-primary" @onclick="OnApply">Apply</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="OnReset">Reset</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ImportTemplateFilterDto Filter { get; set; } = default!;
+    [Parameter] public List<SubDistributorOptionDto> Subds { get; set; } = new();
+    [Parameter] public List<string> Principals { get; set; } = new();
+    [Parameter] public EventCallback OnApply { get; set; }
+    [Parameter] public EventCallback OnReset { get; set; }
+}

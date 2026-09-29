@@ -1,0 +1,69 @@
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Clone template</h5>
+                <button type="button" class="btn-close" @onclick="OnCancel"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">
+                    Copies every column from <strong>@Source.ScopeLabel</strong> (@TypeDisplay)
+                    into a new template. Pick who the copy is for.
+                </p>
+
+                @if (Errors.Count > 0)
+                {
+                    <div class="alert alert-danger py-2 small">
+                        <ul class="mb-0 ps-3">
+                            @foreach (var e in Errors) { <li>@e</li> }
+                        </ul>
+                    </div>
+                }
+
+                <label class="form-label">Copy to</label>
+                @if (_scope == ImportScope.Principal)
+                {
+                    <select class="form-select" @bind="_dto.TargetPrincipal">
+                        <option value="">Global default (all principals)</option>
+                        @foreach (var p in Principals) { <option value="@p">@p</option> }
+                    </select>
+                }
+                else
+                {
+                    <select class="form-select" @bind="_dto.TargetSubDistributorId">
+                        <option value="">Global default (all subdistributors)</option>
+                        @foreach (var s in Subds) { <option value="@s.SubDistributorId">@s.Display</option> }
+                    </select>
+                }
+            </div>
+            <div class="modal-footer"> 
+                <button class="btn btn-outline-secondary" @onclick="OnCancel" disabled="@IsSaving">Cancel</button>
+                <button class="btn btn-primary" @onclick="() => OnConfirm.InvokeAsync(_dto)" disabled="@IsSaving">
+                    @(IsSaving ? "Cloning..." : "Clone")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ImportTemplateListItemDto Source { get; set; } = default!;
+    [Parameter] public List<SubDistributorOptionDto> Subds { get; set; } = new();
+    [Parameter] public List<string> Principals { get; set; } = new();
+    [Parameter] public List<string> Errors { get; set; } = new();
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public EventCallback<CloneImportTemplateDto> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private CloneImportTemplateDto _dto = new();
+    private ImportScope? _scope;
+
+    private string TypeDisplay =>
+        ImportFieldRegistry.Get(Source.ImportType)?.Display ?? Source.ImportType;
+
+    protected override void OnInitialized()
+    {
+        _dto = new CloneImportTemplateDto { SourceTemplateId = Source.ImportTemplateId };
+        _scope = ImportFieldRegistry.Get(Source.ImportType)?.Scope;
+    }
+}

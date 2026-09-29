@@ -11,9 +11,9 @@ public partial class SubDistributor
 
     public string SubdName { get; set; } = null!;
 
-    public string? CityMunicipality { get; set; } = null;
+    public string? CityMunicipality { get; set; }
 
-    public string? Province { get; set; } = null;
+    public string? Province { get; set; }
 
     public int? EncoderId { get; set; }
 
@@ -27,13 +27,17 @@ public partial class SubDistributor
 
     public DateTime? UpdatedDate { get; set; }
 
-    public string? CompanySubdCode { get; set; } = null;
+    public string? CompanySubdCode { get; set; }
 
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();
 
     public virtual User? Encoder { get; set; }
+
+    public virtual ICollection<ImportFile> ImportFiles { get; set; } = new List<ImportFile>();
+
+    public virtual ICollection<ImportTemplate> ImportTemplates { get; set; } = new List<ImportTemplate>();
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 

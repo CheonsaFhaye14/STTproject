@@ -109,32 +109,18 @@
 
         var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
 
-        // Merge saved status back into the invoices the results modal is displaying.
         foreach (var prepared in toCommit)
-        {
-            var existing = importResult.PreparedInvoices.FirstOrDefault(p => p.InvoiceNumber == prepared.InvoiceNumber);
-            if (existing != null)
-            {
-                existing.IsSaved = prepared.IsSaved;
-                existing.SaveErrorMessage = prepared.SaveErrorMessage;
-                existing.Selected = !existing.IsSaved; // unselect what's already saved
-            }
-        }
+            prepared.Selected = !prepared.IsSaved;
 
         if (commitResult.HasIssues)
         {
             foreach (var issue in commitResult.Issues)
-            {
                 importResult.Issues.Add(issue);
-            }
         }
 
         if (commitResult.ImportedInvoiceCount > 0)
-        {
             await OnImportCompleted.InvokeAsync();
-        }
 
-        // Keep the results modal open so the user can see which invoices were saved.
         StateHasChanged();
     }
 

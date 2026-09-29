@@ -4,6 +4,7 @@ namespace STTproject.Features.User.SalesInvoice.DTOs;
 
 public sealed class PreparedInvoice
 {
+    public string GroupKey { get; set; } = string.Empty;
     public string InvoiceNumber { get; set; } = string.Empty;
     public string SubDistributor {get; set; } = string.Empty;
     public InputInvoiceModel Invoice { get; set; } = null!;
@@ -26,7 +27,8 @@ public sealed class ImportSalesInvoiceResult
     public int ImportedInvoiceCount { get; set; }
     public int ImportedRowCount { get; set; }
     public List<ImportSalesInvoiceIssue> Issues { get; } = new();
-     public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
+    public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
+    public Dictionary<string, List<int>> ErroredRowsByInvoiceCode { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool HasIssues => Issues.Count > 0;
 
@@ -36,7 +38,8 @@ public sealed class ImportSalesInvoiceResult
         string header,
         string body,
         string footer,
-        string? columnName = null)
+        string? columnName = null,
+        int? suggestionCount = null)
     {
         Issues.Add(new ImportSalesInvoiceIssue(
             rowNumber,
@@ -44,15 +47,16 @@ public sealed class ImportSalesInvoiceResult
             header,
             body,
             footer,
-            columnName));
+            columnName,
+            suggestionCount));
     }
     public void AddError(
         int rowNumber,
         string invoiceNumber,
         string message,
-        string? columnName = null)
+        string? columnName = null, int? suggestionCount = null)
     {
-        AddError(rowNumber, invoiceNumber, message, string.Empty, string.Empty, columnName);
+        AddError(rowNumber, invoiceNumber, message, string.Empty, string.Empty, columnName, suggestionCount);
     }
 
 }
@@ -91,7 +95,8 @@ public sealed record ImportSalesInvoiceIssue(
     string Header,
     string Body,
     string Footer,
-    string? ColumnName = null)
+    string? ColumnName = null,
+    int? SuggestionCount = null)
 {
     public string Message => Header;
 }
