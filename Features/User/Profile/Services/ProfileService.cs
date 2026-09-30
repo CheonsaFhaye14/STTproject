@@ -15,9 +15,9 @@ public interface IProfileService
 
 public class ProfileService : IProfileService
 {
-    private readonly IDbContextFactory<SttprojectContext> _dbContextFactory;
+    private readonly IDbContextFactory<EntrielContext> _dbContextFactory;
 
-    public ProfileService(IDbContextFactory<SttprojectContext> dbContextFactory)
+    public ProfileService(IDbContextFactory<EntrielContext> dbContextFactory)
     {
         _dbContextFactory = dbContextFactory;
     }

@@ -6,7 +6,7 @@ namespace STTproject.Features.Admin.Customers.Services
 {
     public class AdminCustomerService : IAdminCustomerService
     {
-        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbFactory;
         private readonly IGeographicDataService _geographicDataService;
 
         private static readonly TimeZoneInfo PhTimeZone =
@@ -16,7 +16,7 @@ namespace STTproject.Features.Admin.Customers.Services
         private static DateTime NowPh() =>
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
-        public AdminCustomerService(IDbContextFactory<SttprojectContext> dbFactory, IGeographicDataService geographicDataService)
+        public AdminCustomerService(IDbContextFactory<EntrielContext> dbFactory, IGeographicDataService geographicDataService)
         {
             _dbFactory = dbFactory;
             _geographicDataService = geographicDataService;

@@ -8,7 +8,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
 {
     public class AdminPriceIncreaseService : IAdminPriceIncreaseService
     {
-        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbFactory;
         private readonly IConfiguration _config;
 
         private static readonly TimeZoneInfo PhTimeZone =
@@ -18,7 +18,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
         private static DateTime NowPh() =>
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
-        public AdminPriceIncreaseService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
+        public AdminPriceIncreaseService(IDbContextFactory<EntrielContext> dbFactory, IConfiguration config)
         {
             _dbFactory = dbFactory;
             _config = config;

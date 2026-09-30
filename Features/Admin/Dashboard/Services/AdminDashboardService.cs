@@ -6,9 +6,9 @@ namespace STTproject.Features.Admin.Dashboard.Services
 {
     public class AdminDashboardService : IAdminDashboardService
     {
-        private readonly IDbContextFactory<SttprojectContext> _dbContextFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbContextFactory;
 
-        public AdminDashboardService(IDbContextFactory<SttprojectContext> dbContextFactory)
+        public AdminDashboardService(IDbContextFactory<EntrielContext> dbContextFactory)
         {
             _dbContextFactory = dbContextFactory;
         }

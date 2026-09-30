@@ -3,15 +3,16 @@ using STTproject.Data;
 using STTproject.Features.Admin.ImportTemplate.DTOs;
 using STTproject.Features.Admin.ImportTemplate.Validators;
 using TemplateEntity = STTproject.Data.ImportTemplate;
+using SheetEntity = STTproject.Data.ImportTemplateSheet;
 using ColumnEntity = STTproject.Data.ImportTemplateColumn;
 
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
 public sealed class ImportTemplateService : IImportTemplateService
 {
-    private readonly IDbContextFactory<SttprojectContext> _factory;
+    private readonly IDbContextFactory<EntrielContext> _factory;
 
-    public ImportTemplateService(IDbContextFactory<SttprojectContext> factory)
+    public ImportTemplateService(IDbContextFactory<EntrielContext> factory)
     {
         _factory = factory;
     }
@@ -36,7 +37,7 @@ public sealed class ImportTemplateService : IImportTemplateService
 
         return await q
             .OrderBy(t => t.ImportType)
-            .ThenBy(t => t.SubDistributorId)          // global defaults (null) first
+            .ThenBy(t => t.SubDistributorId)          
             .ThenBy(t => t.Principal)
             .ThenByDescending(t => t.IsActive)
             .Select(t => new ImportTemplateListItemDto
@@ -51,6 +52,7 @@ public sealed class ImportTemplateService : IImportTemplateService
                 Version = t.Version,
                 IsActive = t.IsActive,
                 AllowGlobalFallback = t.AllowGlobalFallback,
+                SheetCount = t.ImportTemplateSheets.Count,
                 ColumnCount = t.ImportTemplateColumns.Count,
                 LastChangedDate = t.UpdatedDate ?? t.CreatedDate
             })
@@ -63,7 +65,9 @@ public sealed class ImportTemplateService : IImportTemplateService
 
         var t = await ctx.ImportTemplates
             .AsNoTracking()
-            .Include(x => x.ImportTemplateColumns)
+            .AsSplitQuery()
+            .Include(x => x.ImportTemplateSheets)
+                .ThenInclude(s => s.ImportTemplateColumns)
             .FirstOrDefaultAsync(x => x.ImportTemplateId == importTemplateId, ct);
 
         if (t is null) return null;
@@ -75,23 +79,34 @@ public sealed class ImportTemplateService : IImportTemplateService
             TemplateName = t.TemplateName,
             SubDistributorId = t.SubDistributorId,
             Principal = t.Principal,
-            SheetName = t.SheetName,
-            HeaderRowNumber = t.HeaderRowNumber,
             AllowGlobalFallback = t.AllowGlobalFallback,
             IsActive = t.IsActive,
             Version = t.Version,
-            Columns = t.ImportTemplateColumns
-                .OrderBy(c => c.SortOrder).ThenBy(c => c.ImportTemplateColumnId)
-                .Select(c => new ImportTemplateColumnEditDto
+            Sheets = t.ImportTemplateSheets
+                .OrderBy(s => s.SortOrder).ThenBy(s => s.ImportTemplateSheetId)
+                .Select(s => new ImportTemplateSheetEditDto
                 {
-                    ImportTemplateColumnId = c.ImportTemplateColumnId,
-                    HeaderText = c.HeaderText,
-                    FieldKey = c.FieldKey,
-                    ReadMode = c.ReadMode,
-                    OptionsJson = c.OptionsJson,
-                    IsRequired = c.IsRequired,
-                    IsIgnored = c.IsIgnored,
-                    SortOrder = c.SortOrder
+                    ImportTemplateSheetId = s.ImportTemplateSheetId,
+                    SheetLabel = s.SheetLabel,
+                    SheetMatchMode = s.SheetMatchMode,
+                    SheetMatchValue = s.SheetMatchValue,
+                    IsRequired = s.IsRequired,
+                    HeaderRowMode = s.HeaderRowMode,
+                    HeaderRowNumber = s.HeaderRowNumber,
+                    SortOrder = s.SortOrder,
+                    Columns = s.ImportTemplateColumns
+                        .OrderBy(c => c.SortOrder).ThenBy(c => c.ImportTemplateColumnId)
+                        .Select(c => new ImportTemplateColumnEditDto
+                        {
+                            ImportTemplateColumnId = c.ImportTemplateColumnId,
+                            HeaderText = c.HeaderText,
+                            FieldKey = c.FieldKey,
+                            RuleType = c.RuleType,
+                            OptionsJson = c.OptionsJson,
+                            IsRequired = c.IsRequired,
+                            SortOrder = c.SortOrder
+                        })
+                        .ToList()
                 })
                 .ToList()
         };
@@ -102,7 +117,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         if (userId <= 0)
             return ImportTemplateSaveResult.Fail("Unable to identify the current user. Please sign in again.");
 
-        NormalizeScope(dto);
+        NormalizeDto(dto);
 
         var errors = ImportTemplateValidator.Validate(dto);
         if (errors.Count > 0)
@@ -139,7 +154,9 @@ public sealed class ImportTemplateService : IImportTemplateService
             else
             {
                 var existing = await ctx.ImportTemplates
-                    .Include(t => t.ImportTemplateColumns)
+                    .AsSplitQuery()
+                    .Include(t => t.ImportTemplateSheets)
+                        .ThenInclude(s => s.ImportTemplateColumns)
                     .FirstOrDefaultAsync(t => t.ImportTemplateId == dto.ImportTemplateId, ct);
 
                 if (existing is null)
@@ -153,22 +170,20 @@ public sealed class ImportTemplateService : IImportTemplateService
                 entity.UpdatedDate = DateTime.UtcNow;
                 entity.UpdatedBy = userId;
 
-                // Replace the column set. Deleting first (and saving) avoids unique-index clashes
-                // on HeaderText if headers were swapped between rows.
-                ctx.ImportTemplateColumns.RemoveRange(entity.ImportTemplateColumns);
+                RemoveDeleted(ctx, entity, dto);
                 await ctx.SaveChangesAsync(ct);
-                entity.ImportTemplateColumns.Clear();
             }
 
             entity.ImportType = dto.ImportType;
-            entity.TemplateName = await BuildTemplateNameAsync(ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, ct);
+            entity.TemplateName = string.IsNullOrWhiteSpace(dto.TemplateName)
+                ? await BuildTemplateNameAsync(ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, ct)
+                : dto.TemplateName.Trim();            
             entity.SubDistributorId = dto.SubDistributorId;
             entity.Principal = dto.Principal;
             entity.AllowGlobalFallback = dto.AllowGlobalFallback;
             entity.IsActive = dto.IsActive;
-            // SheetName and HeaderRowNumber are not edited on the page, so any stored value is kept.
 
-            AddColumns(entity, dto.Columns);
+            UpsertSheets(ctx, entity, dto);
 
             await ctx.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -197,7 +212,9 @@ public sealed class ImportTemplateService : IImportTemplateService
 
         var source = await ctx.ImportTemplates
             .AsNoTracking()
-            .Include(t => t.ImportTemplateColumns)
+            .AsSplitQuery()
+            .Include(t => t.ImportTemplateSheets)
+                .ThenInclude(s => s.ImportTemplateColumns)
             .FirstOrDefaultAsync(t => t.ImportTemplateId == dto.SourceTemplateId, ct);
 
         if (source is null)
@@ -225,11 +242,9 @@ public sealed class ImportTemplateService : IImportTemplateService
             var copy = new TemplateEntity
             {
                 ImportType = source.ImportType,
-                TemplateName = await BuildTemplateNameAsync(ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, ct),
+                TemplateName = dto.TemplateName ?? await BuildTemplateNameAsync(ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, ct),
                 SubDistributorId = dto.TargetSubDistributorId,
                 Principal = targetPrincipal,
-                SheetName = source.SheetName,
-                HeaderRowNumber = source.HeaderRowNumber,
                 AllowGlobalFallback = source.AllowGlobalFallback,
                 Version = 1,
                 IsActive = true,
@@ -237,25 +252,43 @@ public sealed class ImportTemplateService : IImportTemplateService
                 CreatedBy = userId
             };
 
-            foreach (var c in source.ImportTemplateColumns.OrderBy(c => c.SortOrder))
+            foreach (var s in source.ImportTemplateSheets.OrderBy(s => s.SortOrder))
             {
-                copy.ImportTemplateColumns.Add(new ColumnEntity
+                var sheetCopy = new SheetEntity
                 {
-                    FieldKey = c.FieldKey,
-                    HeaderText = c.HeaderText,
-                    ReadMode = c.ReadMode,
-                    OptionsJson = c.OptionsJson,
-                    IsRequired = c.IsRequired,
-                    IsIgnored = c.IsIgnored,
-                    SortOrder = c.SortOrder
-                });
+                    SheetLabel = s.SheetLabel,
+                    SheetMatchMode = s.SheetMatchMode,
+                    SheetMatchValue = s.SheetMatchValue,
+                    IsRequired = s.IsRequired,
+                    HeaderRowMode = s.HeaderRowMode,
+                    HeaderRowNumber = s.HeaderRowNumber,
+                    SortOrder = s.SortOrder
+                };
+                copy.ImportTemplateSheets.Add(sheetCopy);
+
+                foreach (var c in s.ImportTemplateColumns.OrderBy(c => c.SortOrder))
+                {
+                    var colCopy = new ColumnEntity
+                    {
+                        FieldKey = c.FieldKey,
+                        HeaderText = c.HeaderText,
+                        RuleType = c.RuleType,
+                        OptionsJson = c.OptionsJson,
+                        IsRequired = c.IsRequired,
+                        SortOrder = c.SortOrder
+                    };
+
+                    // A column belongs to both its template and its sheet.
+                    copy.ImportTemplateColumns.Add(colCopy);
+                    sheetCopy.ImportTemplateColumns.Add(colCopy);
+                }
             }
 
             ctx.ImportTemplates.Add(copy);
             await ctx.SaveChangesAsync(ct);
             return ImportTemplateSaveResult.Ok(copy.ImportTemplateId);
         }
-        catch(DbUpdateConcurrencyException)
+        catch (DbUpdateConcurrencyException)
         {
             return ImportTemplateSaveResult.Fail(
                 "This template was changed by someone else since you opened it. Reload it and try again.");
@@ -338,40 +371,106 @@ public sealed class ImportTemplateService : IImportTemplateService
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private static void NormalizeScope(ImportTemplateEditDto dto)
+    private static void NormalizeDto(ImportTemplateEditDto dto)
     {
         dto.Principal = string.IsNullOrWhiteSpace(dto.Principal) ? null : dto.Principal.Trim();
 
-        foreach (var c in dto.Columns)
+        foreach (var s in dto.Sheets)
         {
-            c.HeaderText = c.HeaderText?.Trim() ?? string.Empty;
-            c.OptionsJson = string.IsNullOrWhiteSpace(c.OptionsJson) ? null : c.OptionsJson.Trim();
-            if (c.IsIgnored) c.FieldKey = null;
-            else c.FieldKey = string.IsNullOrWhiteSpace(c.FieldKey) ? null : c.FieldKey.Trim();
-            if (string.IsNullOrWhiteSpace(c.ReadMode)) c.ReadMode = "Text";
+            s.SheetLabel = s.SheetLabel?.Trim() ?? string.Empty;
+            s.SheetMatchValue = string.IsNullOrWhiteSpace(s.SheetMatchValue) ? null : s.SheetMatchValue.Trim();
+
+            // Clear values the chosen mode doesn't use, so stale text can't linger.
+            if (s.SheetMatchMode is SheetMatchModes.Any or SheetMatchModes.Ignore) s.SheetMatchValue = null;
+            if (s.HeaderRowMode != HeaderRowModes.Fixed) s.HeaderRowNumber = null;
+            if (s.SheetMatchMode == SheetMatchModes.Ignore) s.Columns.Clear();
+
+            foreach (var c in s.Columns)
+            {
+                c.HeaderText = c.HeaderText?.Trim() ?? string.Empty;
+                c.FieldKey = string.IsNullOrWhiteSpace(c.FieldKey) ? null : c.FieldKey.Trim();
+                c.OptionsJson = string.IsNullOrWhiteSpace(c.OptionsJson) ? null : c.OptionsJson.Trim();
+                if (string.IsNullOrWhiteSpace(c.RuleType)) c.RuleType = ColumnRuleTypes.Direct;
+            }
         }
     }
 
-    private static void AddColumns(TemplateEntity entity, List<ImportTemplateColumnEditDto> columns)
+    private static void RemoveDeleted(EntrielContext ctx, TemplateEntity entity, ImportTemplateEditDto dto)
     {
-        for (int i = 0; i < columns.Count; i++)
+        var keepSheetIds = dto.Sheets.Where(s => s.ImportTemplateSheetId != 0)
+            .Select(s => s.ImportTemplateSheetId).ToHashSet();
+
+        foreach (var sheet in entity.ImportTemplateSheets.ToList())
         {
-            var c = columns[i];
-            entity.ImportTemplateColumns.Add(new ColumnEntity
+            if (!keepSheetIds.Contains(sheet.ImportTemplateSheetId))
             {
-                HeaderText = c.HeaderText,
-                FieldKey = c.IsIgnored ? null : c.FieldKey,
-                ReadMode = c.IsIgnored ? "Text" : c.ReadMode,
-                OptionsJson = c.OptionsJson,
-                IsRequired = c.IsRequired && !c.IsIgnored,
-                IsIgnored = c.IsIgnored,
-                SortOrder = i + 1
-            });
+                ctx.ImportTemplateColumns.RemoveRange(sheet.ImportTemplateColumns.ToList());
+                ctx.ImportTemplateSheets.Remove(sheet);
+                continue;
+            }
+
+            var keepColumnIds = dto.Sheets
+                .First(s => s.ImportTemplateSheetId == sheet.ImportTemplateSheetId)
+                .Columns.Where(c => c.ImportTemplateColumnId != 0)
+                .Select(c => c.ImportTemplateColumnId).ToHashSet();
+
+            ctx.ImportTemplateColumns.RemoveRange(sheet.ImportTemplateColumns
+                .Where(c => !keepColumnIds.Contains(c.ImportTemplateColumnId)).ToList());
+        }
+    }
+
+    /// <summary>Updates rows that already exist (keeping their ids, so past imports stay linked) and adds new ones.</summary>
+    private static void UpsertSheets(EntrielContext ctx, TemplateEntity entity, ImportTemplateEditDto dto)
+    {
+        for (int si = 0; si < dto.Sheets.Count; si++)
+        {
+            var sd = dto.Sheets[si];
+
+            var sheet = sd.ImportTemplateSheetId == 0
+                ? null
+                : entity.ImportTemplateSheets.FirstOrDefault(s => s.ImportTemplateSheetId == sd.ImportTemplateSheetId);
+
+            if (sheet is null)
+            {
+                sheet = new SheetEntity();
+                entity.ImportTemplateSheets.Add(sheet);
+            }
+
+            sheet.SheetLabel = sd.SheetLabel;
+            sheet.SheetMatchMode = sd.SheetMatchMode;
+            sheet.SheetMatchValue = sd.SheetMatchValue;
+            sheet.IsRequired = sd.IsRequired;
+            sheet.HeaderRowMode = sd.HeaderRowMode;
+            sheet.HeaderRowNumber = sd.HeaderRowNumber;
+            sheet.SortOrder = si + 1;
+
+            for (int ci = 0; ci < sd.Columns.Count; ci++)
+            {
+                var cd = sd.Columns[ci];
+
+                var col = cd.ImportTemplateColumnId == 0
+                    ? null
+                    : sheet.ImportTemplateColumns.FirstOrDefault(c => c.ImportTemplateColumnId == cd.ImportTemplateColumnId);
+
+                if (col is null)
+                {
+                    col = new ColumnEntity();
+                    entity.ImportTemplateColumns.Add(col);   // column belongs to the template...
+                    sheet.ImportTemplateColumns.Add(col);    // ...and to its sheet
+                }
+
+                col.HeaderText = cd.HeaderText;
+                col.FieldKey = cd.FieldKey;
+                col.RuleType = cd.RuleType;
+                col.OptionsJson = cd.OptionsJson;
+                col.IsRequired = cd.IsRequired;
+                col.SortOrder = ci + 1;
+            }
         }
     }
 
     private static async Task<string> BuildTemplateNameAsync(
-        SttprojectContext ctx, string importType, int? subDistributorId, string? principal, CancellationToken ct)
+        EntrielContext ctx, string importType, int? subDistributorId, string? principal, CancellationToken ct)
     {
         var display = ImportFieldRegistry.Get(importType)?.Display ?? importType;
 
@@ -397,7 +496,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         return name.Length <= 150 ? name : name[..150];
     }
 
-    private static async Task<string?> CheckSubdExistsAsync(SttprojectContext ctx, int? subDistributorId, CancellationToken ct)
+    private static async Task<string?> CheckSubdExistsAsync(EntrielContext ctx, int? subDistributorId, CancellationToken ct)
     {
         if (subDistributorId is null) return null;
 
@@ -410,7 +509,7 @@ public sealed class ImportTemplateService : IImportTemplateService
     // Mirrors the filtered unique index UX_ImportTemplates_ActiveScope so the user gets a
     // readable message instead of a database error. NULL scope values compare as equal.
     private static Task<string?> FindActiveConflictAsync(
-        SttprojectContext ctx, string importType, int? subDistributorId, string? principal, int excludeId, CancellationToken ct)
+        EntrielContext ctx, string importType, int? subDistributorId, string? principal, int excludeId, CancellationToken ct)
     {
         return ctx.ImportTemplates
             .AsNoTracking()

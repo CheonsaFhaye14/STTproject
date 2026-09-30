@@ -1,0 +1,245 @@
+@foreach (var c in Columns)
+{
+    <div class="col-card" @key="c.RowKey">
+
+        @* ── Line 1: what is this column, and which field does it feed ── *@
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <Input TValue="string"
+                            Label="Header in the file"
+                            Placeholder="e.g. Invoice No."
+                            @bind-Value="c.HeaderText" />
+            </div>
+
+            <div class="col-md-4">
+                <Select TItem="FieldOption"
+                             Label="System field"
+                             Placeholder="Choose a field…"
+                             Items="_fields"
+                             ValueSelector="f => f.Key"
+                             TextSelector="f => f.Display"
+                             SelectedValue="@c.FieldKey"
+                             SelectedValueChanged="v => OnFieldChanged(c, v)" />
+            </div>
+
+            <div class="col-md-2 text-end">
+                <Button Variant="ButtonVariant.IconActionDelete"
+                        Icon="fa-solid fa-trash"
+                        Tooltip="Remove this column"
+                        OnClick="() => RemoveColumn(c)" />
+            </div>
+        </div>
+
+        @* ── Sample first, then how to read it, then what you get ── *@
+        @if (!string.IsNullOrEmpty(c.FieldKey))
+        {
+            <div class="col-md-4">
+                @if (IsDate(c))
+                {
+                    <Select TItem="RuleOption"
+                                    Label="Date format in the file"
+                                    Placeholder="Detect automatically"
+                                    Items="DateFormats"
+                                    ValueSelector="r => r.Value"
+                                    TextSelector="r => r.Text"
+                                    SelectedValue="@(c.OptionsJson ?? string.Empty)"
+                                    SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
+                }
+                else
+                {
+                    <Select TItem="RuleOption"
+                                    Label="How to read it"
+                                    Placeholder="Use as is"
+                                    Items="RuleOptions"
+                                    ValueSelector="r => r.Value"
+                                    TextSelector="r => r.Text"
+                                    SelectedValue="@RuleValue(c)"
+                                    SelectedValueChanged="v => OnRuleChanged(c, v)" />
+                }
+            </div>
+                <div class="read-row mt-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <Input TValue="string"
+                                        Label="Example from the file"
+                                        Placeholder="e.g. 00123 - ABC STORE"
+                                        Value="@GetSample(c)"
+                                        ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Result</label>
+                            @if (string.IsNullOrWhiteSpace(GetSample(c)))
+                            {
+                                <div class="result-box text-muted">Type an example to see the result</div>
+                            }
+                            else
+                            {
+                                <div class="result-box">@PreviewText(c)</div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (c.RuleType == ColumnRuleTypes.Regex)
+                    {
+                        <div class="row g-2 mt-1">
+                            <div class="col-md-8">
+                                <Input TValue="string"
+                                            Label="Pattern"
+                                            Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
+                                            @bind-Value="c.OptionsJson" />
+                            </div>
+                        </div>
+                    }
+                                <div class="col-md-2">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="req-@c.RowKey" @bind="c.IsRequired" />
+                        <label class="form-check-label" for="req-@c.RowKey">Required</label>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<Button Variant="ButtonVariant.Secondary" Title="+ Add column" OnClick="AddColumn" />
+
+<style>
+    .col-card {
+        border: 1px solid var(--app-border, #E5E3DD);
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+        background: #fff;
+    }
+
+    /* Input renders a bare <input>, so give it the same look as the dropdowns
+       and put its label above it (like Select does). */
+    .col-card .form-label {
+        display: block;
+        margin-bottom: .25rem;
+        font-weight: 600;
+    }
+
+    .col-card input:not([type=checkbox]) {
+        display: block;
+        width: 100%;
+        padding: .375rem .75rem;
+        font-size: 1rem;
+        border: 1px solid #ced4da;
+        border-radius: .375rem;
+        background: #fff;
+    }
+
+    .result-box {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        padding: 6px 10px;
+        border: 1px dashed #CFCBC0;
+        border-radius: 8px;
+        background: #fff;
+        font-size: 14px;
+        word-break: break-word;
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public string ImportType { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public List<ImportTemplateColumnEditDto> Columns { get; set; } = new();
+
+    /// <summary>Raised when a change affects the "still missing" alert in the parent.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private sealed record FieldOption(string Key, string Display);
+    private sealed record RuleOption(string Value, string Text);
+
+    // "Use as is" is the empty choice in the dropdown, so it isn't listed here.
+    private static readonly List<RuleOption> RuleOptions = new()
+    {
+        new("Trim", "Remove extra spaces"),
+        new("StripLeadingCode", "Remove the code at the start (00123 - ABC → ABC)"),
+        new("StripParenthetical", "Remove text in (parentheses)"),
+        new("ExtractBracketed", "Keep only the text in [brackets]"),
+        new(ColumnRuleTypes.Regex, "Custom pattern (advanced)")
+    };
+
+    // Value is the .NET date format that gets stored in OptionsJson. Empty = detect automatically.
+    private static readonly List<RuleOption> DateFormats = new()
+    {
+        new("dd-MMM-yy", "05-Jan-26"),
+        new("d-MMM-yyyy", "5-Jan-2026"),
+        new("dd/MM/yyyy", "05/01/2026  (day first)"),
+        new("MM/dd/yyyy", "01/05/2026  (month first)"),
+        new("yyyy-MM-dd", "2026-01-05")
+    };
+
+    private List<FieldOption> _fields = new();
+
+    // Screen-only state, not saved with the template.
+    private readonly Dictionary<Guid, string> _samples = new();
+
+    protected override void OnParametersSet()
+    {
+        // ADJUST to match your registry. Assumes each import type exposes Fields with a Key
+        // (stored in FieldKey) and a Display name.
+        _fields = ImportFieldRegistry.Get(ImportType)?.Fields
+                      .Select(f => new FieldOption(f.Key, f.Display)).ToList()
+                  ?? new List<FieldOption>();
+    }
+
+    private ImportFieldType TypeOf(string? key) =>
+        ImportFieldRegistry.GetField(ImportType, key)?.Type ?? ImportFieldType.Text;
+
+    private bool IsDate(ImportTemplateColumnEditDto c) => TypeOf(c.FieldKey) == ImportFieldType.Date;
+
+    private async Task OnFieldChanged(ImportTemplateColumnEditDto c, string? value)
+    {
+        var oldType = TypeOf(c.FieldKey);
+        c.FieldKey = string.IsNullOrWhiteSpace(value) ? null : value;
+
+        // A date format or text rule means nothing for a different kind of field.
+        if (oldType != TypeOf(c.FieldKey))
+        {
+            c.RuleType = ColumnRuleTypes.Direct;
+            c.OptionsJson = null;
+        }
+        await NotifyChanged();
+    }
+
+    private Task NotifyChanged() => OnChanged.InvokeAsync();
+
+    private static string RuleValue(ImportTemplateColumnEditDto c) =>
+        c.RuleType == ColumnRuleTypes.Direct ? string.Empty : c.RuleType;
+
+    private static void OnRuleChanged(ImportTemplateColumnEditDto c, string? value)
+    {
+        c.RuleType = string.IsNullOrEmpty(value) ? ColumnRuleTypes.Direct : value;
+        if (c.RuleType != ColumnRuleTypes.Regex) c.OptionsJson = null;
+    }
+
+    private static void OnDateFormatChanged(ImportTemplateColumnEditDto c, string? value)
+    {
+        c.RuleType = ColumnRuleTypes.Direct;
+        c.OptionsJson = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private string PreviewText(ImportTemplateColumnEditDto c) =>
+        IsDate(c)
+            ? ImportRulePreview.ApplyDate(GetSample(c), c.OptionsJson)
+            : ImportRulePreview.Apply(GetSample(c), c.RuleType, c.OptionsJson);
+
+    private string GetSample(ImportTemplateColumnEditDto c) =>
+        _samples.TryGetValue(c.RowKey, out var s) ? s : string.Empty;
+
+    private async Task AddColumn()
+    {
+        Columns.Add(new ImportTemplateColumnEditDto());
+        await NotifyChanged();
+    }
+
+    private async Task RemoveColumn(ImportTemplateColumnEditDto c)
+    {
+        Columns.Remove(c);
+        await NotifyChanged();
+    }
+}

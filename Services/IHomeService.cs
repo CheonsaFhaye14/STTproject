@@ -36,9 +36,9 @@ public interface IHomeService
 
 public class HomeService : IHomeService
 {
-    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
 
-    public HomeService(IDbContextFactory<SttprojectContext> contextFactory)
+    public HomeService(IDbContextFactory<EntrielContext> contextFactory)
     {
         _contextFactory = contextFactory;
     }

@@ -89,7 +89,9 @@
                                 }
                                 @if (hasWarningCards)
                                 {
-                                    <button type="button" class="tab @GetTabClass(InvoiceCardFilter.WarningOnly)" @onclick='() => SetTab(InvoiceCardFilter.WarningOnly)'>
+                                    <button type="button" 
+                                        class="tab @GetTabClass(InvoiceCardFilter.WarningOnly)" 
+                                        @onclick='() => SetTab(InvoiceCardFilter.WarningOnly)'>
                                         <span class="dot dot-warn"></span>
                                         Warnings (@invoiceCards.Count(HasWarningOnly))
                                     </button>
@@ -187,7 +189,6 @@
                                     </div>
                                     @if (!string.IsNullOrEmpty(selectedConflictFilter))
                                         {
-                                            var bulkCandidates = GetCandidatesForSku(selectedConflictFilter);
                                             var affectedCount = CountInvoicesWithSku(selectedConflictFilter);
                                             var unconfirmedCount = CountUnconfirmedInvoicesWithSku(selectedConflictFilter);
                                             var alreadyConfirmedCount = affectedCount - unconfirmedCount;
@@ -202,11 +203,9 @@
                                                 <div class="bulk-apply-actions">
                                                     <select @onchange="OnBulkCandidateChanged" value="@(bulkApplyCandidateId?.ToString() ?? string.Empty)">
                                                         <option value="">-- select --</option>
-                                                        @foreach (var candidate in bulkCandidates)
+                                                        @foreach (var opt in GetBulkOptionsForSku(selectedConflictFilter))
                                                         {
-                                                            <option value="@candidate.SubdItemId">
-                                                                @candidate.SubdItemCode - @candidate.ItemName (@candidate.UomName @@ ₱@candidate.UnitPrice.ToString("N2"))
-                                                            </option>
+                                                            <option value="@opt.SubdItemId">@opt.Code - @opt.Name (@opt.UomSummary) · @opt.Lines line@(opt.Lines == 1 ? "" : "s")</option>
                                                         }
                                                     </select>
                                                     <button type="button" class="btn-bulk-apply" disabled="@(bulkApplyCandidateId == null || unconfirmedCount == 0)"
@@ -858,7 +857,30 @@
         selectedConflictFilter = null;
         bulkApplyCandidateId = null;
     }
+    private sealed record BulkOption(int SubdItemId, string Code, string Name, string UomSummary, int Lines);
 
+    private List<BulkOption> GetBulkOptionsForSku(string skuCode) =>
+        GetInvoiceCards()
+            .SelectMany(c => c.Prepared?.ItemChoices ?? new List<PendingItemChoice>())
+            .Where(ch => ch.SkuCode.Equals(skuCode, StringComparison.OrdinalIgnoreCase))
+            .Where(ch => ch.Candidates.Select(x => x.SubdItemId).Distinct().Count() > 1) // real SKU conflicts only
+            .SelectMany(ch => ch.Candidates)
+            .GroupBy(cand => cand.SubdItemId)
+            .Select(g =>
+            {
+                var f = g.First();
+                var uoms = string.Join(" · ", g
+                    .GroupBy(x => x.UomName)
+                    .Select(ug =>
+                    {
+                        var min = ug.Min(x => x.UnitPrice);
+                        var max = ug.Max(x => x.UnitPrice);
+                        return min == max ? $"{ug.Key} ₱{min:N2}" : $"{ug.Key} ₱{min:N2}–₱{max:N2}";
+                    }));
+                return new BulkOption(f.SubdItemId, f.SubdItemCode, f.ItemName, uoms, g.Count());
+            })
+            .OrderBy(o => o.Code).ThenBy(o => o.Name).ThenBy(o => o.SubdItemId)
+            .ToList();
     private void ClearWarningKindFilter()
     {
         selectedWarningKindFilter = null;
@@ -1421,17 +1443,18 @@
 
     private void ApplyToAllWithSku(string skuCode)
     {
-        if (bulkApplyCandidateId is not int candidateId) return;
+        if (bulkApplyCandidateId is not int subdItemId) return;
 
         foreach (var card in GetInvoiceCards())
         {
             if (card.Prepared == null) continue;
             foreach (var choice in card.Prepared.ItemChoices.Where(ch => ch.SkuCode.Equals(skuCode, StringComparison.OrdinalIgnoreCase)))
             {
-                if (confirmedChoiceKeys.Contains(ChoiceKey(card.InvoiceNumber, choice))) continue; // already confirmed individually — leave as-is
+                if (confirmedChoiceKeys.Contains(ChoiceKey(card.InvoiceNumber, choice))) continue;
+                if (choice.Candidates.Select(c => c.SubdItemId).Distinct().Count() < 2) continue; // UOM-only choice
 
-                var candidate = choice.Candidates.FirstOrDefault(c => c.SubdItemId == candidateId);
-                if (candidate == null) continue; // this invoice doesn't offer that exact variant — leave it for manual review
+                var candidate = choice.Candidates.FirstOrDefault(c => c.SubdItemId == subdItemId);
+                if (candidate == null) continue;
                 ApplyCandidate(card.Prepared, choice, candidate);
             }
         }

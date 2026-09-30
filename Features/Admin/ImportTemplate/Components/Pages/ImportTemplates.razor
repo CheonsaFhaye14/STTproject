@@ -1,9 +1,15 @@
 @page "/admin/import-templates"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
 @inject IImportTemplateService TemplateService
 @inject STTproject.Services.IUserContextService UserContextService
 @inject NavigationManager Nav
 
-<PageTitle>Import Templates</PageTitle>
+
+<LoadingOverlay Show="isLoading"
+                Title="Loading Templates…"
+                Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-file-import" />
+
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
@@ -25,11 +31,7 @@
     <div class="alert alert-danger py-2">@_error</div>
 }
 
-@if (_loading)
-{
-    <div class="text-muted">Loading...</div>
-}
-else if (_items.Count == 0)
+@if (_items.Count == 0)
 {
     <div class="alert alert-light border">No templates match these filters.</div>
 }
@@ -93,11 +95,11 @@ else
 }
 
 @code {
+    private bool isLoading = true;
     private readonly ImportTemplateFilterDto _filter = new();
     private List<ImportTemplateListItemDto> _items = new();
     private List<SubDistributorOptionDto> _subds = new();
     private List<string> _principals = new();
-    private bool _loading = true;
     private string? _message;
     private string? _error;
 
@@ -114,9 +116,8 @@ else
 
     private async Task LoadAsync()
     {
-        _loading = true;
         _items = await TemplateService.GetListAsync(_filter);
-        _loading = false;
+        isLoading = false;
     }
 
     private async Task ResetFiltersAsync()
@@ -170,7 +171,6 @@ else
         if (result.Success)
         {
             _cloneSource = null;
-            // Open the copy straight away so the headers can be adjusted.
             Nav.NavigateTo($"/admin/import-templates/{result.ImportTemplateId}");
         }
         else

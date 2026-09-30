@@ -13,10 +13,6 @@ public partial class Customer
 
     public string? CustomerType { get; set; }
 
-    public string? SubdCustCode { get; set; }
-
-    public string? SubdCustName { get; set; }
-
     public int SubDistributorId { get; set; }
 
     public bool IsActive { get; set; }
@@ -36,6 +32,10 @@ public partial class Customer
     public string? Province { get; set; }
 
     public int? ZipCode { get; set; }
+
+    public string? SubdCustCode { get; set; }
+
+    public string? SubdCustName { get; set; }
 
     public virtual User? CreatedByNavigation { get; set; }
 

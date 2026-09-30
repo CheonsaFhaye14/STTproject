@@ -10,12 +10,12 @@ namespace STTproject.Features.User.MapItem.Services;
 
 public sealed class ImportMapItemService
 {
-	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+	private readonly IDbContextFactory<EntrielContext> _contextFactory;
 	private readonly IMapItemService _mapItemService;
 	private readonly ILogger<ImportMapItemService> _logger;
 
 	public ImportMapItemService(
-		IDbContextFactory<SttprojectContext> contextFactory,
+		IDbContextFactory<EntrielContext> contextFactory,
 		IMapItemService mapItemService,
 		ILogger<ImportMapItemService> logger)
 	{
@@ -582,7 +582,7 @@ public sealed class ImportMapItemService
 	}
 
 	private static async Task<bool> IsAdminAsync(
-		SttprojectContext context,
+		EntrielContext context,
 		int currentUserId,
 		CancellationToken cancellationToken)
 	{

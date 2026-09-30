@@ -6,7 +6,7 @@
 @inject IUserContextService userContext
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
-
+<PageTitle>Entriel Admin</PageTitle>
 <div class="layout-container">
 
     @if (sidebarOpen)
@@ -20,15 +20,13 @@
         </div>
 
         <ul class="sidebar-menu">
-            @if (IsBoss)
-            {
                 <li>
                     <NavLink class="sidebar-link" href="/admin" data-tooltip="Dashboard" Match="NavLinkMatch.All">
                         <span class="nav-icon"><span class="ti ti-layout-dashboard" aria-hidden="true"></span></span>
                         <span class="sidebar-label">Dashboard</span>
                     </NavLink>
                 </li>
-            }
+            
             <li>
                 <NavLink class="sidebar-link" href="/admin/customer" data-tooltip="Customers">
                     <span class="nav-icon"><span class="ti ti-users" aria-hidden="true"></span></span>
@@ -47,8 +45,6 @@
                     <span class="sidebar-label">Map Items</span>
                 </NavLink>
             </li>
-            @if (IsBoss)
-            {
                 <li>
                     <NavLink class="sidebar-link" href="/admin/users" data-tooltip="Users">
                         <span class="nav-icon"><span class="ti ti-user-shield" aria-hidden="true"></span></span>
@@ -67,19 +63,22 @@
                         <span class="sidebar-label">SubDistributors</span>
                     </NavLink>
                 </li>
-            }
+         
             <li>
                 <NavLink class="sidebar-link" href="/admin/priceincrease" data-tooltip="Price Increases">
                     <span class="nav-icon"><span class="ti ti-history" aria-hidden="true"></span></span>
                     <span class="sidebar-label">Price Changes</span>
                 </NavLink>
             </li>
+            @if (IsBoss)
+            {
             <li>
                 <NavLink class="sidebar-link" href="/admin/import-templates" data-tooltip="Template Management">
                     <span class="nav-icon"><span class="ti ti-template" aria-hidden="true"></span></span>
                     <span class="sidebar-label">Template Management</span>
                 </NavLink>
             </li>
+            }
         </ul>
     </nav>
 

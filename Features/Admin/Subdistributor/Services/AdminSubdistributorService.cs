@@ -9,7 +9,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
     {
         private const string EncoderRole = "Encoder";
 
-        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbFactory;
         private static readonly TimeZoneInfo PhTimeZone =
             TimeZoneInfo.FindSystemTimeZoneById(
                 OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
@@ -17,7 +17,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
         private static DateTime NowPh() =>
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
-        public AdminSubDistributorService(IDbContextFactory<SttprojectContext> dbFactory)
+        public AdminSubDistributorService(IDbContextFactory<EntrielContext> dbFactory)
         {
             _dbFactory = dbFactory;
         }

@@ -14,12 +14,12 @@ public sealed class ImportSalesInvoiceService
 {
 	private const int MaxHeaderScanRows = 10;
 	private const int MinTemplateMatchThreshold = 6;
-	private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+	private readonly IDbContextFactory<EntrielContext> _contextFactory;
 	private readonly ISalesInvoiceService _salesInvoiceService;
 	private readonly ILogger<ImportSalesInvoiceService> _logger;
 
 	public ImportSalesInvoiceService(
-		IDbContextFactory<SttprojectContext> contextFactory,
+		IDbContextFactory<EntrielContext> contextFactory,
 		ISalesInvoiceService salesInvoiceService,
 		ILogger<ImportSalesInvoiceService> logger)
 	{
@@ -666,7 +666,7 @@ public sealed class ImportSalesInvoiceService
 			for (int c = 1; c <= sheetLastColumn; c++)
 				sheetCells[c - 1] = GetString(row, c);
 			result.RawSheetRowsByRow[rowNumber] = sheetCells;
-			
+
 			DateOnly invoiceDate = default;
 			var emittedRows = new List<ImportedInvoiceRow>();
 			var rowHasErrors = false;

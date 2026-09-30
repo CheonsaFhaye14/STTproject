@@ -151,9 +151,6 @@
         return prop;
     }
 
-    // Drives column auto-sizing: the browser's table-layout:auto pass takes the
-    // widest `size` across all cells in a column, so this doesn't need to be exact —
-    // it just needs to reflect roughly how much room this cell's content wants.
     private int GetInputSize(TItem item, string column)
     {
         var value = GetPropertyValue(item, column) ?? string.Empty;

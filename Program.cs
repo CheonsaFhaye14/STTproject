@@ -26,7 +26,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddDbContextFactory<SttprojectContext>(options =>
+builder.Services.AddDbContextFactory<EntrielContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IHomeService, HomeService>();

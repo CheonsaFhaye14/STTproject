@@ -20,10 +20,10 @@ public interface ISalesInvoiceService
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
 {
-    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
     private readonly ILogger<SalesInvoiceService> _logger;
 
-    public SalesInvoiceService(IDbContextFactory<SttprojectContext> contextFactory, ILogger<SalesInvoiceService> logger)
+    public SalesInvoiceService(IDbContextFactory<EntrielContext> contextFactory, ILogger<SalesInvoiceService> logger)
     {
         _contextFactory = contextFactory;
         _logger = logger;
@@ -99,7 +99,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     }
 
     private async Task<SaveInvoiceResult> SaveInvoiceAsyncInternal(
-        SttprojectContext context,
+        EntrielContext context,
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
@@ -361,7 +361,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     }
 
     private async Task NormalizeItemAmountsAsync(
-        SttprojectContext context,
+        EntrielContext context,
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         CancellationToken cancellationToken)
@@ -392,7 +392,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     }
 
     private static async Task<decimal> ResolveUomPriceAsync(
-        SttprojectContext context,
+        EntrielContext context,
         int itemsUomId,
         DateOnly invoiceDate,
         CancellationToken cancellationToken)

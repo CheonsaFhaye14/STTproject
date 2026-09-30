@@ -1,11 +1,10 @@
 @page "/admin/import-templates/new"
 @page "/admin/import-templates/{Id:int}"
-@attribute [Authorize(Roles = "Admin")]
+
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
 @inject IImportTemplateService TemplateService
 @inject STTproject.Services.IUserContextService UserContextService
 @inject NavigationManager Nav
-
-<PageTitle>@(IsNew ? "New" : "Edit") import template</PageTitle>
 
 <div class="mb-3">
     <a href="/admin/import-templates" class="small">← Back to templates</a>
@@ -32,83 +31,18 @@ else
         </div>
     }
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">Import type</label>
-                    <select class="form-select" value="@_model.ImportType"
-                            @onchange="ImportTypeChanged" disabled="@(!IsNew)">
-                        @foreach (var d in ImportFieldRegistry.All)
-                        {
-                            <option value="@d.Type">@d.Display</option>
-                        }
-                    </select>
-                </div>
+    <TemplateInfo Model="_model"
+                  Subds="_subds"
+                  Principals="_principals"
+                  IsNew="IsNew"
+                  @bind-IsGlobal="_isGlobal"
+                  OnChanged="Refresh" />
 
-                <div class="col-md-5">
-                    <label class="form-label">Applies to</label>
-                    @if (Scope == ImportScope.Principal)
-                    {
-                        <select class="form-select" @bind="_model.Principal">
-                            <option value="">Global default (all principals)</option>
-                            @foreach (var p in _principals) { <option value="@p">@p</option> }
-                        </select>
-                    }
-                    else
-                    {
-                        <select class="form-select" @bind="_model.SubDistributorId">
-                            <option value="">Global default (all subdistributors)</option>
-                            @foreach (var s in _subds) { <option value="@s.SubDistributorId">@s.Display</option> }
-                        </select>
-                    }
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label d-block">Options</label>
-                    @if (!IsGlobal)
-                    {
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="fallback"
-                                   @bind="_model.AllowGlobalFallback" />
-                            <label class="form-check-label" for="fallback">Also use the global default</label>
-                        </div>
-                    }
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="active" @bind="_model.IsActive" />
-                        <label class="form-check-label" for="active">Active</label>
-                    </div>
-                    @if (!IsNew)
-                    {
-                        <div class="text-muted small mt-1">Version @_model.Version</div>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
-
-    @if (Missing.Count > 0)
-    {
-        <div class="alert alert-info small">
-            This template has to cover everything the import needs. Still missing:
-            <ul class="mb-0 ps-3">
-                @foreach (var m in Missing) { <li>@m</li> }
-            </ul>
-        </div>
-    }
-
-    <div class="card mb-3">
-        <div class="card-header">Columns</div>
-        <div class="card-body">
-            <ImportTemplateColumnGrid ImportType="@_model.ImportType" Columns="_model.Columns" />
-        </div>
-    </div>
+    <SheetColumnsInfo Model="_model" IsGlobal="_isGlobal" />
 
     <div class="d-flex gap-2">
-        <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
-            @(_saving ? "Saving..." : "Save")
-        </button>
-        <a class="btn btn-outline-secondary" href="/admin/import-templates">Cancel</a>
+        <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving" Title="@(_saving ? "Saving..." : "Save the template")"></Button>
+        <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
     </div>
 }
 
@@ -122,26 +56,13 @@ else
     private bool _loading = true;
     private bool _saving;
 
+    // Owned here because both sections need it: TemplateInfo sets it (the toggle),
+    // SheetColumnsInfo reads it (the "still missing" alert) and Save checks it.
+    private bool _isGlobal = true;
+
     private bool IsNew => Id is null;
 
     private ImportScope? Scope => _model is null ? null : ImportFieldRegistry.Get(_model.ImportType)?.Scope;
-
-    private bool IsGlobal =>
-        _model is not null && _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal);
-
-    // Same rule the validator uses: global templates, and templates that don't
-    // fall back to the global default, have to map every required field.
-    private List<string> Missing
-    {
-        get
-        {
-            if (_model is null || !(IsGlobal || !_model.AllowGlobalFallback)) return new();
-            var mapped = _model.Columns
-                .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
-                .Select(c => c.FieldKey!);
-            return ImportFieldRegistry.MissingRequired(_model.ImportType, mapped);
-        }
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -150,26 +71,33 @@ else
 
         _model = Id is int id
             ? await TemplateService.GetAsync(id)
-            : new ImportTemplateEditDto { Columns = { new ImportTemplateColumnEditDto() } };
+            : NewModel();
+
+        if (_model is not null)
+            _isGlobal = _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal);
 
         _loading = false;
     }
 
-    private void ImportTypeChanged(ChangeEventArgs e)
+    // A new template starts with one "any sheet" sheet and one empty column row.
+    private static ImportTemplateEditDto NewModel() => new()
     {
-        if (_model is null) return;
-
-        _model.ImportType = e.Value?.ToString() ?? _model.ImportType;
-        _model.SubDistributorId = null;
-        _model.Principal = null;
-
-        // Rows that pointed at a field the new type doesn't have go back to "choose a field".
-        foreach (var c in _model.Columns.Where(c => !ImportFieldRegistry.IsValidField(_model.ImportType, c.FieldKey)))
+        Sheets =
         {
-            c.FieldKey = null;
-            c.ReadMode = "Text";
-            c.OptionsJson = null;
+            new ImportTemplateSheetEditDto
+            {
+                SheetLabel = "Sheet 1",
+                Columns = { new ImportTemplateColumnEditDto() }
+            }
         }
+    };
+
+    private void Refresh() { }
+
+     private Task CancelAsync()
+    {
+        Nav.NavigateTo("/admin/import-templates");
+        return Task.CompletedTask;
     }
 
     private async Task SaveAsync()
@@ -177,9 +105,19 @@ else
         if (_model is null) return;
 
         _errors = new();
+
+        // "Specific" with nobody picked would otherwise be saved as a global template.
+        if (!_isGlobal && _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal))
+        {
+            _errors.Add(Scope == ImportScope.Principal
+                ? "Select a principal, or switch to Global default."
+                : "Select a subdistributor, or switch to Global default.");
+            return;
+        }
+
         _saving = true;
 
-        var userId = UserContextService.UserId ?? 0;        
+        var userId = UserContextService.UserId ?? 0;
         var result = await TemplateService.SaveAsync(_model, userId);
         _saving = false;
 

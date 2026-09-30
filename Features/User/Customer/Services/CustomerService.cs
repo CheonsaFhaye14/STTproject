@@ -6,9 +6,9 @@ namespace STTproject.Features.User.Customer.Services;
 
 public class CustomerService : ICustomerService
 {
-    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
 
-    public CustomerService(IDbContextFactory<SttprojectContext> contextFactory)
+    public CustomerService(IDbContextFactory<EntrielContext> contextFactory)
     {
         _contextFactory = contextFactory;
     }
@@ -72,7 +72,7 @@ public class CustomerService : ICustomerService
     // customer lands together in one CustomerInfoDto.SubdCustomers list, instead
     // of each mapping producing its own duplicate customer row.
     private static async Task<List<CustomerInfoDto>> GetGroupedCustomersAsync(
-        SttprojectContext context,
+        EntrielContext context,
         int subDistributorId,
         CancellationToken cancellationToken)
     {

@@ -15,10 +15,6 @@ public partial class ImportTemplate
 
     public string TemplateName { get; set; } = null!;
 
-    public string? SheetName { get; set; }
-
-    public int? HeaderRowNumber { get; set; }
-
     public bool AllowGlobalFallback { get; set; }
 
     public int Version { get; set; }
@@ -36,6 +32,8 @@ public partial class ImportTemplate
     public virtual ICollection<ImportFile> ImportFiles { get; set; } = new List<ImportFile>();
 
     public virtual ICollection<ImportTemplateColumn> ImportTemplateColumns { get; set; } = new List<ImportTemplateColumn>();
+
+    public virtual ICollection<ImportTemplateSheet> ImportTemplateSheets { get; set; } = new List<ImportTemplateSheet>();
 
     public virtual SubDistributor? SubDistributor { get; set; }
 }

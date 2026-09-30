@@ -6,11 +6,11 @@ namespace STTproject.Features.Admin.SalesInvoice.Services;
 
 public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 {
-    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
     private readonly ILogger<AdminSalesInvoiceService> _logger;
 
     public AdminSalesInvoiceService(
-        IDbContextFactory<SttprojectContext> contextFactory,
+        IDbContextFactory<EntrielContext> contextFactory,
         ILogger<AdminSalesInvoiceService> logger)
     {
         _contextFactory = contextFactory;

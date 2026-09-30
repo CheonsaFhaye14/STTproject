@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STTproject.Data;
 
-public partial class SttprojectContext
+public partial class EntrielContext
 {
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {

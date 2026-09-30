@@ -8,7 +8,7 @@ namespace STTproject.Features.Admin.Users.Services
 {
     public class AdminUserService : IAdminUserService
     {
-        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbFactory;
         private readonly IConfiguration _config;
         private static readonly TimeZoneInfo PhTimeZone =
             TimeZoneInfo.FindSystemTimeZoneById(
@@ -18,7 +18,7 @@ namespace STTproject.Features.Admin.Users.Services
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
 
-        public AdminUserService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
+        public AdminUserService(IDbContextFactory<EntrielContext> dbFactory, IConfiguration config)
         {
             _dbFactory = dbFactory;
             _config = config;

@@ -29,7 +29,11 @@ public partial class CompanyItem
 
     public virtual ICollection<CompanyItemPriceHistory> CompanyItemPriceHistories { get; set; } = new List<CompanyItemPriceHistory>();
 
+    public virtual User? CreatedByNavigation { get; set; }
+
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
 
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
+
+    public virtual User? UpdatedByNavigation { get; set; }
 }

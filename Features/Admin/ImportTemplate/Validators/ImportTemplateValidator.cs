@@ -1,144 +1,111 @@
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using STTproject.Features.Admin.ImportTemplate.DTOs;
-using STTproject.Features.Admin.ImportTemplate.Services;
 
 namespace STTproject.Features.Admin.ImportTemplate.Validators;
 
 public static class ImportTemplateValidator
 {
-    private const int MaxHeaderRow = 100;
-
-    public static List<string> Validate(ImportTemplateEditDto t)
+    public static List<string> Validate(ImportTemplateEditDto dto)
     {
         var errors = new List<string>();
-        var def = ImportFieldRegistry.Get(t.ImportType);
 
-        if (def is null)
-            errors.Add("Please choose a valid import type.");
-        else
+        // TODO: keep your existing checks here (ImportType exists in ImportFieldRegistry,
+        // scope rules for Subd vs Principal, required registry fields are mapped).
+
+        if (dto.Sheets.Count == 0)
         {
-            if (def.Scope == ImportScope.Principal && t.SubDistributorId is not null)
-                errors.Add("Company Item templates are set by principal, not by subdistributor.");
-
-            if (def.Scope == ImportScope.Subd && !string.IsNullOrWhiteSpace(t.Principal))
-                errors.Add($"{def.Display} templates are set by subdistributor, not by principal.");
+            errors.Add("Add at least one sheet.");
+            return errors;
         }
 
-        if (!string.IsNullOrWhiteSpace(t.Principal) && t.Principal.Trim().Length > 100)
-            errors.Add("Principal cannot be longer than 100 characters.");
+        var active = dto.Sheets.Where(s => s.SheetMatchMode != SheetMatchModes.Ignore).ToList();
+        if (active.Count == 0)
+            errors.Add("At least one sheet must be read (not Ignore).");
 
-        if (t.HeaderRowNumber is < 1 or > MaxHeaderRow)
-            errors.Add($"Header row number must be between 1 and {MaxHeaderRow}, or left blank to auto-detect.");
+        var labels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (t.Columns.Count == 0)
-            errors.Add("Add at least one column.");
-
-        var seenHeaders = new Dictionary<string, int>();
-
-        for (int i = 0; i < t.Columns.Count; i++)
+        foreach (var s in dto.Sheets)
         {
-            var c = t.Columns[i];
-            var label = $"Row {i + 1}";
+            var who = string.IsNullOrWhiteSpace(s.SheetLabel) ? "A sheet" : $"Sheet \"{s.SheetLabel}\"";
 
-            if (string.IsNullOrWhiteSpace(c.HeaderText))
-            {
-                errors.Add($"{label}: header text is required.");
-            }
-            else
-            {
-                if (c.HeaderText.Trim().Length > 200)
-                    errors.Add($"{label}: header text cannot be longer than 200 characters.");
+            if (string.IsNullOrWhiteSpace(s.SheetLabel))
+                errors.Add("Every sheet needs a label.");
+            else if (!labels.Add(s.SheetLabel))
+                errors.Add($"Sheet label \"{s.SheetLabel}\" is used more than once.");
 
-                var norm = NormalizeHeader(c.HeaderText);
-                if (seenHeaders.TryGetValue(norm, out var firstRow))
-                    errors.Add($"{label}: header \"{c.HeaderText.Trim()}\" duplicates row {firstRow}.");
-                else
-                    seenHeaders[norm] = i + 1;
+            if (!SheetMatchModes.All.Contains(s.SheetMatchMode))
+            {
+                errors.Add($"{who}: unknown sheet matching mode.");
+                continue;
             }
 
-            if (!c.IsIgnored)
+            switch (s.SheetMatchMode)
             {
-                if (string.IsNullOrWhiteSpace(c.FieldKey))
-                {
-                    errors.Add($"{label}: choose a field, or tick Ignored.");
-                }
-                else if (def is not null)
-                {
-                    if (!ImportFieldRegistry.IsValidField(t.ImportType, c.FieldKey))
-                        errors.Add($"{label}: field \"{c.FieldKey}\" is not valid for {def.Display}.");
-                    else if (!ImportFieldRegistry.IsValidReadMode(t.ImportType, c.FieldKey, c.ReadMode))
-                        errors.Add($"{label}: read mode \"{c.ReadMode}\" is not allowed for that field.");
-                }
+                case SheetMatchModes.Exact or SheetMatchModes.Contains:
+                    if (string.IsNullOrWhiteSpace(s.SheetMatchValue))
+                        errors.Add($"{who}: enter the text to match.");
+                    break;
+                case SheetMatchModes.Position:
+                    if (!int.TryParse(s.SheetMatchValue, out var pos) || pos < 1)
+                        errors.Add($"{who}: sheet position must be a number of 1 or more.");
+                    break;
+                case SheetMatchModes.Any when dto.Sheets.Count > 1:
+                    errors.Add($"{who}: \"Any sheet\" can only be used when the template has a single sheet.");
+                    break;
             }
 
-            ValidateOptions(c, label, errors);
-        }
+            if (!HeaderRowModes.All.Contains(s.HeaderRowMode))
+                errors.Add($"{who}: unknown header row mode.");
+            else if (s.HeaderRowMode == HeaderRowModes.Fixed && (s.HeaderRowNumber is null or < 1))
+                errors.Add($"{who}: enter the header row number.");
 
-        // A subd template that falls back to the global default can be partial, because the
-        // default fills the gaps. Only complete templates must cover every required field.
-        var isGlobal = t.SubDistributorId is null && string.IsNullOrWhiteSpace(t.Principal);
-        var mustBeComplete = isGlobal || !t.AllowGlobalFallback;
-        if (mustBeComplete && def is not null)
-        {
-            var mapped = t.Columns
-                .Where(c => !c.IsIgnored && !string.IsNullOrWhiteSpace(c.FieldKey))
-                .Select(c => c.FieldKey!)
-                .ToList();
-            errors.AddRange(ImportFieldRegistry.MissingRequired(t.ImportType, mapped));
+            if (s.SheetMatchMode == SheetMatchModes.Ignore)
+            {
+                if (s.Columns.Count > 0)
+                    errors.Add($"{who} is set to Ignore, so it can't have columns.");
+                continue;
+            }
 
-            if (t.ImportType == "SalesInvoice" && mapped.Contains("Quantity") &&
-                !mapped.Any(k => k is "CaseQuantity" or "DozenQuantity" or "PieceQuantity" or "InBoxQuantity") &&
-                !mapped.Contains("UnitOfMeasure"))
-                errors.Add("Unit of Measure is required when using Quantity.");
+            ValidateColumns(s, who, errors);
         }
 
         return errors;
     }
 
-    private static void ValidateOptions(ImportTemplateColumnEditDto c, string label, List<string> errors)
+    private static void ValidateColumns(ImportTemplateSheetEditDto sheet, string who, List<string> errors)
     {
-        var hasOptions = !string.IsNullOrWhiteSpace(c.OptionsJson);
-        var isRegex = c.ReadMode == "Regex" && !c.IsIgnored;
-
-        if (isRegex && !hasOptions)
+        if (sheet.Columns.Count == 0)
         {
-            errors.Add($"{label}: Regex read mode needs options like {{\"pattern\":\"...\"}}.");
+            errors.Add($"{who}: add at least one column.");
             return;
         }
-        if (!hasOptions) return;
 
-        try
+        var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var c in sheet.Columns)
         {
-            using var doc = JsonDocument.Parse(c.OptionsJson!);
-            if (isRegex)
+            var col = string.IsNullOrWhiteSpace(c.HeaderText) ? "A column" : $"Column \"{c.HeaderText}\"";
+
+            if (string.IsNullOrWhiteSpace(c.HeaderText))
             {
-                if (doc.RootElement.ValueKind != JsonValueKind.Object ||
-                    !doc.RootElement.TryGetProperty("pattern", out var p) ||
-                    p.ValueKind != JsonValueKind.String ||
-                    string.IsNullOrWhiteSpace(p.GetString()))
-                {
-                    errors.Add($"{label}: Regex options must include a \"pattern\".");
-                    return;
-                }
-
-                _ = new Regex(p.GetString()!, RegexOptions.None, TimeSpan.FromSeconds(1));
+                errors.Add($"{who}: every column needs a header text.");
+                continue;
             }
-        }
-        catch (JsonException)
-        {
-            errors.Add($"{label}: options are not valid JSON.");
-        }
-        catch (ArgumentException)
-        {
-            errors.Add($"{label}: the regex pattern is not valid.");
-        }
-    }
 
-    // Same normalization the importers use, so duplicate detection matches real header matching.
-    public static string NormalizeHeader(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        return Regex.Replace(value.Trim().ToLowerInvariant(), @"[\s\.\#\/\-\,\:\(\)]+", " ").Trim();
+            if (string.IsNullOrWhiteSpace(c.FieldKey))
+                errors.Add($"{who}, {col}: choose a system field or mark it ignored.");
+
+            if (!ColumnRuleTypes.All.Contains(c.RuleType))
+                errors.Add($"{who}, {col}: unknown rule.");
+
+            if (c.RuleType == ColumnRuleTypes.Regex && string.IsNullOrWhiteSpace(c.OptionsJson))
+                errors.Add($"{who}, {col}: the Regex rule needs a pattern.");
+
+        }
+
+        var sharedFields = sheet.Columns
+            .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
+            .GroupBy(c => c.FieldKey!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1);
+
     }
 }

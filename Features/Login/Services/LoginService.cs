@@ -11,10 +11,10 @@ namespace STTproject.Features.Login.Services
 
     public class LoginService : ILoginService
     {
-        private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+        private readonly IDbContextFactory<EntrielContext> _contextFactory;
         private readonly ILogger<LoginService> _logger;
 
-        public LoginService(IDbContextFactory<SttprojectContext> contextFactory, ILogger<LoginService> logger)
+        public LoginService(IDbContextFactory<EntrielContext> contextFactory, ILogger<LoginService> logger)
         {
             _contextFactory = contextFactory;
             _logger = logger;

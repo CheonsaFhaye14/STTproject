@@ -37,6 +37,8 @@ public partial class ImportFile
 
     public DateTime UploadedDate { get; set; }
 
+    public virtual ICollection<ImportFileSheet> ImportFileSheets { get; set; } = new List<ImportFileSheet>();
+
     public virtual ImportTemplate? ImportTemplate { get; set; }
 
     public virtual SubDistributor? SubDistributor { get; set; }

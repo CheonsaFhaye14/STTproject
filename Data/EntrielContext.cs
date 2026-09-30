@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STTproject.Data;
 
-public partial class SttprojectContext : DbContext
+public partial class EntrielContext : DbContext
 {
-    public SttprojectContext()
+    public EntrielContext()
     {
     }
 
-    public SttprojectContext(DbContextOptions<SttprojectContext> options)
+    public EntrielContext(DbContextOptions<EntrielContext> options)
         : base(options)
     {
     }
@@ -23,9 +23,17 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<ImportFile> ImportFiles { get; set; }
 
+    public virtual DbSet<ImportFileColumnMapping> ImportFileColumnMappings { get; set; }
+
+    public virtual DbSet<ImportFileSheet> ImportFileSheets { get; set; }
+
+    public virtual DbSet<ImportRow> ImportRows { get; set; }
+
     public virtual DbSet<ImportTemplate> ImportTemplates { get; set; }
 
     public virtual DbSet<ImportTemplateColumn> ImportTemplateColumns { get; set; }
+
+    public virtual DbSet<ImportTemplateSheet> ImportTemplateSheets { get; set; }
 
     public virtual DbSet<ItemsUom> ItemsUoms { get; set; }
 
@@ -39,30 +47,28 @@ public partial class SttprojectContext : DbContext
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
-    public virtual DbSet<SubdSellout> SubdSellouts { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        => optionsBuilder.UseSqlServer("Name=DefaultConnection");
+        => optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-
         modelBuilder.Entity<CompanyItem>(entity =>
         {
-            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E983839E2C7B0");
+            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E98388CD1744A");
 
             entity.ToTable("CompanyItem");
 
-            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA1D5CA35D").IsUnique();
+            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA8C13BEF6").IsUnique();
 
             entity.Property(e => e.Category)
                 .HasMaxLength(100)
                 .IsUnicode(false);
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("(getdate())", "DF__Customer__Create__3E52440B")
                 .HasColumnType("datetime");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__Customer__IsActi__3D5E1FD2");
             entity.Property(e => e.ItemCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -72,11 +78,19 @@ public partial class SttprojectContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.StockPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CompanyItemCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("FK_CompanyItem_CreatedBy");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CompanyItemUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_CompanyItem_UpdatedBy");
         });
 
         modelBuilder.Entity<CompanyItemPriceHistory>(entity =>
         {
-            entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1344F66C7A5");
+            entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1344EDBBD81");
 
             entity.ToTable("CompanyItemPriceHistory");
 
@@ -92,12 +106,12 @@ public partial class SttprojectContext : DbContext
             entity.HasOne(d => d.CompanyItem).WithMany(p => p.CompanyItemPriceHistories)
                 .HasForeignKey(d => d.CompanyItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__CompanyIt__Compa__76619304");
+                .HasConstraintName("FK__CompanyIt__Compa__3D2915A8");
         });
 
         modelBuilder.Entity<Customer>(entity =>
         {
-            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8F7607638");
+            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8494BD832");
 
             entity.ToTable("Customer");
 
@@ -106,7 +120,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.City).HasMaxLength(100);
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())", "DF__Customer__Create__3E52440B")
+                .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.CustomerCode)
                 .HasMaxLength(50)
@@ -117,7 +131,7 @@ public partial class SttprojectContext : DbContext
             entity.Property(e => e.CustomerType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__Customer__IsActi__3D5E1FD2");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Province).HasMaxLength(100);
             entity.Property(e => e.SubdCustCode)
                 .HasMaxLength(50)
@@ -143,13 +157,13 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<ImportFile>(entity =>
         {
-            entity.HasKey(e => e.ImportFileId).HasName("PK__ImportFi__D9EEC2447618FE08");
-
-            entity.ToTable("ImportFiles", "dbo");
+            entity.HasKey(e => e.ImportFileId).HasName("PK__ImportFi__D9EEC2444B08C390");
 
             entity.HasIndex(e => e.Sha256, "IX_ImportFiles_Hash");
 
             entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.UploadedDate }, "IX_ImportFiles_Lookup").IsDescending(false, false, true);
+
+            entity.HasIndex(e => e.Sha256, "IX_ImportFiles_Sha256");
 
             entity.Property(e => e.ImportType)
                 .HasMaxLength(30)
@@ -175,11 +189,56 @@ public partial class SttprojectContext : DbContext
                 .HasConstraintName("FK_ImportFiles_SubDistributors");
         });
 
+        modelBuilder.Entity<ImportFileColumnMapping>(entity =>
+        {
+            entity.HasKey(e => new { e.ImportFileSheetId, e.ImportTemplateColumnId }).HasName("PK__ImportFi__BCC745FAB54F8CB4");
+
+            entity.Property(e => e.ActualHeader).HasMaxLength(200);
+
+            entity.HasOne(d => d.ImportFileSheet).WithMany(p => p.ImportFileColumnMappings)
+                .HasForeignKey(d => d.ImportFileSheetId)
+                .HasConstraintName("FK__ImportFil__Impor__68D28DBC");
+
+            entity.HasOne(d => d.ImportTemplateColumn).WithMany(p => p.ImportFileColumnMappings)
+                .HasForeignKey(d => d.ImportTemplateColumnId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__ImportFil__Impor__69C6B1F5");
+        });
+
+        modelBuilder.Entity<ImportFileSheet>(entity =>
+        {
+            entity.HasKey(e => e.ImportFileSheetId).HasName("PK__ImportFi__33A9B61AE43CC37D");
+
+            entity.Property(e => e.SheetName).HasMaxLength(100);
+
+            entity.HasOne(d => d.ImportFile).WithMany(p => p.ImportFileSheets)
+                .HasForeignKey(d => d.ImportFileId)
+                .HasConstraintName("FK__ImportFil__Impor__6501FCD8");
+
+            entity.HasOne(d => d.ImportTemplateSheet).WithMany(p => p.ImportFileSheets)
+                .HasForeignKey(d => d.ImportTemplateSheetId)
+                .HasConstraintName("FK__ImportFil__Impor__65F62111");
+        });
+
+        modelBuilder.Entity<ImportRow>(entity =>
+        {
+            entity.HasKey(e => e.ImportRowId).HasName("PK__ImportRo__7A161D66E42E3B43");
+
+            entity.HasIndex(e => new { e.ImportFileSheetId, e.RowNumber }, "IX_ImportRows_Sheet");
+
+            entity.Property(e => e.IsSelected).HasDefaultValue(true);
+            entity.Property(e => e.Status)
+                .HasMaxLength(15)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.ImportFileSheet).WithMany(p => p.ImportRows)
+                .HasForeignKey(d => d.ImportFileSheetId)
+                .HasConstraintName("FK__ImportRow__Impor__6CA31EA0");
+        });
+
         modelBuilder.Entity<ImportTemplate>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2C460E88B6");
-
-            entity.ToTable("ImportTemplates", "dbo");
+            entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2C6C1A2EB2");
 
             entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.Principal }, "UX_ImportTemplates_ActiveScope")
                 .IsUnique()
@@ -192,7 +251,6 @@ public partial class SttprojectContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_ImportTemplates_Active");
             entity.Property(e => e.Principal).HasMaxLength(100);
-            entity.Property(e => e.SheetName).HasMaxLength(100);
             entity.Property(e => e.TemplateName).HasMaxLength(150);
             entity.Property(e => e.Version).HasDefaultValue(1, "DF_ImportTemplates_Version");
 
@@ -203,9 +261,9 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<ImportTemplateColumn>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E0938AC37EE");
+            entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E090006E83F");
 
-            entity.ToTable("ImportTemplateColumns", "dbo");
+            entity.HasIndex(e => new { e.ImportTemplateId, e.SortOrder }, "IX_ImportTemplateColumns_Template");
 
             entity.HasIndex(e => new { e.ImportTemplateId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
 
@@ -213,27 +271,48 @@ public partial class SttprojectContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.HeaderText).HasMaxLength(200);
-            entity.Property(e => e.ReadMode)
+            entity.Property(e => e.RuleType)
                 .HasMaxLength(30)
                 .IsUnicode(false)
-                .HasDefaultValue("Text", "DF_ITC_ReadMode");
+                .HasDefaultValue("Direct", "DF_ITC_RuleType");
 
             entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportTemplateColumns)
                 .HasForeignKey(d => d.ImportTemplateId)
                 .HasConstraintName("FK_ITC_Template");
+
+            entity.HasOne(d => d.ImportTemplateSheet).WithMany(p => p.ImportTemplateColumns)
+                .HasForeignKey(d => d.ImportTemplateSheetId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ITC_Sheet");
+        });
+
+        modelBuilder.Entity<ImportTemplateSheet>(entity =>
+        {
+            entity.HasKey(e => e.ImportTemplateSheetId).HasName("PK__ImportTe__4755275865B88B8A");
+
+            entity.Property(e => e.HeaderRowMode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Automatic");
+            entity.Property(e => e.IsRequired).HasDefaultValue(true);
+            entity.Property(e => e.SheetLabel).HasMaxLength(100);
+            entity.Property(e => e.SheetMatchMode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.SheetMatchValue).HasMaxLength(100);
+
+            entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportTemplateSheets)
+                .HasForeignKey(d => d.ImportTemplateId)
+                .HasConstraintName("FK__ImportTem__Impor__53D770D6");
         });
 
         modelBuilder.Entity<ItemsUom>(entity =>
         {
-            entity.HasKey(e => e.ItemsUomId).HasName("PK__ItemsUom__537249573414BFF9");
+            entity.HasKey(e => e.ItemsUomId).HasName("PK__ItemsUom__53724957BA9B3FE8");
 
             entity.ToTable("ItemsUom");
 
             entity.HasIndex(e => new { e.SubdItemId, e.UomName }, "UQ_ItemsUom_SubdItem_Uom").IsUnique();
-
-            entity.HasIndex(e => e.SubdItemId, "UX_ItemsUom_OneBaseUnit")
-                .IsUnique()
-                .HasFilter("([IsBaseUnit]=(1))");
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())", "DF__ItemsUom__Create__18EBB532")
@@ -249,10 +328,10 @@ public partial class SttprojectContext : DbContext
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_ItemsUom_CreatedBy");
 
-            entity.HasOne(d => d.SubdItem).WithOne(p => p.ItemsUom)
-                .HasForeignKey<ItemsUom>(d => d.SubdItemId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_ItemsUom_SubdItemId");
+            entity.HasOne(d => d.SubdItem).WithMany(p => p.ItemsUoms)
+                .HasForeignKey(d => d.SubdItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ItemsUom_SubdItem");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
@@ -261,7 +340,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<ItemsUomPriceHistory>(entity =>
         {
-            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA340C04A45B");
+            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA34B69D7D99");
 
             entity.ToTable("ItemsUomPriceHistory");
 
@@ -282,7 +361,7 @@ public partial class SttprojectContext : DbContext
 
             entity.HasOne(d => d.CompanyItemPriceHistory).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.CompanyItemPriceHistoryId)
-                .HasConstraintName("FK__ItemsUomP__Compa__7849DB76");
+                .HasConstraintName("FK__ItemsUomP__Compa__3F115E1A");
 
             entity.HasOne(d => d.ItemsUom).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.ItemsUomId)
@@ -292,7 +371,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SalesInvoice>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1A2B3DB990");
+            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1AE9FBEC78");
 
             entity.ToTable("SalesInvoice");
 
@@ -332,7 +411,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SalesInvoiceItem>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64DF1C1337");
+            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64DC7B368D");
 
             entity.ToTable("SalesInvoiceItem");
 
@@ -360,7 +439,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SubDistributor>(entity =>
         {
-            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD15E8FA9F");
+            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD5B53D31B");
 
             entity.ToTable("SubDistributor");
 
@@ -398,7 +477,7 @@ public partial class SttprojectContext : DbContext
 
         modelBuilder.Entity<SubdItem>(entity =>
         {
-            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656E2CB39D1");
+            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656501717AC");
 
             entity.ToTable("SubdItem");
 
@@ -431,81 +510,11 @@ public partial class SttprojectContext : DbContext
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
         });
 
-        modelBuilder.Entity<SubdSellout>(entity =>
-        {
-            entity.HasKey(e => e.SdsId).HasName("PK_SubdSelloutFY2026");
-
-            entity.ToTable("SubdSellout", "dbo");
-
-            entity.Property(e => e.SdsId).HasColumnName("SdsID");
-            entity.Property(e => e.AbfCases).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.AbfItemWeight).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.AbfTon).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.AmountDiscount).HasColumnType("decimal(19, 6)");
-            entity.Property(e => e.AmountWithVat).HasColumnType("decimal(19, 6)");
-            entity.Property(e => e.AmountWoVat).HasColumnType("decimal(19, 6)");
-            entity.Property(e => e.ArTermsCd).HasMaxLength(20);
-            entity.Property(e => e.BillToName).HasMaxLength(100);
-            entity.Property(e => e.BlitzName).HasMaxLength(100);
-            entity.Property(e => e.BlitzNote).HasMaxLength(255);
-            entity.Property(e => e.Brand).HasMaxLength(50);
-            entity.Property(e => e.Brand0001).HasMaxLength(20);
-            entity.Property(e => e.Cal).HasMaxLength(10);
-            entity.Property(e => e.CalendarPeriod).HasMaxLength(20);
-            entity.Property(e => e.CaseKelloggs).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.Country).HasMaxLength(50);
-            entity.Property(e => e.CusNo).HasMaxLength(30);
-            entity.Property(e => e.CusTypeCd).HasMaxLength(20);
-            entity.Property(e => e.CusTypeDesc).HasMaxLength(30);
-            entity.Property(e => e.CustTypeDescRevised).HasMaxLength(30);
-            entity.Property(e => e.CustTypeDescRevisedUsed).HasMaxLength(30);
-            entity.Property(e => e.DbsCalPeriod).HasMaxLength(20);
-            entity.Property(e => e.HansaCs).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.InsertDate).HasDefaultValueSql("(CONVERT([date],sysdatetime()))", "DF_SubdSelloutFY2026_InsertDate");
-            entity.Property(e => e.ItemDescription).HasMaxLength(150);
-            entity.Property(e => e.ItemNo).HasMaxLength(50);
-            entity.Property(e => e.ItemWeight).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.Loc).HasMaxLength(50);
-            entity.Property(e => e.Lookup).HasMaxLength(100);
-            entity.Property(e => e.MitraCases).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.NiveaCs).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.OrdNo).HasMaxLength(25);
-            entity.Property(e => e.OrigOrdType).HasMaxLength(20);
-            entity.Property(e => e.PeriodPrin).HasMaxLength(30);
-            entity.Property(e => e.PriceWithVat).HasColumnType("decimal(19, 6)");
-            entity.Property(e => e.Principal).HasMaxLength(50);
-            entity.Property(e => e.Principal2).HasMaxLength(10);
-            entity.Property(e => e.QtyOrdered).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.QtyReturnToStk).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.QtyToShip).HasMaxLength(10);
-            entity.Property(e => e.QuantitySellingUnit).HasMaxLength(20);
-            entity.Property(e => e.Real).HasMaxLength(50);
-            entity.Property(e => e.SageItemDesc).HasMaxLength(100);
-            entity.Property(e => e.SageItemNo).HasMaxLength(30);
-            entity.Property(e => e.Salesperson).HasMaxLength(50);
-            entity.Property(e => e.ScpCs).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.ShipInstruction1).HasMaxLength(255);
-            entity.Property(e => e.ShipInstruction2).HasMaxLength(255);
-            entity.Property(e => e.ShipToAddress1).HasMaxLength(120);
-            entity.Property(e => e.ShipToAddress2).HasMaxLength(80);
-            entity.Property(e => e.ShipToAddress3).HasMaxLength(80);
-            entity.Property(e => e.ShipToCountry).HasMaxLength(50);
-            entity.Property(e => e.ShipToName).HasMaxLength(100);
-            entity.Property(e => e.ShipViaCd).HasMaxLength(20);
-            entity.Property(e => e.Slm).HasMaxLength(50);
-            entity.Property(e => e.SlspsnName).HasMaxLength(50);
-            entity.Property(e => e.SlspsnNo).HasMaxLength(20);
-            entity.Property(e => e.SlspsnNo2).HasMaxLength(20);
-            entity.Property(e => e.SubD).HasMaxLength(50);
-            entity.Property(e => e.TonsKelloggs).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.Trim).HasMaxLength(50);
-        });
-
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4CD89976AC");
+            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C13EF7F33");
 
-            entity.HasIndex(e => e.Username, "UQ__Users__536C85E421704CE2").IsUnique();
+            entity.HasIndex(e => e.Username, "UQ__Users__536C85E42A318390").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")

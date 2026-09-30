@@ -16,7 +16,7 @@ public partial class Profile
     private IProfileService? ProfileService { get; set; }
 
     [Inject]
-    private IDbContextFactory<SttprojectContext>? DbContextFactory { get; set; }
+    private IDbContextFactory<EntrielContext>? DbContextFactory { get; set; }
 
     [Inject]
     private IHttpContextAccessor? HttpContextAccessor { get; set; }

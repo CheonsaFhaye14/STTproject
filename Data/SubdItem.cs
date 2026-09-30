@@ -29,7 +29,7 @@ public partial class SubdItem
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual ItemsUom? ItemsUom { get; set; }
+    public virtual ICollection<ItemsUom> ItemsUoms { get; set; } = new List<ItemsUom>();
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 

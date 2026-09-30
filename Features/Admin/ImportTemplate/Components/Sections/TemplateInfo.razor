@@ -1,0 +1,134 @@
+<div class="card mb-3">
+    <div class="card-header">1. Template Information</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-12">
+                <label class="form-label">Template name</label>
+                <input class="form-control" value="@Model.TemplateName" @onchange="e => Model.TemplateName = e.Value?.ToString() ?? Model.TemplateName" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Import type</label>
+                <select class="form-select" value="@Model.ImportType"
+                        @onchange="ImportTypeChanged" disabled="@(!IsNew)">
+                    @foreach (var d in ImportFieldRegistry.All)
+                    {
+                        <option value="@d.Type">@d.Display</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label d-block">Applies to</label>
+
+                <Toggle ActiveLabel="Global default"
+                        InactiveLabel="@(Scope == ImportScope.Principal ? "Specific principal" : "Specific subdistributor")"
+                        Bind="IsGlobal"
+                        BindChanged="OnScopeToggled" />
+
+                @if (!IsGlobal)
+                {
+                    <div class="mt-2">
+                        @if (Scope == ImportScope.Principal)
+                        {
+                            <AutoComplete TItem="string"
+                                          Placeholder="Search for a principal…"
+                                          Items="Principals"
+                                          ShowAllOnOpen="true"
+                                          SelectedValue="@Model.Principal"
+                                          SelectedValueChanged="OnPrincipalChanged" />
+                        }
+                        else
+                        {
+                            <AutoComplete TItem="SubDistributorOptionDto"
+                                          Placeholder="Search for a subdistributor…"
+                                          Items="Subds"
+                                          ShowAllOnOpen="true"
+                                          ValueSelector="s => s.SubDistributorId.ToString()"
+                                          TextSelector="s => s.Display"
+                                          SelectedValue="@Model.SubDistributorId?.ToString()"
+                                          SelectedValueChanged="OnSubdChanged" />
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="form-text">
+                        Used for @(Scope == ImportScope.Principal ? "every principal" : "every subdistributor")
+                        that doesn't have its own template.
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label d-block">Options</label>
+                @if (!IsGlobal)
+                {
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="fallback"
+                               @bind="Model.AllowGlobalFallback" @bind:after="NotifyChanged" />
+                        <label class="form-check-label" for="fallback">Also use the global default</label>
+                    </div>
+                }
+                <Toggle @bind-Bind="Model.IsActive" />
+                @if (!IsNew)
+                {
+                    <div class="text-muted small mt-1">Version @Model.Version</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
+    [Parameter] public List<SubDistributorOptionDto> Subds { get; set; } = new();
+    [Parameter] public List<string> Principals { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    /// <summary>True = global default. Owned by the page; use @bind-IsGlobal.</summary>
+    [Parameter] public bool IsGlobal { get; set; } = true;
+    [Parameter] public EventCallback<bool> IsGlobalChanged { get; set; }
+
+    /// <summary>Raised when something the other section depends on changes.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private ImportScope? Scope => ImportFieldRegistry.Get(Model.ImportType)?.Scope;
+
+    private Task NotifyChanged() => OnChanged.InvokeAsync();
+
+    private async Task OnScopeToggled(bool isGlobal)
+    {
+        // Going back to global drops whoever was selected.
+        if (isGlobal)
+        {
+            Model.SubDistributorId = null;
+            Model.Principal = null;
+        }
+        await IsGlobalChanged.InvokeAsync(isGlobal);
+    }
+
+    // AutoComplete sends null when the user edits the text after picking.
+    private void OnSubdChanged(string? value) =>
+        Model.SubDistributorId = int.TryParse(value, out var id) ? id : (int?)null;
+
+    private void OnPrincipalChanged(string? value) =>
+        Model.Principal = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private async Task ImportTypeChanged(ChangeEventArgs e)
+    {
+        Model.ImportType = e.Value?.ToString() ?? Model.ImportType;
+        Model.SubDistributorId = null;
+        Model.Principal = null;
+
+        // Rows that pointed at a field the new type doesn't have go back to "choose a field".
+        foreach (var c in Model.Sheets.SelectMany(s => s.Columns)
+                     .Where(c => !ImportFieldRegistry.IsValidField(Model.ImportType, c.FieldKey)))
+        {
+            c.FieldKey = null;
+            c.RuleType = ColumnRuleTypes.Direct;
+            c.OptionsJson = null;
+        }
+
+        await IsGlobalChanged.InvokeAsync(true);
+    }
+}

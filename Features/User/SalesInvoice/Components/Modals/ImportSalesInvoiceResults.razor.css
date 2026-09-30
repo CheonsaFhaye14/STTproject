@@ -265,13 +265,6 @@
     transition: all 0.15s;
 }
 
-    ::deep .tab.act-all {
-        background: #fff;
-        color: #1B1B1F;
-        border: 0.5px solid #E1D9BC;
-        box-shadow: 0 1px 3px rgba(27, 27, 31, 0.06);
-    }
-
     ::deep .tab.act-ok {
         background: #e4f5ef;
         color: #085041;
@@ -281,6 +274,11 @@
     ::deep .tab.act-er {
         background: #fdeaea;
         color: #791F1F;
+        border: 0.5px solid #f2b0b0;
+    }
+    ::deep .tab.act-warn{
+        background: #fff8e1;
+        color: #7a6d00;
         border: 0.5px solid #f2b0b0;
     }
 
@@ -885,7 +883,7 @@
         padding: 5px 8px;
         height: 30px;
         align-items: center;
-        min-width: 200px;
+        min-width: 300px;
     }
 
 ::deep .btn-bulk-apply,

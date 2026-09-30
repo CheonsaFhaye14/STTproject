@@ -5,11 +5,11 @@ public class PriceIncreaseWorker : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
 
-    private readonly IDbContextFactory<SttprojectContext> _dbContextFactory;
+    private readonly IDbContextFactory<EntrielContext> _dbContextFactory;
     private readonly ILogger<PriceIncreaseWorker> _logger;
 
     public PriceIncreaseWorker(
-        IDbContextFactory<SttprojectContext> dbContextFactory,
+        IDbContextFactory<EntrielContext> dbContextFactory,
         ILogger<PriceIncreaseWorker> logger)
     {
         _dbContextFactory = dbContextFactory;

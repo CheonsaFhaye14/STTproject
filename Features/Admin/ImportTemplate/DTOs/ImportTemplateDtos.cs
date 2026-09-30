@@ -1,5 +1,39 @@
 namespace STTproject.Features.Admin.ImportTemplate.DTOs;
 
+/// <summary>Allowed values, shared by dropdowns, the validator and the service.</summary>
+public static class SheetMatchModes
+{
+    public const string Any = "Any";
+    public const string Exact = "Exact";
+    public const string Contains = "Contains";
+    public const string Position = "Position";
+    public const string Ignore = "Ignore";
+    public static readonly string[] All = { Any, Exact, Contains, Position, Ignore };
+}
+
+public static class HeaderRowModes
+{
+    public const string Automatic = "Automatic";
+    public const string Fixed = "Fixed";
+    public static readonly string[] All = { Automatic, Fixed };
+}
+
+public static class ColumnDataTypes
+{
+    public static readonly string[] All = { "Text", "Integer", "Decimal", "Date" };
+}
+
+public static class ColumnRuleTypes
+{
+    public const string Direct = "Direct";
+    public const string Regex = "Regex";
+    public const string Conditional = "Conditional";
+    public static readonly string[] All =
+    {
+        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", Regex, Conditional
+    };
+}
+
 /// <summary>Filters for the template list page. Null means "don't filter on this".</summary>
 public sealed class ImportTemplateFilterDto
 {
@@ -7,7 +41,6 @@ public sealed class ImportTemplateFilterDto
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
     public bool? IsActive { get; set; } = true;
-
 }
 
 /// <summary>One row in the list page table.</summary>
@@ -25,6 +58,7 @@ public sealed class ImportTemplateListItemDto
     public int Version { get; set; }
     public bool IsActive { get; set; }
     public bool AllowGlobalFallback { get; set; }
+    public int SheetCount { get; set; }
     public int ColumnCount { get; set; }
     public DateTime? LastChangedDate { get; set; }
 
@@ -37,7 +71,7 @@ public sealed class ImportTemplateListItemDto
         : Principal!;
 }
 
-/// <summary>The template being created or edited, with its column rows.</summary>
+/// <summary>The template being created or edited, with its sheets.</summary>
 public sealed class ImportTemplateEditDto
 {
     /// <summary>0 for a new template.</summary>
@@ -50,36 +84,74 @@ public sealed class ImportTemplateEditDto
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
 
-    public string? SheetName { get; set; }
-    public int? HeaderRowNumber { get; set; }
-
     public bool AllowGlobalFallback { get; set; } = true;
     public bool IsActive { get; set; } = true;
 
     /// <summary>Loaded from the database; the service uses it to bump the version on save.</summary>
     public int Version { get; set; } = 1;
 
+    public List<ImportTemplateSheetEditDto> Sheets { get; set; } = new();
+}
+
+/// <summary>How to find one sheet in the workbook, where its header is, and which columns it holds.</summary>
+public sealed class ImportTemplateSheetEditDto
+{
+    /// <summary>0 for a new sheet.</summary>
+    public int ImportTemplateSheetId { get; set; }
+
+    /// <summary>Client-side identity so Blazor keeps the right sheet tab when sheets are added or removed.</summary>
+    public Guid RowKey { get; set; } = Guid.NewGuid();
+
+    /// <summary>Admin's own name for this sheet, e.g. "Sales". Not the name inside the Excel file.</summary>
+    public string SheetLabel { get; set; } = string.Empty;
+
+    /// <summary>Any / Exact / Contains / Position / Ignore.</summary>
+    public string SheetMatchMode { get; set; } = SheetMatchModes.Any;
+
+    /// <summary>The name, text, or position number, depending on the match mode. Empty for Any and Ignore.</summary>
+    public string? SheetMatchValue { get; set; }
+
+    public bool IsRequired { get; set; } = true;
+
+    /// <summary>Automatic / Fixed.</summary>
+    public string HeaderRowMode { get; set; } = HeaderRowModes.Automatic;
+
+    /// <summary>Only used when HeaderRowMode is Fixed.</summary>
+    public int? HeaderRowNumber { get; set; }
+
+    public int SortOrder { get; set; }
+
     public List<ImportTemplateColumnEditDto> Columns { get; set; } = new();
 }
 
-/// <summary>One row of the column grid: "this header in the file means this field".</summary>
+/// <summary>One row of the column grid: "this header in the file means this field, read this way".</summary>
 public sealed class ImportTemplateColumnEditDto
 {
-    /// <summary>0 for a new row. Only used to line rows up when saving.</summary>
+    /// <summary>0 for a new row. Used to line rows up when saving.</summary>
     public int ImportTemplateColumnId { get; set; }
 
     /// <summary>Client-side identity so Blazor keeps the right row when rows are added or removed.</summary>
     public Guid RowKey { get; set; } = Guid.NewGuid();
 
-    /// <summary>The header as it appears in the subd's file.</summary>
+    /// <summary>The header as it usually appears in the subd's file.</summary>
     public string HeaderText { get; set; } = string.Empty;
+
+    /// <summary>Other headers that mean the same thing, e.g. "Date", "Transaction Date".</summary>
+    public List<string> Aliases { get; set; } = new();
 
     /// <summary>Must be one of the registry keys for the import type. Null only when IsIgnored.</summary>
     public string? FieldKey { get; set; }
 
-    public string ReadMode { get; set; } = "Text";
+    /// <summary>What the value is: Text, Integer, Decimal or Date.</summary>
+    public string DataType { get; set; } = "Text";
 
-    /// <summary>Extra settings for a read mode, e.g. the pattern for Regex.</summary>
+    /// <summary>How the value is cleaned or extracted: Direct, Trim, Regex, Conditional...</summary>
+    public string RuleType { get; set; } = ColumnRuleTypes.Direct;
+
+    /// <summary>Which unit this column's quantity is in, e.g. "Piece" or "Case". Used by Conditional.</summary>
+    public string? TargetUom { get; set; }
+
+    /// <summary>Extra settings for a rule, e.g. the pattern for Regex.</summary>
     public string? OptionsJson { get; set; }
 
     public bool IsRequired { get; set; }
@@ -98,6 +170,7 @@ public sealed class CloneImportTemplateDto
     /// <summary>Null = clone as a global default.</summary>
     public int? TargetSubDistributorId { get; set; }
     public string? TargetPrincipal { get; set; }
+    public string? TemplateName { get; set; }
 }
 
 /// <summary>Returned by save, clone and activate calls so the page can show errors.</summary>

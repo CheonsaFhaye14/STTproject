@@ -1,0 +1,225 @@
+<div class="card mb-3">
+    <div class="card-header">2. Sheets and columns</div>
+    <div class="card-body">
+
+        @if (Missing.Count > 0)
+        {
+            <div class="alert alert-info small">
+                This template has to cover everything the import needs. Still missing:
+                <ul class="mb-0 ps-3">
+                    @foreach (var m in Missing) { <li>@m</li> }
+                </ul>
+            </div>
+        }
+
+        <ul class="nav nav-tabs mb-3">
+            @for (var i = 0; i < Model.Sheets.Count; i++)
+            {
+                var idx = i;
+                var tab = Model.Sheets[idx];
+                <li class="nav-item" @key="tab.RowKey">
+                    <button type="button" class="nav-link @(idx == _active ? "active" : "")"
+                            @onclick="() => _active = idx">
+                        @(string.IsNullOrWhiteSpace(tab.SheetLabel) ? $"Sheet {idx + 1}" : tab.SheetLabel)
+                        @if (tab.SheetMatchMode == SheetMatchModes.Ignore)
+                        {
+                            <span class="badge bg-secondary ms-1">ignored</span>
+                        }
+                    </button>
+                </li>
+            }
+            <li class="nav-item">
+                <button type="button" class="nav-link text-primary" @onclick="AddSheet">+ Add sheet</button>
+            </li>
+        </ul>
+
+        @if (Model.Sheets.Count > 0)
+        {
+            var s = Model.Sheets[_active];
+
+            <div @key="s.RowKey">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Sheet label</label>
+                        <input class="form-control" @bind="s.SheetLabel" @bind:event="oninput" placeholder="e.g. Sales" />
+                        <div class="form-text">Your own name for this sheet. It doesn't have to match Excel.</div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">How to find it in the file</label>
+                        <select class="form-select" value="@s.SheetMatchMode" @onchange="e => MatchModeChanged(s, e)">
+                            @foreach (var m in SheetMatchModes.All)
+                            {
+                                <option value="@m">@MatchModeLabel(m)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        @if (NeedsMatchValue(s))
+                        {
+                            <label class="form-label">@MatchValueLabel(s)</label>
+                            <input class="form-control" @bind="s.SheetMatchValue" @bind:event="oninput"
+                                   placeholder="@MatchValuePlaceholder(s)" />
+                        }
+                        else
+                        {
+                            <label class="form-label">&nbsp;</label>
+                            <div class="form-text mt-0">@MatchModeHelp(s)</div>
+                        }
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label d-block">Options</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="req-@s.RowKey" @bind="s.IsRequired" />
+                            <label class="form-check-label" for="req-@s.RowKey">Sheet must exist in the file</label>
+                        </div>
+                        @if (Model.Sheets.Count > 1)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger mt-2" @onclick="RemoveActiveSheet">
+                                Remove this sheet
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (s.SheetMatchMode == SheetMatchModes.Ignore)
+                {
+                    <div class="alert alert-light border small">
+                        This sheet is ignored during import, so it doesn't need any columns.
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Where are the headers?</label>
+                            <select class="form-select" @bind="s.HeaderRowMode">
+                                <option value="@HeaderRowModes.Automatic">Find automatically</option>
+                                <option value="@HeaderRowModes.Fixed">Always on a specific row</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            @if (s.HeaderRowMode == HeaderRowModes.Fixed)
+                            {
+                                <label class="form-label">Row number</label>
+                                <input type="number" min="1" class="form-control" @bind="s.HeaderRowNumber" />
+                            }
+                        </div>
+                        <div class="col-md-6 form-text align-self-end">
+                            @HeaderModeHelp(s)
+                        </div>
+                    </div>
+
+                    <HeaderRowInfo ImportType="@Model.ImportType"
+                                              Columns="s.Columns"
+                                              OnChanged="Refresh" />
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
+
+    /// <summary>Whether the template is a global default. Owned by the page.</summary>
+    [Parameter] public bool IsGlobal { get; set; } = true;
+
+    private int _active;
+
+    protected override void OnParametersSet()
+    {
+        if (_active >= Model.Sheets.Count) _active = Math.Max(0, Model.Sheets.Count - 1);
+    }
+
+    // Grid changes call this so the "still missing" alert above stays current.
+    private void Refresh() { }
+
+    // Global templates, and templates that don't fall back to the global default,
+    // have to map every required field (same rule the validator uses).
+    private List<string> Missing
+    {
+        get
+        {
+            if (!(IsGlobal || !Model.AllowGlobalFallback)) return new();
+
+            var mapped = Model.Sheets
+                .Where(s => s.SheetMatchMode != SheetMatchModes.Ignore)
+                .SelectMany(s => s.Columns)
+                .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
+                .Select(c => c.FieldKey!);
+
+            return ImportFieldRegistry.MissingRequired(Model.ImportType, mapped);
+        }
+    }
+
+    private void AddSheet()
+    {
+        Model.Sheets.Add(new ImportTemplateSheetEditDto
+        {
+            SheetLabel = $"Sheet {Model.Sheets.Count + 1}",
+            SheetMatchMode = SheetMatchModes.Contains,   // "Any" is only allowed for a single sheet
+            Columns = { new ImportTemplateColumnEditDto() }
+        });
+        _active = Model.Sheets.Count - 1;
+    }
+
+    private void RemoveActiveSheet()
+    {
+        if (Model.Sheets.Count <= 1) return;
+
+        Model.Sheets.RemoveAt(_active);
+        _active = Math.Min(_active, Model.Sheets.Count - 1);
+    }
+
+    private static void MatchModeChanged(ImportTemplateSheetEditDto s, ChangeEventArgs e)
+    {
+        s.SheetMatchMode = e.Value?.ToString() ?? SheetMatchModes.Any;
+        if (!NeedsMatchValue(s)) s.SheetMatchValue = null;
+    }
+
+    private static bool NeedsMatchValue(ImportTemplateSheetEditDto s) =>
+        s.SheetMatchMode is SheetMatchModes.Exact or SheetMatchModes.Contains or SheetMatchModes.Position;
+
+    private static string MatchModeLabel(string m) => m switch
+    {
+        SheetMatchModes.Any => "Any sheet",
+        SheetMatchModes.Exact => "Exact sheet name",
+        SheetMatchModes.Contains => "Sheet name contains text",
+        SheetMatchModes.Position => "Sheet position",
+        SheetMatchModes.Ignore => "Ignore this sheet",
+        _ => m
+    };
+
+    private static string MatchValueLabel(ImportTemplateSheetEditDto s) => s.SheetMatchMode switch
+    {
+        SheetMatchModes.Exact => "Sheet name",
+        SheetMatchModes.Contains => "Text the name contains",
+        SheetMatchModes.Position => "Position (1 = first sheet)",
+        _ => ""
+    };
+
+    private static string MatchValuePlaceholder(ImportTemplateSheetEditDto s) => s.SheetMatchMode switch
+    {
+        SheetMatchModes.Exact => "Sales Data",
+        SheetMatchModes.Contains => "Sales",
+        SheetMatchModes.Position => "1",
+        _ => ""
+    };
+
+    private static string MatchModeHelp(ImportTemplateSheetEditDto s) => s.SheetMatchMode switch
+    {
+        SheetMatchModes.Any => "Uses whatever the sheet is called. Only valid when the template has one sheet.",
+        SheetMatchModes.Ignore => "Matches nothing. Use it to skip sheets like Summary.",
+        _ => ""
+    };
+
+    private static string HeaderModeHelp(ImportTemplateSheetEditDto s) => s.HeaderRowMode switch
+    {
+        HeaderRowModes.Automatic => "Looks through the first rows for the one containing the headers below.",
+        HeaderRowModes.Fixed => "Use this when the header row never moves.",
+        _ => ""
+    };
+}

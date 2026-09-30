@@ -6,7 +6,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
 {
     public class AdminCompanyItemService : IAdminCompanyItemService
     {
-        private readonly IDbContextFactory<SttprojectContext> _dbFactory;
+        private readonly IDbContextFactory<EntrielContext> _dbFactory;
         private readonly IConfiguration _config;
         private static readonly TimeZoneInfo PhTimeZone =
             TimeZoneInfo.FindSystemTimeZoneById(
@@ -15,7 +15,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         private static DateTime NowPh() =>
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
 
-        public AdminCompanyItemService(IDbContextFactory<SttprojectContext> dbFactory, IConfiguration config)
+        public AdminCompanyItemService(IDbContextFactory<EntrielContext> dbFactory, IConfiguration config)
         {
             _dbFactory = dbFactory;
             _config = config;

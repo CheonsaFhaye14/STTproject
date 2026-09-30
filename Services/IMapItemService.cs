@@ -32,10 +32,10 @@ public enum CompanyItemFilterMode
 
 public class MapItemService : IMapItemService
 {
-    private readonly IDbContextFactory<SttprojectContext> _contextFactory;
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
     private readonly ILogger<MapItemService> _logger;
 
-    public MapItemService(IDbContextFactory<SttprojectContext> contextFactory, ILogger<MapItemService> logger)
+    public MapItemService(IDbContextFactory<EntrielContext> contextFactory, ILogger<MapItemService> logger)
     {
         _contextFactory = contextFactory;
         _logger = logger;
@@ -299,7 +299,7 @@ public class MapItemService : IMapItemService
         try
         {
             var existing = await context.SubdItems
-                .Include(si => si.ItemsUom)
+                .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == item.SubdItemId, cancellationToken);
 
             if (existing is null)
@@ -478,7 +478,7 @@ public class MapItemService : IMapItemService
         try
         {
             var existing = await context.SubdItems
-                .Include(si => si.ItemsUom)
+                .Include(si => si.ItemsUoms)
                 .FirstOrDefaultAsync(si => si.SubdItemId == subdItemId, cancellationToken);
 
             if (existing is null)
