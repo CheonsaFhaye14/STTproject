@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using STTproject.Features.Admin.ImportTemplate.DTOs;
+using System.Globalization;
 
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
@@ -8,8 +9,8 @@ public sealed class ResolvedSheet
 {
     public IXLWorksheet Worksheet { get; init; } = default!;
     public int HeaderRow { get; init; }
-    public Dictionary<string, int> Headers { get; } = new(StringComparer.OrdinalIgnoreCase);                        // FieldKey -> column number
-    public Dictionary<string, ImportTemplateColumnEditDto> Columns { get; } = new(StringComparer.OrdinalIgnoreCase); // FieldKey -> rule + options
+    public Dictionary<string, int> Headers { get; } = new(StringComparer.OrdinalIgnoreCase);                        
+    public Dictionary<string, ImportTemplateColumnEditDto> Columns { get; } = new(StringComparer.OrdinalIgnoreCase); 
     public List<string> MissingRequired { get; } = new();
 }
 
@@ -22,7 +23,7 @@ public static class TemplateSheetResolver
             ? ""
             : Regex.Replace(value.Trim().ToLowerInvariant(), @"[\s\.\#\/\-\,\:\(\)]+", " ").Trim();
 
-    /// <summary>Finds the first sheet in the template that exists in the workbook. Errors go to addError.</summary>
+
     public static ResolvedSheet? Resolve(ImportTemplateEditDto template, XLWorkbook wb, Action<string> addError)
     {
         var sheets = wb.Worksheets.ToList();
@@ -57,7 +58,7 @@ public static class TemplateSheetResolver
             var byText = new Dictionary<string, int>();
             for (var c = 1; c <= lastCol; c++)
             {
-                var key = Norm(ws.Cell(headerRow.Value, c).GetString());
+                var key = Norm(CellReader.Text(ws.Cell(headerRow.Value, c)));                
                 if (key.Length > 0) byText.TryAdd(key, c);
             }
 
@@ -107,10 +108,31 @@ public static class TemplateSheetResolver
         {
             var hits = 0;
             for (var c = 1; c <= lastCol; c++)
-                if (wanted.Contains(Norm(ws.Cell(row, c).GetString()))) hits++;
+                if (wanted.Contains(Norm(CellReader.Text(ws.Cell(row, c))))) hits++;
 
             if (hits > bestHits) { best = row; bestHits = hits; }
         }
         return best;
+    }
+    public static class CellReader
+    {
+        public static string Text(IXLCell cell)
+        {
+            try
+            {
+                if (!cell.HasFormula)
+                    return cell.GetString().Trim();
+
+                var cached = cell.CachedValue;
+                if (!cached.IsBlank)
+                    return cached.ToString(CultureInfo.InvariantCulture).Trim();
+
+                return cell.GetString().Trim();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
     }
 }

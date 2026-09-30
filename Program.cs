@@ -56,6 +56,7 @@ builder.Services.AddScoped<IImportTemplateService, ImportTemplateService>();
 builder.Services.AddScoped<IImportTemplateTestService, ImportTemplateTestService>();
 builder.Services.AddScoped<ImportCustomersService>();
 builder.Services.AddScoped<ImportCompanyItemsService>();
+builder.Services.AddScoped<TemplateDraftService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

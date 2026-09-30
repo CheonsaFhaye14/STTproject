@@ -7,14 +7,15 @@ public enum ImportFieldType { Text, Integer, Decimal, Date }
 public enum ImportScope { Subd, Principal }
 
 public sealed record ImportField(string Key, string Display, ImportFieldType Type, string? Note = null);
-
+public sealed record ImportDependency(string[] When, string[] Require);
 /// <summary>RequiredGroups: at least one key in each group must be mapped.</summary>
 public sealed record ImportTypeDefinition(
     string Type,
     string Display,
-    ImportScope Scope,  
+    ImportScope Scope,
     IReadOnlyList<ImportField> Fields,
-    IReadOnlyList<string[]> RequiredGroups);
+    IReadOnlyList<string[]> RequiredGroups,
+    IReadOnlyList<ImportDependency>? Dependencies = null);
 public static class ImportFieldRegistry
 {
     private const ImportFieldType T = ImportFieldType.Text;
@@ -56,6 +57,10 @@ public static class ImportFieldRegistry
                 new[] { "CustomerCode", "CustomerName" },
                 new[] { "SkuCode", "ItemName" },
                 new[] { "Quantity", "CaseQuantity", "DozenQuantity", "PieceQuantity", "InBoxQuantity" },
+            },    
+            new[]
+            {
+                new ImportDependency(new[] { "Quantity" }, new[] { "UnitOfMeasure" })
             }),
 
         new ImportTypeDefinition("Customer", "Customer", ImportScope.Subd,
@@ -127,14 +132,29 @@ public static class ImportFieldRegistry
         if (def is null) return new() { $"Unknown import type '{importType}'." };
 
         var mapped = new HashSet<string>(mappedKeys, StringComparer.OrdinalIgnoreCase);
-        return def.RequiredGroups
+
+        var messages = def.RequiredGroups
             .Where(g => !g.Any(mapped.Contains))
             .Select(g => g.Length == 1
                 ? $"{DisplayOf(def, g[0])} is required."
                 : $"One of {string.Join(" / ", g.Select(k => DisplayOf(def, k)))} is required.")
             .ToList();
-    }
 
+        foreach (var d in def.Dependencies ?? Array.Empty<ImportDependency>())
+        {
+            if (d.When.Any(mapped.Contains) && !d.Require.Any(mapped.Contains))
+            {
+                var trigger = string.Join(" / ", d.When.Where(mapped.Contains).Select(k => DisplayOf(def, k)));
+                var needed = d.Require.Length == 1
+                    ? DisplayOf(def, d.Require[0])
+                    : "one of " + string.Join(" / ", d.Require.Select(k => DisplayOf(def, k)));
+                messages.Add($"{needed} is required when {trigger} is mapped.");
+            }
+        }
+
+        return messages;
+    }
+    
     private static string DisplayOf(ImportTypeDefinition def, string key) =>
         def.Fields.First(f => f.Key == key).Display;
 }

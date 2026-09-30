@@ -1,6 +1,8 @@
 @page "/admin/import-templates/new"
 @page "/admin/import-templates/{Id:int}"
 
+@inject TemplateDraftService Drafts
+@implements IDisposable
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
 @inject IImportTemplateService TemplateService
 @inject STTproject.Services.IUserContextService UserContextService
@@ -30,6 +32,16 @@ else
             </ul>
         </div>
     }
+    @if (_pendingDraft is not null)
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+            <span>You have an unsaved draft from @_pendingDraft.SavedAt.ToString("MMM d, h:mm tt").</span>
+            <span class="d-flex gap-2">
+                <Button Variant="ButtonVariant.Primary" Title="Restore draft" OnClick="RestoreDraft" />
+                <Button Variant="ButtonVariant.Secondary" Title="Discard" OnClick="DiscardDraft" />
+            </span>
+        </div>
+    }
 
     <TemplateInfo Model="_model"
                   Subds="_subds"
@@ -57,9 +69,12 @@ else
     private List<string> _errors = new();
     private bool _loading = true;
     private bool _saving;
-
-
     private bool _isGlobal = true;
+
+    // Draft state
+    private TemplateDraftService.Draft? _pendingDraft;
+    private System.Threading.Timer? _timer;
+    private string? _lastJson;
 
     private bool IsNew => Id is null;
 
@@ -75,12 +90,14 @@ else
             : NewModel();
 
         if (_model is not null)
+        {
             _isGlobal = _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal);
+            _lastJson = Snapshot();         
+        }
 
         _loading = false;
     }
 
-    // A new template starts with one "any sheet" sheet and one empty column row.
     private static ImportTemplateEditDto NewModel() => new()
     {
         Sheets =
@@ -93,9 +110,11 @@ else
         }
     };
 
-    private void Refresh() { }
+    private void Refresh() { }               
 
-     private Task CancelAsync()
+    private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_model);
+
+    private Task CancelAsync()
     {
         Nav.NavigateTo("/admin/import-templates");
         return Task.CompletedTask;
@@ -107,7 +126,6 @@ else
 
         _errors = new();
 
-        // "Specific" with nobody picked would otherwise be saved as a global template.
         if (!_isGlobal && _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal))
         {
             _errors.Add(Scope == ImportScope.Principal
@@ -123,8 +141,55 @@ else
         _saving = false;
 
         if (result.Success)
+        {
+            _timer?.Dispose();              
+            await Drafts.ClearAsync(Id);
             Nav.NavigateTo("/admin/import-templates");
+        }
         else
             _errors = result.Errors;
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _pendingDraft = await Drafts.LoadAsync(Id);
+        if (_pendingDraft is not null) StateHasChanged();
+
+        _timer = new System.Threading.Timer(_ =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    
+                    if (_model is null || _saving || _pendingDraft is not null) return;
+
+                    var json = Snapshot();
+                    if (json == _lastJson) return;
+                    _lastJson = json;
+
+                    await Drafts.SaveAsync(Id, _model, _isGlobal);
+                }
+                catch { /* page closed or circuit gone: ignore */ }
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private void RestoreDraft()
+    {
+        _model = _pendingDraft!.Model;
+        _isGlobal = _pendingDraft.IsGlobal;
+        _pendingDraft = null;
+        _lastJson = Snapshot();             
+    }
+
+    private async Task DiscardDraft()
+    {
+        await Drafts.ClearAsync(Id);
+        _pendingDraft = null;
+    }
+
+    public void Dispose() => _timer?.Dispose();
 }
