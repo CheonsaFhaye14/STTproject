@@ -6,20 +6,7 @@ namespace STTproject.Features.Admin.ImportTemplate.Services;
 public enum ImportFieldType { Text, Integer, Decimal, Date }
 public enum ImportScope { Subd, Principal }
 
-public sealed record ImportField(string Key, string Display, ImportFieldType Type, string? Note = null)
-{
-    private static readonly string[] TextModes =
-        { "Text", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", "Regex" };
-
-    public IReadOnlyList<string> ReadModes => Type switch
-    {
-        ImportFieldType.Text    => TextModes,
-        ImportFieldType.Integer => new[] { "Integer" },
-        ImportFieldType.Decimal => new[] { "Decimal" },
-        ImportFieldType.Date    => new[] { "Date" },
-        _ => TextModes
-    };
-}
+public sealed record ImportField(string Key, string Display, ImportFieldType Type, string? Note = null);
 
 /// <summary>RequiredGroups: at least one key in each group must be mapped.</summary>
 public sealed record ImportTypeDefinition(
@@ -124,12 +111,6 @@ public static class ImportFieldRegistry
             }),
     };
 
-    public static readonly IReadOnlyList<string> AllReadModes = new[]
-    {
-        "Text", "Integer", "Decimal", "Date",
-        "StripLeadingCode", "StripParenthetical", "ExtractBracketed", "Regex"
-    };
-
     public static ImportTypeDefinition? Get(string importType) =>
         All.FirstOrDefault(d => d.Type == importType);
 
@@ -138,9 +119,6 @@ public static class ImportFieldRegistry
 
     public static bool IsValidField(string importType, string? fieldKey) =>
         GetField(importType, fieldKey) is not null;
-
-    public static bool IsValidReadMode(string importType, string fieldKey, string readMode) =>
-        GetField(importType, fieldKey)?.ReadModes.Contains(readMode) == true;
 
     /// <summary>Returns a message for each required group the template doesn't cover.</summary>
     public static List<string> MissingRequired(string importType, IEnumerable<string> mappedKeys)

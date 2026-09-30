@@ -40,6 +40,8 @@ else
 
     <SheetColumnsInfo Model="_model" IsGlobal="_isGlobal" />
 
+    <TemplateTester Model="_model" />
+
     <div class="d-flex gap-2">
         <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving" Title="@(_saving ? "Saving..." : "Save the template")"></Button>
         <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
@@ -56,8 +58,7 @@ else
     private bool _loading = true;
     private bool _saving;
 
-    // Owned here because both sections need it: TemplateInfo sets it (the toggle),
-    // SheetColumnsInfo reads it (the "still missing" alert) and Save checks it.
+
     private bool _isGlobal = true;
 
     private bool IsNew => Id is null;

@@ -1,0 +1,259 @@
+@using System.IO
+@using Microsoft.AspNetCore.Components.Forms
+@using STTproject.Features.User.SalesInvoice.DTOs
+@inject IImportTemplateTestService Tester
+@inject STTproject.Features.User.SalesInvoice.Services.ImportSalesInvoiceService Importer
+@inject STTproject.Services.IUserContextService UserContext
+@using STTproject.Features.User.SalesInvoice.Components.Modals
+
+<div class="card mb-3">
+    <div class="card-header">3. Try it with a file</div>
+    <div class="card-body">
+        <div class="form-text mb-2">
+            Nothing is imported or saved. This uses the template exactly as it is on screen right now.
+        </div>
+
+        <FileInput InputId="template-test-file"
+                   Title="Choose an Excel or CSV file to test"
+                   Subtitle="@(_fileName ?? "Only the first rows are read")"
+                   Accept=".xlsx,.csv"
+                   OnFileSelected="OnFile" />
+
+        @if (_busy)
+        {
+            <div class="text-muted mt-3">Reading the file…</div>
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_error</div>
+        }
+
+        @if (_bytes is not null && !_busy)
+        {
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="Run">
+                    Test again with the same file
+                </button>
+            </div>
+
+            @if (Model.ImportType == "SalesInvoice")
+            {
+                <hr />
+                <h6>What would be imported</h6>
+                <div class="form-text mb-2">
+                    Runs the real import check: customer, SKU and UOM lookups, invoice grouping, prices and
+                    duplicates. Reads the first @MaxRows rows. Nothing is saved.
+                </div>
+
+                @if (IsCsv)
+                {
+                    <div class="alert alert-light border small">
+                        This check needs an .xlsx file. The import itself doesn't read CSV.
+                    </div>
+                }
+                else
+                {
+                    @if (Model.SubDistributorId is null)
+                    {
+                        <div class="mb-2" style="max-width:360px;">
+                            <label class="form-label">Check against subdistributor</label>
+                            <select class="form-select" @bind="_testSubdId">
+                                <option value="0">Choose…</option>
+                                @foreach (var s in Subds)
+                                {
+                                    <option value="@s.SubDistributorId">@s.Display</option>
+                                }
+                            </select>
+                        </div>
+                    }
+
+                    <button type="button" class="btn btn-primary btn-sm"
+                            disabled="@(_checking || SubdForCheck <= 0)" @onclick="CheckImportAsync">
+                        @(_checking ? "Checking…" : "Check what would be imported")
+                    </button>
+                }
+            }
+        }
+
+        @if (_result is not null)
+        {
+            @if (_result.Errors.Count > 0)
+            {
+                <div class="alert alert-warning mt-3 mb-0">
+                    <strong>Fix the template first:</strong>
+                    <ul class="mb-0 ps-3">
+                        @foreach (var e in _result.Errors) { <li>@e</li> }
+                    </ul>
+                </div>
+            }
+
+            @foreach (var sheet in _result.Sheets)
+            {
+                var shown = sheet.Columns.Where(c => c.ColumnIndex is not null).ToList();
+                var badRows = sheet.Rows.Count(r => r.Messages.Count > 0);
+
+                <div class="mt-4">
+                    <h6 class="mb-1">
+                        @sheet.Label
+                        @if (sheet.ExcelSheetName is not null)
+                        {
+                            <span class="text-muted fw-normal">
+                                → “@sheet.ExcelSheetName”, headers on row @sheet.HeaderRow
+                            </span>
+                        }
+                    </h6>
+
+                    @foreach (var p in sheet.Problems)
+                    {
+                        <div class="alert alert-danger py-2 small mb-2">@p</div>
+                    }
+
+                    @if (sheet.Columns.Count > 0)
+                    {
+                        <div class="mb-2">
+                            @foreach (var c in sheet.Columns)
+                            {
+                                var found = c.ColumnIndex is not null;
+                                <span class="badge me-1 @(found ? "bg-success" : c.IsRequired ? "bg-danger" : "bg-secondary")">
+                                    @c.HeaderText @(found ? "" : "· not found")
+                                </span>
+                            }
+                        </div>
+                    }
+
+                    @if (sheet.Rows.Count > 0)
+                    {
+                        <div class="small mb-1 @(badRows > 0 ? "text-danger" : "text-success")">
+                            @(badRows == 0
+                                ? $"All {sheet.Rows.Count} rows look fine."
+                                : $"{badRows} of {sheet.Rows.Count} rows have problems.")
+                        </div>
+
+                        <div style="overflow-x:auto; max-height:420px; overflow-y:auto;">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead class="table-light" style="position:sticky; top:0;">
+                                    <tr>
+                                        <th>Row</th>
+                                        @foreach (var c in shown)
+                                        {
+                                            <th>@(ImportFieldRegistry.GetField(Model.ImportType, c.FieldKey)?.Display ?? c.FieldKey)</th>
+                                        }
+                                        <th>Problems</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in sheet.Rows)
+                                    {
+                                        <tr class="@(row.Messages.Count > 0 ? "table-warning" : "")">
+                                            <td class="text-muted">@row.RowNumber</td>
+                                            @foreach (var c in shown)
+                                            {
+                                                <td>@(row.Values.GetValueOrDefault(c.FieldKey!, ""))</td>
+                                            }
+                                            <td class="small">@string.Join("; ", row.Messages)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<ImportSalesInvoiceResults Show="_showImport"
+                           ImportResult="_importResult"
+                           ReadOnly="true"
+                           OnClose="CloseImport" />
+
+@code {
+    private const int MaxRows = 50;
+    private const long MaxFileBytes = 20 * 1024 * 1024;
+
+    [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
+    [Parameter] public List<SubDistributorOptionDto> Subds { get; set; } = new();
+
+    private byte[]? _bytes;
+    private string? _fileName;
+    private string? _error;
+    private bool _busy;
+    private TemplateTestResult? _result;
+
+    private int _testSubdId;
+    private bool _checking, _showImport;
+    private ImportSalesInvoiceResult? _importResult;
+
+    private bool IsCsv => _fileName?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
+    private int SubdForCheck => Model.SubDistributorId ?? _testSubdId;
+
+    private async Task OnFile(IBrowserFile file)
+    {
+        _error = null;
+        _result = null;
+
+        var ok = file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+            || file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+        if (!ok)
+        {
+            _error = "Please choose an .xlsx or .csv file.";
+            return;
+        }
+
+        _busy = true;
+        _fileName = file.Name;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxFileBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _bytes = ms.ToArray();
+            Run();
+        }
+        catch (IOException)
+        {
+            _bytes = null;
+            _error = "That file is too large to test (20 MB max).";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Run()
+    {
+        if (_bytes is null) return;
+        _result = Tester.Test(Model, new MemoryStream(_bytes), _fileName ?? "", MaxRows);
+    }
+
+    private async Task CheckImportAsync()
+    {
+        if (_bytes is null || SubdForCheck <= 0) return;
+
+        _checking = true;
+        StateHasChanged();
+        try
+        {
+            using var ms = new MemoryStream(_bytes);
+            _importResult = await Importer.PrepareFromExcelAsync(
+                ms, SubdForCheck, UserContext.UserId ?? 0, Model, MaxRows);
+        }
+        catch (Exception ex)
+        {
+            _importResult = new ImportSalesInvoiceResult();
+            _importResult.AddError(0, string.Empty, $"Check failed: {ex.Message}");
+        }
+        finally
+        {
+            _checking = false;
+            _showImport = true;
+        }
+    }
+
+    private void CloseImport() => _showImport = false;
+}

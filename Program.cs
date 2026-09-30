@@ -53,6 +53,7 @@ builder.Services.AddScoped<IAdminSalesInvoiceService, AdminSalesInvoiceService>(
 builder.Services.AddScoped<IAdminSubDistributorService, AdminSubDistributorService>();
 builder.Services.AddScoped<IAdminPriceIncreaseService, AdminPriceIncreaseService>();
 builder.Services.AddScoped<IImportTemplateService, ImportTemplateService>();
+builder.Services.AddScoped<IImportTemplateTestService, ImportTemplateTestService>();
 builder.Services.AddScoped<ImportCustomersService>();
 builder.Services.AddScoped<ImportCompanyItemsService>();
 var app = builder.Build();

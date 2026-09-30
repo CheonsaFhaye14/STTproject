@@ -521,7 +521,39 @@ public sealed class ImportTemplateService : IImportTemplateService
             .Select(t => t.TemplateName)
             .FirstOrDefaultAsync(ct);
     }
+    public async Task<ImportTemplateEditDto?> ResolveForImportAsync(string importType, int? subDistributorId, CancellationToken ct = default)
+    {
+        await using var ctx = await _factory.CreateDbContextAsync(ct);
 
+        var candidates = await ctx.ImportTemplates.AsNoTracking()
+            .Where(t => t.IsActive && t.ImportType == importType && t.Principal == null
+                        && (t.SubDistributorId == subDistributorId || t.SubDistributorId == null))
+            .Select(t => new { t.ImportTemplateId, t.SubDistributorId })
+            .ToListAsync(ct);
+
+        var specificId = candidates.FirstOrDefault(c => c.SubDistributorId != null)?.ImportTemplateId;
+        var globalId = candidates.FirstOrDefault(c => c.SubDistributorId == null)?.ImportTemplateId;
+
+        var specific = specificId is int s ? await GetAsync(s, ct) : null;
+        var global = globalId is int g ? await GetAsync(g, ct) : null;
+
+        if (specific is null) return global;
+        if (global is null || !specific.AllowGlobalFallback) return specific;
+
+        // "Also use the global default": add global columns for fields the specific template doesn't map.
+        // Assumes one readable sheet on each side.
+        var target = specific.Sheets.FirstOrDefault(sh => sh.SheetMatchMode != SheetMatchModes.Ignore);
+        var source = global.Sheets.FirstOrDefault(sh => sh.SheetMatchMode != SheetMatchModes.Ignore);
+        if (target is null || source is null) return specific;
+
+        var mapped = specific.Sheets.SelectMany(sh => sh.Columns).Select(c => c.FieldKey)
+            .Where(k => !string.IsNullOrWhiteSpace(k)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var c in source.Columns.Where(c => !string.IsNullOrWhiteSpace(c.FieldKey) && !mapped.Contains(c.FieldKey!)))
+            target.Columns.Add(c);
+
+        return specific;
+    }
     private static string ConflictMessage(string existingName) =>
         $"An active template \"{existingName}\" already exists for this scope. Deactivate it first.";
 }

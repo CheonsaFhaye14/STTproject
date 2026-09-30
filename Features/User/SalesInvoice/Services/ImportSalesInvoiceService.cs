@@ -6,25 +6,27 @@ using STTproject.Features.User.SalesInvoice.DTOs;
 using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Services;
-
+using STTproject.Features.Admin.ImportTemplate.DTOs;
+using STTproject.Features.Admin.ImportTemplate.Services;
 
 namespace STTproject.Features.User.SalesInvoice.Services;
 
 public sealed class ImportSalesInvoiceService
 {
-	private const int MaxHeaderScanRows = 10;
-	private const int MinTemplateMatchThreshold = 6;
 	private readonly IDbContextFactory<EntrielContext> _contextFactory;
 	private readonly ISalesInvoiceService _salesInvoiceService;
 	private readonly ILogger<ImportSalesInvoiceService> _logger;
+	private readonly IImportTemplateService _templates;
 
 	public ImportSalesInvoiceService(
 		IDbContextFactory<EntrielContext> contextFactory,
 		ISalesInvoiceService salesInvoiceService,
+		IImportTemplateService templates,
 		ILogger<ImportSalesInvoiceService> logger)
 	{
 		_contextFactory = contextFactory;
 		_salesInvoiceService = salesInvoiceService;
+		_templates = templates;
 		_logger = logger;
 	}
 
@@ -61,10 +63,22 @@ public sealed class ImportSalesInvoiceService
 		return result;
 	}
 
+	public Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
+		Stream excelStream,
+		int subDistributorId,
+		int currentUserId,
+		CancellationToken cancellationToken = default)
+		=> PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, null, int.MaxValue, cancellationToken);
+
+	/// <param name="template">Null = use the saved template for this subd (or the global default).
+	/// The admin's Test panel passes the unsaved template that is on screen.</param>
+	/// <param name="maxRows">Data rows to read after the header. int.MaxValue = all.</param>
 	public async Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
 		Stream excelStream,
 		int subDistributorId,
 		int currentUserId,
+		ImportTemplateEditDto? template,
+		int maxRows,
 		CancellationToken cancellationToken = default)
 	{
 		var result = new ImportSalesInvoiceResult();
@@ -99,34 +113,41 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		// Load the workbook and detect the header row and mapping for each worksheet, then select the best candidate worksheet to process.
-		using var workbook = new XLWorkbook(excelStream);
-		var worksheetCandidates = workbook.Worksheets
-			.Select(worksheet => new { Worksheet = worksheet, HeaderRowNumber = DetectHeaderRow(worksheet, subDistributor) })
-			.Where(candidate => candidate.HeaderRowNumber > 0)
-			.OrderBy(candidate => candidate.HeaderRowNumber)
-			.ToList();
-
-		var worksheetWithHeader = worksheetCandidates.FirstOrDefault();
-		if (worksheetWithHeader is null)
+		template ??= await _templates.ResolveForImportAsync("SalesInvoice", subDistributorId, cancellationToken);
+		if (template is null)
 		{
-			result.AddError(0, string.Empty, $"Could not find a sales invoice header row within the first {MaxHeaderScanRows} rows of any worksheet.");
+			result.AddError(0, string.Empty,
+				"No active import template was found for this subdistributor and there is no global default. Ask an admin to set one up under Import Templates.");
 			return result;
 		}
 
-		var worksheet = worksheetWithHeader.Worksheet;
-		var headerRowNumber = worksheetWithHeader.HeaderRowNumber;
-		var headers = BuildHeaderMap(worksheet, headerRowNumber, subDistributor);
+		// The template decides which sheet, which header row and which columns.
+		using var workbook = new XLWorkbook(excelStream);
+
+		var templateErrors = new List<string>();
+		var resolved = TemplateSheetResolver.Resolve(template, workbook, templateErrors.Add);
+		if (resolved is null || templateErrors.Count > 0)
+		{
+			foreach (var error in templateErrors)
+				result.AddError(0, string.Empty, error);
+			return result;
+		}
+
+		var worksheet = resolved.Worksheet;
+		var headerRowNumber = resolved.HeaderRow;
+		var headers = resolved.Headers;          // FieldKey -> column number
+		var columnRules = resolved.Columns;      // FieldKey -> rule + options
+
 		result.OriginalHeaders = headers
 			.OrderBy(kvp => kvp.Value)
 			.Select(kvp => kvp.Key)
-			.ToList();	
+			.ToList();
 
 		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 		result.RawSheetHeaders = Enumerable.Range(1, sheetLastColumn)
 			.Select(c => worksheet.Cell(headerRowNumber, c).GetString().Trim())
 			.ToList();
-			
+
 		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
 		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
 		if (!isValid)
@@ -154,16 +175,17 @@ public sealed class ImportSalesInvoiceService
 
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
-		var subdItemsBySkuGroup = subdItems.ToLookup(item => Normalize(item.SubdItemCode ?? string.Empty));		var subdItemById = subdItems.ToDictionary(item => item.SubdItemId);
+		var subdItemsBySkuGroup = subdItems.ToLookup(item => Normalize(item.SubdItemCode ?? string.Empty));
+		var subdItemById = subdItems.ToDictionary(item => item.SubdItemId);
 		var uomLookup = uoms.ToLookup(uom => (uom.SubdItemId, Normalize(uom.UomName)));
 		var uomsBySubdItemId = uoms.Where(u => u.IsActive).ToLookup(u => u.SubdItemId);
 		var customerById = customers.ToDictionary(customer => customer.CustomerId);
 		var itemsUomById = uoms.ToDictionary(uom => uom.ItemsUomId);
 
-		// ADDED — pre-scan the sheet once to know which conversions each item actually uses,
+		// Pre-scan the sheet once to know which conversions each item actually uses,
 		// so the fallback in ReadRows can restrict itself to a confirmed match instead of a guess.
 		var knownConversionsBySubdItem = BuildKnownConversionsBySubdItem(
-			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, headerRowNumber);
+			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, headerRowNumber, columnRules, maxRows);
 
 		var parsedRows = ReadRows(
 			worksheet,
@@ -174,10 +196,12 @@ public sealed class ImportSalesInvoiceService
 			subdItemsBySkuGroup,
 			uomLookup,
 			uomsBySubdItemId,
-			knownConversionsBySubdItem,   // ADDED
+			knownConversionsBySubdItem,
 			customers,
 			subdItems,
-			headerRowNumber);
+			headerRowNumber,
+			columnRules,
+			maxRows);
 
 		result.Rows.AddRange(parsedRows);
 
@@ -204,7 +228,7 @@ public sealed class ImportSalesInvoiceService
 			{
 				SubDistributor = subDistributor.SubdCode + " - " + subDistributor.SubdName,
 				InvoiceNumber = invoiceNumber,
-				GroupKey = invoiceGroup.Key,  
+				GroupKey = invoiceGroup.Key,
 				Items = new List<InputItemModel>(),
 				Issues = new List<ImportSalesInvoiceIssue>(),
 				Selected = true
@@ -277,8 +301,8 @@ public sealed class ImportSalesInvoiceService
 					CustomerCode = customer.CustomerCode,
 					CustomerName = customer.CustomerName,
 					CustomerType = customer.CustomerType ?? string.Empty,
-					SubdistributorId = subDistributorId, 
-					SalesManName = SalesInvoiceService.NormalizeSalesMan(firstRow.SalesManName) ?? string.Empty,					
+					SubdistributorId = subDistributorId,
+					SalesManName = SalesInvoiceService.NormalizeSalesMan(firstRow.SalesManName) ?? string.Empty,
 					CustomerAddress = string.Join(", ", new[]
 					{
 						customer.AddressLine,
@@ -437,11 +461,11 @@ public sealed class ImportSalesInvoiceService
 				}
 				preparedInvoice.RawItems = items;
 				preparedInvoice.Items = BuildAggregatedItems(items, preparedInvoice.Invoice?.OrderType);
-		
+
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
 					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, preparedInvoice.Invoice!.SubdistributorId, preparedInvoice.Invoice!.CustomerId, preparedInvoice.Invoice!.SalesManName, 0, cancellationToken));
-								
+
 				if (validationErrors.Count > 0)
 				{
 					var msg = string.Join(" ", validationErrors.Values);
@@ -477,7 +501,7 @@ public sealed class ImportSalesInvoiceService
 	}
 
 	public static List<InputItemModel> BuildAggregatedItems(
-    List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
+		List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
 	{
 		var aggregated = rawItems
 			.GroupBy(e => new { e.Item.SubdItemId, e.Item.ItemsUomId, e.Item.ItemCode, e.Item.ItemName, e.Item.UomName, e.IsFreeItem })
@@ -572,29 +596,24 @@ public sealed class ImportSalesInvoiceService
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		ILookup<int, ItemsUom> uomsBySubdItemId,
-		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem, 
+		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem,
 		IEnumerable<Data.Customer> allCustomers,
 		IEnumerable<SubdItem> allSubdItems,
-		int headerRowNumber)
+		int headerRowNumber,
+		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> columnRules,
+		int maxRows)
 	{
 		// Reads and validates rows from the worksheet starting after the header row, returning a list of parsed invoice rows along with any issues found.
 		var rows = new List<ImportedInvoiceRow>();
-		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var lastRow = LastRowFor(worksheet, headerRowNumber, maxRows);
 		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 
-		// Customer Columns
-		var hasCustomerCodeColumn = headers.ContainsKey("CustomerCode");
-		var hasCustomerNameColumn = headers.TryGetValue("CustomerName", out var customerNameColumn);
-		var hasCustomerTypeColumn = headers.TryGetValue("CustomerType", out var customerTypeColumn);
-
-		// Address/location columns (used for customer disambiguation)
-		var hasAddressLineColumn = headers.TryGetValue("AddressLine", out var addressLineColumn);
-		var hasCityMunicipalityColumn = headers.TryGetValue("CityMunicipality", out var cityMunicipalityColumn);
-		var hasProvinceColumn = headers.TryGetValue("Province", out var provinceColumn);
-
-		// Item columns
-		var hasSkuCodeColumn = headers.ContainsKey("SkuCode");
-		var hasItemNameColumn = headers.TryGetValue("ItemName", out var itemNameColumn);
+		// Optional columns. Text columns are read through ReadValue, which returns "" when a column isn't mapped.
+		var hasCustomerTypeColumn = headers.ContainsKey("CustomerType");
+		var hasAddressLineColumn = headers.ContainsKey("AddressLine");
+		var hasCityMunicipalityColumn = headers.ContainsKey("CityMunicipality");
+		var hasProvinceColumn = headers.ContainsKey("Province");
+		var hasItemNameColumn = headers.ContainsKey("ItemName");
 
 		// Quantity columns
 		var hasQuantityColumn = headers.TryGetValue("Quantity", out var quantityColumn);
@@ -604,34 +623,32 @@ public sealed class ImportSalesInvoiceService
 		var hasInBoxQuantityColumn = headers.TryGetValue("InBoxQuantity", out var inBoxQuantityColumn);
 		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
 
-		// UOM column (required when using simple Quantity)
-		var hasUomColumn = headers.TryGetValue("UnitOfMeasure", out var uomColumn);
-
-		// Order columns
-		var hasOrderTypeColumn = headers.TryGetValue("OrderType", out var orderTypeColumn);
 		var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
 
+		// If the admin picked a text format for the invoice date, use exactly that.
+		var invoiceDateFormat = columnRules.TryGetValue("InvoiceDate", out var invoiceDateRule)
+			? invoiceDateRule.OptionsJson
+			: null;
 
 		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
 
-			// ── Read raw cell values ─────────────────────────────────────────────
-			var invoiceCode = GetString(row, headers["InvoiceCode"]);
-			var customerCode = hasCustomerCodeColumn ? GetString(row, headers["CustomerCode"]) : string.Empty;
-			var customerName = hasCustomerNameColumn ? GetString(row, customerNameColumn) : string.Empty;
-			var customerType = hasCustomerTypeColumn ? GetString(row, customerTypeColumn) : null;
-			var province = hasProvinceColumn ? GetString(row, provinceColumn) : null;
-			var city = hasCityMunicipalityColumn ? GetString(row, cityMunicipalityColumn) : null;
-			var addressLine = hasAddressLineColumn ? GetString(row, addressLineColumn) : null;
-			var orderType = hasOrderTypeColumn ? GetString(row, orderTypeColumn) : string.Empty;
-			var skuCode = hasSkuCodeColumn ? GetString(row, headers["SkuCode"]) : string.Empty;
-			var itemName = hasItemNameColumn ? GetString(row, itemNameColumn) : string.Empty;
-			var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
-			var salesManName = headers.TryGetValue("SalesManName", out var salesManCol) ? GetString(row, salesManCol) : string.Empty;
+			// ── Read raw cell values (with the template's "how to read it" rule applied) ──
+			var invoiceCode = ReadValue(row, headers, columnRules, "InvoiceCode");
+			var customerCode = ReadValue(row, headers, columnRules, "CustomerCode");
+			var customerName = ReadValue(row, headers, columnRules, "CustomerName");
+			var customerType = hasCustomerTypeColumn ? ReadValue(row, headers, columnRules, "CustomerType") : null;
+			var province = hasProvinceColumn ? ReadValue(row, headers, columnRules, "Province") : null;
+			var city = hasCityMunicipalityColumn ? ReadValue(row, headers, columnRules, "CityMunicipality") : null;
+			var addressLine = hasAddressLineColumn ? ReadValue(row, headers, columnRules, "AddressLine") : null;
+			var orderType = ReadValue(row, headers, columnRules, "OrderType");
+			var skuCode = ReadValue(row, headers, columnRules, "SkuCode");
+			var itemName = ReadValue(row, headers, columnRules, "ItemName");
+			var uom = ReadValue(row, headers, columnRules, "UnitOfMeasure");
+			var salesManName = ReadValue(row, headers, columnRules, "SalesManName");
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
-			var freeitemsCell = headers.TryGetValue("FreeItems", out var freeItemsCol) ? row.Cell(freeItemsCol) : null;
-			var freeItemsRaw = freeitemsCell != null ? GetString(row, freeItemsCol) : string.Empty;
+			var freeItemsRaw = ReadValue(row, headers, columnRules, "FreeItems");
 			var isFreeItem = InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
 
 			// ── Skip completely empty rows ───────────────────────────────────────
@@ -648,11 +665,11 @@ public sealed class ImportSalesInvoiceService
 				(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
 				(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
 				(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
-				(netAmountCell is null || IsAmountCellEffectivelyEmptyForRowSkip(netAmountCell)))			
-				{
+				(netAmountCell is null || IsAmountCellEffectivelyEmptyForRowSkip(netAmountCell)))
+			{
 				continue;
 			}
-			
+
 			result.TotalRowsProcessed++;
 
 			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -693,7 +710,7 @@ public sealed class ImportSalesInvoiceService
 			// Invoice date is required and must be a valid date
 			if (IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])))
 				AddRowError("Invoice date is required.", "InvoiceDate");
-			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate))
+			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate, invoiceDateFormat))
 				AddRowError("Invoice date is invalid.", "InvoiceDate");
 
 			//-------Validate customer-----------------
@@ -741,11 +758,11 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			// ── SKU / Item Resolution ────────────────────────────────────────────
-				if (!InvoiceDataValidator.TryResolveItem(
-						skuCode, itemName,
-						subdItemsBySkuGroup, allSubdItems,
-						out var resolvedItem, out var itemSuggestions, out var itemWarning, out var ambiguousCandidates))
-				{
+			if (!InvoiceDataValidator.TryResolveItem(
+					skuCode, itemName,
+					subdItemsBySkuGroup, allSubdItems,
+					out var resolvedItem, out var itemSuggestions, out var itemWarning, out var ambiguousCandidates))
+			{
 				if (string.IsNullOrWhiteSpace(skuCode) && string.IsNullOrWhiteSpace(itemName))
 				{
 					AddRowError("SKU code or Item name is required.", hasItemNameColumn ? "ItemName" : "SkuCode");
@@ -796,9 +813,13 @@ public sealed class ImportSalesInvoiceService
 
 			if (!useSplitQuantities)
 			{
-				// Simple path — use TryResolveQuantity to normalize quantity + UOM together
+				// Simple path — use TryResolveQuantity to normalize quantity + UOM together.
+				// The template might not map a Quantity column at all, so don't touch a cell that isn't there.
+				var quantityCell = hasQuantityColumn ? row.Cell(quantityColumn) : null;
+				var quantityIsEmpty = quantityCell is null || IsCellEffectivelyEmpty(quantityCell);
+
 				int? rawQuantity = null;
-				if (!IsCellEffectivelyEmpty(row.Cell(quantityColumn)) && TryGetInt(row.Cell(quantityColumn), out var parsedQty))
+				if (!quantityIsEmpty && TryGetInt(quantityCell!, out var parsedQty))
 					rawQuantity = parsedQty;
 
 				if (!InvoiceDataValidator.TryResolveQuantity(
@@ -812,7 +833,7 @@ public sealed class ImportSalesInvoiceService
 						out var resolvedUom,
 						out _))
 				{
-					if (IsCellEffectivelyEmpty(row.Cell(quantityColumn)))
+					if (quantityIsEmpty)
 						AddRowError("Quantity is required.", "Quantity");
 					else if (rawQuantity is null)
 						AddRowError("Quantity must be a whole number.", "Quantity");
@@ -890,85 +911,85 @@ public sealed class ImportSalesInvoiceService
 			}
 			else
 			{
-			void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
-			{
-				if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
-					return;
-
-				var rawValue = row.Cell(columnIndex).GetString().Trim();
-				if (InvoiceDataValidator.IsMissingUomValue(rawValue))
-					return;
-
-				if (!TryGetInt(row.Cell(columnIndex), out var qty))
+				void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
 				{
-					AddRowError($"{errorField} must be a whole number.", errorField);
-					return;
-				}
+					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
+						return;
 
-				if (qty == 0)
-					return;
+					var rawValue = row.Cell(columnIndex).GetString().Trim();
+					if (InvoiceDataValidator.IsMissingUomValue(rawValue))
+						return;
 
-				var rowOrderType = string.IsNullOrWhiteSpace(normalizedOrderType)
-					? (qty < 0 ? "Credit" : "Invoice")
-					: normalizedOrderType;
-
-				// Normalize the UOM label and resolve its ID via synonyms
-				var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
-				var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(normalizedUomName);
-				var finalUomName = normalizedUomName;
-				List<int>? uomReviewCandidateIds = null;
-
-				if (resolvedUomId == 0 && resolvedItem is not null)
-				{
-					InvoiceDataValidator.TryResolveFallbackUom( out _, out _, out var reviewUoms);
-
-					if (reviewUoms is { Count: > 0 })
+					if (!TryGetInt(row.Cell(columnIndex), out var qty))
 					{
-						var tentative = reviewUoms[0];
-						resolvedUomId = tentative.ItemsUomId;
-						finalUomName = tentative.UomName;
-						uomReviewCandidateIds = reviewUoms.Select(u => u.ItemsUomId).ToList();
-					}
-					else
-					{
-						var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-						AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
+						AddRowError($"{errorField} must be a whole number.", errorField);
 						return;
 					}
-				}
-				else if (uomAmbiguousMatches is { Count: > 1 })
-				{
-					uomReviewCandidateIds = uomAmbiguousMatches.Select(u => u.ItemsUomId).ToList();
-				}
 
-				emittedRows.Add(new ImportedInvoiceRow(
-					RowNumber: rowNumber,
-					InvoiceCode: invoiceCode,
-					InvoiceDate: invoiceDate,
-					CustomerCode: customerCode,
-					CustomerName: customerName,
-					OrderType: rowOrderType,
-					SalesManName: salesManName,
-					SkuCode: skuCode,
-					ItemName: itemName,
-					UOM: finalUomName,
-					Quantity: qty,
-					Province: province ?? string.Empty,
-					CityMunicipality: city ?? string.Empty,
-					CustomerType: customerType,
-					AddressLine: addressLine,
-					ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
-					ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
-					ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-					ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
-					ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
-					ResolvedItemsUomId: resolvedUomId,
-					IsFreeItem: isFreeItem,
-					AmbiguousItemWarning: itemWarning,
-					AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
-					UomFallbackWarning: null,
-					UomReviewCandidateIds: uomReviewCandidateIds));
-			}
+					if (qty == 0)
+						return;
+
+					var rowOrderType = string.IsNullOrWhiteSpace(normalizedOrderType)
+						? (qty < 0 ? "Credit" : "Invoice")
+						: normalizedOrderType;
+
+					// Normalize the UOM label and resolve its ID via synonyms
+					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
+					var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(normalizedUomName);
+					var finalUomName = normalizedUomName;
+					List<int>? uomReviewCandidateIds = null;
+
+					if (resolvedUomId == 0 && resolvedItem is not null)
+					{
+						InvoiceDataValidator.TryResolveFallbackUom(out _, out _, out var reviewUoms);
+
+						if (reviewUoms is { Count: > 0 })
+						{
+							var tentative = reviewUoms[0];
+							resolvedUomId = tentative.ItemsUomId;
+							finalUomName = tentative.UomName;
+							uomReviewCandidateIds = reviewUoms.Select(u => u.ItemsUomId).ToList();
+						}
+						else
+						{
+							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
+							AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
+							return;
+						}
+					}
+					else if (uomAmbiguousMatches is { Count: > 1 })
+					{
+						uomReviewCandidateIds = uomAmbiguousMatches.Select(u => u.ItemsUomId).ToList();
+					}
+
+					emittedRows.Add(new ImportedInvoiceRow(
+						RowNumber: rowNumber,
+						InvoiceCode: invoiceCode,
+						InvoiceDate: invoiceDate,
+						CustomerCode: customerCode,
+						CustomerName: customerName,
+						OrderType: rowOrderType,
+						SalesManName: salesManName,
+						SkuCode: skuCode,
+						ItemName: itemName,
+						UOM: finalUomName,
+						Quantity: qty,
+						Province: province ?? string.Empty,
+						CityMunicipality: city ?? string.Empty,
+						CustomerType: customerType,
+						AddressLine: addressLine,
+						ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
+						ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
+						ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
+						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
+						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
+						ResolvedItemsUomId: resolvedUomId,
+						IsFreeItem: isFreeItem,
+						AmbiguousItemWarning: itemWarning,
+						AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
+						UomFallbackWarning: null,
+						UomReviewCandidateIds: uomReviewCandidateIds));
+				}
 
 				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
 				TryEmitSplitRow(hasDozenQuantityColumn, dozenQuantityColumn, "dozen", "DozenQuantity");
@@ -991,155 +1012,7 @@ public sealed class ImportSalesInvoiceService
 
 		return rows;
 	}
-	private static int DetectHeaderRow(IXLWorksheet worksheet, SubDistributor subDistributor)
-	{
-		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
-		var scanLimit = Math.Min(lastRow, MaxHeaderScanRows);
 
-		// Pre-build a flat reverse lookup: normalized alias → canonical key
-		// This makes cell matching O(1) instead of O(keys × aliases)
-		var templateAliases = SubdTemplateHeaders.GetTemplateAliases(subDistributor);
-		var globalAliases = SubdTemplateHeaders.GetGlobalAliases();
-
-		var templateLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-		var globalLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-		foreach (var kvp in templateAliases)
-			foreach (var alias in kvp.Value)
-				templateLookup.TryAdd(NormalizeHeader(alias), kvp.Key);
-
-		foreach (var kvp in globalAliases)
-			foreach (var alias in kvp.Value)
-				globalLookup.TryAdd(NormalizeHeader(alias), kvp.Key);
-
-		var alwaysRequiredGroups = new[]
-		{
-			new[] { "InvoiceCode" },
-			new[] { "InvoiceDate" },
-			new[] { "SalesManName" },
-			new[] { "CustomerCode", "CustomerName" },
-			new[] { "SkuCode", "ItemName" }
-		};
-
-		// Read the entire scan range in ONE call — avoids per-row ClosedXML overhead
-		var usedRange = worksheet.Range(1, 1, scanLimit, worksheet.LastColumnUsed()?.ColumnNumber() ?? 50);
-
-		// Group cells by row number
-		var cellsByRow = usedRange.Cells()
-			.Where(c => !c.IsEmpty())
-			.GroupBy(c => c.Address.RowNumber)
-			.OrderBy(g => g.Key);
-
-		foreach (var rowGroup in cellsByRow)
-		{
-			var rowNumber = rowGroup.Key;
-			var foundCanonicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			var templateMatches = 0;
-
-			foreach (var cell in rowGroup)
-			{
-				var normalized = NormalizeHeader(cell.GetString());
-				if (string.IsNullOrWhiteSpace(normalized)) continue;
-
-				if (templateLookup.TryGetValue(normalized, out var templateKey))
-				{
-					if (foundCanonicalKeys.Add(templateKey))
-						templateMatches++;
-				}
-				else if (globalLookup.TryGetValue(normalized, out var globalKey))
-				{
-					foundCanonicalKeys.Add(globalKey);
-				}
-			}
-
-			// Early exit for high-confidence template match
-			if (templateMatches >= MinTemplateMatchThreshold)
-				return rowNumber;
-
-			// Check required groups
-			var satisfiesAllGroups = alwaysRequiredGroups
-				.All(group => group.Any(key => foundCanonicalKeys.Contains(key)));
-
-			if (!satisfiesAllGroups) continue;
-
-			// Quantity group check
-			bool hasSplitQuantity =
-				foundCanonicalKeys.Contains("CaseQuantity") ||
-				foundCanonicalKeys.Contains("PieceQuantity") ||
-				foundCanonicalKeys.Contains("DozenQuantity") ||
-				foundCanonicalKeys.Contains("InBoxQuantity");
-
-			if (!hasSplitQuantity)
-			{
-				bool hasUom = foundCanonicalKeys.Contains("UnitOfMeasure");
-				bool hasQty = foundCanonicalKeys.Contains("Quantity");
-				if (!hasUom && !hasQty) continue;
-			}
-
-			// First row that satisfies all required groups wins (no more scoring needed)
-			return rowNumber;
-		}
-
-		return 0;
-	}
-	private static IReadOnlyDictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet, int headerRowNumber, SubDistributor subDistributor)
-	{
-		var headerRow = worksheet.Row(headerRowNumber);
-		var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-		var templateAliases = SubdTemplateHeaders.GetTemplateAliases(subDistributor);
-		var globalAliases = SubdTemplateHeaders.GetGlobalAliases();
-
-		// Case-insensitive: template keys like "UnitofMeasure" vs global "UnitOfMeasure"
-		var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var usedColumns = new HashSet<int>();
-
-		var cells = headerRow.CellsUsed()
-			.Select(c => (Col: c.Address.ColumnNumber, Norm: NormalizeHeader(c.GetString())))
-			.Where(x => !string.IsNullOrWhiteSpace(x.Norm))
-			.ToList();
-
-		// Pass 1: subd template headers
-		foreach (var (col, norm) in cells)
-		{
-			foreach (var kvp in templateAliases)
-			{
-				if (assigned.Contains(kvp.Key)) continue;
-				if (kvp.Value.Any(alias => NormalizeHeader(alias) == norm))
-				{
-					headers[kvp.Key] = col;
-					assigned.Add(kvp.Key);
-					usedColumns.Add(col);
-					break;
-				}
-			}
-		}
-
-		// Pass 2: global aliases are only an alternate, used when the subd has no
-		// template, or one or more of its template headers weren't found.
-		var needGlobal = templateAliases.Count == 0 || !templateAliases.Keys.All(assigned.Contains);
-		if (!needGlobal)
-			return headers;
-
-		foreach (var (col, norm) in cells)
-		{
-			if (usedColumns.Contains(col)) continue;
-
-			foreach (var kvp in globalAliases)
-			{
-				if (assigned.Contains(kvp.Key)) continue;
-				if (kvp.Value.Any(alias => NormalizeHeader(alias) == norm))
-				{
-					headers[kvp.Key] = col;
-					assigned.Add(kvp.Key);
-					usedColumns.Add(col);
-					break;
-				}
-			}
-		}
-
-		return headers;
-	}
 	private static bool IsAmountCellEffectivelyEmptyForRowSkip(IXLCell cell)
 	{
 		if (cell.HasFormula)
@@ -1157,12 +1030,38 @@ public sealed class ImportSalesInvoiceService
 
 		return cell.IsEmpty();
 	}
+
 	private static string GetString(IXLRow row, int columnNumber)
 	{
 		var cell = row.Cell(columnNumber);
 		if (cell.HasFormula)
 			return cell.CachedValue.ToString()?.Trim() ?? string.Empty;
 		return cell.GetString().Trim();
+	}
+
+	// Reads a text cell and applies the column's "how to read it" rule from the template.
+	private static string ReadValue(
+		IXLRow row,
+		IReadOnlyDictionary<string, int> headers,
+		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> rules,
+		string key)
+	{
+		if (!headers.TryGetValue(key, out var column)) return string.Empty;
+
+		var raw = GetString(row, column);
+		if (raw.Length == 0) return raw;
+		if (!rules.TryGetValue(key, out var rule) || rule.RuleType == ColumnRuleTypes.Direct) return raw;
+
+		// If the rule can't be applied, keep the raw text so the normal lookup error shows what was in the file.
+		return ImportRules.TryApply(raw, rule.RuleType, rule.OptionsJson, out var result, out _) ? result : raw;
+	}
+
+	// Last data row to read: the end of the sheet, or maxRows after the header, whichever comes first.
+	private static int LastRowFor(IXLWorksheet worksheet, int headerRowNumber, int maxRows)
+	{
+		var used = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var limit = maxRows >= int.MaxValue - headerRowNumber ? int.MaxValue : headerRowNumber + maxRows;
+		return Math.Min(used, limit);
 	}
 
 	private static bool TryGetInt(IXLCell cell, out int value)
@@ -1228,7 +1127,7 @@ public sealed class ImportSalesInvoiceService
 		return decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowCurrencySymbol | NumberStyles.AllowLeadingSign | NumberStyles.AllowParentheses, CultureInfo.CurrentCulture, out value);
 	}
 
-	private static bool TryGetDateOnly(IXLCell cell, out DateOnly date)
+	private static bool TryGetDateOnly(IXLCell cell, out DateOnly date, string? dateFormat = null)
 	{
 		if (cell.HasFormula)
 		{
@@ -1253,6 +1152,22 @@ public sealed class ImportSalesInvoiceService
 		{
 			date = DateOnly.FromDateTime(cell.GetDateTime());
 			return true;
+		}
+
+		// The admin picked a text format for this column: use exactly that, never guess.
+		// This has to come before TryGetValue<DateTime>, which would otherwise guess first.
+		if (!string.IsNullOrWhiteSpace(dateFormat) && cell.DataType != XLDataType.Number)
+		{
+			var formatted = cell.GetString().Trim();
+			if (DateTime.TryParseExact(formatted, dateFormat, CultureInfo.InvariantCulture,
+					DateTimeStyles.AllowWhiteSpaces, out var exact))
+			{
+				date = DateOnly.FromDateTime(exact);
+				return true;
+			}
+
+			date = default;
+			return false;
 		}
 
 		if (cell.TryGetValue<DateTime>(out var dateTime))
@@ -1336,17 +1251,6 @@ public sealed class ImportSalesInvoiceService
 			.Replace("’", string.Empty);
 	}
 
-	private static string NormalizeHeader(string value)
-	{
-		if (string.IsNullOrWhiteSpace(value))
-			return string.Empty;
-
-		return System.Text.RegularExpressions.Regex.Replace(
-			value.Trim().ToLowerInvariant(),
-			@"[\s\.\#\/\-\,\:\(\)]+",
-			" ").Trim();
-	}
-
 	private static string BuildCustomerDisplayValue(string? customerCode, string? customerName)
 	{
 		var code = string.IsNullOrWhiteSpace(customerCode) ? string.Empty : customerCode.Trim();
@@ -1396,14 +1300,13 @@ public sealed class ImportSalesInvoiceService
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IEnumerable<SubdItem> allSubdItems,
 		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
-		int headerRowNumber)
+		int headerRowNumber,
+		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> columnRules,
+		int maxRows)
 	{
 		var result = new Dictionary<int, HashSet<int>>();
-		var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+		var lastRow = LastRowFor(worksheet, headerRowNumber, maxRows);
 
-		var hasSkuCodeColumn = headers.ContainsKey("SkuCode");
-		var hasItemNameColumn = headers.TryGetValue("ItemName", out var itemNameColumn);
-		var hasUomColumn = headers.TryGetValue("UnitOfMeasure", out var uomColumn);
 		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
 		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
 		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
@@ -1435,8 +1338,10 @@ public sealed class ImportSalesInvoiceService
 			var row = worksheet.Row(rowNumber);
 			if (row.CellsUsed().All(c => c.IsEmpty())) continue;
 
-			var skuCode = hasSkuCodeColumn ? GetString(row, headers["SkuCode"]) : string.Empty;
-			var itemName = hasItemNameColumn ? GetString(row, itemNameColumn) : string.Empty;
+			// Read SKU / item / UOM exactly the way ReadRows does, rules included,
+			// so this pre-scan and the real read always agree on which item a row is.
+			var skuCode = ReadValue(row, headers, columnRules, "SkuCode");
+			var itemName = ReadValue(row, headers, columnRules, "ItemName");
 
 			if (!InvoiceDataValidator.TryResolveItem(
 					skuCode, itemName, subdItemsBySkuGroup, allSubdItems,
@@ -1445,7 +1350,7 @@ public sealed class ImportSalesInvoiceService
 
 			if (!useSplitQuantities)
 			{
-				var uom = hasUomColumn ? GetString(row, uomColumn) : string.Empty;
+				var uom = ReadValue(row, headers, columnRules, "UnitOfMeasure");
 				if (string.IsNullOrWhiteSpace(uom)) continue;
 				var conversion = TryMatchConversion(resolvedItem, uom);
 				if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);

@@ -10,6 +10,7 @@ namespace STTproject.Features.Admin.ImportTemplate.Services
         Task<ImportTemplateSaveResult> SetActiveAsync(int importTemplateId, bool isActive, int userId, CancellationToken ct = default);
         Task<List<SubDistributorOptionDto>> GetSubDistributorsAsync(CancellationToken ct = default);
         Task<List<string>> GetPrincipalsAsync(CancellationToken ct = default);
+        Task<ImportTemplateEditDto?> ResolveForImportAsync(string importType, int? subDistributorId, CancellationToken ct = default);
     
     }
 }

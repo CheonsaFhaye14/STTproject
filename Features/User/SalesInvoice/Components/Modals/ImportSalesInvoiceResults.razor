@@ -12,7 +12,7 @@
                         <i class="ti ti-file-import" aria-hidden="true"></i>
                     </div>
                     <div>
-                        <div class="mh-title">Import results</div>
+                        <div class="mh-title">@(ReadOnly ? "Import check (preview)" : "Import results")</div>
                         <div class="mh-sub">@ImportResult?.PreparedInvoices?.FirstOrDefault()?.SubDistributor</div>
                     </div>
                 </div>
@@ -23,6 +23,12 @@
 
             @* ── Modal body ── *@
             <div class="modal-body-ent">
+                @if (ReadOnly)
+                {
+                    <div class="alert alert-info py-2 small mb-2">
+                        This is a preview of what would be imported. Nothing has been saved and nothing can be imported from here.
+                    </div>
+                }
                 @if (ImportResult == null)
                 {
                     <p class="text-muted" style="font-size:13px;">No import result to display.</p>
@@ -130,10 +136,13 @@
                                             Clear
                                         </button>
                                     }
-                                    <button type="button" class="btn-download-errors" @onclick="OpenDownloadModal">
-                                        <i class="ti ti-download" aria-hidden="true"></i>
-                                        Download
-                                    </button>
+                                  @if (OnDownloadErrorReport.HasDelegate)
+                                    {
+                                        <button type="button" class="btn-download-errors" @onclick="OpenDownloadModal">
+                                            <i class="ti ti-download" aria-hidden="true"></i>
+                                            Download
+                                        </button>
+                                    }
                                 </div>
                             }
 
@@ -187,7 +196,7 @@
                                             }
                                         }
                                     </div>
-                                    @if (!string.IsNullOrEmpty(selectedConflictFilter))
+                                    @if (!ReadOnly && !string.IsNullOrEmpty(selectedConflictFilter))
                                         {
                                             var affectedCount = CountInvoicesWithSku(selectedConflictFilter);
                                             var unconfirmedCount = CountUnconfirmedInvoicesWithSku(selectedConflictFilter);
@@ -226,7 +235,7 @@
                         
 
                         @* ── Select all (only on valid) ── *@
-                        @if (cardFilter == InvoiceCardFilter.SuccessOnly && selectableCount > 0)
+                        @if (!ReadOnly && cardFilter == InvoiceCardFilter.SuccessOnly && selectableCount > 0)
                         {
                             <div class="sel-all-bar">
                                 <input type="checkbox"
@@ -280,7 +289,7 @@
                     }
 
                     @* ── Pure success (no cards, no global issues) ── *@
-                    @if (!invoiceCards.Any() && !globalIssues.Any())
+                    @if (!ReadOnly && !invoiceCards.Any() && !globalIssues.Any())
                     {
                         <div class="success-banner">
                             <div class="success-banner-icon">
@@ -343,7 +352,7 @@
                                                             ? $"SKU '{choice.SkuCode}' has multiple matching records — choose which one to use"
                                                             : $"UOM isn't defined for SKU '{choice.SkuCode}' — choose which one to use")">
                                                         <i class="ti @(isConfirmed ? "ti-check" : "ti-alert-triangle") item-choice-icon" aria-hidden="true"></i>
-                                                        <select class="item-choice-select" value="@choice.SelectedSubdItemId"
+                                                        <select class="item-choice-select" value="@choice.SelectedSubdItemId" disabled="@ReadOnly"
                                                                 @onchange="(e) => OnItemChoiceChanged(card, choice, e.Value)">
                                                             @foreach (var candidate in choice.Candidates)
                                                             {
@@ -358,7 +367,7 @@
                                                                 <i class="ti ti-check" aria-hidden="true"></i>
                                                             </span>
                                                         }
-                                                        else
+                                                        else if (!ReadOnly)
                                                         {
                                                             <button type="button" class="btn-done-reviewing-sm" title="Confirm this choice"
                                                                     @onclick="() => ConfirmChoice(card, choice)">
@@ -386,10 +395,13 @@
                                                         <i class="ti ti-check" aria-hidden="true"></i>
                                                         Ready
                                                     </span>
-                                                    <div class="chk" @onclick:stopPropagation="true">
-                                                        <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.CardKey" />
-                                                        <label for="chk-@card.CardKey">Select</label>
-                                                    </div>
+                                                    @if (!ReadOnly)
+                                                    {
+                                                        <div class="chk" @onclick:stopPropagation="true">
+                                                            <input type="checkbox" @bind="card.Prepared.Selected" id="chk-@card.CardKey" />
+                                                            <label for="chk-@card.CardKey">Select</label>
+                                                        </div>
+                                                    }
                                                 }
                                                 <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
                                             </div>
@@ -603,7 +615,7 @@
 
             @* ── Modal footer ── *@
             <div class="modal-footer-ent">
-                @if (ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Count > 0)
+                @if (!ReadOnly && ImportResult != null && ImportResult.PreparedInvoices != null && ImportResult.PreparedInvoices.Count > 0)
                 {
                     <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
                         <i class="ti ti-send" aria-hidden="true"></i>
@@ -685,6 +697,7 @@
     [Parameter] public EventCallback OnCommit { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<List<ErrorReportEntry>> OnDownloadErrorReport { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
 
     private InvoiceCardFilter cardFilter = InvoiceCardFilter.SuccessOnly;
     private bool showCommitConfirmModal;
@@ -1038,8 +1051,8 @@
         if (_groupedIssuesCache.TryGetValue(card.CardKey, out var cached)) return cached;
 
         var visibleIssues = EffectiveIssues(card).AsEnumerable();
-            if (!string.IsNullOrWhiteSpace(filter))
-                visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
+        if (!string.IsNullOrWhiteSpace(filter))
+            visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
 
 
         var grouped = visibleIssues
@@ -1127,7 +1140,12 @@
         }
     }
 
-    private void OpenCommitConfirmModal() => showCommitConfirmModal = true;
+    private void OpenCommitConfirmModal()
+    {
+        if (ReadOnly) return;
+        showCommitConfirmModal = true;
+    }
+
     private void CancelCommit() => showCommitConfirmModal = false;
     private async Task ConfirmCommit()
     {

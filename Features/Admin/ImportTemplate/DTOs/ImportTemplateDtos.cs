@@ -18,19 +18,13 @@ public static class HeaderRowModes
     public static readonly string[] All = { Automatic, Fixed };
 }
 
-public static class ColumnDataTypes
-{
-    public static readonly string[] All = { "Text", "Integer", "Decimal", "Date" };
-}
-
 public static class ColumnRuleTypes
 {
     public const string Direct = "Direct";
     public const string Regex = "Regex";
-    public const string Conditional = "Conditional";
     public static readonly string[] All =
     {
-        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", Regex, Conditional
+        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", Regex,
     };
 }
 
@@ -136,29 +130,16 @@ public sealed class ImportTemplateColumnEditDto
     /// <summary>The header as it usually appears in the subd's file.</summary>
     public string HeaderText { get; set; } = string.Empty;
 
-    /// <summary>Other headers that mean the same thing, e.g. "Date", "Transaction Date".</summary>
-    public List<string> Aliases { get; set; } = new();
-
     /// <summary>Must be one of the registry keys for the import type. Null only when IsIgnored.</summary>
     public string? FieldKey { get; set; }
 
-    /// <summary>What the value is: Text, Integer, Decimal or Date.</summary>
-    public string DataType { get; set; } = "Text";
-
-    /// <summary>How the value is cleaned or extracted: Direct, Trim, Regex, Conditional...</summary>
+    /// <summary>How the value is cleaned or extracted: Direct, Trim, Regex...</summary>
     public string RuleType { get; set; } = ColumnRuleTypes.Direct;
-
-    /// <summary>Which unit this column's quantity is in, e.g. "Piece" or "Case". Used by Conditional.</summary>
-    public string? TargetUom { get; set; }
 
     /// <summary>Extra settings for a rule, e.g. the pattern for Regex.</summary>
     public string? OptionsJson { get; set; }
 
     public bool IsRequired { get; set; }
-
-    /// <summary>The column exists in the file but should be skipped.</summary>
-    public bool IsIgnored { get; set; }
-
     public int SortOrder { get; set; }
 }
 
