@@ -506,8 +506,6 @@ public sealed class ImportTemplateService : IImportTemplateService
         return exists ? null : "The selected subdistributor was not found or is inactive.";
     }
 
-    // Mirrors the filtered unique index UX_ImportTemplates_ActiveScope so the user gets a
-    // readable message instead of a database error. NULL scope values compare as equal.
     private static Task<string?> FindActiveConflictAsync(
         EntrielContext ctx, string importType, int? subDistributorId, string? principal, int excludeId, CancellationToken ct)
     {
