@@ -290,6 +290,7 @@ public partial class EntrielContext : DbContext
         {
             entity.HasKey(e => e.ImportTemplateSheetId).HasName("PK__ImportTe__4755275865B88B8A");
 
+            entity.Property(e => e.HeaderRowCount).HasDefaultValue(1, "DF_ITS_HeaderRowCount");
             entity.Property(e => e.HeaderRowMode)
                 .HasMaxLength(20)
                 .IsUnicode(false)

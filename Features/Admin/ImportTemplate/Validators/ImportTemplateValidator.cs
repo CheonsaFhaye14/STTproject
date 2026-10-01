@@ -1,5 +1,5 @@
 using STTproject.Features.Admin.ImportTemplate.DTOs;
-
+using STTproject.Features.Admin.ImportTemplate.Services; 
 namespace STTproject.Features.Admin.ImportTemplate.Validators;
 
 public static class ImportTemplateValidator
@@ -7,9 +7,6 @@ public static class ImportTemplateValidator
     public static List<string> Validate(ImportTemplateEditDto dto)
     {
         var errors = new List<string>();
-
-        // TODO: keep your existing checks here (ImportType exists in ImportFieldRegistry,
-        // scope rules for Subd vs Principal, required registry fields are mapped).
 
         if (dto.Sheets.Count == 0)
         {
@@ -58,6 +55,9 @@ public static class ImportTemplateValidator
             else if (s.HeaderRowMode == HeaderRowModes.Fixed && (s.HeaderRowNumber is null or < 1))
                 errors.Add($"{who}: enter the header row number.");
 
+            if (s.HeaderRowCount is < 1 or > 5)
+                errors.Add($"{who}: header rows must be between 1 and 5.");
+
             if (s.SheetMatchMode == SheetMatchModes.Ignore)
             {
                 if (s.Columns.Count > 0)
@@ -65,21 +65,19 @@ public static class ImportTemplateValidator
                 continue;
             }
 
-            ValidateColumns(s, who, errors);
+            ValidateColumns(s, who, dto.ImportType, errors);
         }
 
         return errors;
     }
 
-    private static void ValidateColumns(ImportTemplateSheetEditDto sheet, string who, List<string> errors)
+    private static void ValidateColumns(ImportTemplateSheetEditDto sheet, string who, string importType, List<string> errors)
     {
         if (sheet.Columns.Count == 0)
         {
             errors.Add($"{who}: add at least one column.");
             return;
         }
-
-        var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var c in sheet.Columns)
         {
@@ -92,7 +90,7 @@ public static class ImportTemplateValidator
             }
 
             if (string.IsNullOrWhiteSpace(c.FieldKey))
-                errors.Add($"{who}, {col}: choose a system field or mark it ignored.");
+                errors.Add($"{who}, {col}: choose a system field.");
 
             if (!ColumnRuleTypes.All.Contains(c.RuleType))
                 errors.Add($"{who}, {col}: unknown rule.");
@@ -100,12 +98,30 @@ public static class ImportTemplateValidator
             if (c.RuleType == ColumnRuleTypes.Regex && string.IsNullOrWhiteSpace(c.OptionsJson))
                 errors.Add($"{who}, {col}: the Regex rule needs a pattern.");
 
+            if (c.RuleType == ColumnRuleTypes.ValueMap)
+            {
+                var field = ImportFieldRegistry.GetField(importType, c.FieldKey);
+                var entries = ValueMapOptions.Parse(c.OptionsJson)
+                    .Where(e => e.From == "*" || !string.IsNullOrWhiteSpace(e.From) || !string.IsNullOrWhiteSpace(e.To))
+                    .ToList();
+
+                if (field?.Choices is null)
+                    errors.Add($"{who}, {col}: this field doesn't use a value table.");
+                else
+                {
+                    if (entries.Count == 0)
+                        errors.Add($"{who}, {col}: add at least one value to the table.");
+
+                    foreach (var e in entries)
+                    {
+                        var name = e.From == "*" ? "anything else" : e.From;
+                        if (e.From != "*" && string.IsNullOrWhiteSpace(e.From))
+                            errors.Add($"{who}, {col}: a row in the table has no text from the file.");
+                        else if (!field.Choices.Contains(e.To, StringComparer.OrdinalIgnoreCase))
+                            errors.Add($"{who}, {col}: choose what \"{name}\" means.");
+                    }
+                }
+            }
         }
-
-        var sharedFields = sheet.Columns
-            .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
-            .GroupBy(c => c.FieldKey!, StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Count() > 1);
-
     }
 }

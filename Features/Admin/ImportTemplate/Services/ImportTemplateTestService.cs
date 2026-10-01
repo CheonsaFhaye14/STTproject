@@ -109,10 +109,12 @@ public sealed class ImportTemplateTestService : IImportTemplateTestService
         }
         r.HeaderRow = headerRow;
 
+        var count = Math.Max(1, ts.HeaderRowCount);
+
         var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (var c = 1; c <= lastCol; c++)
         {
-            var text = ws.Cell(headerRow.Value, c).GetString().Trim();
+            var text = TemplateSheetResolver.HeaderText(ws, headerRow.Value, count, c);
             if (text.Length > 0) headers.TryAdd(TemplateSheetResolver.Norm(text), c);
         }
 
@@ -132,7 +134,7 @@ public sealed class ImportTemplateTestService : IImportTemplateTestService
         }
 
         var rowsRead = 0;
-        for (var rowNo = headerRow.Value + 1; rowNo <= lastRow && rowsRead < maxRows; rowNo++)
+        for (var rowNo = headerRow.Value + count; rowNo <= lastRow && rowsRead < maxRows; rowNo++)
         {
             if (ws.Row(rowNo).IsEmpty()) continue;  
             rowsRead++;
@@ -155,7 +157,7 @@ public sealed class ImportTemplateTestService : IImportTemplateTestService
             if (cell.DataType == XLDataType.DateTime)
                 return cell.GetDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-            var text = cell.GetString().Trim();
+            var text = CellReader.Text(cell);
             if (text.Length == 0) return "";
 
             var shown = ImportRulePreview.ApplyDate(text, col.OptionsJson);
@@ -168,7 +170,7 @@ public sealed class ImportTemplateTestService : IImportTemplateTestService
         {
             var raw = cell.DataType == XLDataType.Number
                 ? cell.GetDouble().ToString(CultureInfo.InvariantCulture)
-                : cell.GetString().Trim().Replace(",", "");
+                : CellReader.Text(cell).Replace(",", "");
             if (raw.Length == 0) return "";
 
             var ok = type == ImportFieldType.Integer
@@ -180,7 +182,7 @@ public sealed class ImportTemplateTestService : IImportTemplateTestService
             return raw;
         }
 
-        var value = ImportRulePreview.Apply(cell.GetString().Trim(), col.RuleType, col.OptionsJson);
+        var value = ImportRulePreview.Apply(CellReader.Text(cell), col.RuleType, col.OptionsJson);
         if (col.RuleType != ColumnRuleTypes.Direct && value.StartsWith("("))
             messages.Add($"{col.HeaderText}: {value}");
         return value;

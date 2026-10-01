@@ -35,11 +35,35 @@ public sealed class ImportTemplateService : IImportTemplateService
         if (f.IsActive.HasValue)
             q = q.Where(t => t.IsActive == f.IsActive.Value);
 
-        return await q
-            .OrderBy(t => t.ImportType)
-            .ThenBy(t => t.SubDistributorId)          
-            .ThenBy(t => t.Principal)
-            .ThenByDescending(t => t.IsActive)
+        if (!string.IsNullOrWhiteSpace(f.SearchText))
+        {
+            var term = f.SearchText.Trim();
+            q = q.Where(t =>
+                t.TemplateName.Contains(term) ||
+                (t.Principal != null && t.Principal.Contains(term)) ||
+                (t.SubDistributor != null &&
+                    (t.SubDistributor.SubdCode.Contains(term) || t.SubDistributor.SubdName.Contains(term))));
+        }
+
+        IOrderedQueryable<TemplateEntity> ordered = f.SortBy switch
+        {
+            ImportTemplateSortModes.NameAsc =>
+                q.OrderBy(t => t.TemplateName),
+            ImportTemplateSortModes.AppliesTo =>
+                q.OrderBy(t => t.SubDistributor != null ? t.SubDistributor.SubdCode : (t.Principal ?? "")),
+            ImportTemplateSortModes.NewestChanged =>
+                q.OrderByDescending(t => t.UpdatedDate ?? t.CreatedDate),
+            ImportTemplateSortModes.OldestChanged =>
+                q.OrderBy(t => t.UpdatedDate ?? t.CreatedDate),
+            ImportTemplateSortModes.MostColumns =>
+                q.OrderByDescending(t => t.ImportTemplateColumns.Count),
+            _ =>
+                q.OrderBy(t => t.ImportType).ThenBy(t => t.SubDistributorId).ThenBy(t => t.Principal)
+        };
+
+        return await ordered
+            .ThenByDescending(t => t.IsActive)         
+            .ThenBy(t => t.TemplateName)
             .Select(t => new ImportTemplateListItemDto
             {
                 ImportTemplateId = t.ImportTemplateId,
@@ -93,6 +117,7 @@ public sealed class ImportTemplateService : IImportTemplateService
                     IsRequired = s.IsRequired,
                     HeaderRowMode = s.HeaderRowMode,
                     HeaderRowNumber = s.HeaderRowNumber,
+                    HeaderRowCount = s.HeaderRowCount,
                     SortOrder = s.SortOrder,
                     Columns = s.ImportTemplateColumns
                         .OrderBy(c => c.SortOrder).ThenBy(c => c.ImportTemplateColumnId)
@@ -262,6 +287,7 @@ public sealed class ImportTemplateService : IImportTemplateService
                     IsRequired = s.IsRequired,
                     HeaderRowMode = s.HeaderRowMode,
                     HeaderRowNumber = s.HeaderRowNumber,
+                    HeaderRowCount = s.HeaderRowCount,
                     SortOrder = s.SortOrder
                 };
                 copy.ImportTemplateSheets.Add(sheetCopy);
@@ -379,7 +405,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         {
             s.SheetLabel = s.SheetLabel?.Trim() ?? string.Empty;
             s.SheetMatchValue = string.IsNullOrWhiteSpace(s.SheetMatchValue) ? null : s.SheetMatchValue.Trim();
-
+            s.HeaderRowCount = Math.Clamp(s.HeaderRowCount, 1, 5);
             // Clear values the chosen mode doesn't use, so stale text can't linger.
             if (s.SheetMatchMode is SheetMatchModes.Any or SheetMatchModes.Ignore) s.SheetMatchValue = null;
             if (s.HeaderRowMode != HeaderRowModes.Fixed) s.HeaderRowNumber = null;
@@ -442,6 +468,7 @@ public sealed class ImportTemplateService : IImportTemplateService
             sheet.IsRequired = sd.IsRequired;
             sheet.HeaderRowMode = sd.HeaderRowMode;
             sheet.HeaderRowNumber = sd.HeaderRowNumber;
+            sheet.HeaderRowCount = sd.HeaderRowCount;
             sheet.SortOrder = si + 1;
 
             for (int ci = 0; ci < sd.Columns.Count; ci++)

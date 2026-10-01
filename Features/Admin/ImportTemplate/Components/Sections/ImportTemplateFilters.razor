@@ -2,8 +2,21 @@
     <div class="card-body">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
+                <label class="form-label small mb-1">Search</label>
+                <div class="input-group input-group-sm">
+                    <input class="form-control" placeholder="Name, subdistributor or principal…"
+                           @bind="Filter.SearchText" @bind:event="oninput"
+                           @onkeydown="OnSearchKey" />
+                    @if (!string.IsNullOrEmpty(Filter.SearchText))
+                    {
+                        <button class="btn btn-outline-secondary" type="button" title="Clear search"
+                                @onclick="ClearSearch">✕</button>
+                    }
+                </div>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Import type</label>
-                <select class="form-select form-select-sm" @bind="Filter.ImportType">
+                <select class="form-select form-select-sm" @bind="Filter.ImportType" @bind:after="ApplyAsync">
                     <option value="">All</option>
                     @foreach (var d in ImportFieldRegistry.All)
                     {
@@ -11,9 +24,9 @@
                     }
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Subdistributor</label>
-                <select class="form-select form-select-sm" @bind="Filter.SubDistributorId">
+                <select class="form-select form-select-sm" @bind="Filter.SubDistributorId" @bind:after="ApplyAsync">
                     <option value="">All</option>
                     @foreach (var s in Subds)
                     {
@@ -21,9 +34,9 @@
                     }
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Principal</label>
-                <select class="form-select form-select-sm" @bind="Filter.Principal">
+                <select class="form-select form-select-sm" @bind="Filter.Principal" @bind:after="ApplyAsync">
                     <option value="">All</option>
                     @foreach (var p in Principals)
                     {
@@ -33,16 +46,27 @@
             </div>
             <div class="col-md-1">
                 <label class="form-label small mb-1">Status</label>
-                <select class="form-select form-select-sm" @bind="Filter.IsActive">
+                <select class="form-select form-select-sm" @bind="Filter.IsActive" @bind:after="ApplyAsync">
                     <option value="">All</option>
                     <option value="True">Active</option>
                     <option value="False">Inactive</option>
                 </select>
             </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button class="btn btn-sm btn-primary" @onclick="OnApply">Apply</button>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="OnReset">Reset</button>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Sort by</label>
+                <select class="form-select form-select-sm" @bind="Filter.SortBy" @bind:after="ApplyAsync">
+                    <option value="@ImportTemplateSortModes.Default">Import type</option>
+                    <option value="@ImportTemplateSortModes.NameAsc">Name (A–Z)</option>
+                    <option value="@ImportTemplateSortModes.AppliesTo">Applies to</option>
+                    <option value="@ImportTemplateSortModes.NewestChanged">Last changed (newest)</option>
+                    <option value="@ImportTemplateSortModes.OldestChanged">Last changed (oldest)</option>
+                    <option value="@ImportTemplateSortModes.MostColumns">Most columns</option>
+                </select>
             </div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-primary" @onclick="OnApply">Search</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="OnReset">Reset</button>
         </div>
     </div>
 </div>
@@ -53,4 +77,15 @@
     [Parameter] public List<string> Principals { get; set; } = new();
     [Parameter] public EventCallback OnApply { get; set; }
     [Parameter] public EventCallback OnReset { get; set; }
+    private Task ApplyAsync() => OnApply.InvokeAsync();
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await OnApply.InvokeAsync();
+    }
+
+    private async Task ClearSearch()
+    {
+        Filter.SearchText = null;
+        await OnApply.InvokeAsync();
+    }
 }

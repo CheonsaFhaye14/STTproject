@@ -25,7 +25,7 @@ public static class ColumnRuleTypes
     public const string ValueMap = "ValueMap";
     public static readonly string[] All =
     {
-        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", ValueMap, Regex,
+        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", "StripMarkers", ValueMap, Regex,
     };
 }
 
@@ -43,14 +43,6 @@ public static class ValueMapOptions
         try { return System.Text.Json.JsonSerializer.Deserialize<List<ValueMapEntry>>(json) ?? new(); }
         catch (System.Text.Json.JsonException) { return new(); }
     }
-}
-
-public sealed class ImportTemplateFilterDto
-{
-    public string? ImportType { get; set; }
-    public int? SubDistributorId { get; set; }
-    public string? Principal { get; set; }
-    public bool? IsActive { get; set; } = true;
 }
 
 /// <summary>One row in the list page table.</summary>
@@ -120,6 +112,7 @@ public sealed class ImportTemplateSheetEditDto
 
     /// <summary>The name, text, or position number, depending on the match mode. Empty for Any and Ignore.</summary>
     public string? SheetMatchValue { get; set; }
+    public int HeaderRowCount { get; set; } = 1;
 
     public bool IsRequired { get; set; } = true;
 
@@ -195,4 +188,25 @@ public sealed class SubDistributorOptionDto
     public string SubdName { get; set; } = string.Empty;
 
     public string Display => $"{SubdCode} - {SubdName}";
+}
+
+public static class ImportTemplateSortModes
+{
+    public const string Default = "Default";          // import type, then who it applies to
+    public const string NameAsc = "NameAsc";
+    public const string AppliesTo = "AppliesTo";
+    public const string NewestChanged = "NewestChanged";
+    public const string OldestChanged = "OldestChanged";
+    public const string MostColumns = "MostColumns";
+}
+
+/// <summary>Filters for the template list page. Null means "don't filter on this".</summary>
+public sealed class ImportTemplateFilterDto
+{
+    public string? ImportType { get; set; }
+    public int? SubDistributorId { get; set; }
+    public string? Principal { get; set; }
+    public bool? IsActive { get; set; }                       // null = show all (was true)
+    public string? SearchText { get; set; }
+    public string SortBy { get; set; } = ImportTemplateSortModes.Default;
 }

@@ -132,6 +132,7 @@ public sealed class ImportSalesInvoiceService
 
 		var worksheet = resolved.Worksheet;
 		var headerRowNumber = resolved.HeaderRow;
+		var dataStartMinusOne = resolved.FirstDataRow - 1;  
 		var headers = resolved.Headers;          
 		var columnRules = resolved.Columns;    
 
@@ -141,10 +142,11 @@ public sealed class ImportSalesInvoiceService
 			.ToList();
 
 		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+		var headerRowCount = resolved.FirstDataRow - resolved.HeaderRow;
 		result.RawSheetHeaders = Enumerable.Range(1, sheetLastColumn)
-			.Select(c => worksheet.Cell(headerRowNumber, c).GetString().Trim())
+			.Select(c => TemplateSheetResolver.HeaderText(worksheet, headerRowNumber, headerRowCount, c))
 			.ToList();
-
+			
 		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
 		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
 		if (!isValid)
@@ -182,7 +184,7 @@ public sealed class ImportSalesInvoiceService
 		// Pre-scan the sheet once to know which conversions each item actually uses,
 		// so the fallback in ReadRows can restrict itself to a confirmed match instead of a guess.
 		var knownConversionsBySubdItem = BuildKnownConversionsBySubdItem(
-			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, headerRowNumber, columnRules, maxRows);
+			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, dataStartMinusOne, columnRules, maxRows);
 
 		var parsedRows = ReadRows(
 			worksheet,
@@ -196,7 +198,7 @@ public sealed class ImportSalesInvoiceService
 			knownConversionsBySubdItem,
 			customers,
 			subdItems,
-			headerRowNumber,
+			dataStartMinusOne,
 			columnRules,
 			maxRows);
 
@@ -646,7 +648,8 @@ public sealed class ImportSalesInvoiceService
 			var salesManName = ReadValue(row, headers, columnRules, "SalesManName");
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
 			var freeItemsRaw = ReadValue(row, headers, columnRules, "FreeItems");
-			var isFreeItem = InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
+			var isFreeItem = string.Equals(freeItemsRaw, "Yes", StringComparison.OrdinalIgnoreCase)
+              || InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
 
 			// ── Skip completely empty rows ───────────────────────────────────────
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
@@ -1049,8 +1052,10 @@ public sealed class ImportSalesInvoiceService
 		if (raw.Length == 0) return raw;
 		if (!rules.TryGetValue(key, out var rule) || rule.RuleType == ColumnRuleTypes.Direct) return raw;
 
-		// If the rule can't be applied, keep the raw text so the normal lookup error shows what was in the file.
-		return ImportRules.TryApply(raw, rule.RuleType, rule.OptionsJson, out var result, out _) ? result : raw;
+		if (ImportRules.TryApply(raw, rule.RuleType, rule.OptionsJson, out var applied, out _))
+			return applied;
+		
+		return rule.RuleType == ColumnRuleTypes.ValueMap ? string.Empty : raw;
 	}
 
 	// Last data row to read: the end of the sheet, or maxRows after the header, whichever comes first.

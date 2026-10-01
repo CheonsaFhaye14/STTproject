@@ -30,10 +30,16 @@
 {
     <div class="alert alert-danger py-2">@_error</div>
 }
-
+<div class="text-muted small mb-2">
+    @_items.Count template@(_items.Count == 1 ? "" : "s")
+    @if (_items.Any(t => !t.IsActive))
+    {
+        <text> · @_items.Count(t => !t.IsActive) inactive</text>
+    }
+</div>
 @if (_items.Count == 0)
 {
-    <div class="alert alert-light border">No templates match these filters.</div>
+    <div class="alert alert-light border">No templates match these filters. Try clearing the search or pressing Reset.</div>
 }
 else
 {
@@ -125,7 +131,9 @@ else
         _filter.ImportType = null;
         _filter.SubDistributorId = null;
         _filter.Principal = null;
-        _filter.IsActive = true;
+        _filter.IsActive = null;                              // was true
+        _filter.SearchText = null;
+        _filter.SortBy = ImportTemplateSortModes.Default;
         await LoadAsync();
     }
 

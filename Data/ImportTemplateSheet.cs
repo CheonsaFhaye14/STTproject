@@ -23,6 +23,8 @@ public partial class ImportTemplateSheet
 
     public int SortOrder { get; set; }
 
+    public int HeaderRowCount { get; set; }
+
     public virtual ICollection<ImportFileSheet> ImportFileSheets { get; set; } = new List<ImportFileSheet>();
 
     public virtual ImportTemplate ImportTemplate { get; set; } = null!;

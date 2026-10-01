@@ -93,7 +93,7 @@
                 else
                 {
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label">Where are the headers?</label>
                             <select class="form-select" @bind="s.HeaderRowMode">
                                 <option value="@HeaderRowModes.Automatic">Find automatically</option>
@@ -103,14 +103,22 @@
                         <div class="col-md-2">
                             @if (s.HeaderRowMode == HeaderRowModes.Fixed)
                             {
-                                <label class="form-label">Row number</label>
+                                <label class="form-label">First header row</label>
                                 <input type="number" min="1" class="form-control" @bind="s.HeaderRowNumber" />
                             }
                         </div>
-                        <div class="col-md-6 form-text align-self-end">
-                            @HeaderModeHelp(s)
+                        <div class="col-md-2">
+                            <label class="form-label">Header rows</label>
+                            <input type="number" min="1" max="5" class="form-control" @bind="s.HeaderRowCount" />
                         </div>
-                    </div> 
+                        <div class="col-md-5 form-text align-self-end">
+                            @HeaderModeHelp(s)
+                            @if (s.HeaderRowCount > 1)
+                            {
+                                <div>The headers are read as the rows joined top to bottom. Type each one that way, e.g. <em>Salesman Name</em>.</div>
+                            }
+                        </div>
+                    </div>
 
                     <HeaderRowInfo ImportType="@Model.ImportType"
                                               Columns="s.Columns"

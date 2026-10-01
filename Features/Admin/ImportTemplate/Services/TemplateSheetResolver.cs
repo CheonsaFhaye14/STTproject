@@ -12,6 +12,7 @@ public sealed class ResolvedSheet
     public Dictionary<string, int> Headers { get; } = new(StringComparer.OrdinalIgnoreCase);                        
     public Dictionary<string, ImportTemplateColumnEditDto> Columns { get; } = new(StringComparer.OrdinalIgnoreCase); 
     public List<string> MissingRequired { get; } = new();
+    public int FirstDataRow { get; init; }
 }
 
 public static class TemplateSheetResolver
@@ -53,12 +54,18 @@ public static class TemplateSheetResolver
                 continue;
             }
 
-            var resolved = new ResolvedSheet { Worksheet = ws, HeaderRow = headerRow.Value };
+            var count = Math.Max(1, ts.HeaderRowCount);
+            var resolved = new ResolvedSheet
+            {
+                Worksheet = ws,
+                HeaderRow = headerRow.Value,
+                FirstDataRow = headerRow.Value + count
+            };
 
             var byText = new Dictionary<string, int>();
             for (var c = 1; c <= lastCol; c++)
             {
-                var key = Norm(CellReader.Text(ws.Cell(headerRow.Value, c)));                
+                var key = Norm(HeaderText(ws, headerRow.Value, count, c));
                 if (key.Length > 0) byText.TryAdd(key, c);
             }
 
@@ -97,10 +104,10 @@ public static class TemplateSheetResolver
             _ => null
         };
     }
-
     public static int? FindHeaderRow(ImportTemplateSheetEditDto ts, IXLWorksheet ws, int scanRows, int lastCol)
     {
         var wanted = ts.Columns.Select(c => Norm(c.HeaderText)).Where(t => t.Length > 0).ToHashSet();
+        var count = Math.Max(1, ts.HeaderRowCount);
 
         int? best = null;
         var bestHits = 0;
@@ -108,31 +115,47 @@ public static class TemplateSheetResolver
         {
             var hits = 0;
             for (var c = 1; c <= lastCol; c++)
-                if (wanted.Contains(Norm(CellReader.Text(ws.Cell(row, c))))) hits++;
+                if (wanted.Contains(Norm(HeaderText(ws, row, count, c)))) hits++;
 
             if (hits > bestHits) { best = row; bestHits = hits; }
         }
         return best;
     }
-    public static class CellReader
+    public static string HeaderText(IXLWorksheet ws, int firstRow, int rowCount, int col)
     {
-        public static string Text(IXLCell cell)
+        var parts = new List<string>();
+        for (var r = firstRow; r < firstRow + rowCount; r++)
         {
-            try
-            {
-                if (!cell.HasFormula)
-                    return cell.GetString().Trim();
+            var cell = ws.Cell(r, col);
+            if (cell.IsMerged()) cell = cell.MergedRange().FirstCell();
 
-                var cached = cell.CachedValue;
-                if (!cached.IsBlank)
-                    return cached.ToString(CultureInfo.InvariantCulture).Trim();
+            var t = CellReader.Text(cell);
+            if (t.Length == 0) continue;
+            if (parts.Count > 0 && string.Equals(parts[^1], t, StringComparison.OrdinalIgnoreCase)) continue;
+            parts.Add(t);
+        }
+        return string.Join(" ", parts);
+    }
+}
 
+public static class CellReader
+{
+    public static string Text(IXLCell cell)
+    {
+        try
+        {
+            if (!cell.HasFormula)
                 return cell.GetString().Trim();
-            }
-            catch
-            {
-                return string.Empty;
-            }
+
+            var cached = cell.CachedValue;
+            if (!cached.IsBlank)
+                return cached.ToString(CultureInfo.InvariantCulture).Trim();
+
+            return cell.GetString().Trim();
+        }
+        catch
+        {
+            return string.Empty;
         }
     }
 }
