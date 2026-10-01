@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-
+using STTproject.Features.Admin.ImportTemplate.DTOs;
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
 public static class ImportRules
@@ -28,9 +28,25 @@ public static class ImportRules
                     return true;
                 case "Regex":
                     if (string.IsNullOrWhiteSpace(pattern)) { error = "enter a pattern"; return false; }
-                    var m = Regex.Match(value, pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+                    var m = Regex.Match(value, pattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
                     if (!m.Success) { error = "no match"; return false; }
                     result = (m.Groups.Count > 1 ? m.Groups[1].Value : m.Value).Trim();
+                    return true;
+                case "ValueMap":
+                    var entries = ValueMapOptions.Parse(pattern);
+                    var text = value.Trim();
+                    var hit = entries.FirstOrDefault(e => e.From != "*" && e.From.Trim().Length > 0 &&
+                                string.Equals(e.From.Trim(), text, StringComparison.OrdinalIgnoreCase))
+                            ?? entries.FirstOrDefault(e => e.From == "*");   // "anything else"
+                    if (hit is null || string.IsNullOrWhiteSpace(hit.To))
+                    {
+                        error = $"\"{text}\" isn't mapped";
+                        return false;
+                    }
+                    result = hit.To;
+                    return true;
+                case "StripMarkers":
+                    result = Regex.Replace(value, @"^[\s\*]+|[\s\-\*]+$", "", RegexOptions.None, TimeSpan.FromSeconds(1));
                     return true;
                 default:
                     return true;   

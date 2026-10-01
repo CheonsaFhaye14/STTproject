@@ -363,9 +363,15 @@
                         SubdCustName = m.SubdCustName
                     }).ToList()
                     : new List<SubdCustPairInput> { new SubdCustPairInput { CustomerId = CustomerId, SubDistributorId = SubDistributorId } };
+                
+                OriginalGroupIds = mappings.Select(m => m.CustomerId).ToList();
+                if (!OriginalGroupIds.Contains(CustomerId!.Value))
+                    OriginalGroupIds.Add(CustomerId.Value);
             }
         }
     }
+
+    private List<int> OriginalGroupIds { get; set; } = new();   
 
     private void EnableEdit() => isViewMode = false;
 
@@ -382,17 +388,17 @@
         Errors = await CustomerValidations.ValidateAddCustomerAsync(
             customerToValidate,
             AdminCustomerService,
-            isEdit ? SubdCustPairs.Where(p => p.CustomerId.HasValue).Select(p => p.CustomerId!.Value) : null);
+            isEdit ? OriginalGroupIds : null);
 
         SubdPairErrors.Clear();
         SubdPairsGeneralError = null;
-        ValidateSubdPairs(); 
+        ValidateSubdPairs();
 
         ShowValidationErrors = true;
 
         if (Errors.Any() || SubdPairErrors.Any())
             return;
-
+            
         if (isEdit)
         {
             var anchorPair = SubdCustPairs.FirstOrDefault(p => p.CustomerId == CustomerId);

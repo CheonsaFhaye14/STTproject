@@ -22,13 +22,29 @@ public static class ColumnRuleTypes
 {
     public const string Direct = "Direct";
     public const string Regex = "Regex";
+    public const string ValueMap = "ValueMap";
     public static readonly string[] All =
     {
-        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", Regex,
+        Direct, "Trim", "StripLeadingCode", "StripParenthetical", "ExtractBracketed", ValueMap, Regex,
     };
 }
 
-/// <summary>Filters for the template list page. Null means "don't filter on this".</summary>
+public sealed class ValueMapEntry
+{
+    public string From { get; set; } = "";
+    public string To { get; set; } = "";
+}
+
+public static class ValueMapOptions
+{
+    public static List<ValueMapEntry> Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<ValueMapEntry>>(json) ?? new(); }
+        catch (System.Text.Json.JsonException) { return new(); }
+    }
+}
+
 public sealed class ImportTemplateFilterDto
 {
     public string? ImportType { get; set; }

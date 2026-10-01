@@ -6,20 +6,20 @@
         <div class="row g-2 align-items-end">
             <div class="col-md-4">
                 <Input TValue="string"
-                            Label="Header in the file"
-                            Placeholder="e.g. Invoice No."
-                            @bind-Value="c.HeaderText" />
+                       Label="Header in the file"
+                       Placeholder="e.g. Invoice No."
+                       @bind-Value="c.HeaderText" />
             </div>
 
             <div class="col-md-4">
                 <AutoComplete TItem="FieldOption"
-                             Label="System field"
-                             Placeholder="Choose a field…"
-                             Items="_fields"
-                             ValueSelector="f => f.Key"
-                             TextSelector="f => f.Display"
-                             SelectedValue="@c.FieldKey"
-                             SelectedValueChanged="v => OnFieldChanged(c, v)" />
+                              Label="System field"
+                              Placeholder="Choose a field…"
+                              Items="_fields"
+                              ValueSelector="f => f.Key"
+                              TextSelector="f => f.Display"
+                              SelectedValue="@c.FieldKey"
+                              SelectedValueChanged="v => OnFieldChanged(c, v)" />
             </div>
 
             <div class="col-md-2 text-end">
@@ -30,67 +30,121 @@
             </div>
         </div>
 
-        @* ── Sample first, then how to read it, then what you get ── *@
         @if (!string.IsNullOrEmpty(c.FieldKey))
         {
-            <div class="col-md-4">
-                @if (IsDate(c))
-                {
-                    <Select TItem="RuleOption"
-                                    Label="Date format in the file"
-                                    Placeholder="Detect automatically"
-                                    Items="DateFormats"
-                                    ValueSelector="r => r.Value"
-                                    TextSelector="r => r.Text"
-                                    SelectedValue="@(c.OptionsJson ?? string.Empty)"
-                                    SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
-                }
-                else
-                {
-                    <Select TItem="RuleOption"
-                                    Label="How to read it"
-                                    Placeholder="Use as is"
-                                    Items="RuleOptions"
-                                    ValueSelector="r => r.Value"
-                                    TextSelector="r => r.Text"
-                                    SelectedValue="@RuleValue(c)"
-                                    SelectedValueChanged="v => OnRuleChanged(c, v)" />
-                }
-            </div>
-                <div class="read-row mt-2">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
-                            <Input TValue="string"
-                                        Label="Example from the file"
-                                        Placeholder="e.g. 00123 - ABC STORE"
-                                        Value="@GetSample(c)"
-                                        ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Result</label>
-                            @if (string.IsNullOrWhiteSpace(GetSample(c)))
-                            {
-                                <div class="result-box text-muted">Type an example to see the result</div>
-                            }
-                            else
-                            {
-                                <div class="result-box">@PreviewText(c)</div>
-                            }
-                        </div>
-                    </div>
-
-                    @if (c.RuleType == ColumnRuleTypes.Regex)
+            @if (Choices(c) is { } choices)
+            {
+                <div class="mt-2">
+                    <label class="form-label">What the file says → what it means</label>
+                    @{ var map = GetMap(c); }
+                    @for (var i = 0; i < map.Count; i++)
                     {
-                        <div class="row g-2 mt-1">
-                            <div class="col-md-8">
-                                <Input TValue="string"
-                                            Label="Pattern"
-                                            Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
-                                            @bind-Value="c.OptionsJson" />
+                        var idx = i;
+                        <div class="row g-2 align-items-end mb-1" @key="idx">
+                            <div class="col-md-4">
+                                <input value="@map[idx].From" placeholder="e.g. Free"
+                                    @onchange="e => SetFrom(c, idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-auto pb-2">→</div>
+                            <div class="col-md-3">
+                                <Select TItem="RuleOption"
+                                        Placeholder="Choose…"
+                                        Items="ChoiceOptions(choices)"
+                                        ValueSelector="r => r.Value"
+                                        TextSelector="r => r.Text"
+                                        SelectedValue="@map[idx].To"
+                                        SelectedValueChanged="v => SetTo(c, idx, v)" />
+                            </div>
+                            <div class="col-auto">
+                                <Button Variant="ButtonVariant.IconActionDelete"
+                                        Icon="fa-solid fa-trash"
+                                        Tooltip="Remove"
+                                        OnClick="() => RemoveMapRow(c, idx)" />
                             </div>
                         </div>
                     }
-                                <div class="col-md-2">
+
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-md-4 pb-2"><em>Anything else</em></div>
+                        <div class="col-auto pb-2">→</div>
+                        <div class="col-md-3">
+                            <Select TItem="RuleOption"
+                                    Placeholder="Choose…"
+                                    Items="ChoiceOptions(choices)"
+                                    ValueSelector="r => r.Value"
+                                    TextSelector="r => r.Text"
+                                    SelectedValue="@Otherwise(c)"
+                                    SelectedValueChanged="v => SetOtherwise(c, v)" />
+                        </div>
+                    </div>
+
+                    <Button Variant="ButtonVariant.Secondary" Title="+ Add value" OnClick="() => AddMapRow(c)" />
+                    <div class="form-text">@ImportFieldRegistry.GetField(ImportType, c.FieldKey)?.Note</div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-4">
+                    @if (IsDate(c))
+                    {
+                        <Select TItem="RuleOption"
+                                Label="Date format in the file"
+                                Placeholder="Detect automatically"
+                                Items="DateFormats"
+                                ValueSelector="r => r.Value"
+                                TextSelector="r => r.Text"
+                                SelectedValue="@(c.OptionsJson ?? string.Empty)"
+                                SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
+                    }
+                    else
+                    {
+                        <Select TItem="RuleOption"
+                                Label="How to read it"
+                                Placeholder="Use as is"
+                                Items="RuleOptions"
+                                ValueSelector="r => r.Value"
+                                TextSelector="r => r.Text"
+                                SelectedValue="@RuleValue(c)"
+                                SelectedValueChanged="v => OnRuleChanged(c, v)" />
+                    }
+                </div>
+            }
+
+            <div class="read-row mt-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <Input TValue="string"
+                               Label="Example from the file"
+                               Placeholder="e.g. 00123 - ABC STORE"
+                               Value="@GetSample(c)"
+                               ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Result</label>
+                        @if (string.IsNullOrWhiteSpace(GetSample(c)))
+                        {
+                            <div class="result-box text-muted">Type an example to see the result</div>
+                        }
+                        else
+                        {
+                            <div class="result-box">@PreviewText(c)</div>
+                        }
+                    </div>
+                </div>
+
+                @if (c.RuleType == ColumnRuleTypes.Regex)
+                {
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-8">
+                            <Input TValue="string"
+                                   Label="Pattern"
+                                   Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
+                                   @bind-Value="c.OptionsJson" />
+                        </div>
+                    </div>
+                }
+
+                <div class="col-md-2">
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="req-@c.RowKey" @bind="c.IsRequired" />
                         <label class="form-check-label" for="req-@c.RowKey">Required</label>
@@ -112,8 +166,6 @@
         background: #fff;
     }
 
-    /* Input renders a bare <input>, so give it the same look as the dropdowns
-       and put its label above it (like Select does). */
     .col-card .form-label {
         display: block;
         margin-bottom: .25rem;
@@ -147,23 +199,21 @@
     [Parameter, EditorRequired] public string ImportType { get; set; } = string.Empty;
     [Parameter, EditorRequired] public List<ImportTemplateColumnEditDto> Columns { get; set; } = new();
 
-    /// <summary>Raised when a change affects the "still missing" alert in the parent.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private sealed record FieldOption(string Key, string Display);
     private sealed record RuleOption(string Value, string Text);
 
-    // "Use as is" is the empty choice in the dropdown, so it isn't listed here.
     private static readonly List<RuleOption> RuleOptions = new()
     {
         new("Trim", "Remove extra spaces"),
         new("StripLeadingCode", "Remove the code at the start (00123 - ABC → ABC)"),
         new("StripParenthetical", "Remove text in (parentheses)"),
         new("ExtractBracketed", "Keep only the text in [brackets]"),
+        new("StripMarkers", "Remove * at the start and - at the end (*ABC STORE - → ABC STORE)"), 
         new(ColumnRuleTypes.Regex, "Custom pattern (advanced)")
     };
 
-    // Value is the .NET date format that gets stored in OptionsJson. Empty = detect automatically.
     private static readonly List<RuleOption> DateFormats = new()
     {
         new("dd-MMM-yy", "05-Jan-26"),
@@ -174,14 +224,10 @@
     };
 
     private List<FieldOption> _fields = new();
-
-    // Screen-only state, not saved with the template.
     private readonly Dictionary<Guid, string> _samples = new();
 
     protected override void OnParametersSet()
     {
-        // ADJUST to match your registry. Assumes each import type exposes Fields with a Key
-        // (stored in FieldKey) and a Display name.
         _fields = ImportFieldRegistry.Get(ImportType)?.Fields
                       .Select(f => new FieldOption(f.Key, f.Display)).ToList()
                   ?? new List<FieldOption>();
@@ -192,15 +238,18 @@
 
     private bool IsDate(ImportTemplateColumnEditDto c) => TypeOf(c.FieldKey) == ImportFieldType.Date;
 
+    private IReadOnlyList<string>? Choices(ImportTemplateColumnEditDto c) =>
+        ImportFieldRegistry.GetField(ImportType, c.FieldKey)?.Choices;
+
     private async Task OnFieldChanged(ImportTemplateColumnEditDto c, string? value)
     {
         var oldType = TypeOf(c.FieldKey);
         c.FieldKey = string.IsNullOrWhiteSpace(value) ? null : value;
 
-        // A date format or text rule means nothing for a different kind of field.
-        if (oldType != TypeOf(c.FieldKey))
+        var hasChoices = Choices(c) is not null;
+        if (oldType != TypeOf(c.FieldKey) || hasChoices || c.RuleType == ColumnRuleTypes.ValueMap)
         {
-            c.RuleType = ColumnRuleTypes.Direct;
+            c.RuleType = hasChoices ? ColumnRuleTypes.ValueMap : ColumnRuleTypes.Direct;
             c.OptionsJson = null;
         }
         await NotifyChanged();
@@ -223,6 +272,27 @@
         c.OptionsJson = string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    private static List<RuleOption> ChoiceOptions(IReadOnlyList<string> choices) =>
+        choices.Select(x => new RuleOption(x, x)).ToList();
+
+    private static void SaveMap(ImportTemplateColumnEditDto c, List<ValueMapEntry> list)
+    {
+        c.RuleType = ColumnRuleTypes.ValueMap;
+        c.OptionsJson = System.Text.Json.JsonSerializer.Serialize(list);
+    }
+
+    private static void SetFrom(ImportTemplateColumnEditDto c, int i, string? v)
+    { var l = GetMap(c); l[i].From = v?.Trim() ?? ""; SaveMap(c, l); }
+
+    private static void SetTo(ImportTemplateColumnEditDto c, int i, string? v)
+    { var l = GetMap(c); l[i].To = v ?? ""; SaveMap(c, l); }
+
+    private static void AddMapRow(ImportTemplateColumnEditDto c)
+    { var l = GetMap(c); l.Add(new ValueMapEntry()); SaveMap(c, l); }
+
+    private static void RemoveMapRow(ImportTemplateColumnEditDto c, int i)
+    { var l = GetMap(c); l.RemoveAt(i); SaveMap(c, l); }
+
     private string PreviewText(ImportTemplateColumnEditDto c) =>
         IsDate(c)
             ? ImportRulePreview.ApplyDate(GetSample(c), c.OptionsJson)
@@ -242,4 +312,28 @@
         Columns.Remove(c);
         await NotifyChanged();
     }
+    private const string Else = "*";
+
+    // the editable rows (without the "anything else" entry)
+    private static List<ValueMapEntry> GetMap(ImportTemplateColumnEditDto c)
+    {
+        var list = ValueMapOptions.Parse(c.OptionsJson).Where(e => e.From != Else).ToList();
+        if (list.Count == 0) list.Add(new ValueMapEntry());
+        return list;
+    }
+
+    private static string Otherwise(ImportTemplateColumnEditDto c) =>
+        ValueMapOptions.Parse(c.OptionsJson).FirstOrDefault(e => e.From == Else)?.To ?? "";
+
+    private static void SaveMap(ImportTemplateColumnEditDto c, List<ValueMapEntry> rows, string? otherwise = null)
+    {
+        var other = otherwise ?? Otherwise(c);
+        var all = rows.ToList();
+        if (!string.IsNullOrEmpty(other)) all.Add(new ValueMapEntry { From = Else, To = other });
+        c.RuleType = ColumnRuleTypes.ValueMap;
+        c.OptionsJson = System.Text.Json.JsonSerializer.Serialize(all);
+    }
+
+    private static void SetOtherwise(ImportTemplateColumnEditDto c, string? v) =>
+        SaveMap(c, GetMap(c), v ?? "");
 }

@@ -70,9 +70,6 @@ public sealed class ImportSalesInvoiceService
 		CancellationToken cancellationToken = default)
 		=> PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, null, int.MaxValue, cancellationToken);
 
-	/// <param name="template">Null = use the saved template for this subd (or the global default).
-	/// The admin's Test panel passes the unsaved template that is on screen.</param>
-	/// <param name="maxRows">Data rows to read after the header. int.MaxValue = all.</param>
 	public async Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
 		Stream excelStream,
 		int subDistributorId,
@@ -135,8 +132,8 @@ public sealed class ImportSalesInvoiceService
 
 		var worksheet = resolved.Worksheet;
 		var headerRowNumber = resolved.HeaderRow;
-		var headers = resolved.Headers;          // FieldKey -> column number
-		var columnRules = resolved.Columns;      // FieldKey -> rule + options
+		var headers = resolved.Headers;          
+		var columnRules = resolved.Columns;    
 
 		result.OriginalHeaders = headers
 			.OrderBy(kvp => kvp.Value)

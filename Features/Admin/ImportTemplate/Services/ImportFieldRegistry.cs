@@ -6,9 +6,9 @@ namespace STTproject.Features.Admin.ImportTemplate.Services;
 public enum ImportFieldType { Text, Integer, Decimal, Date }
 public enum ImportScope { Subd, Principal }
 
-public sealed record ImportField(string Key, string Display, ImportFieldType Type, string? Note = null);
+public sealed record ImportField(string Key, string Display, ImportFieldType Type, string? Note = null, IReadOnlyList<string>? Choices = null);
 public sealed record ImportDependency(string[] When, string[] Require);
-/// <summary>RequiredGroups: at least one key in each group must be mapped.</summary>
+
 public sealed record ImportTypeDefinition(
     string Type,
     string Display,
@@ -45,9 +45,11 @@ public static class ImportFieldRegistry
                 new("DozenQuantity",    "Dozen Quantity",     I, "Split column: UOM is implied (dozen)."),
                 new("PieceQuantity",    "Piece Quantity",     I, "Split column: UOM is implied (piece)."),
                 new("InBoxQuantity",    "In-Box Quantity",    I, "Split column: UOM is implied (inbox)."),
-                new("OrderType",        "Order Type",         T, "Invoice or Credit. Inferred if blank."),
+                new("OrderType",        "Order Type",         T, "Invoice or Credit. Inferred if blank.", 
+                    new[] { "Invoice", "Credit" }),                
                 new("NetAmount",        "Net Amount",         D, "Used to infer Invoice/Credit from its sign."),
-                new("FreeItems",        "Free Items",         T),
+                new("FreeItems",        "Free Items",         T, "Anything not listed here is treated as not free.",
+                    new[] { "Yes", "No" }),            
             },
             new[]
             {
@@ -154,7 +156,7 @@ public static class ImportFieldRegistry
 
         return messages;
     }
-    
+
     private static string DisplayOf(ImportTypeDefinition def, string key) =>
         def.Fields.First(f => f.Key == key).Display;
 }
