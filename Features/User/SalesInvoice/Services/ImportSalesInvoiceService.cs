@@ -165,12 +165,11 @@ public sealed class ImportSalesInvoiceService
 			.AsNoTracking()
 			.Where(item => item.SubDistributorId == subDistributorId && item.IsActive)
 			.ToListAsync(cancellationToken);
-
-		var subdItemIds = subdItems.Select(item => item.SubdItemId).Distinct().ToList();
-		var uoms = await context.ItemsUoms
-			.AsNoTracking()
-			.Where(uom => subdItemIds.Contains(uom.SubdItemId))
-			.ToListAsync(cancellationToken);
+		
+		var uoms = await (from u in context.ItemsUoms.AsNoTracking()
+						join i in context.SubdItems on u.SubdItemId equals i.SubdItemId
+						where i.SubDistributorId == subDistributorId && i.IsActive
+						select u).ToListAsync(cancellationToken);
 
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
