@@ -1,0 +1,156 @@
+.it-form {
+    counter-reset: it-step;
+
+    --it-card:        #fdfdfd;  /* section body */
+    --it-head:        #F0EADB;  /* section header band */
+    --it-line:        #E3DCC8;  /* card borders, dividers */
+    --it-line-hover:  #D3CAB0;
+    --it-input-bg:    #FFFFFF;
+    --it-input-line:  #d8bfbf;
+    --it-disabled:    #ECE7DA;
+    --it-text:        #171719;
+    --it-label-text:  #3a3a33;  /* labels*/
+    --it-muted:       #8A8A92;  /* muted text, hints */
+    --it-accent:      #A8884F;  /* switches, tab underline */
+    --it-accent-soft: #e8d492;  /* active pill */
+    --it-gold:        #C9A227;  /* section number circle */
+    --it-col:         #FDFCF8;  /* column cards */
+    --it-strip:       #F0E6CC;  /* inner strips (test, value map) */
+}
+
+/* ── Card ── */
+.it-form ::deep .form-item {
+    counter-increment: it-step;
+    background: var(--it-card);
+    border: 1px solid var(--it-line);
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+.it-form ::deep .form-item:hover { border-color: var(--it-line-hover); }
+
+/* ── Header: numbered circle, no icon, no summary ── */
+.it-form ::deep .form-header {
+    padding: 0.65rem 1rem;
+    background: var(--it-head);
+    border-bottom: 1px solid var(--it-line);
+    border-radius: 9px 9px 0 0;
+}
+.it-form ::deep .form-icon {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--it-gold); color: var(--it-text); font-size: 11px; font-weight: 700;
+}
+.it-form ::deep .form-icon i { display: none; }
+.it-form ::deep .form-icon::after { content: counter(it-step); }
+.it-form ::deep .form-sub { display: none; }
+.it-form ::deep .form-title { font-size: 13px; font-weight: 600; color: var(--it-text); }
+
+/* ── Body ── */
+.it-form ::deep .form-body { background: transparent; border-top: 0; padding: 1rem; }
+
+/* ── Fields: every input/select inside a section body ── */
+.it-form ::deep .it-field { position: relative; margin-bottom: 0.9rem; }
+
+.it-form ::deep .form-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+.it-form ::deep .form-body select {
+    width: 100%; height: 38px; padding: 0 12px;
+    font-size: 13px; color: var(--it-text);
+    background-color: var(--it-input-bg);
+    border: 1px solid var(--it-input-line); border-radius: 10px;
+    box-sizing: border-box;
+}
+.it-form ::deep .form-body select { padding-right: 32px; }
+
+.it-form ::deep .form-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.it-form ::deep .form-body select:focus {
+    outline: none; border-color: var(--it-accent); box-shadow: 0 0 0 3px rgba(168, 136, 79, 0.2);
+}
+.it-form ::deep .form-body input:disabled:not([type="checkbox"]),
+.it-form ::deep .form-body select:disabled {
+    background-color: var(--it-disabled); color: #9A968C; cursor: not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239A968C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
+}
+.it-form ::deep .form-body .autocomplete-list { border-radius: 10px; border-color: var(--it-input-line); }
+
+/* ── Labels ── */
+.it-form ::deep .form-body .form-label,
+.it-form ::deep .it-field > label:not(.it-option) {
+    display: block; font-size: 12px; font-weight: 400; color: var(--it-label-text); margin-bottom: 4px;
+}
+.it-form ::deep .form-body .form-check-label { font-size: 13px; font-weight: 400; color: var(--it-text); }
+.it-form ::deep .form-body .form-text { font-size: 12px; color: var(--it-label-text); }
+
+/* ── Scope pills ── */
+.it-form ::deep .it-seg { display: flex; gap: 8px; margin-bottom: 8px; }
+.it-form ::deep .it-seg-btn {
+    height: 30px; padding: 0 12px; font-size: 12px;
+    color: var(--it-label-text); background: var(--it-input-bg);
+    border: 1px solid var(--it-input-line); border-radius: 8px; cursor: pointer;
+}
+.it-form ::deep .it-seg-btn:hover { border-color: var(--it-accent); }
+.it-form ::deep .it-seg-btn.active {
+    color: var(--it-text); font-weight: 600; background: var(--it-accent-soft); border-color: var(--it-accent);
+}
+
+/* ── Option rows with switches ── */
+.it-form ::deep .it-field .it-option {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; font-size: 13px; font-weight: 400; color: var(--it-text);
+    border-bottom: 1px solid var(--it-line); cursor: pointer; margin: 0;
+}
+.it-form ::deep .it-field .it-option input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    flex-shrink: 0; width: 34px; height: 20px; margin: 0; border-radius: 999px;
+    background: var(--it-input-line); position: relative; cursor: pointer; transition: background 0.15s;
+}
+.it-form ::deep .it-field .it-option input[type="checkbox"]::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.15s;
+}
+.it-form ::deep .it-field .it-option input[type="checkbox"]:checked { background: var(--it-accent); }
+.it-form ::deep .it-field .it-option input[type="checkbox"]:checked::after { transform: translateX(14px); }
+
+/* ── "Still to map" chips ── */
+.it-form ::deep .it-missing { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
+.it-form ::deep .it-hint { font-size: 12px; color: var(--it-label-text); }
+.it-form ::deep .it-chip {
+    font-size: 12px; color: #7c1d1d; padding: 2px 10px;
+    background: #f6d7da; border: 1px dashed #6b2424; border-radius: 999px;
+}
+.it-form ::deep .it-chip::before { content: "+ "; }
+
+/* ── Sheet tabs ── */
+.it-form ::deep .it-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--it-line); margin-bottom: 16px; }
+.it-form ::deep .it-tab {
+    background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    padding: 8px 12px; font-size: 13px; color: var(--it-label-text); cursor: pointer;
+}
+.it-form ::deep .it-tab:hover { color: var(--it-text); }
+.it-form ::deep .it-tab.active { color: var(--it-text); font-weight: 600; border-bottom-color: var(--it-accent); }
+.it-form ::deep .it-tab-add { font-weight: 400; }
+
+/* ── Column cards ── */
+.it-form ::deep .col-card {
+    background: var(--it-col); border: 1px solid var(--it-line); border-radius: 10px;
+    padding: 12px; margin-bottom: 12px;
+}
+.it-form ::deep .it-strip { background: var(--it-strip); border-radius: 8px; padding: 10px 12px; }
+.it-form ::deep .result-box {
+    min-height: 38px; display: flex; align-items: center; padding: 0 12px;
+    font-size: 13px; background: var(--it-input-bg); border: 1px dashed var(--it-input-line); border-radius: 10px;
+}
+
+/* ── Field rows ── */
+.it-form ::deep .it-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 16px; }
+.it-form ::deep .it-row > .it-field { flex: 1 1 220px; min-width: 0; }
+.it-form ::deep .it-row > .it-field.it-opt { flex: 0 1 280px; }
+.it-form ::deep .it-row > .it-field.it-sm { flex: 0 0 150px; }
+.it-form ::deep .it-row--compact > .it-field { flex: 0 1 320px; }
+.it-form ::deep .it-row--compact > .it-field.it-sm { flex: 0 0 150px; }
+
+.it-form ::deep .form-body .form-label .optional-text {
+    font-size: 11px; font-weight: 400; color: var(--it-muted); margin-left: 4px;
+}
+
+/* ── Remove-sheet control, right end of the tab bar ── */
+.it-form ::deep .it-tabs-end { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 4px; }

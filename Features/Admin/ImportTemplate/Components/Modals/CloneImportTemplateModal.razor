@@ -35,7 +35,7 @@
                         @foreach (var s in Subds) { <option value="@s.SubDistributorId">@s.Display</option> }
                     </select>
                 }
-                <Input Label="Template Name" @bind-Value="_dto.TemplateName" Placeholder="Optional: give the new template a name" />
+                <Input Label="Template Name" @bind-Value="_dto.TemplateName" Placeholder="Ex: Sales Invoice - Starwide" AddOptionalText="true"/>
             </div>
             <div class="modal-footer"> 
                 <button class="btn btn-outline-secondary" @onclick="OnCancel" disabled="@IsSaving">Cancel</button>

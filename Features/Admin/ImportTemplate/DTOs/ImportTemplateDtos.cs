@@ -86,7 +86,7 @@ public sealed class ImportTemplateEditDto
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
 
-    public bool AllowGlobalFallback { get; set; } = true;
+    public bool AllowGlobalFallback { get; set; } = false;
     public bool IsActive { get; set; } = true;
 
     /// <summary>Loaded from the database; the service uses it to bump the version on save.</summary>

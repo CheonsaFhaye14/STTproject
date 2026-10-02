@@ -6,9 +6,9 @@
 @inject STTproject.Services.IUserContextService UserContext
 @using STTproject.Features.User.SalesInvoice.Components.Modals
 
-<div class="card mb-3">
-    <div class="card-header">3. Try it with a file</div>
-    <div class="card-body">
+<FormSection Icon="ti ti-flask" Title="Try it with a file"
+             Summary="Check the template against a real Excel or CSV file"
+             IsExpanded="false">
         <div class="form-text mb-2">
             Nothing is imported or saved. This uses the template exactly as it is on screen right now.
         </div>
@@ -161,8 +161,7 @@
                 </div>
             }
         }
-    </div>
-</div>
+</FormSection>
 
 <ImportSalesInvoiceResults Show="_showImport"
                            ImportResult="_importResult"

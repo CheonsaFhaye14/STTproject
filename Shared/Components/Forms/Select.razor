@@ -23,9 +23,12 @@
         disabled="@Disabled"
         @ref="SelectElement">
 
-    <option value="" selected="@(string.IsNullOrEmpty(SelectedValue))">
-        @(Placeholder ?? "-- Select an option --")
-    </option>
+    @if (ShowPlaceholder)
+    {
+        <option value="" selected="@(string.IsNullOrEmpty(SelectedValue))">
+            @(Placeholder ?? "-- Select an option --")
+        </option>
+    }
 
     @foreach (var item in Items)
     {
@@ -63,6 +66,7 @@
 </style>
 
 @code {
+    [Parameter] public bool ShowPlaceholder { get; set; } = true;
     [Parameter] public string? Label { get; set; }
     [Parameter] public string? Placeholder { get; set; }
     [Parameter] public bool Required { get; set; }

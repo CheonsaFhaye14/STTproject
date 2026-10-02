@@ -7,7 +7,7 @@
 @inject IImportTemplateService TemplateService
 @inject STTproject.Services.IUserContextService UserContextService
 @inject NavigationManager Nav
-
+  <link href="css/import-templates.css" rel="stylesheet" />
 <div class="mb-3">
     <a href="/admin/import-templates" class="small">← Back to templates</a>
     <h3 class="mb-0">@(IsNew ? "New import template" : "Edit import template")</h3>
@@ -42,7 +42,7 @@ else
             </span>
         </div>
     }
-
+<div class="it-form">
     <TemplateInfo Model="_model"
                   Subds="_subds"
                   Principals="_principals"
@@ -52,9 +52,9 @@ else
 
     <SheetColumnsInfo Model="_model" IsGlobal="_isGlobal" />
 
-    <TemplateTester Model="_model" />
-
-    <div class="d-flex gap-2">
+    <TemplateTester Model="_model" Subds="_subds" />
+</div>
+    <div class="d-flex justify-content-end gap-2">
         <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving" Title="@(_saving ? "Saving..." : "Save the template")"></Button>
         <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
     </div>

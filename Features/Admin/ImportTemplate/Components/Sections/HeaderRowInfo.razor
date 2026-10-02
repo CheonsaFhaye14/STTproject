@@ -1,32 +1,25 @@
 @foreach (var c in Columns)
 {
+    var testing = _testing.Contains(c.RowKey);
     <div class="col-card" @key="c.RowKey">
 
-        @* ── Line 1: what is this column, and which field does it feed ── *@
         <div class="row g-2 align-items-end">
-            <div class="col-md-4">
-                <Input TValue="string"
-                       Label="Header in the file"
-                       Placeholder="e.g. Invoice No."
-                       @bind-Value="c.HeaderText" />
+            <div class="col-md-5">
+                <Input TValue="string" Label="Header in the file" Placeholder="Invoice No." @bind-Value="c.HeaderText" />
             </div>
-
-            <div class="col-md-4">
-                <AutoComplete TItem="FieldOption"
-                              Label="System field"
-                              Placeholder="Choose a field…"
-                              Items="_fields"
-                              ValueSelector="f => f.Key"
-                              TextSelector="f => f.Display"
-                              SelectedValue="@c.FieldKey"
-                              SelectedValueChanged="v => OnFieldChanged(c, v)" />
+            <div class="col-md-5">
+                <AutoComplete TItem="FieldOption" Label="System field" Placeholder="Choose a field…"
+                            Items="_fields" ValueSelector="f => f.Key" TextSelector="f => f.Display"
+                            SelectedValue="@c.FieldKey" SelectedValueChanged="v => OnFieldChanged(c, v)" />
             </div>
-
-            <div class="col-md-2 text-end">
-                <Button Variant="ButtonVariant.IconActionDelete"
-                        Icon="fa-solid fa-trash"
-                        Tooltip="Remove this column"
-                        OnClick="() => RemoveColumn(c)" />
+            <div class="col-md-2 d-flex justify-content-end align-items-center gap-2">
+                @if (!string.IsNullOrEmpty(c.FieldKey))
+                {
+                    <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-flask" Tooltip="Test this column"
+                            OnClick="() => ToggleTest(c)" Active="@testing" />
+                }
+                <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
+                        Tooltip="Remove this column" OnClick="() => RemoveColumn(c)" />
             </div>
         </div>
 
@@ -34,100 +27,57 @@
         {
             @if (Choices(c) is { } choices)
             {
-                <div class="mt-2">
+                <div class="it-strip mt-2">
                     <label class="form-label">What the file says → what it means</label>
                     @{ var map = GetMap(c); }
                     @for (var i = 0; i < map.Count; i++)
                     {
                         var idx = i;
                         <div class="row g-2 align-items-end mb-1" @key="idx">
-                            <div class="col-md-4">
-                                <input value="@map[idx].From" placeholder="e.g. Free"
-                                    @onchange="e => SetFrom(c, idx, e.Value?.ToString())" />
+                            <div class="col-md-5">
+                                <input value="@map[idx].From" placeholder="Free" @onchange="e => SetFrom(c, idx, e.Value?.ToString())" />
                             </div>
                             <div class="col-auto pb-2">→</div>
-                            <div class="col-md-3">
-                                <Select TItem="RuleOption"
-                                        Placeholder="Choose…"
-                                        Items="ChoiceOptions(choices)"
-                                        ValueSelector="r => r.Value"
-                                        TextSelector="r => r.Text"
-                                        SelectedValue="@map[idx].To"
-                                        SelectedValueChanged="v => SetTo(c, idx, v)" />
+                            <div class="col-md-4">
+                                <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
+                                        ValueSelector="r => r.Value" TextSelector="r => r.Text"
+                                        SelectedValue="@map[idx].To" SelectedValueChanged="v => SetTo(c, idx, v)" />
                             </div>
                             <div class="col-auto">
-                                <Button Variant="ButtonVariant.IconActionDelete"
-                                        Icon="fa-solid fa-trash"
-                                        Tooltip="Remove"
-                                        OnClick="() => RemoveMapRow(c, idx)" />
+                                <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
+                                        Tooltip="Remove" OnClick="() => RemoveMapRow(c, idx)" />
                             </div>
                         </div>
                     }
-
                     <div class="row g-2 align-items-end mb-2">
-                        <div class="col-md-4 pb-2"><em>Anything else</em></div>
+                        <div class="col-md-5 pb-2"><em>Anything else</em></div>
                         <div class="col-auto pb-2">→</div>
-                        <div class="col-md-3">
-                            <Select TItem="RuleOption"
-                                    Placeholder="Choose…"
-                                    Items="ChoiceOptions(choices)"
-                                    ValueSelector="r => r.Value"
-                                    TextSelector="r => r.Text"
-                                    SelectedValue="@Otherwise(c)"
-                                    SelectedValueChanged="v => SetOtherwise(c, v)" />
+                        <div class="col-md-4">
+                            <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
+                                    ValueSelector="r => r.Value" TextSelector="r => r.Text"
+                                    SelectedValue="@Otherwise(c)" SelectedValueChanged="v => SetOtherwise(c, v)" />
                         </div>
                     </div>
-
                     <Button Variant="ButtonVariant.Secondary" Title="+ Add value" OnClick="() => AddMapRow(c)" />
                     <div class="form-text">@ImportFieldRegistry.GetField(ImportType, c.FieldKey)?.Note</div>
                 </div>
             }
             else
             {
-                <div class="col-md-4">
-                    @if (IsDate(c))
-                    {
-                        <Select TItem="RuleOption"
-                                Label="Date format in the file"
-                                Placeholder="Detect automatically"
-                                Items="DateFormats"
-                                ValueSelector="r => r.Value"
-                                TextSelector="r => r.Text"
-                                SelectedValue="@(c.OptionsJson ?? string.Empty)"
-                                SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
-                    }
-                    else
-                    {
-                        <Select TItem="RuleOption"
-                                Label="How to read it"
-                                Placeholder="Use as is"
-                                Items="RuleOptions"
-                                ValueSelector="r => r.Value"
-                                TextSelector="r => r.Text"
-                                SelectedValue="@RuleValue(c)"
-                                SelectedValueChanged="v => OnRuleChanged(c, v)" />
-                    }
-                </div>
-            }
-
-            <div class="read-row mt-2">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-4">
-                        <Input TValue="string"
-                               Label="Example from the file"
-                               Placeholder="e.g. 00123 - ABC STORE"
-                               Value="@GetSample(c)"
-                               ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Result</label>
-                        @if (string.IsNullOrWhiteSpace(GetSample(c)))
+                <div class="row g-2 mt-1">
+                    <div class="col-md-6">
+                        @if (IsDate(c))
                         {
-                            <div class="result-box text-muted">Type an example to see the result</div>
+                            <Select TItem="RuleOption" Label="Date format in the file" Placeholder="Detect automatically"
+                                    Items="DateFormats" ValueSelector="r => r.Value" TextSelector="r => r.Text"
+                                    SelectedValue="@(c.OptionsJson ?? string.Empty)"
+                                    SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
                         }
                         else
                         {
-                            <div class="result-box">@PreviewText(c)</div>
+                            <Select TItem="RuleOption" Label="How to read it" Placeholder="Use as is"
+                                    Items="RuleOptions" ValueSelector="r => r.Value" TextSelector="r => r.Text"
+                                    SelectedValue="@RuleValue(c)" SelectedValueChanged="v => OnRuleChanged(c, v)" />
                         }
                     </div>
                 </div>
@@ -135,65 +85,46 @@
                 @if (c.RuleType == ColumnRuleTypes.Regex)
                 {
                     <div class="row g-2 mt-1">
-                        <div class="col-md-8">
-                            <Input TValue="string"
-                                   Label="Pattern"
-                                   Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
+                        <div class="col-md-12">
+                            <Input TValue="string" Label="Pattern" Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
                                    @bind-Value="c.OptionsJson" />
                         </div>
                     </div>
                 }
+            }
 
-                <div class="col-md-2">
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="req-@c.RowKey" @bind="c.IsRequired" />
-                        <label class="form-check-label" for="req-@c.RowKey">Required</label>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="req-@c.RowKey" @bind="c.IsRequired" />
+                <label class="form-check-label" for="req-@c.RowKey">Required</label>
+            </div>
+
+            @if (testing)
+            {
+                <div class="it-strip mt-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-6">
+                            <Input TValue="string" Label="Example from the file" Placeholder="00123 - ABC STORE"
+                                   Value="@GetSample(c)" ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Result</label>
+                            @if (string.IsNullOrWhiteSpace(GetSample(c)))
+                            {
+                                <div class="result-box text-muted">Type an example to see the result</div>
+                            }
+                            else
+                            {
+                                <div class="result-box">@PreviewText(c)</div>
+                            }
+                        </div>
                     </div>
                 </div>
-            </div>
+            }
         }
     </div>
 }
 
 <Button Variant="ButtonVariant.Secondary" Title="+ Add column" OnClick="AddColumn" />
-
-<style>
-    .col-card {
-        border: 1px solid var(--app-border, #E5E3DD);
-        border-radius: 10px;
-        padding: 12px;
-        margin-bottom: 10px;
-        background: #fff;
-    }
-
-    .col-card .form-label {
-        display: block;
-        margin-bottom: .25rem;
-        font-weight: 600;
-    }
-
-    .col-card input:not([type=checkbox]) {
-        display: block;
-        width: 100%;
-        padding: .375rem .75rem;
-        font-size: 1rem;
-        border: 1px solid #ced4da;
-        border-radius: .375rem;
-        background: #fff;
-    }
-
-    .result-box {
-        min-height: 38px;
-        display: flex;
-        align-items: center;
-        padding: 6px 10px;
-        border: 1px dashed #CFCBC0;
-        border-radius: 8px;
-        background: #fff;
-        font-size: 14px;
-        word-break: break-word;
-    }
-</style>
 
 @code {
     [Parameter, EditorRequired] public string ImportType { get; set; } = string.Empty;
@@ -232,7 +163,12 @@
                       .Select(f => new FieldOption(f.Key, f.Display)).ToList()
                   ?? new List<FieldOption>();
     }
+    private readonly HashSet<Guid> _testing = new();
 
+    private void ToggleTest(ImportTemplateColumnEditDto c)
+    {
+        if (!_testing.Remove(c.RowKey)) _testing.Add(c.RowKey);
+    }
     private ImportFieldType TypeOf(string? key) =>
         ImportFieldRegistry.GetField(ImportType, key)?.Type ?? ImportFieldType.Text;
 

@@ -2,8 +2,8 @@
 @using Microsoft.AspNetCore.Components.Web
 
 <span class="btn-tooltip-wrap" @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
-    <button class="btn @VariantClass" @onclick="OnClick" disabled="@Disabled" type="@Type">
-        @if (IconContent != null)
+    <button class="btn @VariantClass @(Active ? "is-active" : "")" @onclick="OnClick" disabled="@Disabled" type="@Type">        
+    @if (IconContent != null)
         {
             <span class="btn-icon" aria-hidden="true">@IconContent</span>
         }
@@ -16,6 +16,7 @@
             <span>@Title</span>
         }
     </button>
+    
     @if (!string.IsNullOrWhiteSpace(Tooltip) && (isHovering || isFocused))
     {
         <span class="btn-tooltip-bubble" role="tooltip"
@@ -203,6 +204,12 @@
         pointer-events: none;
         z-index: 2147483647;
     }
+    .icon-action-btn.is-active
+    {
+        background: #F3EBDD;
+        color: #8A6A34;
+        border-color: #B08D57;
+    }
 </style>
 
 @code {
@@ -214,7 +221,7 @@
     [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Secondary;
     [Parameter] public string Type { get; set; } = "button";
     [Parameter] public string? Tooltip { get; set; }
-
+    [Parameter] public bool Active { get; set; }
     private bool isHovering;
     private bool isFocused;
     private double mouseX;
