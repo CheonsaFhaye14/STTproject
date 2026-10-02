@@ -1,51 +1,38 @@
-<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Clone template</h5>
-                <button type="button" class="btn-close" @onclick="OnCancel"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-muted">
-                    Copies every column from <strong>@Source.ScopeLabel</strong> (@TypeDisplay)
-                    into a new template. Pick who the copy is for.
-                </p>
-
-                @if (Errors.Count > 0)
-                {
-                    <div class="alert alert-danger py-2 small">
-                        <ul class="mb-0 ps-3">
-                            @foreach (var e in Errors) { <li>@e</li> }
-                        </ul>
-                    </div>
-                }
-
-                <label class="form-label">Copy to</label>
-                @if (_scope == ImportScope.Principal)
-                {
-                    <select class="form-select" @bind="_dto.TargetPrincipal">
-                        <option value="">Global default (all principals)</option>
-                        @foreach (var p in Principals) { <option value="@p">@p</option> }
-                    </select>
-                }
-                else
-                {
-                    <select class="form-select" @bind="_dto.TargetSubDistributorId">
-                        <option value="">Global default (all subdistributors)</option>
-                        @foreach (var s in Subds) { <option value="@s.SubDistributorId">@s.Display</option> }
-                    </select>
-                }
-                <Input Label="Template Name" @bind-Value="_dto.TemplateName" Placeholder="Ex: Sales Invoice - Starwide" AddOptionalText="true"/>
-            </div>
-            <div class="modal-footer"> 
-                <button class="btn btn-outline-secondary" @onclick="OnCancel" disabled="@IsSaving">Cancel</button>
-                <button class="btn btn-primary" @onclick="() => OnConfirm.InvokeAsync(_dto)" disabled="@IsSaving">
-                    @(IsSaving ? "Cloning..." : "Clone")
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<Modal ShowModal="true" Width="500px" IconType="ModalIconType.Clone" MaxWidth="100%" MaxHeight="88vh" Subtitle="Clone an existing import template" Title="Clone template" OnClose="OnCancel">
+    <ChildContent>
+        @if (_scope == ImportScope.Principal)
+        {
+            <AutoComplete Label="Copy to principal"
+                          Placeholder="Search for a principal…"
+                          Items="Principals"
+                          ShowAllOnOpen="true"
+                          SelectedValue="@_dto.TargetPrincipal"
+                          SelectedValueChanged="v => _dto.TargetPrincipal = v" />
+        }
+        else
+        {
+            <AutoComplete Label="Copy to subdistributor"
+                          Placeholder="Search for a subdistributor…"
+                          Items="Subds"
+                          ShowAllOnOpen="true"
+                          ValueSelector="s => s.SubDistributorId.ToString()"
+                          TextSelector="s => s.Display"
+                          SelectedValue="@_dto.TargetSubDistributorId?.ToString()"
+                          SelectedValueChanged="v => _dto.TargetSubDistributorId = string.IsNullOrWhiteSpace(v) ? null : int.Parse(v)" />
+        }
+            <Input Label="New template name"
+                Placeholder="Enter a name for the new template"
+                AddOptionalText="true" 
+                @bind-Value="_dto.TemplateName"/>
+    </ChildContent>
+    <FooterContent>
+        <Button Title="Cancel" OnClick="OnCancel" Variant="ButtonVariant.Secondary" />
+        <Button Title="Clone"
+                OnClick="() => OnConfirm.InvokeAsync(_dto)"
+                Disabled="@IsSaving"
+                Variant="ButtonVariant.Primary" />
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter, EditorRequired] public ImportTemplateListItemDto Source { get; set; } = default!;

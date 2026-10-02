@@ -14,5 +14,6 @@ namespace STTproject.Shared.Components.Modals
         UserEdit,
         Ruler,
         ItemView,
+        Clone
     }
 }
