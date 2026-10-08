@@ -206,7 +206,8 @@ public sealed class ImportTemplateFilterDto
     public string? ImportType { get; set; }
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
-    public bool? IsActive { get; set; }                       // null = show all (was true)
+    public bool? IsActive { get; set; }                       
     public string? SearchText { get; set; }
-    public string SortBy { get; set; } = ImportTemplateSortModes.Default;
+    public string SortColumn { get; set; } = "LastChanged";
+    public bool SortAscending { get; set; } = true;
 }

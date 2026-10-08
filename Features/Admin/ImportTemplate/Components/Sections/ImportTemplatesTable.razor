@@ -1,0 +1,419 @@
+@using STTproject.Shared.Components
+@inject IImportTemplateService TemplateService
+@inject STTproject.Services.IUserContextService UserContextService
+@inject NavigationManager Nav
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+
+<div class="clt-page">
+    <div class="clt-layout">
+
+        <aside class="clt-sidebar">
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@_items.Count</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Active</span>
+                    <span class="clt-stat-value clt-stat-active">@_items.Count(t => t.IsActive)</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Inactive</span>
+                    <span class="clt-stat-value clt-stat-inactive">@_items.Count(t => !t.IsActive)</span>
+                </div>
+            </div>
+            <div class="clt-divider"></div>
+
+            @* Search *@
+            <div class="clt-filter-group">
+                <Input @key="@($"search-{filterResetKey}")" TValue="string" Label="Search"
+                    Placeholder="Search..."
+                    Value="@SearchTerm" ValueChanged="OnSearchChanged" />
+            </div>
+
+            @* Status *@
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Status</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                        <input type="radio" name="status" value=""
+                            @onchange="() => OnStatusChanged(string.Empty)"
+                            checked="@(SelectedStatus == "")" />
+                        <span>All</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
+                        <input type="radio" name="status" value="active"
+                            @onchange='() => OnStatusChanged("active")'
+                            checked="@(SelectedStatus == "active")" />
+                        <span>Active</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
+                        <input type="radio" name="status" value="inactive"
+                            @onchange='() => OnStatusChanged("inactive")'
+                            checked="@(SelectedStatus == "inactive")" />
+                        <span>Inactive</span>
+                    </label>
+                </div>
+            </div>
+
+            @* Import type *@
+            <div class="clt-filter-group">
+                <Select @key="@($"type-{filterResetKey}")"
+                        Label="Import type"
+                        Placeholder="All types"
+                        TItem="FilterOption"
+                        Items="ImportTypeOptions"
+                        ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text"
+                        SelectedValue="@(_filter.ImportType ?? string.Empty)"
+                        SelectedValueChanged="OnImportTypeSelected" />
+            </div>
+
+            @* Subdistributor *@
+            <div class="clt-filter-group">
+                <AutoComplete @key="@($"subd-{filterResetKey}")"
+                              Label="Subdistributor"
+                              TItem="SubDistributorOptionDto"
+                              Items="_subds"
+                              ValueSelector="x => x.SubDistributorId.ToString()"
+                              TextSelector="x => x.Display ?? string.Empty"
+                              Placeholder="All subdistributors"
+                              SelectedValue="@(_filter.SubDistributorId?.ToString())"
+                              SelectedItemChanged="OnSubdSelected" />
+            </div>
+
+            @* Principal *@
+            <div class="clt-filter-group">
+                <Select @key="@($"principal-{filterResetKey}")"
+                        Label="Principal"
+                        Placeholder="All principals"
+                        TItem="FilterOption"
+                        Items="PrincipalOptions"
+                        ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text"
+                        SelectedValue="@(_filter.Principal ?? string.Empty)"
+                        SelectedValueChanged="OnPrincipalSelected" />
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+        </aside>
+
+        <main class="clt-main">
+            @if (!string.IsNullOrEmpty(_message))
+            {
+                <p class="@(_messageIsError ? "" : "clt-muted")" style="@(_messageIsError ? "color:#b91c1c" : "")">@_message</p>
+            }
+
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th @onclick='() => SortBy("ImportType")' style="cursor:pointer">Import type @SortIndicator("ImportType")</th>
+                                <th @onclick='() => SortBy("AppliesTo")' style="cursor:pointer">Applies to @SortIndicator("AppliesTo")</th>
+                                <th @onclick='() => SortBy("Columns")' style="cursor:pointer">Columns @SortIndicator("Columns")</th>
+                                <th @onclick='() => SortBy("UsesGlobal")' style="cursor:pointer">Uses global too @SortIndicator("UsesGlobal")</th>
+                                <th @onclick='() => SortBy("Version")' style="cursor:pointer">Version @SortIndicator("Version")</th>
+                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status @SortIndicator("Status")</th>
+                                <th @onclick='() => SortBy("LastChanged")' style="cursor:pointer">Last changed @SortIndicator("LastChanged")</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr><td colspan="8" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
+                            }
+                            else if (_items.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="8" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>@(HasActiveFilters ? "No templates match your filters" : "No templates found")</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var t in _items)
+                                {
+                                    <tr @key="t.ImportTemplateId" class="@(!t.IsActive ? "clt-row-inactive" : "")">
+                                        <td class="clt-name">@(ImportFieldRegistry.Get(t.ImportType)?.Display ?? t.ImportType)</td>
+                                        <td>
+                                            @t.ScopeLabel
+                                            @if (t.IsGlobalDefault)
+                                            {
+                                                <span class="clt-type-badge">default</span>
+                                            }
+                                        </td>
+                                        <td class="clt-muted">@t.ColumnCount</td>
+                                        <td class="clt-muted">@(t.IsGlobalDefault ? "—" : (t.AllowGlobalFallback ? "Yes" : "No"))</td>
+                                        <td class="clt-muted">@t.Version</td>
+                                        <td>
+                                            @if (t.IsActive)
+                                            {
+                                                <span class="clt-status clt-status-active">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clt-status clt-status-inactive">Inactive</span>
+                                            }
+                                        </td>
+                                        <td class="clt-muted">
+                                            @(t.LastChangedDate?.ToLocalTime().ToString("MMM d, yyyy hh:mm tt") ?? "—")
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit" @onclick="() => Edit(t.ImportTemplateId)">Edit</button>
+                                                <button class="clt-btn-edit" @onclick="() => OpenClone(t)">Clone</button>
+                                                @if (t.IsActive)
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-deactivate"
+                                                            @onclick="() => ToggleActiveAsync(t)">
+                                                        Deactivate
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="clt-btn-toggle clt-btn-activate"
+                                                            @onclick="() => ToggleActiveAsync(t)">
+                                                        Activate
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">
+                    Showing @_items.Count template@(_items.Count == 1 ? "" : "s")
+                </span>
+            </div>
+        </main>
+    </div>
+
+    @if (_cloneSource is not null)
+    {
+        <CloneImportTemplateModal Source="_cloneSource" Subds="_subds" Principals="_principals"
+                                  Errors="_cloneErrors" IsSaving="_cloning"
+                                  OnConfirm="ConfirmCloneAsync" OnCancel="CloseClone" />
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+
+    private record FilterOption(string Value, string Text);
+
+    private readonly ImportTemplateFilterDto _filter = new();
+    private List<ImportTemplateListItemDto> _items = new();
+    private List<SubDistributorOptionDto> _subds = new();
+    private List<string> _principals = new();
+
+    private int filterResetKey;
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private string? _message;
+    private bool _messageIsError;
+
+    private ImportTemplateListItemDto? _cloneSource;
+    private List<string> _cloneErrors = new();
+    private bool _cloning;
+
+    private List<FilterOption> ImportTypeOptions =>
+        ImportFieldRegistry.All.Select(d => new FilterOption(d.Type, d.Display)).ToList();
+
+    private List<FilterOption> PrincipalOptions =>
+        _principals.Select(p => new FilterOption(p, p)).ToList();
+
+    private string SelectedStatus => _filter.IsActive switch
+    {
+        true => "active",
+        false => "inactive",
+        _ => ""
+    };
+
+    private string SearchTerm
+    {
+        get => _filter.SearchText ?? string.Empty;
+        set
+        {
+            _filter.SearchText = string.IsNullOrWhiteSpace(value) ? null : value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(_ =>
+            {
+                _ = InvokeAsync(LoadAsync);
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+    private void OnSearchChanged(string? value) => SearchTerm = value ?? string.Empty;
+
+    // Sort is not counted as a filter
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_filter.SearchText) ||
+        !string.IsNullOrEmpty(_filter.ImportType) ||
+        _filter.SubDistributorId.HasValue ||
+        !string.IsNullOrEmpty(_filter.Principal) ||
+        _filter.IsActive.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _subds = await TemplateService.GetSubDistributorsAsync();
+            _principals = await TemplateService.GetPrincipalsAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing import templates: {ex.Message}");
+            isLoading = false;
+        }
+    }
+
+    public async Task LoadAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            _items = await TemplateService.GetListAsync(_filter);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import templates: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate) await OnCountChanged.InvokeAsync(_items.Count);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnStatusChanged(string status)
+    {
+        _filter.IsActive = status switch
+        {
+            "active" => true,
+            "inactive" => false,
+            _ => null
+        };
+        await LoadAsync();
+    }
+
+    private async Task OnImportTypeSelected(string? value)
+    {
+        _filter.ImportType = string.IsNullOrEmpty(value) ? null : value;
+        await LoadAsync();
+    }
+
+    private async Task OnSubdSelected(SubDistributorOptionDto? sd)
+    {
+        int? newValue = sd is { SubDistributorId: > 0 } ? sd.SubDistributorId : null;
+        if (newValue == _filter.SubDistributorId) return;
+        _filter.SubDistributorId = newValue;
+        await LoadAsync();
+    }
+
+    private async Task OnPrincipalSelected(string? value)
+    {
+        _filter.Principal = string.IsNullOrEmpty(value) ? null : value;
+        await LoadAsync();
+    }
+
+    private async Task SortBy(string column)
+    {
+        if (_filter.SortColumn == column)
+            _filter.SortAscending = !_filter.SortAscending;
+        else
+        {
+            _filter.SortColumn = column;
+            _filter.SortAscending = true;
+        }
+        await LoadAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (_filter.SortColumn != column) return string.Empty;
+        return _filter.SortAscending ? " ▲" : " ▼";
+    }
+
+    private async Task ClearFilters()
+    {
+        _debounceTimer?.Dispose();
+        _filter.ImportType = null;
+        _filter.SubDistributorId = null;
+        _filter.Principal = null;
+        _filter.IsActive = null;
+        _filter.SearchText = null;
+        _filter.SortColumn = "ImportType";
+        _filter.SortAscending = true;
+        filterResetKey++;
+        await LoadAsync();
+    }
+
+    private void Edit(int id) => Nav.NavigateTo($"/admin/import-templates/{id}");
+
+    private async Task ToggleActiveAsync(ImportTemplateListItemDto t)
+    {
+        _message = null;
+        _messageIsError = false;
+
+        var userId = UserContextService.UserId ?? 0;
+        var result = await TemplateService.SetActiveAsync(t.ImportTemplateId, !t.IsActive, userId);
+
+        if (result.Success)
+        {
+            _message = t.IsActive ? "Template deactivated." : "Template activated.";
+            await LoadAsync();
+        }
+        else
+        {
+            _message = string.Join(" ", result.Errors);
+            _messageIsError = true;
+        }
+    }
+
+    private void OpenClone(ImportTemplateListItemDto t)
+    {
+        _cloneSource = t;
+        _cloneErrors = new();
+    }
+
+    private void CloseClone() => _cloneSource = null;
+
+    private async Task ConfirmCloneAsync(CloneImportTemplateDto dto)
+    {
+        _cloning = true;
+        _cloneErrors = new();
+
+        var userId = UserContextService.UserId ?? 0;
+        var result = await TemplateService.CloneAsync(dto, userId);
+        _cloning = false;
+
+        if (result.Success)
+        {
+            _cloneSource = null;
+            Nav.NavigateTo($"/admin/import-templates/{result.ImportTemplateId}");
+        }
+        else
+        {
+            _cloneErrors = result.Errors;
+        }
+    }
+}

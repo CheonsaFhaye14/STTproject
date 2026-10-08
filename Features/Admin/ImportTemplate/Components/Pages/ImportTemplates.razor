@@ -1,189 +1,35 @@
 @page "/admin/import-templates"
 @layout STTproject.Shared.Layout.Admin.AdminSideBar
-@inject IImportTemplateService TemplateService
-@inject STTproject.Services.IUserContextService UserContextService
+@using STTproject.Shared.Components
+@using STTproject.Shared.Components.Buttons
 @inject NavigationManager Nav
-
 
 <LoadingOverlay Show="isLoading"
                 Title="Loading Templates…"
                 Subtitle="Please wait while we fetch the latest data."
                 IconClass="fa-solid fa-file-import" />
 
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Import Templates</h1>
+                <p class="clt-page-sub">Tell each import how to read a subdistributor's or principal's file.</p>
+            </div>
+            <Button Title="New template" OnClick="@(() => Nav.NavigateTo("/admin/import-templates/new"))"
+                    Icon="fa-solid fa-plus" Variant="ButtonVariant.Primary" />
+        </div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h3 class="mb-0">Import Templates</h3>
-        <div class="text-muted small">Tell each import how to read a subdistributor's or principal's file.</div>
+        <ImportTemplatesTable OnLoaded="OnTableLoaded" />
     </div>
-    <button class="btn btn-primary" @onclick="NewTemplate">+ New template</button>
 </div>
-
-<ImportTemplateFilters Filter="_filter" Subds="_subds" Principals="_principals"
-                       OnApply="LoadAsync" OnReset="ResetFiltersAsync" />
-
-@if (_message is not null)
-{
-    <div class="alert alert-success py-2">@_message</div>
-}
-@if (_error is not null)
-{
-    <div class="alert alert-danger py-2">@_error</div>
-}
-<div class="text-muted small mb-2">
-    @_items.Count template@(_items.Count == 1 ? "" : "s")
-    @if (_items.Any(t => !t.IsActive))
-    {
-        <text> · @_items.Count(t => !t.IsActive) inactive</text>
-    }
-</div>
-@if (_items.Count == 0)
-{
-    <div class="alert alert-light border">No templates match these filters. Try clearing the search or pressing Reset.</div>
-}
-else
-{
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead>
-                <tr>
-                    <th>Import type</th>
-                    <th>Applies to</th>
-                    <th class="text-center">Columns</th>
-                    <th class="text-center">Uses global too</th>
-                    <th class="text-center">Version</th>
-                    <th>Status</th>
-                    <th>Last changed</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var t in _items)
-                {
-                    <tr @key="t.ImportTemplateId" class="@(t.IsActive ? "" : "text-muted")">
-                        <td>@(ImportFieldRegistry.Get(t.ImportType)?.Display ?? t.ImportType)</td>
-                        <td>
-                            @t.ScopeLabel
-                            @if (t.IsGlobalDefault)
-                            {
-                                <span class="badge bg-secondary ms-1">default</span>
-                            }
-                        </td>
-                        <td class="text-center">@t.ColumnCount</td>
-                        <td class="text-center">@(t.IsGlobalDefault ? "—" : (t.AllowGlobalFallback ? "Yes" : "No"))</td>
-                        <td class="text-center">@t.Version</td>
-                        <td>
-                            <span class="badge @(t.IsActive ? "bg-success" : "bg-secondary")">
-                                @(t.IsActive ? "Active" : "Inactive")
-                            </span>
-                        </td>
-                        <td class="small">@t.LastChangedDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                        <td class="text-end text-nowrap">
-                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(t.ImportTemplateId)">Edit</button>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenClone(t)">Clone</button>
-                            <button class="btn btn-sm @(t.IsActive ? "btn-outline-danger" : "btn-outline-success")"
-                                    @onclick="() => ToggleActiveAsync(t)">
-                                @(t.IsActive ? "Deactivate" : "Activate")
-                            </button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
-
-@if (_cloneSource is not null)
-{
-    <CloneImportTemplateModal Source="_cloneSource" Subds="_subds" Principals="_principals"
-                              Errors="_cloneErrors" IsSaving="_cloning"
-                              OnConfirm="ConfirmCloneAsync" OnCancel="CloseClone" />
-}
 
 @code {
     private bool isLoading = true;
-    private readonly ImportTemplateFilterDto _filter = new();
-    private List<ImportTemplateListItemDto> _items = new();
-    private List<SubDistributorOptionDto> _subds = new();
-    private List<string> _principals = new();
-    private string? _message;
-    private string? _error;
 
-    private ImportTemplateListItemDto? _cloneSource;
-    private List<string> _cloneErrors = new();
-    private bool _cloning;
-
-    protected override async Task OnInitializedAsync()
+    private async Task OnTableLoaded()
     {
-        _subds = await TemplateService.GetSubDistributorsAsync();
-        _principals = await TemplateService.GetPrincipalsAsync();
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        _items = await TemplateService.GetListAsync(_filter);
         isLoading = false;
-    }
-
-    private async Task ResetFiltersAsync()
-    {
-        _filter.ImportType = null;
-        _filter.SubDistributorId = null;
-        _filter.Principal = null;
-        _filter.IsActive = null;                              // was true
-        _filter.SearchText = null;
-        _filter.SortBy = ImportTemplateSortModes.Default;
-        await LoadAsync();
-    }
-
-    private void NewTemplate() => Nav.NavigateTo("/admin/import-templates/new");
-    private void Edit(int id) => Nav.NavigateTo($"/admin/import-templates/{id}");
-
-    private async Task ToggleActiveAsync(ImportTemplateListItemDto t)
-    {
-        _message = null;
-        _error = null;
-
-        var userId = UserContextService.UserId ?? 0;        
-        var result = await TemplateService.SetActiveAsync(t.ImportTemplateId, !t.IsActive, userId);
-
-        if (result.Success)
-        {
-            _message = t.IsActive ? "Template deactivated." : "Template activated.";
-            await LoadAsync();
-        }
-        else
-        {
-            _error = string.Join(" ", result.Errors);
-        }
-    }
-
-    private void OpenClone(ImportTemplateListItemDto t)
-    {
-        _cloneSource = t;
-        _cloneErrors = new();
-    }
-
-    private void CloseClone() => _cloneSource = null;
-
-    private async Task ConfirmCloneAsync(CloneImportTemplateDto dto)
-    {
-        _cloning = true;
-        _cloneErrors = new();
-
-        var userId = UserContextService.UserId ?? 0;
-        var result = await TemplateService.CloneAsync(dto, userId);
-        _cloning = false;
-
-        if (result.Success)
-        {
-            _cloneSource = null;
-            Nav.NavigateTo($"/admin/import-templates/{result.ImportTemplateId}");
-        }
-        else
-        {
-            _cloneErrors = result.Errors;
-        }
+        await InvokeAsync(StateHasChanged);
     }
 }

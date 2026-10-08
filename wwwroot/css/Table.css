@@ -58,7 +58,9 @@
 /* ---------------------------------------------------------- */
 /* Sidebar                                                      */
 /* ---------------------------------------------------------- */
-
+.clt-page .clt-page {
+    padding: 0;
+}
 .clt-sidebar {
     flex: 0 0 240px;
     background: var(--clt-surface);
@@ -701,5 +703,25 @@
 }
 
 .clt-filter-group input::placeholder {
+    color: var(--clt-muted);
+}
+
+/* Price change statuses */
+.clt-stat-pending { color: var(--clt-accent); }
+.clt-stat-overdue { color: #b91c1c; }
+.clt-stat-applied { color: var(--clt-muted); }
+
+.clt-status-pending {
+    background: var(--clt-accent-soft);
+    color: var(--clt-accent);
+}
+
+.clt-status-overdue {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.clt-status-applied {
+    background: var(--clt-canvas);
     color: var(--clt-muted);
 }

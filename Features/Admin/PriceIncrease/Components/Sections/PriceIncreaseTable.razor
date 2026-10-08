@@ -1,15 +1,13 @@
-
 @using STTproject.Features.Admin.PriceIncrease.DTOs
+@using STTproject.Shared.Components
 @using STTproject.Shared.Components.Buttons
 @inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
-<div class="clt-page">
 
+<div class="clt-page">
     <div class="clt-layout">
 
-        <!-- Sidebar -->
         <aside class="clt-sidebar">
-
             <div class="clt-sidebar-stats">
                 <div class="clt-stat">
                     <span class="clt-stat-label">Total</span>
@@ -28,31 +26,23 @@
                     <span class="clt-stat-value clt-stat-applied">@appliedCount</span>
                 </div>
             </div>
-
             <div class="clt-divider"></div>
 
-            <!-- Search -->
+            @* Search *@
             <div class="clt-filter-group">
-                <label class="clt-filter-label">Search</label>
-                <div class="clt-search-wrap">
-                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
-                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                         stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
-                           placeholder="Search…" />
-                </div>
+                <Input TValue="string" Label="Search"
+                    Placeholder="Search..."
+                    Value="@SearchTerm" ValueChanged="OnSearchChanged" />
             </div>
 
-            <!-- Status filter -->
+            @* Status *@
             <div class="clt-filter-group">
                 <label class="clt-filter-label">Status</label>
                 <div class="clt-radio-group">
                     <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
                         <input type="radio" name="status" value=""
-                            @onchange="() => OnFilterChanged(status: string.Empty)" checked="@(SelectedStatus == "")" />
+                            @onchange="() => OnFilterChanged(status: string.Empty)"
+                            checked="@(SelectedStatus == "")" />
                         <span>All</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "pending" ? "selected" : "")">
@@ -76,74 +66,51 @@
                 </div>
             </div>
 
-            <!-- Principal filter -->
+            @* Principal *@
             <div class="clt-filter-group">
-                <label class="clt-filter-label" for="principalFilter">Principal</label>
-                <select id="principalFilter" class="clt-select" value="@SelectedPrincipalId"
-                        @onchange="e => OnFilterChanged(principal: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All Principals</option>
-                    @foreach (var principal in Principals)
-                    {
-                        <option value="@principal" selected="@(SelectedPrincipalId == principal)">
-                            @principal
-                        </option>
-                    }
-                </select>
+                <AutoComplete @key="@($"principal-{filterResetKey}")"
+                        Label="Principal"
+                        Placeholder="All principals"
+                        TItem="FilterOption"
+                        Items="PrincipalOptions"
+                        ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text"
+                        SelectedValue="@SelectedPrincipalId"
+                        SelectedValueChanged="OnPrincipalSelected" />
             </div>
 
             @if (HasActiveFilters)
             {
                 <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
             }
-
         </aside>
 
-        <!-- Main content -->
         <main class="clt-main">
             <div class="clt-table-card">
                 <div class="clt-table-scroll">
                     <table class="clt-table">
                         <thead>
                             <tr>
-                                <th @onclick='() => SortBy("CompanyItemCode")' style="cursor:pointer">
-                                    Company Item Code @SortIndicator("CompanyItemCode")
-                                </th>
-                                <th @onclick='() => SortBy("CompanyItemName")' style="cursor:pointer">
-                                    Company Item Name @SortIndicator("CompanyItemName")
-                                </th>
-                                <th @onclick='() => SortBy("PriceIncreaseAmount")' style="cursor:pointer">
-                                    Price Change Amount @SortIndicator("PriceIncreaseAmount")
-                                </th>
-                                <th @onclick='() => SortBy("EffectivityDate")' style="cursor:pointer">
-                                    Effectivity Date @SortIndicator("EffectivityDate")
-                                </th>
-                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
-                                    Created @SortIndicator("CreatedDate")
-                                </th>
-                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">
-                                    Status @SortIndicator("Status")
-                                </th>
+                                <th @onclick='() => SortBy("CompanyItemCode")' style="cursor:pointer">Company Item Code @SortIndicator("CompanyItemCode")</th>
+                                <th @onclick='() => SortBy("CompanyItemName")' style="cursor:pointer">Company Item Name @SortIndicator("CompanyItemName")</th>
+                                <th @onclick='() => SortBy("PriceIncreaseAmount")' style="cursor:pointer">Price Change Amount @SortIndicator("PriceIncreaseAmount")</th>
+                                <th @onclick='() => SortBy("EffectivityDate")' style="cursor:pointer">Effectivity Date @SortIndicator("EffectivityDate")</th>
+                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">Created @SortIndicator("CreatedDate")</th>
+                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status @SortIndicator("Status")</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (isLoading)
                             {
-                                <tr>
-                                    <td colspan="7" class="clt-empty">
-                                        <div class="clt-empty-inner">
-                                            <p>Loading…</p>
-                                        </div>
-                                    </td>
-                                </tr>
+                                <tr><td colspan="7" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
                             }
                             else if (!PagedPriceIncrease.Any())
                             {
                                 <tr>
                                     <td colspan="7" class="clt-empty">
                                         <div class="clt-empty-inner">
-                                            <p>No company items match your filters</p>
-                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                            <p>@(HasActiveFilters ? "No price changes match your filters" : "No price changes found")</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -158,17 +125,19 @@
                                         <td class="clt-muted">@(priceIncrease.PriceIncreaseAmount?.ToString("N2") ?? "-")</td>
                                         <td class="clt-muted">@(priceIncrease.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")</td>
                                         <td class="clt-muted">@priceIncrease.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
-                                        <td class="clt-muted">
-                                            <span class="clt-status-badge clt-status-@priceIncrease.Status?.ToLowerInvariant()">
+                                        <td>
+                                            <span class="clt-status clt-status-@(priceIncrease.Status?.ToLowerInvariant())">
                                                 @priceIncrease.Status
                                             </span>
                                         </td>
                                         <td>
                                             <div class="clt-actions">
-                                                <Button Variant="ButtonVariant.Primary" Title="View" Onclick="@(() => OnEditPriceIncrease.InvokeAsync(priceIncrease.CompanyItemPriceHistoryId))" />
+                                                <Button Variant="ButtonVariant.Primary" Title="View"
+                                                        OnClick="@(() => OnEditPriceIncrease.InvokeAsync(priceIncrease.CompanyItemPriceHistoryId))" />
                                                 @if (priceIncrease.Status != "Applied")
                                                 {
-                                                    <Button Variant="ButtonVariant.Secondary" Title="Cancel" Onclick="@(() => RequestCancel(priceIncrease.CompanyItemPriceHistoryId))" />
+                                                    <Button Variant="ButtonVariant.Secondary" Title="Cancel"
+                                                            OnClick="@(() => RequestCancel(priceIncrease.CompanyItemPriceHistoryId))" />
                                                 }
                                             </div>
                                         </td>
@@ -181,9 +150,7 @@
             </div>
 
             <div class="clt-footer">
-                <span class="clt-footer-count">
-                    Showing @PagedPriceIncrease.Count of @totalCount company items
-                </span>
+                <span class="clt-footer-count">Showing @PagedPriceIncrease.Count of @totalCount price changes</span>
                 @if (totalPages > 1)
                 {
                     <div class="clt-pagination">
@@ -196,21 +163,46 @@
                 }
             </div>
         </main>
-
     </div>
-        <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Cancellation of price change" Message="@toggleConfirmMessage"
-                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
 
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Cancellation of price change"
+                  Message="@toggleConfirmMessage" OnYes="ConfirmToggle" OnNo="CancelToggle" />
 </div>
 
 @code {
-    [Parameter] public EventCallback<int> OnEditPriceIncrease { get; set; }
     [Parameter] public EventCallback OnLoaded { get; set; }
     [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    [Parameter] public EventCallback<int> OnEditPriceIncrease { get; set; }
+
+    private record FilterOption(string Value, string Text);
+
+    private List<PriceIncreaseTableListDto> PagedPriceIncrease { get; set; } = new();
     private List<string> Principals { get; set; } = new();
-    private static readonly TimeZoneInfo PhTimeZone =
-           TimeZoneInfo.FindSystemTimeZoneById(
-               OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila");
+
+    private List<FilterOption> PrincipalOptions =>
+        Principals.Select(p => new FilterOption(p, p)).ToList();
+
+    private string SelectedStatus { get; set; } = "";
+    private string SelectedPrincipalId { get; set; } = "";
+    private int filterResetKey;
+
+    private string SortColumn { get; set; } = "CreatedDate";
+    private bool SortAscending { get; set; } = true;
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount;
+    private int pendingCount;
+    private int overdueCount;
+    private int appliedCount;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private bool showToggleConfirmModal;
+    private int pendingToggleId;
+    private string toggleConfirmMessage = "";
 
     private string _searchTerm = "";
     private string SearchTerm
@@ -220,38 +212,22 @@
         {
             _searchTerm = value;
             _debounceTimer?.Dispose();
-            _debounceTimer = new System.Threading.Timer(async _ =>
+            _debounceTimer = new System.Threading.Timer(_ =>
             {
-                currentPage = 1;
-                await InvokeAsync(LoadPageAsync); // ← add InvokeAsync here
+                _ = InvokeAsync(async () =>
+                {
+                    currentPage = 1;
+                    await LoadPageAsync();
+                });
             }, null, 400, Timeout.Infinite);
         }
     }
-    private List<PriceIncreaseTableListDto> PagedPriceIncrease { get; set; } = new();
-    private string SelectedPrincipalId { get; set; } = "";
-    private bool showToggleConfirmModal;
-    private int pendingToggleId;
-    private bool pendingToggleStatus;
-    private string toggleConfirmMessage = "";
-
-    [Parameter] public EventCallback<int> OnEditCompanyItem { get; set; }
-    private string SelectedStatus { get; set; } = "";
-
-    private int currentPage = 1;
-    private const int pageSize = 50;
-    private int totalCount = 0;
-    private int pendingCount = 0;
-    private int overdueCount = 0;
-    private int appliedCount = 0;
-    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
-
-    private bool isLoading = true;
-    private System.Threading.Timer? _debounceTimer;
+    private void OnSearchChanged(string? value) => SearchTerm = value ?? string.Empty;
 
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(_searchTerm) ||
-        !string.IsNullOrWhiteSpace(SelectedPrincipalId) ||
-        !string.IsNullOrWhiteSpace(SelectedStatus);
+        !string.IsNullOrEmpty(SelectedStatus) ||
+        !string.IsNullOrEmpty(SelectedPrincipalId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -268,29 +244,19 @@
         {
             Console.WriteLine($"Error loading price changes: {ex.Message}");
             isLoading = false;
-            await InvokeAsync(StateHasChanged);
         }
     }
-    private async Task ConfirmToggle()
-    {
-        showToggleConfirmModal = false;
-        await AdminPriceIncreaseService.CancelPendingIncreaseAsync(companyItemPriceHistoryId: pendingToggleId);
-        var priceIncrease = PagedPriceIncrease.FirstOrDefault(x => x.CompanyItemPriceHistoryId == pendingToggleId);
-        await LoadPageAsync();
 
-    }
     public async Task LoadPageAsync()
     {
         isLoading = true;
         await InvokeAsync(StateHasChanged);
-
         try
         {
-
             var (items, total) = await AdminPriceIncreaseService.GetPagedAsync(
-                            currentPage, pageSize, _searchTerm, SelectedStatus,
-                            SelectedPrincipalId,
-                            SortColumn, SortAscending); // ← add these
+                currentPage, pageSize, _searchTerm, SelectedStatus,
+                SelectedPrincipalId,
+                SortColumn, SortAscending);
 
             PagedPriceIncrease = items.ToList();
             totalCount = total;
@@ -307,32 +273,41 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading page: {ex.Message}");
+            Console.WriteLine($"Error loading price changes: {ex.Message}");
         }
         finally
         {
             isLoading = false;
             await InvokeAsync(StateHasChanged);
-            if (OnCountChanged.HasDelegate)
-                await OnCountChanged.InvokeAsync(totalCount);
-            if (OnLoaded.HasDelegate)
-                await OnLoaded.InvokeAsync();
+            if (OnCountChanged.HasDelegate) await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
         }
     }
 
-    private async Task RequestCancel( int companyItemPriceHistoryId)
-    {
-        pendingToggleId = companyItemPriceHistoryId;
-        toggleConfirmMessage = "Are you sure you want to cancel this price change?";
-        showToggleConfirmModal = true;
-    }
-
-    private async Task OnFilterChanged(string? status = null, string? principal = null)
+    private async Task OnFilterChanged(string? status = null)
     {
         if (status != null) SelectedStatus = status;
-        if (principal != null) SelectedPrincipalId = principal;
-
         currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task OnPrincipalSelected(string? value)
+    {
+        SelectedPrincipalId = value ?? string.Empty;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _debounceTimer?.Dispose();
+        _searchTerm = "";
+        SelectedStatus = "";
+        SelectedPrincipalId = "";
+        SortColumn = "CreatedDate";
+        SortAscending = true;
+        currentPage = 1;
+        filterResetKey++;
         await LoadPageAsync();
     }
 
@@ -342,29 +317,21 @@
         await LoadPageAsync();
     }
 
-    private async Task ClearFilters()
+    private void RequestCancel(int companyItemPriceHistoryId)
     {
-        _searchTerm = "";
-        SelectedPrincipalId = "";
-        SelectedStatus = "";
-        currentPage = 1;
-        await LoadPageAsync();
-    }
-
-    private void SetActive(int id, bool isActive)
-    {
-        pendingToggleId = id;
-        pendingToggleStatus = isActive;
-        toggleConfirmMessage = isActive
-            ? "Are you sure you want to activate this company item?"
-            : "Are you sure you want to deactivate this company item?";
+        pendingToggleId = companyItemPriceHistoryId;
+        toggleConfirmMessage = "Are you sure you want to cancel this price change?";
         showToggleConfirmModal = true;
     }
 
+    private async Task ConfirmToggle()
+    {
+        showToggleConfirmModal = false;
+        await AdminPriceIncreaseService.CancelPendingIncreaseAsync(companyItemPriceHistoryId: pendingToggleId);
+        await LoadPageAsync();
+    }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "CreatedDate";
-    private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)
     {
@@ -381,11 +348,7 @@
 
     private string SortIndicator(string column)
     {
-        if (SortColumn != column)
-        {
-            return string.Empty;
-        }
-
+        if (SortColumn != column) return string.Empty;
         return SortAscending ? " ▲" : " ▼";
     }
 }

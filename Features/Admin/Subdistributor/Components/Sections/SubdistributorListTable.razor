@@ -1,15 +1,12 @@
-@using STTproject.Features.Admin.Customers.Services
 @using STTproject.Features.Admin.Subdistributor.DTOs
+@using STTproject.Shared.Components
 @inject STTproject.Features.Admin.Subdistributor.Services.IAdminSubDistributorService AdminSubDistributorService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
 <div class="clt-page">
-
     <div class="clt-layout">
 
-        <!-- Sidebar -->
         <aside class="clt-sidebar">
-
             <div class="clt-sidebar-stats">
                 <div class="clt-stat">
                     <span class="clt-stat-label">Total</span>
@@ -24,43 +21,35 @@
                     <span class="clt-stat-value clt-stat-inactive">@inactiveCount</span>
                 </div>
             </div>
-
             <div class="clt-divider"></div>
 
-            <!-- Search -->
+            @* Search *@
             <div class="clt-filter-group">
-                <label class="clt-filter-label">Search</label>
-                <div class="clt-search-wrap">
-                    <svg class="clt-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
-                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                         stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <input class="clt-search-input" type="text" @bind:event="oninput" @bind="SearchTerm"
-                           placeholder="Search…" />
-                </div>
+                <Input TValue="string" Label="Search"
+                    Placeholder="Search..."
+                    Value="@SearchTerm" ValueChanged="OnSearchChanged" />
             </div>
 
-            <!-- Status filter -->
+            @* Status *@
             <div class="clt-filter-group">
                 <label class="clt-filter-label">Status</label>
                 <div class="clt-radio-group">
                     <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
                         <input type="radio" name="status" value=""
-                               @onchange="() => OnFilterChanged(status: string.Empty)" checked="@(SelectedStatus == "")" />
+                            @onchange="() => OnFilterChanged(status: string.Empty)"
+                            checked="@(SelectedStatus == "")" />
                         <span>All</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
                         <input type="radio" name="status" value="active"
-                               @onchange='() => OnFilterChanged(status: "active")'
-                               checked="@(SelectedStatus == "active")" />
+                            @onchange='() => OnFilterChanged(status: "active")'
+                            checked="@(SelectedStatus == "active")" />
                         <span>Active</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
                         <input type="radio" name="status" value="inactive"
-                               @onchange='() => OnFilterChanged(status: "inactive")'
-                               checked="@(SelectedStatus == "inactive")" />
+                            @onchange='() => OnFilterChanged(status: "inactive")'
+                            checked="@(SelectedStatus == "inactive")" />
                         <span>Inactive</span>
                     </label>
                 </div>
@@ -70,52 +59,33 @@
             {
                 <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
             }
-
         </aside>
 
-        <!-- Main content -->
         <main class="clt-main">
             <div class="clt-table-card">
                 <div class="clt-table-scroll">
                     <table class="clt-table">
                         <thead>
                             <tr>
-                                <th @onclick='() => SortBy("SubdCode")' style="cursor:pointer">
-                                    Code @SortIndicator("SubdCode")
-                                </th>
-                                <th @onclick='() => SortBy("SubdName")' style="cursor:pointer">
-                                    Name @SortIndicator("SubdName")
-                                </th>
-                                <th @onclick='() => SortBy("EncoderName")' style="cursor:pointer">
-                                    Encoder @SortIndicator("EncoderName")
-                                </th>
-                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">
-                                    Created @SortIndicator("CreatedDate")
-                                </th>
-                                <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">
-                                    Status @SortIndicator("IsActive")
-                                </th>
+                                <th @onclick='() => SortBy("SubdCode")' style="cursor:pointer">Code @SortIndicator("SubdCode")</th>
+                                <th @onclick='() => SortBy("SubdName")' style="cursor:pointer">Name @SortIndicator("SubdName")</th>
+                                <th @onclick='() => SortBy("EncoderName")' style="cursor:pointer">Encoder @SortIndicator("EncoderName")</th>
+                                <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">Created @SortIndicator("CreatedDate")</th>
+                                <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">Status @SortIndicator("IsActive")</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (isLoading)
                             {
-                                <tr>
-                                    <td colspan="8" class="clt-empty">
-                                        <div class="clt-empty-inner">
-                                            <p>Loading…</p>
-                                        </div>
-                                    </td>
-                                </tr>
+                                <tr><td colspan="6" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
                             }
                             else if (!PagedSubDistributors.Any())
                             {
                                 <tr>
-                                    <td colspan="8" class="clt-empty">
+                                    <td colspan="6" class="clt-empty">
                                         <div class="clt-empty-inner">
-                                            <p>No subdistributors match your filters</p>
-                                            <button class="clt-clear-btn" @onclick="ClearFilters">Clear filters</button>
+                                            <p>@(HasActiveFilters ? "No subdistributors match your filters" : "No subdistributors found")</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -128,9 +98,7 @@
                                         <td><span class="clt-code">@subd.SubdCode</span></td>
                                         <td class="clt-name">@subd.SubdName</td>
                                         <td class="clt-muted">@(subd.EncoderName ?? "Not Set")</td>
-                                        <td class="clt-muted">
-                                            @subd.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
-                                        </td>
+                                        <td class="clt-muted">@subd.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
                                         <td>
                                             @if (subd.IsActive)
                                             {
@@ -144,16 +112,22 @@
                                         <td>
                                             <div class="clt-actions">
                                                 <button class="clt-btn-edit"
-                                                        @onclick="() => OnEditSubDistributor.InvokeAsync(subd.SubDistributorId)">Edit</button>
+                                                        @onclick="() => OnEditSubDistributor.InvokeAsync(subd.SubDistributorId)">
+                                                    Edit
+                                                </button>
                                                 @if (subd.IsActive)
                                                 {
                                                     <button class="clt-btn-toggle clt-btn-deactivate"
-                                                            @onclick="() => SetActive(subd.SubDistributorId, false)">Deactivate</button>
+                                                            @onclick="() => SetActive(subd.SubDistributorId, false)">
+                                                        Deactivate
+                                                    </button>
                                                 }
                                                 else
                                                 {
                                                     <button class="clt-btn-toggle clt-btn-activate"
-                                                            @onclick="() => SetActive(subd.SubDistributorId, true)">Activate</button>
+                                                            @onclick="() => SetActive(subd.SubDistributorId, true)">
+                                                        Activate
+                                                    </button>
                                                 }
                                             </div>
                                         </td>
@@ -166,9 +140,7 @@
             </div>
 
             <div class="clt-footer">
-                <span class="clt-footer-count">
-                    Showing @PagedSubDistributors.Count of @totalCount subdistributors
-                </span>
+                <span class="clt-footer-count">Showing @PagedSubDistributors.Count of @totalCount subdistributors</span>
                 @if (totalPages > 1)
                 {
                     <div class="clt-pagination">
@@ -181,10 +153,10 @@
                 }
             </div>
         </main>
-
     </div>
-    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change" Message="@toggleConfirmMessage"
-                  OnYes="ConfirmToggle" OnNo="CancelToggle" />
+
+    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Status Change"
+                  Message="@toggleConfirmMessage" OnYes="ConfirmToggle" OnNo="CancelToggle" />
 </div>
 
 @code {
@@ -194,6 +166,28 @@
 
     private List<SubDistributorListDto> PagedSubDistributors { get; set; } = new();
 
+    private string SelectedStatus { get; set; } = "";
+    // Not shown in the UI; kept because the service still takes it
+    private string SelectedProvince { get; set; } = "";
+
+    private string SortColumn { get; set; } = "CreatedDate";
+    private bool SortAscending { get; set; } = true;
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount;
+    private int activeCount;
+    private int inactiveCount;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private bool showToggleConfirmModal;
+    private int pendingToggleId;
+    private bool pendingToggleStatus;
+    private string toggleConfirmMessage = "";
+
     private string _searchTerm = "";
     private string SearchTerm
     {
@@ -202,36 +196,21 @@
         {
             _searchTerm = value;
             _debounceTimer?.Dispose();
-            _debounceTimer = new System.Threading.Timer(async _ =>
+            _debounceTimer = new System.Threading.Timer(_ =>
             {
-                currentPage = 1;
-                await InvokeAsync(LoadPageAsync);
+                _ = InvokeAsync(async () =>
+                {
+                    currentPage = 1;
+                    await LoadPageAsync();
+                });
             }, null, 400, Timeout.Infinite);
         }
     }
-
-    private bool showToggleConfirmModal;
-    private int pendingToggleId;
-    private bool pendingToggleStatus;
-    private string toggleConfirmMessage = "";
-
-    private string SelectedProvince { get; set; } = "";
-    private string SelectedStatus { get; set; } = "";
-
-    private int currentPage = 1;
-    private const int pageSize = 50;
-    private int totalCount = 0;
-    private int activeCount = 0;
-    private int inactiveCount = 0;
-    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
-
-    private bool isLoading = true;
-    private System.Threading.Timer? _debounceTimer;
+    private void OnSearchChanged(string? value) => SearchTerm = value ?? string.Empty;
 
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(_searchTerm) ||
-        !string.IsNullOrWhiteSpace(SelectedProvince) ||
-        !string.IsNullOrWhiteSpace(SelectedStatus);
+        !string.IsNullOrEmpty(SelectedStatus);
 
     protected override async Task OnInitializedAsync()
     {
@@ -243,7 +222,6 @@
         {
             Console.WriteLine($"Error loading subdistributors: {ex.Message}");
             isLoading = false;
-            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -251,7 +229,6 @@
     {
         isLoading = true;
         await InvokeAsync(StateHasChanged);
-
         try
         {
             var (items, total) = await AdminSubDistributorService.GetPagedAsync(
@@ -270,24 +247,31 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading page: {ex.Message}");
+            Console.WriteLine($"Error loading subdistributors: {ex.Message}");
         }
         finally
         {
             isLoading = false;
             await InvokeAsync(StateHasChanged);
-            if (OnCountChanged.HasDelegate)
-                await OnCountChanged.InvokeAsync(totalCount);
-            if (OnLoaded.HasDelegate)
-                await OnLoaded.InvokeAsync();
+            if (OnCountChanged.HasDelegate) await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
         }
     }
 
-    private async Task OnFilterChanged(string? status = null, string? province = null)
+    private async Task OnFilterChanged(string? status = null)
     {
         if (status != null) SelectedStatus = status;
-        if (province != null) SelectedProvince = province;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
 
+    private async Task ClearFilters()
+    {
+        _debounceTimer?.Dispose();
+        _searchTerm = "";
+        SelectedStatus = "";
+        SortColumn = "CreatedDate";
+        SortAscending = true;
         currentPage = 1;
         await LoadPageAsync();
     }
@@ -298,18 +282,8 @@
         await LoadPageAsync();
     }
 
-    private async Task ClearFilters()
-    {
-        _searchTerm = "";
-        SelectedProvince = "";
-        SelectedStatus = "";
-        currentPage = 1;
-        await LoadPageAsync();
-    }
-
     private void SetActive(int id, bool isActive)
     {
-        Console.WriteLine($"SetActive called with id: {id}, isActive: {isActive}");
         pendingToggleId = id;
         pendingToggleStatus = isActive;
         toggleConfirmMessage = isActive
@@ -328,8 +302,6 @@
     }
 
     private void CancelToggle() => showToggleConfirmModal = false;
-    private string SortColumn { get; set; } = "CreatedDate";
-    private bool SortAscending { get; set; } = true;
 
     private async Task SortBy(string column)
     {

@@ -45,20 +45,31 @@ public sealed class ImportTemplateService : IImportTemplateService
                     (t.SubDistributor.SubdCode.Contains(term) || t.SubDistributor.SubdName.Contains(term))));
         }
 
-        IOrderedQueryable<TemplateEntity> ordered = f.SortBy switch
+        var asc = f.SortAscending;
+
+        IOrderedQueryable<TemplateEntity> ordered = f.SortColumn switch
         {
-            ImportTemplateSortModes.NameAsc =>
-                q.OrderBy(t => t.TemplateName),
-            ImportTemplateSortModes.AppliesTo =>
-                q.OrderBy(t => t.SubDistributor != null ? t.SubDistributor.SubdCode : (t.Principal ?? "")),
-            ImportTemplateSortModes.NewestChanged =>
-                q.OrderByDescending(t => t.UpdatedDate ?? t.CreatedDate),
-            ImportTemplateSortModes.OldestChanged =>
-                q.OrderBy(t => t.UpdatedDate ?? t.CreatedDate),
-            ImportTemplateSortModes.MostColumns =>
-                q.OrderByDescending(t => t.ImportTemplateColumns.Count),
-            _ =>
-                q.OrderBy(t => t.ImportType).ThenBy(t => t.SubDistributorId).ThenBy(t => t.Principal)
+            "AppliesTo" => asc
+                ? q.OrderBy(t => t.SubDistributor != null ? t.SubDistributor.SubdCode : (t.Principal ?? ""))
+                : q.OrderByDescending(t => t.SubDistributor != null ? t.SubDistributor.SubdCode : (t.Principal ?? "")),
+            "Columns" => asc
+                ? q.OrderBy(t => t.ImportTemplateColumns.Count)
+                : q.OrderByDescending(t => t.ImportTemplateColumns.Count),
+            "UsesGlobal" => asc
+                ? q.OrderBy(t => t.AllowGlobalFallback)
+                : q.OrderByDescending(t => t.AllowGlobalFallback),
+            "Version" => asc
+                ? q.OrderBy(t => t.Version)
+                : q.OrderByDescending(t => t.Version),
+            "Status" => asc
+                ? q.OrderBy(t => t.IsActive)
+                : q.OrderByDescending(t => t.IsActive),
+            "LastChanged" => asc
+                ? q.OrderByDescending(t => t.UpdatedDate ?? t.CreatedDate)
+                : q.OrderBy(t => t.UpdatedDate ?? t.CreatedDate),
+            _ => asc
+                ? q.OrderBy(t => t.ImportType).ThenBy(t => t.SubDistributorId).ThenBy(t => t.Principal)
+                : q.OrderByDescending(t => t.ImportType).ThenByDescending(t => t.SubDistributorId).ThenByDescending(t => t.Principal)
         };
 
         return await ordered
