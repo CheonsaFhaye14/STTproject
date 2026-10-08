@@ -1,0 +1,35 @@
+@page "/admin/salesinvoice/deleted"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@using STTproject.Features.Admin.SalesInvoice.Components.Sections
+@using STTproject.Shared.Components
+@inject NavigationManager Nav
+
+<LoadingOverlay Show="isLoading"
+                Title="Loading deleted invoices…"
+                Subtitle="Please wait while we load the archive."
+                IconClass="fa-solid fa-file-invoice" />
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Deleted Sales Invoices</h1>
+                <p class="clt-page-sub">Archived deletions. Restore a whole batch to bring its invoices back.</p>
+            </div>
+            <Button Title="Back to invoices" OnClick="@(() => Nav.NavigateTo("/admin/salesinvoice"))"
+                    Icon="fa-solid fa-arrow-left" Variant="ButtonVariant.Secondary" />
+        </div>
+
+        <DeletedInvoiceTable OnLoaded="OnTableLoaded" />
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+
+    private async Task OnTableLoaded()
+    {
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+}

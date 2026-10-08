@@ -38,6 +38,10 @@
                             {
                                 <span class="group-empty"></span>
                             }
+                            else if (!ViewMode && CellTemplate is not null && TemplateColumns.Contains(col))
+                            {
+                                @CellTemplate((item, col))
+                            }
                             else if (editable)
                             {
                                 <input value="@GetEditableValue(item, col)"
@@ -104,6 +108,8 @@
 
 @code
 {
+    [Parameter] public RenderFragment<(TItem Item, string Column)>? CellTemplate { get; set; }
+    [Parameter] public List<string> TemplateColumns { get; set; } = new();
     [Parameter] public List<TItem> Items { get; set; } = new();
     [Parameter] public List<string> Columns { get; set; } = new();
     [Parameter] public Dictionary<string, string> ColumnLabels { get; set; } = new();

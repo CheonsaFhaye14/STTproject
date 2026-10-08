@@ -54,13 +54,28 @@ public interface IAdminSalesInvoiceService
         int updatedByUserId,
         CancellationToken cancellationToken = default);
 
-    Task<DeleteSalesInvoiceResult> DeleteSalesInvoiceAsync(
-        int salesInvoiceId,
-        CancellationToken cancellationToken = default);
-
     // User
     Task<string?> GetUserNameByIdAsync(int? userId);
 
-    // In IAdminSalesInvoiceService:
+    Task<DeleteSalesInvoiceResult> DeleteSalesInvoiceAsync(
+        int salesInvoiceId, int deletedByUserId, CancellationToken ct = default);
 
+    Task<BatchDeleteResult> DeleteSelectedAsync(
+        IReadOnlyCollection<int> invoiceIds, int deletedByUserId, CancellationToken ct = default);
+
+    Task<int> CountForBatchDeleteAsync(
+        int subDistributorId, int year, int month, CancellationToken cancellationToken = default);
+
+    Task<BatchDeleteResult> DeleteBatchAsync(
+        int subDistributorId, int year, int month, int deletedByUserId, CancellationToken ct = default);
+
+    Task<(List<DeletedBatchRow> Items, int Total)> GetDeletedBatchesPagedAsync(
+    int page, int pageSize, string? type, string? status, int? subDistributorId,
+    CancellationToken ct = default);
+
+    Task<(List<DeletedInvoiceDetailRow> Items, int Total)> GetDeletedBatchInvoicesPagedAsync(
+        int deletionBatchId, int page, int pageSize, string? search, CancellationToken ct = default);
+
+    Task<RestoreBatchResult> RestoreBatchAsync(
+        int deletionBatchId, int restoredByUserId, CancellationToken ct = default);
 }

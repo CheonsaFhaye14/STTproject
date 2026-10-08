@@ -1,0 +1,166 @@
+@using STTproject.Features.Admin.SalesInvoice.DTOs
+@using STTproject.Shared.Components
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+
+<Modal ShowModal="true" Width="900px" MaxWidth="100%" MaxHeight="88vh"
+       Title="@($"Deleted Batch #{Batch.DeletionBatchId}")"
+       OnClose="Close">
+    <ChildContent>
+
+        <FormSection Icon="ti ti-info-circle" Title="Batch Information"
+                     Summary="@($"{Batch.DeletionType} • {Batch.InvoiceCount:N0} invoice(s) • {Batch.Status}")"
+                     Expandable="true" IsExpanded="true">
+            <ChildContent>
+                <div class="form-group"><Input Label="Type" Disabled="true" Value="@Batch.DeletionType" /></div>
+                <div class="form-group"><Input Label="Subdistributor" Disabled="true" Value="@Batch.SubdName" /></div>
+                <div class="form-group"><Input Label="Period" Disabled="true" Value="@Batch.Period" /></div>
+                <div class="form-group"><Input Label="Invoices" Disabled="true" Value="@Batch.InvoiceCount.ToString("N0")" /></div>
+                <div class="form-group"><Input Label="Deleted By" Disabled="true" Value="@(Batch.DeletedByName ?? "—")" /></div>
+                <div class="form-group">
+                    <Input Label="Deleted Date" Disabled="true"
+                           Value="@Batch.DeletedDate.ToLocalTime().ToString("MMM d, yyyy hh:mm tt")" />
+                </div>
+                @if (Batch.RestoredDate.HasValue)
+                {
+                    <div class="form-group"><Input Label="Restored By" Disabled="true" Value="@(Batch.RestoredByName ?? "—")" /></div>
+                    <div class="form-group">
+                        <Input Label="Restored Date" Disabled="true"
+                               Value="@Batch.RestoredDate.Value.ToLocalTime().ToString("MMM d, yyyy hh:mm tt")" />
+                    </div>
+                }
+            </ChildContent>
+        </FormSection>
+
+        <div class="clt-search-wrap" style="margin:.75rem 0">
+            <input class="clt-search-input" type="text" placeholder="Search invoice code, then press Enter…"
+                   @bind="search" @bind:event="onchange" @bind:after="SearchAsync" />
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="clt-muted">Loading invoices…</p>
+        }
+        else if (!invoices.Any())
+        {
+            <p class="clt-muted">No invoices found.</p>
+        }
+        else
+        {
+            @foreach (var inv in invoices)
+            {
+                <FormSection @key="inv.DeletedSalesInvoiceId" Icon="ti ti-file-invoice"
+                             Title="@inv.SalesInvoiceCode"
+                             Summary="@($"{inv.SalesInvoiceDate:MMM d, yyyy} • {inv.CustomerName} • {inv.OrderType} • {inv.Items.Count} item(s) • {inv.TotalAmount:N2}")"
+                             Expandable="true" IsExpanded="@(invoices.Count == 1)">
+                    <ChildContent>
+                        <div class="form-group"><Input Label="Customer" Disabled="true" Value="@inv.CustomerName" /></div>
+                        <div class="form-group"><Input Label="Invoice Date" Disabled="true" Value="@inv.SalesInvoiceDate.ToString("MMM d, yyyy")" /></div>
+                        <div class="form-group"><Input Label="Order Type" Disabled="true" Value="@inv.OrderType" /></div>
+                        <div class="form-group"><Input Label="Salesman" Disabled="true" Value="@(inv.SalesMan ?? "—")" /></div>
+
+                        <div class="clt-table-scroll">
+                            <table class="clt-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th><th>UOM</th><th>Qty</th><th>Unit Price</th><th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in inv.Items)
+                                    {
+                                        <tr>
+                                            <td>@item.ItemCode - @item.ItemName</td>
+                                            <td>@item.UomName</td>
+                                            <td>@item.Quantity</td>
+                                            <td>@item.UnitPrice.ToString("N2")</td>
+                                            <td>@item.Amount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="4" style="text-align:right"><strong>Total</strong></td>
+                                        <td><strong>@inv.TotalAmount.ToString("N2")</strong></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </ChildContent>
+                </FormSection>
+            }
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">Showing @invoices.Count of @total.ToString("N0") invoices</span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(page == 1)" @onclick="() => GoToPage(page - 1)">←</button>
+                        <span>Page @(page) of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(page >= totalPages)" @onclick="() => GoToPage(page + 1)">→</button>
+                    </div>
+                }
+            </div>
+        }
+    </ChildContent>
+
+    <FooterContent>
+        <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Close"></Button>
+        @if (Batch.Status == "Deleted" && OnRestore.HasDelegate)
+        {
+            <Button Title="Restore batch" Variant="ButtonVariant.Primary" OnClick="RestoreClicked"></Button>
+        }
+    </FooterContent>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public DeletedBatchRow Batch { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<DeletedBatchRow> OnRestore { get; set; }
+
+    private const int pageSize = 20;
+    private List<DeletedInvoiceDetailRow> invoices = new();
+    private string? search;
+    private int page = 1;
+    private int total;
+    private bool isLoading = true;
+    private int totalPages => (int)Math.Ceiling(total / (double)pageSize);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var (items, count) = await SalesInvoiceService.GetDeletedBatchInvoicesPagedAsync(
+                Batch.DeletionBatchId, page, pageSize, search);
+            invoices = items;
+            total = count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading deleted batch invoices: {ex.Message}");
+            invoices = new();
+            total = 0;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        page = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoToPage(int p)
+    {
+        page = p;
+        await LoadAsync();
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+    private Task RestoreClicked() => OnRestore.InvokeAsync(Batch);
+}

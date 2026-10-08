@@ -1,0 +1,308 @@
+@using STTproject.Features.Admin.SalesInvoice.DTOs
+@using STTproject.Shared.Components
+@using STTproject.Features.Admin.SalesInvoice.Components.Modals
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+@inject STTproject.Services.IUserContextService UserContextService
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+
+<div class="clt-page">
+    <div class="clt-layout">
+
+        <aside class="clt-sidebar">
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@totalCount</span>
+                </div>
+            </div>
+            <div class="clt-divider"></div>
+
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="delStatus">Status</label>
+                <select id="delStatus" class="clt-select" value="@statusFilter"
+                        @onchange="e => OnFilterChanged(status: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All</option>
+                    <option value="Deleted">Deleted</option>
+                    <option value="Restored">Restored</option>
+                </select>
+            </div>
+
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="delType">Type of deletion</label>
+                <select id="delType" class="clt-select" value="@typeFilter"
+                        @onchange="e => OnFilterChanged(type: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All</option>
+                    <option value="Individual">Individual</option>
+                    <option value="Selected">Selected</option>
+                    <option value="Batch">Batch</option>
+                </select>
+            </div>
+
+            <div class="clt-filter-group">
+                <label class="clt-filter-label" for="delSubd">Subdistributor</label>
+                <select id="delSubd" class="clt-select" value="@(subdFilter?.ToString() ?? "")"
+                        @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
+                    <option value="">All subdistributors</option>
+                    @foreach (var sd in SubDistributors)
+                    {
+                        <option value="@sd.Id">@(sd.Name ?? "—")</option>
+                    }
+                </select>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+        </aside>
+
+        <main class="clt-main">
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <p class="@(messageIsError ? "" : "clt-muted")" style="@(messageIsError ? "color:#b91c1c" : "")">@message</p>
+            }
+
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                <th>Batch ID</th>
+                                <th>Type</th>
+                                <th>Subdistributor</th>
+                                <th>Period</th>
+                                <th>Invoices</th>
+                                <th>Deleted By</th>
+                                <th>Deleted Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr><td colspan="9" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
+                            }
+                            else if (!Batches.Any())
+                            {
+                                <tr>
+                                    <td colspan="9" class="clt-empty">
+                                        <div class="clt-empty-inner">
+                                            <p>@(HasActiveFilters ? "No deleted batches match your filters" : "No deleted invoices")</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var b in Batches)
+                                {
+                                    <tr>
+                                        <td><span class="clt-code">#@b.DeletionBatchId</span></td>
+                                        <td><span class="clt-type-badge">@b.DeletionType</span></td>
+                                        <td class="clt-name">@b.SubdName</td>
+                                        <td class="clt-muted">@b.Period</td>
+                                        <td>@b.InvoiceCount.ToString("N0")</td>
+                                        <td class="clt-muted">@(b.DeletedByName ?? "—")</td>
+                                        <td class="clt-muted">@b.DeletedDate.ToLocalTime().ToString("MMM d, yyyy hh:mm tt")</td>
+                                        <td>
+                                            <span class="clt-type-badge">@b.Status</span>
+                                            @if (b.RestoredDate.HasValue)
+                                            {
+                                                <div class="clt-muted">
+                                                    @(b.RestoredByName ?? "—"), @b.RestoredDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit" @onclick="() => viewBatch = b">View</button>
+                                                @if (b.Status == "Deleted")
+                                                {
+                                                    <button class="clt-btn-edit" disabled="@isRestoring"
+                                                            @onclick="() => AskRestore(b)">
+                                                        Restore
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="clt-footer">
+                <span class="clt-footer-count">Showing @Batches.Count of @totalCount batches</span>
+                @if (totalPages > 1)
+                {
+                    <div class="clt-pagination">
+                        <button class="clt-page-btn" disabled="@(currentPage == 1)"
+                                @onclick="() => GoToPage(currentPage - 1)">←</button>
+                        <span>Page @currentPage of @totalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                                @onclick="() => GoToPage(currentPage + 1)">→</button>
+                    </div>
+                }
+            </div>
+        </main>
+    </div>
+
+    <ConfirmModal Show="showRestoreConfirm" Title="Confirm Restore"
+                  Message="@restoreMessage" OnYes="ConfirmRestore" OnNo="() => showRestoreConfirm = false" />
+
+    @if (viewBatch is not null)
+    {
+        <DeletedBatchModal @key="viewBatch.DeletionBatchId"
+                        Batch="viewBatch"
+                        OnClose="() => viewBatch = null"
+                        OnRestore="RestoreFromModal" />
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback OnRestored { get; set; }
+
+    private List<DeletedBatchRow> Batches { get; set; } = new();
+    private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
+    private DeletedBatchRow? viewBatch;
+
+    private string statusFilter = "";
+    private string typeFilter = "";
+    private int? subdFilter;
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private bool isRestoring;
+
+    private bool showRestoreConfirm;
+    private DeletedBatchRow? pendingRestore;
+    private string restoreMessage = "";
+
+    private string? message;
+    private bool messageIsError;
+
+    private int? CurrentUserId => UserContextService.UserId;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrEmpty(statusFilter) || !string.IsNullOrEmpty(typeFilter) || subdFilter.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var subds = await SalesInvoiceService.GetSubDistributorsAsync();
+            SubDistributors = subds.Select(sd => (sd.SubDistributorId, (string?)sd.SubdName)).ToList();
+            await LoadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing deleted invoices: {ex.Message}");
+            isLoading = false;
+        }
+    }
+
+    public async Task LoadPageAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var (items, total) = await SalesInvoiceService.GetDeletedBatchesPagedAsync(
+                currentPage, pageSize, typeFilter, statusFilter, subdFilter);
+            Batches = items;
+            totalCount = total;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading deleted batches: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnFilterChanged(string? status = null, string? type = null, string? subdId = null)
+    {
+        if (status != null) statusFilter = status;
+        if (type != null) typeFilter = type;
+        if (subdId != null)
+            subdFilter = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        statusFilter = typeFilter = "";
+        subdFilter = null;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private void RestoreFromModal(DeletedBatchRow b)
+    {
+        viewBatch = null;   // close the details modal before the confirm opens
+        AskRestore(b);
+    }
+
+    private void AskRestore(DeletedBatchRow b)
+    {
+        pendingRestore = b;
+        restoreMessage = $"Restore batch #{b.DeletionBatchId} ({b.InvoiceCount:N0} sales invoice(s))? " +
+                         "They will be added back to the sales invoice list.";
+        showRestoreConfirm = true;
+    }
+
+    private async Task ConfirmRestore()
+    {
+        showRestoreConfirm = false;
+        if (pendingRestore is null) return;
+
+        if (CurrentUserId is not int userId)
+        {
+            message = "Could not determine the current user.";
+            messageIsError = true;
+            return;
+        }
+
+        isRestoring = true;
+        try
+        {
+            var result = await SalesInvoiceService.RestoreBatchAsync(pendingRestore.DeletionBatchId, userId);
+
+            messageIsError = !result.IsRestored;
+            message = result.IsRestored
+                ? $"Restored {result.RestoredCount:N0} sales invoice(s) from batch #{pendingRestore.DeletionBatchId}."
+                : result.ErrorMessage;
+
+            if (result.IsRestored)
+            {
+                await LoadPageAsync();
+                if (OnRestored.HasDelegate) await OnRestored.InvokeAsync();
+            }
+        }
+        finally
+        {
+            isRestoring = false;
+            pendingRestore = null;
+        }
+    }
+}

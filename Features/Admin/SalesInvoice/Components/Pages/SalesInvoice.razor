@@ -3,6 +3,8 @@
 @using STTproject.Features.Admin.SalesInvoice.Components.Modals
 @using STTproject.Features.Admin.SalesInvoice.Components.Sections
 @using STTproject.Shared.Components
+@inject NavigationManager Nav
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
 
 <LoadingOverlay Show="isLoading"
                       Title="Loading sales invoices…"
@@ -18,6 +20,12 @@
                 <h1 class="clt-page-title">Sales Invoices</h1>
                 <p class="clt-page-sub">@totalCount total sales invoices</p>
             </div>
+            <Button Title="Deleted invoices"
+            OnClick="@(() => Nav.NavigateTo("/admin/salesinvoice/deleted"))"
+            Icon="fa-solid fa-trash-can-arrow-up"
+            Variant="ButtonVariant.Secondary" />
+            <Button Title="Batch delete" OnClick="() => showBatchDelete = true">
+            </Button>
             <Button Title="Import invoices"
                     OnClick="@(() => showImportModal = true)"
                     Icon="fa-solid fa-file-arrow-up"
@@ -49,6 +57,11 @@
             <AddSalesInvoice @ref="addInvoiceModal" SalesInvoiceId="editInvoiceId" onCancel="CancelAddModal"
                              OnRequestConfirm="OpenConfirmModal" />
         }
+        <BatchDelete Show="showBatchDelete"
+                  SubDistributors="subDistributors"
+                  AvailableYears="availableYears"
+                  OnClose="() => showBatchDelete = false"
+                  OnDeleted="OnImportCompletedAsync" />
 
     </div>
 </div>
@@ -113,7 +126,30 @@
 
     private async Task OnImportCompletedAsync()
     {
+        await LoadBatchDeleteOptionsAsync();
         if (invoiceTable is not null)
             await invoiceTable.LoadPageAsync();
+    }
+
+    private bool showBatchDelete = false;
+    private List<(int Id, string? Name)> subDistributors = new();
+    private List<int> availableYears = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBatchDeleteOptionsAsync();
+    }
+
+    private async Task LoadBatchDeleteOptionsAsync()
+    {
+        var subdTask = SalesInvoiceService.GetSubDistributorsAsync();
+        var datesTask = SalesInvoiceService.GetAvailableInvoiceMonthsAsync();
+        await Task.WhenAll(subdTask, datesTask);
+
+        subDistributors = subdTask.Result
+            .Select(sd => (sd.SubDistributorId, (string?)sd.SubdName)).ToList();
+
+        availableYears = datesTask.Result
+            .Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
     }
 }

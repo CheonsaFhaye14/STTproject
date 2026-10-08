@@ -160,3 +160,79 @@ public sealed class SalesInvoiceSubDistributorDropdownItem
     public int SubDistributorId { get; init; }
     public string? SubdName { get; init; }
 }
+
+public record BatchDeleteResult(bool IsDeleted, int DeletedCount, string? ErrorMessage = null);
+
+// ─── Deleted invoices (archive) ──────────────────────────────────────────────
+public sealed class DeletedBatchRaw
+{
+    public int DeletionBatchId { get; set; }
+    public string DeletionType { get; set; } = string.Empty;
+    public int? SubDistributorId { get; set; }
+    public int? PeriodYear { get; set; }
+    public int? PeriodMonth { get; set; }
+    public int InvoiceCount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int DeletedBy { get; set; }
+    public DateTime DeletedDate { get; set; }
+    public int? RestoredBy { get; set; }
+    public DateTime? RestoredDate { get; set; }
+}
+
+public sealed class DeletedBatchRow
+{
+    public int DeletionBatchId { get; init; }
+    public string DeletionType { get; init; } = string.Empty;
+    public string SubdName { get; init; } = "—";
+    public string Period { get; init; } = "—";
+    public int InvoiceCount { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string? DeletedByName { get; init; }
+    public DateTime DeletedDate { get; init; }
+    public string? RestoredByName { get; init; }
+    public DateTime? RestoredDate { get; init; }
+}
+
+public sealed class DeletedInvoiceHeaderRaw
+{
+    public int DeletedSalesInvoiceId { get; set; }
+    public string SalesInvoiceCode { get; set; } = string.Empty;
+    public DateTime SalesInvoiceDate { get; set; }
+    public int CustomerId { get; set; }
+    public string OrderType { get; set; } = string.Empty;
+    public string? SalesMan { get; set; }
+}
+
+public sealed class DeletedInvoiceItemRaw
+{
+    public int DeletedSalesInvoiceItemId { get; set; }
+    public int DeletedSalesInvoiceId { get; set; }
+    public int SubdItemId { get; set; }
+    public int ItemsUomId { get; set; }
+    public int Quantity { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public sealed class DeletedInvoiceItemRow
+{
+    public string ItemCode { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public string UomName { get; init; } = string.Empty;
+    public int Quantity { get; init; }
+    public decimal UnitPrice { get; init; }   // derived: Amount / Quantity
+    public decimal Amount { get; init; }
+}
+
+public sealed class DeletedInvoiceDetailRow
+{
+    public int DeletedSalesInvoiceId { get; init; }
+    public string SalesInvoiceCode { get; init; } = string.Empty;
+    public DateOnly SalesInvoiceDate { get; init; }
+    public string CustomerName { get; init; } = "—";
+    public string OrderType { get; init; } = string.Empty;
+    public string? SalesMan { get; init; }
+    public List<DeletedInvoiceItemRow> Items { get; init; } = new();
+    public decimal TotalAmount => Items.Sum(i => i.Amount);
+}
+
+public record RestoreBatchResult(bool IsRestored, int RestoredCount, string? ErrorMessage = null);

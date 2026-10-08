@@ -1,225 +1,169 @@
 ﻿@using STTproject.Features.Admin.SalesInvoice.DTOs
 @using STTproject.Shared.Components
+@using STTproject.Features.Admin.SalesInvoice.Validators
 @inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
 @inject STTproject.Services.IUserContextService UserContextService
-@using STTproject.Features.Admin.SalesInvoice.Validators
 
-<link rel="stylesheet" href="css/modal.css" asp-append-version="true" />
-<div class="modal-overlay">
-    <div class="modal-box modal-box--wide">
-        <div class="modal-header">
-            <h3>@(isEdit ? (isViewMode ? "View Sales Invoice" : "Edit Sales Invoice") : "Add New Sales Invoice")</h3>
-        </div>
 
-        <div class="modal-body">
+<Modal ShowModal="true" Width="900px" MaxWidth="100%" MaxHeight="88vh"
+       Title="@(isEdit ? (isViewMode ? "View Sales Invoice" : "Edit Sales Invoice") : "Add New Sales Invoice")"
+       IconType="@(isEdit ? (isViewMode ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
+       OnClose="Cancel">
+    <ChildContent>
 
-            <div class="form-group">
-                <label>Subdistributor <span class="required-asterisk">*</span></label>
-                <GenericAutocomplete TItem="SalesInvoiceSubDistributorDropdownItem" @ref="subdAutocomplete"
-                                     Items="SubDistributors" @bind-Value="SelectedSubDistributorName"
-                                     ItemLabel="@(sd => sd.SubdName ?? string.Empty)" OnSelected="OnSubDistributorSelected"
-                                     Placeholder="Search subdistributor..." IsDisabled="@isViewMode" />
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)</span>
-                }
-            </div>
+        <FormSection Icon="ti ti-file-invoice" Title="Invoice Information"
+                     Summary="@GetInvoiceInfoSummary()" Expandable="true" IsExpanded="true">
+            <ChildContent>
+                <div class="form-group">
+                    <AutoComplete Label="Subdistributor" Placeholder="Search subdistributor..."
+                                  TItem="SalesInvoiceSubDistributorDropdownItem" Required="true"
+                                  Items="SubDistributors"
+                                  ValueSelector="x => x.SubDistributorId.ToString()"
+                                  TextSelector="x => x.SubdName ?? string.Empty"
+                                  SelectedValue="@(SubDistributorId.ToString())"
+                                  SelectedItemChanged="OnSubDistributorSelected"
+                                  Disabled="@isViewMode"
+                                  ShowError="@ShowValidationErrors"
+                                  ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)" />
+                </div>
 
-            <div class="form-group">
-                <label>Invoice Code <span class="required-asterisk">*</span></label>
-                <input @bind="SalesInvoiceCode" disabled="@isViewMode" />
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)</span>
-                }
-            </div>
+                <div class="form-group">
+                    <Input Label="Invoice Code" Required="true" @bind-Value="SalesInvoiceCode"
+                           Disabled="@isViewMode" Placeholder="Enter invoice code..."
+                           ShowError="@ShowValidationErrors"
+                           ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)" />
+                </div>
 
-            <div class="form-group">
-                <label>Invoice Date <span class="required-asterisk">*</span></label>
-                <input type="date" @bind="SalesInvoiceDate" disabled="@isViewMode" />
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>Customer <span class="required-asterisk">*</span></label>
-                <GenericAutocomplete TItem="SalesInvoiceCustomerDropdownItem" @ref="customerAutocomplete"
-                                     Items="Customers" @bind-Value="SelectedCustomerName"
-                                     ItemLabel="@(c => $"{c.CustomerCode} – {c.CustomerName}")" OnSelected="OnCustomerSelected"
-                                     Placeholder="Search customer..." IsDisabled="@isViewMode" />
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.Customer)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.Customer)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>Order Type <span class="required-asterisk">*</span></label>
-                <select @bind="OrderType" @bind:after="OnOrderTypeChanged" disabled="@isViewMode">
-                    <option value="">— select —</option>
-                    <option value="Invoice">Invoice</option>
-                    <option value="Credit">Credit</option>
-                </select>
-                @if (ShowValidationErrors &&
-                !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.OrderType)))
-                {
-                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.OrderType)</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label>Salesman</label>
-                <input @bind="SalesMan" disabled="@isViewMode" />
-            </div>
-
-            <h4>Items</h4>
-
-            @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.Items)))
-            {
-                <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.Items)</span>
-            }
-
-            <table class="clt-table">
-                <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th>UOM</th>
-                        <th>Qty</th>
-                        <th>Unit Price</th>
-                        <th>Amount</th>
-                        @if (!isViewMode)
-                        {
-                            <th></th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var line in LineItems)
+                <div class="form-group">
+                    <label>Invoice Date <span class="required-asterisk">*</span></label>
+                    <input type="date" @bind="SalesInvoiceDate" disabled="@isViewMode" />
+                    @if (ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)))
                     {
-                        <tr>
-                            <td>
-                                @if (isViewMode)
-                                {
-                                    <span>@line.ItemName</span>
-                                }
-                                else
-                                {
-                                    <GenericAutocomplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
-                                                        @bind-Value="line.ItemSearchText"
-                                                        ItemLabel="@(i => $"{i.SubdItemCode} - {i.ItemName}")"
-                                                        OnSelected="item => OnItemSelected(line, item)" Placeholder="Search item..." />
-                                }
-                            </td>
-                            <td>
-                                @if (isViewMode)
-                                {
-                                    <span>@line.UomName</span>
-                                }
-                                else
-                                {
-                                    <select @bind="line.SelectedUomId" @bind:after="() => OnUomChanged(line)"
-                                            disabled="@(!line.AvailableUoms.Any())">
-                                        <option value="0">— UOM —</option>
-                                        @foreach (var uom in line.AvailableUoms)
-                                        {
-                                            <option value="@uom.ItemsUomId">@uom.UomName</option>
-                                        }
-                                    </select>
-                                }
-                            </td>
-                            <td>
-                                @if (isViewMode)
-                                {
-                                    <span>@line.Quantity</span>
-                                }
-                                else
-                                {
-                                    <input type="number" min="1" @bind="line.Quantity" @bind:after="() => RecalcLine(line)" />
-                                }
-                            </td>
-                            <td>@line.UnitPrice.ToString("N2")</td>
-                            <td>@line.Amount.ToString("N2")</td>
-                            @if (!isViewMode)
-                            {
-                                <td>
-                                    <button class="clt-btn-delete" @onclick="() => RemoveLine(line)">✕</button>
-                                </td>
-                            }
-                        </tr>
+                        <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)</span>
                     }
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="@(isViewMode ? 4 : 5)" style="text-align:right"><strong>Total</strong></td>
-                        <td><strong>@LineItems.Sum(l => l.Amount).ToString("N2")</strong></td>
-                        @if (!isViewMode)
+                </div>
+
+                <div class="form-group">
+                    <AutoComplete Label="Customer" Placeholder="Search customer..."
+                                  TItem="SalesInvoiceCustomerDropdownItem" Required="true"
+                                  Items="Customers"
+                                  ValueSelector="x => x.CustomerId.ToString()"
+                                  TextSelector='x => $"{x.CustomerCode} – {x.CustomerName}"'
+                                  SelectedValue="@(CustomerId.ToString())"
+                                  SelectedItemChanged="OnCustomerSelected"
+                                  Disabled="@isViewMode"
+                                  ShowError="@ShowValidationErrors"
+                                  ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.Customer)" />
+                </div>
+
+                <div class="form-group">
+                    <Select Label="Order Type" Required="true" Items="@OrderTypeOptions"
+                            SelectedValue="@OrderType" SelectedValueChanged="OnOrderTypeSelected"
+                            Placeholder="-- Select Order Type --" Disabled="@isViewMode"
+                            ShowError="@(ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.OrderType)))"
+                            ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.OrderType)" />
+                </div>
+
+                <div class="form-group">
+                    <Input Label="Salesman" @bind-Value="SalesMan" Disabled="@isViewMode"
+                           Placeholder="Enter salesman..." />
+                </div>
+            </ChildContent>
+        </FormSection>
+
+        <FormSection Icon="ti ti-clipboard-list" Title="Items" Summary="@GetItemsSummary()"
+                     Expandable="true" IsExpanded="true">
+            <ChildContent>
+                <AddTable @key="tableKey" TItem="LineItemModel"
+                          Items="LineItems"
+                          Columns="LineColumns"
+                          ColumnLabels="LineColumnLabels"
+                          EditableColumns="LineEditableColumns"
+                          TemplateColumns="LineTemplateColumns"
+                          ColumnInputTypes="LineColumnInputTypes"
+                          DisplayValueSelector="GetLineDisplayValue"
+                          OnCellChanged="HandleLineCellChanged"
+                          ViewMode="isViewMode"
+                          Disabled="isSubmitting"
+                          AddButtonVisible="!isViewMode"
+                          AddTableButtonText="+ Add item"
+                          OnAdd="AddLine"
+                          RemoveButtonVisible="!isViewMode"
+                          RemoveButtonDisabled="isSubmitting"
+                          OnRemove="HandleLineRemoved"
+                          ShowError="true"
+                          ErrorSelector="@(idx => GetLineError(idx))"
+                          GeneralErrorText="@GetFieldError(SalesInvoiceValidator.Fields.Items)">
+                    <CellTemplate Context="cell">
+                        @if (cell.Column == nameof(LineItemModel.ItemSearchText))
                         {
-                            <td></td>
+                            <AutoComplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
+                                          Placeholder="Search SKU / item..."
+                                          ValueSelector="x => x.SubdItemId.ToString()"
+                                          TextSelector='x => $"{x.SubdItemCode} - {x.ItemName}"'
+                                          SelectedValue="@(cell.Item.SubdItemId == 0 ? string.Empty : cell.Item.SubdItemId.ToString())"
+                                          SelectedItemChanged="@(item => OnRowItemSelected(cell.Item, item))" />
                         }
-                    </tr>
-                </tfoot>
-            </table>
+                        else if (cell.Column == nameof(LineItemModel.UomName))
+                        {
+                            <AutoComplete @key="@($"uom-{cell.Item.SubdItemId}")"
+                                          TItem="SalesInvoiceUomOption" Items="cell.Item.AvailableUoms"
+                                          Placeholder="Select UOM" ShowAllOnOpen="true"
+                                          Disabled="@(!cell.Item.AvailableUoms.Any())"
+                                          ValueSelector="x => x.ItemsUomId.ToString()"
+                                          TextSelector="x => x.UomName"
+                                          SelectedValue="@(cell.Item.SelectedUomId == 0 ? string.Empty : cell.Item.SelectedUomId.ToString())"
+                                          SelectedItemChanged="@(uom => OnRowUomSelected(cell.Item, uom))" />
+                        }
+                    </CellTemplate>
+                </AddTable>
 
-            @if (!isViewMode)
-            {
-                <button class="clt-btn-edit" style="margin-top:.5rem" @onclick="AddLine">+ Add Item</button>
-            }
-
-            
-            @if (isEdit && isViewMode)
-            {
-                <h4>Audit Information</h4>
-
-                <div class="form-group">
-                    <label>Created Date</label>
-                    <input value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                <div style="text-align:right; margin-top:.5rem">
+                    <strong>Total: @LineItems.Sum(l => l.Amount).ToString("N2")</strong>
                 </div>
+            </ChildContent>
+        </FormSection>
 
-                <div class="form-group">
-                    <label>Created By</label>
-                    <input value="@(CreatedByName ?? "—")" disabled />
-                </div>
-
-                @if (UpdatedDate.HasValue)
-                {
+        @if (isViewMode)
+        {
+            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="true">
+                <ChildContent>
+                    @if (CreatedByName != null)
+                    {
+                        <div class="form-group"><Input Label="Created By" Disabled="true" Value="@CreatedByName" /></div>
+                    }
                     <div class="form-group">
-                        <label>Updated Date</label>
-                        <input value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" disabled />
+                        <Input Label="Created Date" Disabled="true" Value="@CreatedDate.ToString("MMM d, yyyy hh:mm tt")" />
                     </div>
+                    @if (UpdatedByName != null)
+                    {
+                        <div class="form-group"><Input Label="Updated By" Disabled="true" Value="@UpdatedByName" /></div>
+                    }
+                    @if (UpdatedDate.HasValue)
+                    {
+                        <div class="form-group">
+                            <Input Label="Updated Date" Disabled="true" Value="@UpdatedDate.Value.ToString("MMM d, yyyy hh:mm tt")" />
+                        </div>
+                    }
+                </ChildContent>
+            </FormSection>
+        }
+    </ChildContent>
 
-                    <div class="form-group">
-                        <label>Updated By</label>
-                        <input value="@(UpdatedByName ?? "—")" disabled />
-                    </div>
-                }
-            }
-
-            <div class="action-buttons">
-                @if (isEdit && isViewMode)
-                {
-                    <button @onclick="EnableEdit">Edit</button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Close</button>
-                }
-                else
-                {
-                    <button @onclick="Submit" disabled="@isSubmitting">
-                        @(isSubmitting
-                            ? (isEdit ? "Saving..." : "Creating...")
-                            : (isEdit ? "Save Changes" : "Create Invoice"))
-                    </button>
-                    <button @onclick="Cancel" disabled="@isSubmitting">Cancel</button>
-                }
-            </div>
-
-        </div>
-    </div>
-</div>
+    <FooterContent>
+        @if (isEdit && isViewMode)
+        {
+            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+            <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
+        }
+        else
+        {
+            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Invoice"))"
+                    Variant="ButtonVariant.Primary" OnClick="Submit" Disabled="@isSubmitting"></Button>
+        }
+    </FooterContent>
+</Modal>
 
 @code {
     // ── Parameters ────────────────────────────────────────────────────────────
@@ -236,13 +180,10 @@
     private bool isEdit => SalesInvoiceId.HasValue;
     private bool isSubmitting = false;
     private bool ShowValidationErrors = false;
+    private int tableKey;
     private Dictionary<string, string> Errors { get; set; } = new();
 
     private int? CurrentUserId => UserContextService.UserId;
-
-    // ── Autocomplete refs ─────────────────────────────────────────────────────
-    private GenericAutocomplete<SalesInvoiceSubDistributorDropdownItem>? subdAutocomplete;
-    private GenericAutocomplete<SalesInvoiceCustomerDropdownItem>? customerAutocomplete; // ← add this back
 
     // ── Dropdown data ─────────────────────────────────────────────────────────
     private List<SalesInvoiceSubDistributorDropdownItem> SubDistributors { get; set; } = new();
@@ -259,7 +200,6 @@
     private string? OrderType { get; set; }
     private string? SalesMan { get; set; }
 
-    
     // ── Audit fields ──────────────────────────────────────────────────────────
     private DateTime CreatedDate { get; set; }
     private DateTime? UpdatedDate { get; set; }
@@ -304,9 +244,7 @@
                 OrderType = detail.OrderType;
                 SalesMan = detail.SalesMan;
 
-                await LoadDropdownsForSubdistributor(
-                    SubDistributorId,
-                    SalesInvoiceDate);
+                await LoadDropdownsForSubdistributor(SubDistributorId, SalesInvoiceDate);
                 CreatedDate = detail.CreatedDate;
                 UpdatedDate = detail.UpdatedDate;
                 CreatedByName = detail.CreatedByName;
@@ -330,16 +268,12 @@
         }
     }
 
-    private async Task LoadDropdownsForSubdistributor(
-        int subdId,
-        DateOnly invoiceDate)
+    private async Task LoadDropdownsForSubdistributor(int subdId, DateOnly invoiceDate)
     {
-        Customers = await SalesInvoiceService
-            .GetCustomersForDropdownAsync(subdId);
-
-        SubdItems = await SalesInvoiceService
-            .GetSubdItemsForDropdownAsync(subdId, invoiceDate);
+        Customers = await SalesInvoiceService.GetCustomersForDropdownAsync(subdId);
+        SubdItems = await SalesInvoiceService.GetSubdItemsForDropdownAsync(subdId, invoiceDate);
     }
+
     // ── Selection handlers ────────────────────────────────────────────────────
     private async Task OnSubDistributorSelected(SalesInvoiceSubDistributorDropdownItem? sd)
     {
@@ -351,7 +285,8 @@
         CustomerId = 0;
         SelectedCustomerName = null;
         LineItems.Clear();
-        await LoadDropdownsForSubdistributor( SubDistributorId, SalesInvoiceDate);        
+        tableKey++;
+        await LoadDropdownsForSubdistributor(SubDistributorId, SalesInvoiceDate);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -361,28 +296,6 @@
         CustomerId = c.CustomerId;
         SelectedCustomerName = $"{c.CustomerCode} – {c.CustomerName}";
         return Task.CompletedTask;
-    }
-
-    private void OnItemSelected(LineItemModel line, SalesInvoiceSubdItemDropdownItem? item)
-    {
-        if (item is null) return;
-        line.SubdItemId = item.SubdItemId;
-        line.ItemSearchText = $"{item.SubdItemCode} - {item.ItemName}";  
-        line.ItemName = item.ItemName;
-        line.AvailableUoms = item.Uoms;
-        line.SelectedUomId = item.Uoms.FirstOrDefault()?.ItemsUomId ?? 0;
-        line.UomName = item.Uoms.FirstOrDefault()?.UomName;
-        line.UnitPrice = ApplySign(item.Uoms.FirstOrDefault()?.Price ?? 0);
-        RecalcLine(line);
-        StateHasChanged();
-    }
-
-    private void OnUomChanged(LineItemModel line)
-    {
-        var uom = line.AvailableUoms.FirstOrDefault(u => u.ItemsUomId == line.SelectedUomId);
-        line.UomName = uom?.UomName;
-        line.UnitPrice = ApplySign(uom?.Price ?? 0);
-        RecalcLine(line);
     }
 
     private static void RecalcLine(LineItemModel line)
@@ -395,10 +308,6 @@
         var abs = Math.Abs(value);
         return isCredit ? -abs : abs;
     }
-
-    // ── Line item management ──────────────────────────────────────────────────
-    private void AddLine() => LineItems.Add(new LineItemModel());
-    private void RemoveLine(LineItemModel line) => LineItems.Remove(line);
 
     // ── Validation ────────────────────────────────────────────────────────────
     private bool Validate()
@@ -443,8 +352,12 @@
     // ── Submit (same two-step pattern as AddCustomer) ─────────────────────────
     private async Task Submit()
     {
+        foreach (var l in LineItems) RecalcLine(l);
+
         ShowValidationErrors = true;
-        if (!Validate()) return;
+        var valid = Validate();
+        var rowsOk = !LineItems.Any(l => GetRowError(l, true) is not null);
+        if (!valid || !rowsOk) return;
 
         if (isEdit)
         {
@@ -547,4 +460,137 @@
         }
     }
 
+    private static readonly string[] OrderTypeOptions = { "Invoice", "Credit" };
+
+    private string GetInvoiceInfoSummary()
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(SelectedSubDistributorName)) parts.Add(SelectedSubDistributorName!);
+        if (!string.IsNullOrWhiteSpace(SalesInvoiceCode)) parts.Add(SalesInvoiceCode!);
+        if (!string.IsNullOrWhiteSpace(SelectedCustomerName)) parts.Add(SelectedCustomerName!);
+        if (!string.IsNullOrWhiteSpace(OrderType)) parts.Add(OrderType!);
+        return parts.Count > 0 ? string.Join(" • ", parts) : "Subdistributor, code, date, customer, order type";
+    }
+
+    private string GetItemsSummary() =>
+        LineItems.Count == 0 ? "No items yet" : $"{LineItems.Count} item(s) • {LineItems.Sum(l => l.Amount):N2}";
+
+    private Task OnOrderTypeSelected(string? value)
+    {
+        OrderType = value;
+        OnOrderTypeChanged();
+        return Task.CompletedTask;
+    }
+
+    // ── AddTable configuration ────────────────────────────────────────────────
+    private static readonly List<string> LineColumns = new()
+    {
+        nameof(LineItemModel.ItemSearchText), nameof(LineItemModel.UomName),
+        nameof(LineItemModel.Quantity), nameof(LineItemModel.UnitPrice), nameof(LineItemModel.Amount)
+    };
+
+    // Only Qty is a plain editable cell; Item and UOM are autocompletes via CellTemplate
+    private static readonly List<string> LineEditableColumns = new() { nameof(LineItemModel.Quantity) };
+
+    private static readonly List<string> LineTemplateColumns = new()
+    {
+        nameof(LineItemModel.ItemSearchText), nameof(LineItemModel.UomName)
+    };
+
+    private static readonly Dictionary<string, string> LineColumnLabels = new()
+    {
+        [nameof(LineItemModel.ItemSearchText)] = "Item",
+        [nameof(LineItemModel.UomName)] = "UOM",
+        [nameof(LineItemModel.Quantity)] = "Qty",
+        [nameof(LineItemModel.UnitPrice)] = "Unit Price",
+        [nameof(LineItemModel.Amount)] = "Amount"
+    };
+
+    private static readonly Dictionary<string, string> LineColumnInputTypes = new()
+    {
+        [nameof(LineItemModel.Quantity)] = "number"
+    };
+
+    private string? GetLineDisplayValue(LineItemModel line, string column) => column switch
+    {
+        nameof(LineItemModel.UnitPrice) => line.UnitPrice.ToString("N2"),
+        nameof(LineItemModel.Amount) => line.Amount.ToString("N2"),
+        _ => null
+    };
+
+    private Task AddLine()
+    {
+        LineItems.Add(new LineItemModel());
+        return Task.CompletedTask;
+    }
+
+    private Task HandleLineRemoved(int idx)
+    {
+        tableKey++; // re-creates rows so autocompletes don't keep a removed row's text
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleLineCellChanged((LineItemModel Item, string Column) args)
+    {
+        if (args.Column == nameof(LineItemModel.Quantity))
+        {
+            if (args.Item.Quantity < 1) args.Item.Quantity = 1;
+            RecalcLine(args.Item);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Task OnRowItemSelected(LineItemModel line, SalesInvoiceSubdItemDropdownItem? item)
+    {
+        if (item is null)
+        {
+            line.SubdItemId = 0;
+            line.ItemName = null;
+            line.ItemSearchText = null;
+            line.AvailableUoms = new();
+            ApplyUom(line, null);
+            line.UomName = null;
+        }
+        else
+        {
+            line.SubdItemId = item.SubdItemId;
+            line.ItemName = item.ItemName;
+            line.ItemSearchText = $"{item.SubdItemCode} - {item.ItemName}";
+            line.AvailableUoms = item.Uoms;
+            ApplyUom(line, item.Uoms.FirstOrDefault()); // default to the first UOM
+        }
+        RecalcLine(line);
+        return Task.CompletedTask;
+    }
+
+    private Task OnRowUomSelected(LineItemModel line, SalesInvoiceUomOption? uom)
+    {
+        ApplyUom(line, uom);
+        RecalcLine(line);
+        return Task.CompletedTask;
+    }
+
+    private void ApplyUom(LineItemModel line, SalesInvoiceUomOption? uom)
+    {
+        if (uom is null)
+        {
+            line.SelectedUomId = 0;
+            line.UnitPrice = 0;
+            return;
+        }
+        line.SelectedUomId = uom.ItemsUomId;
+        line.UomName = uom.UomName;
+        line.UnitPrice = ApplySign(uom.Price);
+    }
+
+    private string? GetLineError(int idx) =>
+        idx >= 0 && idx < LineItems.Count ? GetRowError(LineItems[idx], ShowValidationErrors) : null;
+
+    private string? GetRowError(LineItemModel l, bool force)
+    {
+        if (l.SubdItemId == 0) return force ? "Select an item." : null;
+        if (l.SelectedUomId == 0) return force ? "Select a unit of measure." : null;
+        if (l.Quantity < 1) return "Quantity must be at least 1.";
+        return null;
+    }
 }

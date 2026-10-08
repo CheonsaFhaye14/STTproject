@@ -314,13 +314,13 @@ public class MapItemService : IMapItemService
             if (inUseByInvoices)
             {
                 bool coreFieldsChanged =
-                    existing.SubdItemCode != item.SubdItemCode ||
-                    existing.ItemName != item.ItemName ||
-                    existing.CompanyItemId != item.CompanyItemId;
+                    !string.Equals(existing.SubdItemCode, item.SubdItemCode, StringComparison.Ordinal) ||
+                    !string.Equals(existing.ItemName, item.ItemName, StringComparison.Ordinal);
 
                 if (coreFieldsChanged)
                 {
-                    return UpdateSubdItemResult.InUse("This sub distributor item cannot be updated because it is already used by one or more invoices.");
+                    return UpdateSubdItemResult.InUse(
+                        "The SKU code and item name cannot be changed because this item is already used by one or more invoices. You can still change the company item.");
                 }
             }
 

@@ -903,7 +903,6 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
         private async Task SelectCompanyItem(int companyItemId)
         {
-            // Acquire lock to ensure sequential DbContext access
             await mapTablesLoadLock.WaitAsync();
             try
             {
@@ -913,26 +912,24 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 {
                     selectedDropdownPrincipal = selectedItem.Principal;
                     selectedCompanyItemDisplayName = selectedItem.ItemName;
-                    // Load possible UOMs for this company item (used as dropdown/source)
-                    availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
 
-                    // If there's an add-uom draft for this subd+companyItem, don't overwrite uomEntries
-                    jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
-                    var addDraftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetAddUomDraftStorageKey());
-
-                    if (string.IsNullOrWhiteSpace(addDraftJson))
+                    if (editingSubdItemId.HasValue)
                     {
-                        // No modal draft present. For a new item, show only PC as base unit by default.
-                        if (!editingSubdItemId.HasValue)
+                        availableUoms = uomEntries.Keys.OrderBy(x => x).ToList();
+                    }
+                    else
+                    {
+                        availableUoms = await mapItemService.GetCompanyItemUomsAsync(companyItemId);
+
+                        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+                        var addDraftJson = await jsModule.InvokeAsync<string?>("loadSalesInvoiceDraft", GetAddUomDraftStorageKey());
+
+                        if (string.IsNullOrWhiteSpace(addDraftJson) && !uomEntries.Any())
                         {
                             uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase)
                             {
                                 [BaseUomName] = new UomEntry { Conversion = 1, Price = null }
                             };
-                        }
-                        else
-                        {
-                            uomEntries = availableUoms.ToDictionary(u => u, u => new UomEntry { Conversion = 1, Price = null });                        
                         }
                     }
                 }
@@ -945,17 +942,22 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 mapTablesLoadLock.Release();
             }
         }
-
+        
         private void ClearCompanyItemSelection()
         {
             selectedCompanyItemId = null;
             selectedDropdownPrincipal = null;
             selectedCompanyItemDisplayName = null;
-            availableUoms = new();
-            uomEntries = new();
+
+            if (!IsEditingItem)
+            {
+                availableUoms = new();
+                uomEntries = new();
+            }
+
             ClearFieldError(MapItemValidation.Form.CompanyItem.Key);
             _ = PersistDraftAsync();
-        }   
+        }
 
         private string GetSelectedCompanyItemName()
         {
@@ -985,42 +987,37 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 }));
         }
 
-        private async Task SaveItemAsync()
+    private async Task SaveItemAsync()
+    {
+        await ValidateFormAsync();
+
+        if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
         {
-            await ValidateFormAsync();
+            return;
+        }
 
-            if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
-            {
-                return;
-            }
-
-            if (!uomEntries.Any() || !uomEntries.Any(x => x.Value.Price.HasValue))
-            {
-                if (!IsEditingItem)
-                {
-                    modalTitle = "Add Item";
-                    modalMessage = string.Empty;
-                    pendingConfirmAction = ConfirmActionKind.Add;
-                    confirmedCompanyItemSummary = GetSelectedCompanyItemName();
-                    itemActionErrorMessage = "At least one UOM with a price must be added before adding this item.";
-                    showConfirmModal = true;
-                    await PersistDraftAsync();
-                    return;
-                }
-
-                return;
-            }
-
+        if (!uomEntries.Any() || !uomEntries.Any(x => x.Value.Price.HasValue))
+        {
             modalTitle = IsEditingItem ? "Update Item" : "Add Item";
-            modalMessage = IsEditingItem
-                ? $"Do you want to update '{itemCode}'?"
-                : $"Do you want to add '{itemCode}'?";
+            modalMessage = string.Empty;
             pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
             confirmedCompanyItemSummary = GetSelectedCompanyItemName();
-            itemActionErrorMessage = null;
+            itemActionErrorMessage = "At least one UOM with a price must be added before saving this item.";
             showConfirmModal = true;
             await PersistDraftAsync();
+            return;
         }
+
+        modalTitle = IsEditingItem ? "Update Item" : "Add Item";
+        modalMessage = IsEditingItem
+            ? $"Do you want to update '{itemCode}'?"
+            : $"Do you want to add '{itemCode}'?";
+        pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
+        confirmedCompanyItemSummary = GetSelectedCompanyItemName();
+        itemActionErrorMessage = null;
+        showConfirmModal = true;
+        await PersistDraftAsync();
+    }
 
     private async Task PersistItemAsync()
     {
@@ -1062,17 +1059,16 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                         {
                             itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
                             showErrorModal = true;
-                            return; // don't reset the form on failure — let the user see what happened
+                            return; 
                         }
                     }
                     catch (Exception ex)
                     {
-                        // Surface the real failure reason instead of a blank modal.
                         itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
                         showErrorModal = true;
                         return;
                     }
-
+    
                     ResetItemForm();
                     await _LoadMapTablesAsyncInternal();
                     await ClearDraftAsync();

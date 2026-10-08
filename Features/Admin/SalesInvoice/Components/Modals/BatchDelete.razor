@@ -1,0 +1,152 @@
+
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+@inject STTproject.Services.IUserContextService UserContextService
+
+<Modal Title="Delete Batch" ShowModal="Show" OnClose="Close">
+    <ChildContent>
+        <div class="clt-filter-group">
+            <label class="clt-filter-label" for="bdSubd">Sub-distributor</label>
+            <select id="bdSubd" class="clt-select" value="@subdId"
+                    @onchange="e => OnSelectionChanged(subd: e.Value?.ToString())">
+                <option value="">Select sub-distributor</option>
+                @foreach (var sd in SubDistributors)
+                {
+                    <option value="@sd.Id">@(sd.Name ?? "—")</option>
+                }
+            </select>
+        </div>
+
+        <div class="clt-filter-group">
+            <label class="clt-filter-label" for="bdYear">Year</label>
+            <select id="bdYear" class="clt-select" value="@year"
+                    @onchange="e => OnSelectionChanged(yr: e.Value?.ToString())">
+                <option value="">Select year</option>
+                @foreach (var y in AvailableYears)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+        </div>
+
+        <div class="clt-filter-group">
+            <label class="clt-filter-label" for="bdMonth">Month</label>
+            <select id="bdMonth" class="clt-select" value="@month"
+                    @onchange="e => OnSelectionChanged(mo: e.Value?.ToString())">
+                <option value="">Select month</option>
+                @foreach (var m in Enumerable.Range(1, 12))
+                {
+                    <option value="@m">@(new DateTime(1, m, 1).ToString("MMMM"))</option>
+                }
+            </select>
+        </div>
+
+        @if (IsComplete)
+        {
+            <p class="clt-muted">
+                @if (isCounting) { <span>Counting…</span> }
+                else if (matchCount == 0) { <span>No sales invoices match this selection.</span> }
+                else { <strong>@matchCount sales invoice(s) will be archived and can be restored later.</strong> }
+            </p>
+        }
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <p style="color:#b91c1c">@error</p>
+        }
+
+    </ChildContent>
+    <FooterContent>
+        <Button Title="Cancel" OnClick="Close" Variant="ButtonVariant.Secondary" Disabled="@isDeleting" />
+        <Button Title="Delete" OnClick="() => confirming = true" Disabled="@(!IsComplete || isCounting || matchCount == 0)" />
+    </FooterContent>
+</Modal>
+
+<ConfirmModal Show="confirming" Title="Confirm Delete"
+              Message="@($"Are you sure you want to delete {matchCount} sales invoice(s)?")"
+              OnYes="DeleteAsync" OnNo="() => confirming = false" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
+    [Parameter] public List<(int Id, string? Name)> SubDistributors { get; set; } = new();
+    [Parameter] public List<int> AvailableYears { get; set; } = new();
+
+    private string subdId = "", year = "", month = "";
+    private int matchCount;
+    private bool isCounting, isDeleting, confirming;
+    private string? error;
+
+    private bool IsComplete =>
+        int.TryParse(subdId, out _) && int.TryParse(year, out _) && int.TryParse(month, out _);
+
+    private async Task OnSelectionChanged(string? subd = null, string? yr = null, string? mo = null)
+    {
+        if (subd != null) subdId = subd;
+        if (yr != null) year = yr;
+        if (mo != null) month = mo;
+
+        confirming = false;
+        error = null;
+        matchCount = 0;
+
+        if (!IsComplete) return;
+
+        isCounting = true;
+        try
+        {
+            matchCount = await SalesInvoiceService.CountForBatchDeleteAsync(
+                int.Parse(subdId), int.Parse(year), int.Parse(month));
+        }
+        catch (Exception ex)
+        {
+            error = $"Unable to count invoices: {ex.Message}";
+        }
+        finally
+        {
+            isCounting = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        isDeleting = true;
+        error = null;
+
+        try
+        {
+            if (UserContextService.UserId is not int userId)
+            {
+                error = "Could not determine the current user.";
+                confirming = false;
+                return;
+            }
+
+            var result = await SalesInvoiceService.DeleteBatchAsync(
+                int.Parse(subdId), int.Parse(year), int.Parse(month), userId);
+
+            if (!result.IsDeleted)
+            {
+                error = result.ErrorMessage;
+                confirming = false;
+                return;
+            }
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+
+        await OnDeleted.InvokeAsync();
+        await Close();
+    }
+
+    private async Task Close()
+    {
+        subdId = year = month = "";
+        matchCount = 0;
+        confirming = false;
+        error = null;
+        await OnClose.InvokeAsync();
+    }
+}
