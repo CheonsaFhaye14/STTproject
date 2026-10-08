@@ -7,9 +7,9 @@
 @inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
 
 <LoadingOverlay Show="isLoading"
-                      Title="Loading sales invoices…"
-                      Subtitle="Please wait while we fetch the latest data."
-                      IconClass="fa-solid fa-file-invoice" />
+                Title="Loading sales invoices…"
+                Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-file-invoice" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">
@@ -20,36 +20,55 @@
                 <h1 class="clt-page-title">Sales Invoices</h1>
                 <p class="clt-page-sub">@totalCount total sales invoices</p>
             </div>
-            <Button Title="Deleted invoices"
-            OnClick="@(() => Nav.NavigateTo("/admin/salesinvoice/deleted"))"
-            Icon="fa-solid fa-trash-can-arrow-up"
-            Variant="ButtonVariant.Secondary" />
-            <Button Title="Batch delete" OnClick="() => showBatchDelete = true">
-            </Button>
-            <Button Title="Import invoices"
-                    OnClick="@(() => showImportModal = true)"
-                    Icon="fa-solid fa-file-arrow-up"
-                    Variant="ButtonVariant.Secondary" />
-            <Button OnClick="OpenAddModal" Title="Add invoice"
-                    Icon="fa-solid fa-plus"
-                    Variant="ButtonVariant.Primary" />
+            <div class="clt-page-actions">
+                <Button Title="Import invoices"
+                        OnClick="@(() => showImportModal = true)"
+                        Icon="fa-solid fa-file-arrow-up"
+                        Variant="ButtonVariant.Secondary" />
+                <Button OnClick="OpenAddModal" Title="Add invoice"
+                        Icon="fa-solid fa-plus"
+                        Variant="ButtonVariant.Primary" />
+
+                <!-- More actions: rarely used / destructive -->
+                <div class="more-menu">
+                    <Button Title="More"
+                            Icon="fa-solid fa-ellipsis"
+                            Variant="ButtonVariant.Secondary"
+                            OnClick="ToggleMoreMenu" />
+                    @if (showMoreMenu)
+                    {
+                        <div class="more-menu-backdrop" @onclick="CloseMoreMenu"></div>
+                        <div class="more-menu-panel" role="menu">
+                            <button type="button" class="more-menu-item" role="menuitem" @onclick="GoToDeleted">
+                                <i class="fa-solid fa-trash-can-arrow-up"></i>
+                                <span>Deleted invoices</span>
+                            </button>
+                            <hr class="more-menu-divider" />
+                            <button type="button" class="more-menu-item more-menu-item--danger" role="menuitem" @onclick="OpenBatchDelete">
+                                <i class="fa-solid fa-trash"></i>
+                                <span>Batch delete</span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
         </div>
 
         <!-- List table -->
         <SalesInvoiceTable @ref="invoiceTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                            OnViewInvoice="OpenEditModal" />
- 
+
         <!-- Confirm create/update modal -->
         <ConfirmModal @ref="confirmModal" Show="showConfirmModal"
                       Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
                       Message="@(editInvoiceId.HasValue
-                                                                                                                                                                        ? "Are you sure you want to save changes to this sales invoice?"
-                                                                                                                                                                        : "Are you sure you want to create this sales invoice?")"
+                                                                                                                                                                                ? "Are you sure you want to save changes to this sales invoice?"
+                                                                                                                                                                                : "Are you sure you want to create this sales invoice?")"
                       OnYes="ConfirmSave" OnNo="CancelConfirm" />
 
         <ImportSalesInvoice Show="showImportModal"
-                    OnClose="@(() => showImportModal = false)"
-                    OnImportCompleted="OnImportCompletedAsync" />              
+                            OnClose="@(() => showImportModal = false)"
+                            OnImportCompleted="OnImportCompletedAsync" />
 
         <!-- Add / Edit modal -->
         @if (showAddModal)
@@ -58,10 +77,10 @@
                              OnRequestConfirm="OpenConfirmModal" />
         }
         <BatchDelete Show="showBatchDelete"
-                  SubDistributors="subDistributors"
-                  AvailableYears="availableYears"
-                  OnClose="() => showBatchDelete = false"
-                  OnDeleted="OnImportCompletedAsync" />
+                     SubDistributors="subDistributors"
+                     AvailableYears="availableYears"
+                     OnClose="() => showBatchDelete = false"
+                     OnDeleted="OnImportCompletedAsync" />
 
     </div>
 </div>
@@ -86,6 +105,25 @@
     }
 
     private void OnCountChanged(int count) => totalCount = count;
+
+    // ── More menu ─────────────────────────────────────────────────────────────
+
+    private bool showMoreMenu = false;
+
+    private void ToggleMoreMenu() => showMoreMenu = !showMoreMenu;
+    private void CloseMoreMenu() => showMoreMenu = false;
+
+    private void GoToDeleted()
+    {
+        showMoreMenu = false;
+        Nav.NavigateTo("/admin/salesinvoice/deleted");
+    }
+
+    private void OpenBatchDelete()
+    {
+        showMoreMenu = false;
+        showBatchDelete = true;
+    }
 
     // ── Open / close ──────────────────────────────────────────────────────────
 

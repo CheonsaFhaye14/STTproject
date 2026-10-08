@@ -61,6 +61,7 @@
 .clt-page .clt-page {
     padding: 0;
 }
+
 .clt-sidebar {
     flex: 0 0 240px;
     background: var(--clt-surface);
@@ -507,6 +508,80 @@
     color: var(--clt-muted);
 }
 
+/* Header action buttons (Import / Add / More) */
+
+.clt-page-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+    .clt-page-actions button {
+        white-space: nowrap;
+    }
+
+/* More actions menu */
+
+.more-menu {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.more-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+}
+
+.more-menu-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 50;
+    min-width: 190px;
+    padding: 4px 0;
+    background: var(--clt-surface);
+    border: 1px solid var(--clt-line);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(33, 26, 16, 0.12);
+}
+
+.more-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    color: var(--clt-ink);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .more-menu-item:hover {
+        background: var(--clt-canvas);
+    }
+
+.more-menu-item--danger {
+    color: #b91c1c;
+}
+
+    .more-menu-item--danger:hover {
+        background: #fee2e2;
+    }
+
+.more-menu-divider {
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--clt-line);
+}
+
 .clt-add-btn {
     display: inline-flex;
     align-items: center;
@@ -622,12 +697,12 @@
     background-position: right 10px center;
 }
 
-.clt-filter-group .form-select:focus,
-.clt-filter-group .form-control:focus {
-    outline: none;
-    border-color: var(--clt-accent);
-    box-shadow: 0 0 0 3px var(--clt-accent-soft);
-}
+    .clt-filter-group .form-select:focus,
+    .clt-filter-group .form-control:focus {
+        outline: none;
+        border-color: var(--clt-accent);
+        box-shadow: 0 0 0 3px var(--clt-accent-soft);
+    }
 
 .clt-filter-group .form-control::placeholder {
     color: var(--clt-muted);
@@ -664,24 +739,25 @@
     cursor: pointer;
 }
 
-.clt-filter-group .autocomplete-item:hover,
-.clt-filter-group .autocomplete-item.active {
-    background: var(--clt-accent-soft);
-    color: var(--clt-accent);
-}
+    .clt-filter-group .autocomplete-item:hover,
+    .clt-filter-group .autocomplete-item.active {
+        background: var(--clt-accent-soft);
+        color: var(--clt-accent);
+    }
 
-.clt-filter-group .autocomplete-item.disabled,
-.clt-filter-group .autocomplete-item.disabled:hover {
-    background: transparent;
-    color: var(--clt-muted);
-    cursor: default;
-}
+    .clt-filter-group .autocomplete-item.disabled,
+    .clt-filter-group .autocomplete-item.disabled:hover {
+        background: transparent;
+        color: var(--clt-muted);
+        cursor: default;
+    }
 
 /* Validation text, if a filter ever shows one */
 .clt-filter-group .error-text {
     font-size: 11px;
     color: #b91c1c;
 }
+
 .clt-filter-group input[type="text"],
 .clt-filter-group input[type="number"] {
     width: 100%;
@@ -695,21 +771,29 @@
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.clt-filter-group input[type="text"]:focus,
-.clt-filter-group input[type="number"]:focus {
-    outline: none;
-    border-color: var(--clt-accent);
-    box-shadow: 0 0 0 3px var(--clt-accent-soft);
-}
+    .clt-filter-group input[type="text"]:focus,
+    .clt-filter-group input[type="number"]:focus {
+        outline: none;
+        border-color: var(--clt-accent);
+        box-shadow: 0 0 0 3px var(--clt-accent-soft);
+    }
 
 .clt-filter-group input::placeholder {
     color: var(--clt-muted);
 }
 
 /* Price change statuses */
-.clt-stat-pending { color: var(--clt-accent); }
-.clt-stat-overdue { color: #b91c1c; }
-.clt-stat-applied { color: var(--clt-muted); }
+.clt-stat-pending {
+    color: var(--clt-accent);
+}
+
+.clt-stat-overdue {
+    color: #b91c1c;
+}
+
+.clt-stat-applied {
+    color: var(--clt-muted);
+}
 
 .clt-status-pending {
     background: var(--clt-accent-soft);
