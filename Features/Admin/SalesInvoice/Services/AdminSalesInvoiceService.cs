@@ -562,34 +562,6 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
         }
     }
 
-    public async Task<BatchDeleteResult> DeleteSelectedAsync(
-        IReadOnlyCollection<int> invoiceIds, int deletedByUserId, CancellationToken ct = default)
-    {
-        if (invoiceIds.Count == 0)
-            return new BatchDeleteResult(true, 0);
-
-        await using var context = _contextFactory.CreateDbContext();
-        await using var tx = await context.Database.BeginTransactionAsync(ct);
-        try
-        {
-            var deleted = await ArchiveAndDeleteAsync(context, new ArchiveRequest(
-                DeletionType: "Selected",
-                SubDistributorId: null,   // selection may span several sub-distributors
-                IdsCsv: string.Join(",", invoiceIds),
-                DeletedByUserId: deletedByUserId), ct);
-
-            await tx.CommitAsync(ct);
-            return new BatchDeleteResult(true, deleted);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync(ct);
-            _logger.LogError(ex, "Error deleting selected sales invoices");
-            return new BatchDeleteResult(false, 0,
-                $"Unable to delete the selected invoices: {ex.GetBaseException().Message}");
-        }
-    }
-
     // ─── Batch delete ────────────────────────────────────────────────────────
 
     public async Task<int> CountForBatchDeleteAsync(
@@ -750,9 +722,25 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
     }
 
     // ─── Deleted invoices (archive) ──────────────────────────────────────────
+    public async Task<List<(int Year, int Month)>> GetDeletedInvoiceMonthsAsync(
+        CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
 
+        var raw = await context.Database.SqlQuery<int>($@"
+            SELECT DISTINCT YEAR(SalesInvoiceDate) * 100 + MONTH(SalesInvoiceDate) AS Value
+            FROM DeletedSalesInvoice").ToListAsync(ct);
+
+        return raw
+            .Select(v => (Year: v / 100, Month: v % 100))
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
+            .ToList();
+    }
     public async Task<(List<DeletedBatchRow> Items, int Total)> GetDeletedBatchesPagedAsync(
         int page, int pageSize, string? type, string? status, int? subDistributorId,
+        int? month, int? year,
+        string? search, string? sortColumn, bool sortAscending,
         CancellationToken ct = default)
     {
         await using var context = _contextFactory.CreateDbContext();
@@ -768,17 +756,23 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
             query = query.Where(b => b.Status == status);
         if (subDistributorId > 0)
             query = query.Where(b => b.SubDistributorId == subDistributorId);
+        if (month > 0 || year > 0)
+        {
+            var m = month ?? 0;
+            var y = year ?? 0;
 
-        var total = await query.CountAsync(ct);
+            var batchIds = await context.Database.SqlQuery<int>($@"
+                SELECT DISTINCT DeletionBatchId AS Value
+                FROM DeletedSalesInvoice
+                WHERE ({y} = 0 OR YEAR(SalesInvoiceDate) = {y})
+                AND ({m} = 0 OR MONTH(SalesInvoiceDate) = {m})").ToListAsync(ct);
 
-        var raw = await query
-            .OrderByDescending(b => b.DeletedDate)
-            .ThenByDescending(b => b.DeletionBatchId)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(ct);
+            query = query.Where(b => batchIds.Contains(b.DeletionBatchId));
+        }
 
-        // Resolve names in memory (no guessing table names in raw SQL)
+        var raw = await query.ToListAsync(ct);
+
+        // Resolve names
         var subdNames = await context.SubDistributors.AsNoTracking()
             .ToDictionaryAsync(s => s.SubDistributorId, s => s.SubdName, ct);
 
@@ -792,26 +786,63 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
 
         string? Name(int? id) => id.HasValue && userNames.TryGetValue(id.Value, out var n) ? n : null;
 
-        var items = raw.Select(b => new DeletedBatchRow
+        var rows = raw.Select(b => (
+            Raw: b,
+            Row: new DeletedBatchRow
+            {
+                DeletionBatchId = b.DeletionBatchId,
+                DeletionType = b.DeletionType,
+                SubdName = b.SubDistributorId.HasValue && subdNames.TryGetValue(b.SubDistributorId.Value, out var sn)
+                    ? sn ?? "—" : "Multiple / —",
+                Period = b.PeriodYear.HasValue && b.PeriodMonth.HasValue
+                    ? new DateTime(b.PeriodYear.Value, b.PeriodMonth.Value, 1).ToString("MMMM yyyy")
+                    : "—",
+                InvoiceCount = b.InvoiceCount,
+                Status = b.Status,
+                DeletedByName = Name(b.DeletedBy),
+                DeletedDate = b.DeletedDate,
+                RestoredByName = Name(b.RestoredBy),
+                RestoredDate = b.RestoredDate
+            })).ToList();
+
+        // Search (batch id, type, subdistributor, period, deleted by, status)
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            DeletionBatchId = b.DeletionBatchId,
-            DeletionType = b.DeletionType,
-            SubdName = b.SubDistributorId.HasValue && subdNames.TryGetValue(b.SubDistributorId.Value, out var sn)
-                ? sn ?? "—" : "Multiple / —",
-            Period = b.PeriodYear.HasValue && b.PeriodMonth.HasValue
-                ? new DateTime(b.PeriodYear.Value, b.PeriodMonth.Value, 1).ToString("MMMM yyyy")
-                : "—",
-            InvoiceCount = b.InvoiceCount,
-            Status = b.Status,
-            DeletedByName = Name(b.DeletedBy),
-            DeletedDate = b.DeletedDate,
-            RestoredByName = Name(b.RestoredBy),
-            RestoredDate = b.RestoredDate
-        }).ToList();
+            var term = search.Trim().TrimStart('#');
+            bool Has(string? s) => s?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+
+            rows = rows.Where(x =>
+                x.Row.DeletionBatchId.ToString() == term ||
+                Has(x.Row.DeletionType) || Has(x.Row.SubdName) || Has(x.Row.Period) ||
+                Has(x.Row.DeletedByName) || Has(x.Row.Status)).ToList();
+        }
+
+        var total = rows.Count;
+
+        // Sort
+        Func<(DeletedBatchRaw Raw, DeletedBatchRow Row), object?> key = sortColumn switch
+        {
+            "Type"           => x => x.Row.DeletionType,
+            "Subdistributor" => x => x.Row.SubdName,
+            "Period"         => x => (x.Raw.PeriodYear ?? 0) * 100 + (x.Raw.PeriodMonth ?? 0),
+            "Invoices"       => x => x.Row.InvoiceCount,
+            "DeletedBy"      => x => x.Row.DeletedByName ?? string.Empty,
+            "Status"         => x => x.Row.Status,
+            _                => x => x.Row.DeletedDate
+        };
+
+        var ascending = sortColumn is null or "DeletedDate" or "Period" ? !sortAscending : sortAscending;
+
+        var sorted = ascending ? rows.OrderBy(key) : rows.OrderByDescending(key);
+        var items = sorted
+            .ThenByDescending(x => x.Row.DeletionBatchId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.Row)
+            .ToList();
 
         return (items, total);
     }
-
     public async Task<(List<DeletedInvoiceDetailRow> Items, int Total)> GetDeletedBatchInvoicesPagedAsync(
         int deletionBatchId, int page, int pageSize, string? search, CancellationToken ct = default)
     {
@@ -897,7 +928,7 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
 
         return (rows, total);
     }
-    
+
     public async Task<RestoreBatchResult> RestoreBatchAsync(
         int deletionBatchId, int restoredByUserId, CancellationToken ct = default)
     {

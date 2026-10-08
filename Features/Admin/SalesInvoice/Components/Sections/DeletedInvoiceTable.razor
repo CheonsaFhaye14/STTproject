@@ -17,37 +17,73 @@
             </div>
             <div class="clt-divider"></div>
 
+            @* Search *@
             <div class="clt-filter-group">
-                <label class="clt-filter-label" for="delStatus">Status</label>
-                <select id="delStatus" class="clt-select" value="@statusFilter"
-                        @onchange="e => OnFilterChanged(status: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All</option>
-                    <option value="Deleted">Deleted</option>
-                    <option value="Restored">Restored</option>
-                </select>
+                <Input TValue="string" Label="Search"
+                    Placeholder="Search..."
+                    Value="@SearchTerm" ValueChanged="OnSearchChanged" />
+            </div>
+
+            @* Filter group *@
+            <div class="clt-filter-group">
+                <label class="clt-filter-label">Status</label>
+                <div class="clt-radio-group">
+                    <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                        <input type="radio" name="status" value=""
+                            @onchange="() => OnFilterChanged(status: string.Empty)"
+                            checked="@(SelectedStatus == "")" />
+                        <span>All</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "deleted" ? "selected" : "")">
+                        <input type="radio" name="status" value="deleted"
+                            @onchange='() => OnFilterChanged(status: "deleted")'
+                            checked="@(SelectedStatus == "deleted")" />
+                        <span>Deleted</span>
+                    </label>
+                    <label class="clt-radio-option @(SelectedStatus == "restored" ? "selected" : "")">
+                        <input type="radio" name="status" value="restored"
+                            @onchange='() => OnFilterChanged(status: "restored")'
+                            checked="@(SelectedStatus == "restored")" />
+                        <span>Restored</span>
+                    </label>
+                </div>
+            </div>
+
+
+            <div class="clt-filter-group">
+                <AutoComplete @key="@($"subd-{filterResetKey}")"
+                            Label="Subdistributor"
+                            TItem="SalesInvoiceSubDistributorDropdownItem"
+                            Items="SubDistributors"
+                            ValueSelector="x => x.SubDistributorId.ToString()"
+                            TextSelector="x => x.SubdName ?? string.Empty"
+                            Placeholder="All subdistributors"
+                            SelectedValue="@(subdFilter?.ToString())"
+                            SelectedItemChanged="OnSubdSelected" />
             </div>
 
             <div class="clt-filter-group">
-                <label class="clt-filter-label" for="delType">Type of deletion</label>
-                <select id="delType" class="clt-select" value="@typeFilter"
-                        @onchange="e => OnFilterChanged(type: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All</option>
-                    <option value="Individual">Individual</option>
-                    <option value="Selected">Selected</option>
-                    <option value="Batch">Batch</option>
-                </select>
+                <Select @key="@($"month-{filterResetKey}")"
+                        Label="Sales Invoice Month"
+                        Placeholder="All months"
+                        TItem="FilterOption"
+                        Items="MonthOptions"
+                        ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text"
+                        SelectedValue="@(SelectedMonth?.ToString() ?? "")"
+                        SelectedValueChanged="OnMonthSelected" />
             </div>
 
             <div class="clt-filter-group">
-                <label class="clt-filter-label" for="delSubd">Subdistributor</label>
-                <select id="delSubd" class="clt-select" value="@(subdFilter?.ToString() ?? "")"
-                        @onchange="e => OnFilterChanged(subdId: e.Value?.ToString() ?? string.Empty)">
-                    <option value="">All subdistributors</option>
-                    @foreach (var sd in SubDistributors)
-                    {
-                        <option value="@sd.Id">@(sd.Name ?? "—")</option>
-                    }
-                </select>
+                <Select @key="@($"year-{filterResetKey}")"
+                        Label="Sales Invoice Year"
+                        Placeholder="All years"
+                        TItem="FilterOption"
+                        Items="YearOptions"
+                        ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text"
+                        SelectedValue="@(SelectedYear?.ToString() ?? "")"
+                        SelectedValueChanged="OnYearSelected" />
             </div>
 
             @if (HasActiveFilters)
@@ -67,14 +103,13 @@
                     <table class="clt-table">
                         <thead>
                             <tr>
-                                <th>Batch ID</th>
-                                <th>Type</th>
-                                <th>Subdistributor</th>
-                                <th>Period</th>
-                                <th>Invoices</th>
-                                <th>Deleted By</th>
-                                <th>Deleted Date</th>
-                                <th>Status</th>
+                                <th @onclick='() => SortBy("Type")' style="cursor:pointer">Type @SortIndicator("Type")</th>
+                                <th @onclick='() => SortBy("Subdistributor")' style="cursor:pointer">Subdistributor @SortIndicator("Subdistributor")</th>
+                                <th @onclick='() => SortBy("Period")' style="cursor:pointer">Period @SortIndicator("Period")</th>
+                                <th @onclick='() => SortBy("Invoices")' style="cursor:pointer">Invoices @SortIndicator("Invoices")</th>
+                                <th @onclick='() => SortBy("DeletedBy")' style="cursor:pointer">Deleted By @SortIndicator("DeletedBy")</th>
+                                <th @onclick='() => SortBy("DeletedDate")' style="cursor:pointer">Deleted Date @SortIndicator("DeletedDate")</th>
+                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status @SortIndicator("Status")</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -98,7 +133,6 @@
                                 @foreach (var b in Batches)
                                 {
                                     <tr>
-                                        <td><span class="clt-code">#@b.DeletionBatchId</span></td>
                                         <td><span class="clt-type-badge">@b.DeletionType</span></td>
                                         <td class="clt-name">@b.SubdName</td>
                                         <td class="clt-muted">@b.Period</td>
@@ -167,17 +201,61 @@
     [Parameter] public EventCallback OnRestored { get; set; }
 
     private List<DeletedBatchRow> Batches { get; set; } = new();
-    private List<(int Id, string? Name)> SubDistributors { get; set; } = new();
-    private DeletedBatchRow? viewBatch;
-
-    private string statusFilter = "";
+    private List<SalesInvoiceSubDistributorDropdownItem> SubDistributors { get; set; } = new();    private DeletedBatchRow? viewBatch;
+    private string SelectedStatus { get; set; } = "";
+    private int filterResetKey;
     private string typeFilter = "";
     private int? subdFilter;
-
+    private int? SelectedMonth { get; set; }
+    private int? SelectedYear { get; set; }
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(_ =>
+            {
+                _ = InvokeAsync(async () =>
+                {
+                    currentPage = 1;
+                    await LoadPageAsync();
+                });
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+    private List<(int Year, int Month)> AvailableDates { get; set; } = new();
+    private System.Threading.Timer? _debounceTimer;
+    private string SortColumn { get; set; } = "DeletedDate";
+    private bool SortAscending { get; set; } = true;
+    private void OnSearchChanged(string? value) => SearchTerm = value ?? string.Empty;
     private int currentPage = 1;
     private const int pageSize = 50;
     private int totalCount;
     private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+    private async Task OnDateChanged(string? month = null, string? year = null)
+    {
+        if (month != null)
+            SelectedMonth = int.TryParse(month, out var m) && m > 0 ? m : null;
+
+        if (year != null)
+        {
+            SelectedYear = int.TryParse(year, out var y) && y > 0 ? y : null;
+
+            if (SelectedMonth.HasValue && !AvailableMonths.Contains(SelectedMonth.Value))
+                SelectedMonth = null;
+        }
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+    private List<int> AvailableMonths =>
+    (SelectedYear.HasValue
+        ? AvailableDates.Where(d => d.Year == SelectedYear.Value)
+        : AvailableDates)
+    .Select(d => d.Month).Distinct().OrderBy(m => m).ToList();
 
     private bool isLoading = true;
     private bool isRestoring;
@@ -192,14 +270,15 @@
     private int? CurrentUserId => UserContextService.UserId;
 
     private bool HasActiveFilters =>
-        !string.IsNullOrEmpty(statusFilter) || !string.IsNullOrEmpty(typeFilter) || subdFilter.HasValue;
+       !string.IsNullOrWhiteSpace(_searchTerm) || !string.IsNullOrEmpty(SelectedStatus) || !string.IsNullOrEmpty(typeFilter) || subdFilter.HasValue || SelectedMonth.HasValue ||
+            SelectedYear.HasValue;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var subds = await SalesInvoiceService.GetSubDistributorsAsync();
-            SubDistributors = subds.Select(sd => (sd.SubDistributorId, (string?)sd.SubdName)).ToList();
+            SubDistributors = await SalesInvoiceService.GetSubDistributorsAsync();
+            AvailableDates = await SalesInvoiceService.GetDeletedInvoiceMonthsAsync();
             await LoadPageAsync();
         }
         catch (Exception ex)
@@ -208,7 +287,7 @@
             isLoading = false;
         }
     }
-
+    
     public async Task LoadPageAsync()
     {
         isLoading = true;
@@ -216,7 +295,8 @@
         try
         {
             var (items, total) = await SalesInvoiceService.GetDeletedBatchesPagedAsync(
-                currentPage, pageSize, typeFilter, statusFilter, subdFilter);
+                currentPage, pageSize, typeFilter, SelectedStatus, subdFilter,
+                SelectedMonth, SelectedYear, _searchTerm, SortColumn, SortAscending);
             Batches = items;
             totalCount = total;
         }
@@ -231,23 +311,55 @@
             if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
         }
     }
+    private record FilterOption(string Value, string Text);
 
-    private async Task OnFilterChanged(string? status = null, string? type = null, string? subdId = null)
+    private List<FilterOption> MonthOptions =>
+        AvailableMonths
+            .Select(m => new FilterOption(m.ToString(), new DateTime(2000, m, 1).ToString("MMMM")))
+            .ToList();
+
+    private List<FilterOption> YearOptions =>
+        AvailableYears
+            .Select(y => new FilterOption(y.ToString(), y.ToString()))
+            .ToList();
+    private async Task OnFilterChanged(string? status = null, string? type = null)
     {
-        if (status != null) statusFilter = status;
+        if (status != null) SelectedStatus = status;
         if (type != null) typeFilter = type;
-        if (subdId != null)
-            subdFilter = int.TryParse(subdId, out var sid) && sid > 0 ? sid : null;
 
         currentPage = 1;
         await LoadPageAsync();
     }
+    private async Task OnMonthSelected(string? value)
+    {
+        SelectedMonth = int.TryParse(value, out var m) && m > 0 ? m : null;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
 
+    private async Task OnYearSelected(string? value)
+    {
+        SelectedYear = int.TryParse(value, out var y) && y > 0 ? y : null;
+
+        // drop the month if it doesn't exist in the chosen year
+        if (SelectedMonth.HasValue && !AvailableMonths.Contains(SelectedMonth.Value))
+            SelectedMonth = null;
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
     private async Task ClearFilters()
     {
-        statusFilter = typeFilter = "";
+        _debounceTimer?.Dispose();
+        _searchTerm = "";
+        SelectedStatus = typeFilter = "";
         subdFilter = null;
+        SelectedMonth = null;
+        SelectedYear = null;
+        SortColumn = "DeletedDate";
+        SortAscending = true;
         currentPage = 1;
+        filterResetKey++;
         await LoadPageAsync();
     }
 
@@ -259,7 +371,7 @@
 
     private void RestoreFromModal(DeletedBatchRow b)
     {
-        viewBatch = null;   // close the details modal before the confirm opens
+        viewBatch = null;   
         AskRestore(b);
     }
 
@@ -270,7 +382,14 @@
                          "They will be added back to the sales invoice list.";
         showRestoreConfirm = true;
     }
-
+    private async Task OnSubdSelected(SalesInvoiceSubDistributorDropdownItem? sd)
+    {
+        int? newValue = sd is { SubDistributorId: > 0 } ? sd.SubDistributorId : null;
+        if (newValue == subdFilter) return;  
+        subdFilter = newValue;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
     private async Task ConfirmRestore()
     {
         showRestoreConfirm = false;
@@ -304,5 +423,25 @@
             isRestoring = false;
             pendingRestore = null;
         }
+    }
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+    private List<int> AvailableYears =>
+        AvailableDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column) return string.Empty;
+        return SortAscending ? " ▲" : " ▼";
     }
 }
