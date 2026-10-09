@@ -76,12 +76,13 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             return dto;
         }
 
-        public async Task ToggleCompanyItemStatusAsync(int id, bool isActive)
+        public async Task ToggleCompanyItemStatusAsync(int id, bool isActive, int? updatedBy)
         {
             await using var db = _dbFactory.CreateDbContext();
             var entity = await db.CompanyItems.FindAsync(id);
             if (entity == null) return;
             entity.IsActive = isActive;
+            entity.UpdatedBy = updatedBy;
             entity.UpdatedDate = NowPh();
             await db.SaveChangesAsync();
         }

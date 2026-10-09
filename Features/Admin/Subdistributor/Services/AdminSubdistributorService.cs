@@ -62,13 +62,14 @@ namespace STTproject.Features.Admin.Subdistributor.Services
             return dto;
         }
 
-        public async Task ToggleSubDistributorStatusAsync(int id, bool isActive)
+        public async Task ToggleSubDistributorStatusAsync(int id, bool isActive, int? updatedBy)
         {
             await using var db = _dbFactory.CreateDbContext();
             var entity = await db.SubDistributors.FindAsync(id);
             if (entity == null) return;
             entity.IsActive = isActive;
             entity.UpdatedDate = NowPh();
+            entity.UpdatedBy = updatedBy;
             await db.SaveChangesAsync();
         }
 

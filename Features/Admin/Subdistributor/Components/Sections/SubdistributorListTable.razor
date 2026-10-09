@@ -1,5 +1,6 @@
 @using STTproject.Features.Admin.Subdistributor.DTOs
 @using STTproject.Shared.Components
+@inject STTproject.Services.IUserContextService UserContextService
 @inject STTproject.Features.Admin.Subdistributor.Services.IAdminSubDistributorService AdminSubDistributorService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
@@ -295,7 +296,7 @@
     private async Task ConfirmToggle()
     {
         showToggleConfirmModal = false;
-        await AdminSubDistributorService.ToggleSubDistributorStatusAsync(pendingToggleId, pendingToggleStatus);
+        await AdminSubDistributorService.ToggleSubDistributorStatusAsync(pendingToggleId, pendingToggleStatus, UserContextService.UserId);
         var subd = PagedSubDistributors.FirstOrDefault(x => x.SubDistributorId == pendingToggleId);
         if (subd != null) subd.IsActive = pendingToggleStatus;
         await InvokeAsync(StateHasChanged);

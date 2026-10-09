@@ -7,7 +7,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
     {
         Task<SubDistributorListDto?> CreateSubDistributorAsync(SubDistributorCreateDto dto);
         Task<SubDistributorUpdateDto?> UpdateSubDistributorAsync(SubDistributorUpdateDto dto);
-        Task ToggleSubDistributorStatusAsync(int id, bool isActive);
+        Task ToggleSubDistributorStatusAsync(int id, bool isActive, int? updatedBy);
         Task<IEnumerable<SubDistributorListDto>> GetAllAsync();
         Task<(IEnumerable<SubDistributorListDto> Items, int TotalCount)> GetPagedAsync(
             int page, int pageSize, string? search, string? status,

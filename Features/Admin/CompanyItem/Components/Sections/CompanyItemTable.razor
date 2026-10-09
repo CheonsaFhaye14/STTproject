@@ -1,5 +1,6 @@
 @using STTproject.Shared.Components
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
+@inject STTproject.Services.IUserContextService UserContextService
 
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
@@ -336,7 +337,7 @@
     private async Task ConfirmToggle()
     {
         showToggleConfirmModal = false;
-        await AdminCompanyItemService.ToggleCompanyItemStatusAsync(pendingToggleId, pendingToggleStatus);
+        await AdminCompanyItemService.ToggleCompanyItemStatusAsync(pendingToggleId, pendingToggleStatus, UserContextService.UserId);
         var companyItem = PagedCompanyItems.FirstOrDefault(x => x.CompanyItemId == pendingToggleId);
         if (companyItem != null) companyItem.IsActive = pendingToggleStatus;
         await InvokeAsync(StateHasChanged);

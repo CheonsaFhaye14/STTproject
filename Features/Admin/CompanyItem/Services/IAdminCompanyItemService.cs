@@ -6,7 +6,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
     {
         Task<CompanyItemListDto?> CreateCompanyItemAsync(CompanyItemCreateDto dto, CancellationToken cancellationToken = default);
         Task<CompanyItemUpdateDto?> UpdateCompanyItemAsync(CompanyItemUpdateDto dto);
-        Task ToggleCompanyItemStatusAsync(int id, bool isActive);
+        Task ToggleCompanyItemStatusAsync(int id, bool isActive, int? updatedBy);
         Task<IEnumerable<CompanyItemListDto>> GetAllAsync();
         Task<(IEnumerable<CompanyItemListDto> Items, int TotalCount)> GetPagedAsync(
             int page, int pageSize, string? search, string? status,
