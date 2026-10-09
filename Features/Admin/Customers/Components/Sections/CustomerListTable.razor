@@ -1,5 +1,6 @@
 @using STTproject.Features.Admin.Customers.DTOs
 @using STTproject.Shared.Components
+@inject STTproject.Services.IUserContextService UserContextService
 @inject STTproject.Features.Admin.Customers.Services.IAdminCustomerService AdminCustomerService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
@@ -368,7 +369,7 @@
     private async Task ConfirmToggle()
     {
         showToggleConfirmModal = false;
-        await AdminCustomerService.ToggleCustomerStatusAsync(pendingToggleId, pendingToggleStatus);
+        await AdminCustomerService.ToggleCustomerStatusAsync(pendingToggleId, pendingToggleStatus, UserContextService.UserId);
         var customer = PagedCustomers.FirstOrDefault(x => x.CustomerId == pendingToggleId);
         if (customer != null) customer.IsActive = pendingToggleStatus;
         await InvokeAsync(StateHasChanged);

@@ -103,13 +103,14 @@ namespace STTproject.Features.Admin.Customers.Services
             };
         }
 
-        public async Task ToggleCustomerStatusAsync(int id, bool isActive)
+        public async Task ToggleCustomerStatusAsync(int id, bool isActive, int? updatedBy)
         {
             await using var db = _dbFactory.CreateDbContext();
             var entity = await db.Customers.FindAsync(id);
             if (entity == null) return;
             entity.IsActive = isActive;
-            entity.UpdatedDate = NowPh();  // ← changed
+            entity.UpdatedDate = NowPh();  
+            entity.UpdatedBy = updatedBy;  
             await db.SaveChangesAsync();
         }
 
