@@ -52,7 +52,7 @@
     [Parameter] public bool Show { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnImportCompleted { get; set; }
-    
+
 
     private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new();
     private string? selectedSubdistributorId;
@@ -110,7 +110,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString()); 
+            Console.WriteLine(ex.ToString());
             Show = false;
             importResult = new STTproject.Features.Admin.Customers.DTOs.CustomerImportResult();
             importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
@@ -122,7 +122,7 @@
             StateHasChanged();
         }
     }
-    
+
     private async Task HandleCommitAsync()
     {
         if (importResult == null || string.IsNullOrEmpty(selectedSubdistributorId)) return;
@@ -135,13 +135,43 @@
             .ToList();
 
         var selectedRows = selectedGroups.SelectMany(g => g.Rows).ToList();
+
+        // Nothing matched the selection. The results modal reports these groups as
+        // "not processed" instead of failing silently.
         if (selectedRows.Count == 0) return;
 
-        var committedCount = await ImportCustomersService.CommitPreparedRowsAsync(selectedRows, subdistributorId, userId);
-        
+        // CommitPreparedRowsAsync quietly returns 0 when there is no user, so stop here
+        // and give every selected row a reason instead of pretending it was saved.
+        if (userId <= 0)
+        {
+            foreach (var row in selectedRows)
+            {
+                row.Issues.Add("Save failed: unable to identify the current user. Please sign in again.");
+                row.IsSuccess = false;
+            }
+            StateHasChanged();
+            return;
+        }
+
+        var committedCount = 0;
+        try
+        {
+            committedCount = await ImportCustomersService.CommitPreparedRowsAsync(selectedRows, subdistributorId, userId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            foreach (var row in selectedRows.Where(r => r.Issues.Count == 0))
+            {
+                row.Issues.Add($"Save failed: {ex.Message}");
+                row.IsSuccess = false;
+            }
+        }
+
+        // A group only counts as saved when every row succeeded AND ended up with a customer id.
         foreach (var g in selectedGroups)
         {
-            if (g.Rows.All(r => r.IsSuccess))
+            if (g.Rows.All(r => r.IsSuccess && r.Issues.Count == 0 && r.CustomerId.HasValue))
                 g.IsSaved = true;
         }
 
@@ -170,9 +200,14 @@
         showResults = false;
         importResult = null;
         selectedGroupKeys.Clear();
-        await OnClose.InvokeAsync(); 
+        await OnClose.InvokeAsync();
     }
 
+    // Must stay identical to GroupKey in ImportCustomersResult.razor (CODE|NAME, trimmed, upper-case).
     private static string GroupKey(STTproject.Features.Admin.Customers.DTOs.PreparedCustomerGroup g)
-        => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
+    {
+        var first = g.Rows.FirstOrDefault();
+        if (first == null) return string.Empty;
+        return $"{(first.CustomerCode ?? string.Empty).Trim().ToUpperInvariant()}|{(first.CustomerName ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
 }

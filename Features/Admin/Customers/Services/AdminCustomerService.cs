@@ -473,7 +473,52 @@ namespace STTproject.Features.Admin.Customers.Services
                 CreatedDate = entity.CreatedDate,
                 UpdatedDate = entity.UpdatedDate
             };
-        }     
-            
-    }   
+        }
+
+        // Returns every row of a customer group (same Subd, Customer Code and Customer Name), untracked.
+        // The import uses this to preview what would change before anything is saved.
+        public async Task<List<Customer>> GetCustomersByKeyAsync(int subdistributorId, string customerCode, string customerName)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.Customers
+                .AsNoTracking()
+                .Where(c => c.SubDistributorId == subdistributorId
+                            && c.CustomerCode == customerCode
+                            && c.CustomerName == customerName)
+                .ToListAsync();
+        }
+
+        // Applies the incoming address / city / province / zip / type to every row in the group.
+        // Blank or 0 incoming values are skipped (handled inside CustomerDetailsUpdate.Apply).
+        // Returns how many rows actually changed.
+        public async Task<int> UpdateGroupDetailsAsync(
+            int subdistributorId, string customerCode, string customerName,
+            CustomerDetailsUpdate details, int userId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+
+            var rows = await db.Customers
+                .Where(c => c.SubDistributorId == subdistributorId
+                            && c.CustomerCode == customerCode
+                            && c.CustomerName == customerName)
+                .ToListAsync();
+
+            var now = NowPh();
+            var changed = 0;
+
+            foreach (var c in rows)
+            {
+                if (details.Apply(c, commit: true).Count == 0) continue;
+
+                c.UpdatedDate = now;
+                c.UpdatedBy = userId;
+                changed++;
+            }
+
+            if (changed > 0)
+                await db.SaveChangesAsync();
+
+            return changed;
+        }
+    }
 }

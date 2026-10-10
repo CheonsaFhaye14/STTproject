@@ -1,3 +1,4 @@
+using STTproject.Data;
 using STTproject.Features.Admin.Customers.DTOs;
 
 namespace STTproject.Features.Admin.Customers.Services
@@ -14,10 +15,14 @@ namespace STTproject.Features.Admin.Customers.Services
         Task<IEnumerable<string>> GetCustomerTypesAsync();
         Task<CustomerDetailDto?> GetCustomerByIdAsync(int id);
         Task<string?> GetUserNameByIdAsync(int? userId);
-        Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, IEnumerable<int>? excludeIds = null);        
+        Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, IEnumerable<int>? excludeIds = null);
         Task<IEnumerable<SubdMappingDto>> GetCustomerGroupMappingsAsync(int customerId);
         Task<(bool success, string? error)> UpdateCustomerGroupAsync(CustomerGroupUpdateDto dto);
         Task<ImportMatchResult> CheckImportDuplicateAsync(string customerCode, string customerName, int subDistributorId, string? subdCustCode, string? subdCustName);
         Task<CustomerDetailDto?> FillBlankSubdMappingAsync(int customerId, string? subdCustCode, string? subdCustName, int? updatedBy);
+
+        // Used by the customer import to preview and apply detail updates to an existing customer group.
+        Task<List<Customer>> GetCustomersByKeyAsync(int subdistributorId, string customerCode, string customerName);
+        Task<int> UpdateGroupDetailsAsync(int subdistributorId, string customerCode, string customerName, CustomerDetailsUpdate details, int userId);
     }
 }

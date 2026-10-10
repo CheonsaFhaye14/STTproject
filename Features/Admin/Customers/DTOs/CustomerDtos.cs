@@ -68,7 +68,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
     public class CustomerUpdateDto : CustomerCreateDto
     {
         public int CustomerId { get; set; }
-        public int? UpdatedBy { get; set; } 
+        public int? UpdatedBy { get; set; }
     }
 
     public class SubDistributorDto
@@ -120,7 +120,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         IReadOnlyList<string> IImportGroup<CustomerImportRowDto>.Issues => Issues;
     }
 
-    
+
     public sealed class CustomerImportResult
     {
         public int SubDistributorId { get; set; }
@@ -128,7 +128,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public List<string> OriginalHeaders { get; set; } = new();
         public List<CustomerImportRowResult> Rows { get; } = new();
         public List<PreparedCustomerGroup> PreparedGroups { get; } = new();
-        public List<CustomerImportIssue> Issues { get; } = new(); // header/global-level problems
+        public List<CustomerImportIssue> Issues { get; } = new();
 
         public int SuccessCount => Rows.Count(r => r.IsSuccess);
         public int ErrorCount => Rows.Count(r => !r.IsSuccess);
@@ -137,6 +137,44 @@ namespace STTproject.Features.Admin.Customers.DTOs
 
         public void AddError(int rowNumber, string customerCode, string message)
             => Issues.Add(new CustomerImportIssue(rowNumber, customerCode, message));
+    }
+
+    public sealed record CustomerDetailsUpdate(
+        string? AddressLine, string? City, string? Province, int? ZipCode, string? CustomerType,
+        bool OnlyFillBlanks = false)
+    {
+        private static bool Blank(string? s) => string.IsNullOrWhiteSpace(s) || s.Trim() == "0";
+
+        // Returns a list like "City: Manila → MUNTINLUPA CITY".
+        // It only changes the customer when commit is true, so the same method works for the preview and the save.
+        public List<string> Apply(STTproject.Data.Customer c, bool commit)
+        {
+            var changes = new List<string>();
+
+            void Set(string label, string? current, string? incoming, Action<string> assign)
+            {
+                if (Blank(incoming)) return;                                          // blank or 0 in the file: keep what's there
+                if (OnlyFillBlanks && !string.IsNullOrWhiteSpace(current)) return;
+                var v = incoming!.Trim();
+                if (string.Equals(current?.Trim(), v, StringComparison.OrdinalIgnoreCase)) return;   // nothing to change
+
+                changes.Add($"{label}: {(string.IsNullOrWhiteSpace(current) ? "(blank)" : current)} → {v}");
+                if (commit) assign(v);
+            }
+
+            Set("Address", c.AddressLine, AddressLine, v => c.AddressLine = v);
+            Set("City", c.City, City, v => c.City = v);
+            Set("Province", c.Province, Province, v => c.Province = v);
+            Set("Customer type", c.CustomerType, CustomerType, v => c.CustomerType = v);
+
+            if (ZipCode is > 0 && ZipCode != c.ZipCode && !(OnlyFillBlanks && c.ZipCode is > 0))
+            {
+                changes.Add($"Zip: {c.ZipCode?.ToString() ?? "(blank)"} → {ZipCode}");
+                if (commit) c.ZipCode = ZipCode;
+            }
+
+            return changes;
+        }
     }
 
     public sealed class CustomerImportRowResult
@@ -155,10 +193,12 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int? CustomerId { get; set; }
         public List<string> Issues { get; } = new();
         public List<string> Warnings { get; } = new();
+        public List<string> Notes { get; } = new();
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int? ExistingCustomerIdToUpdate { get; set; }
         public bool IsAlreadyImported { get; set; }
         public bool IsDuplicateInFile { get; set; }
+        public CustomerDetailsUpdate? DetailsUpdate { get; set; }
     }
 
     public sealed class PreparedCustomerGroup
@@ -176,4 +216,3 @@ namespace STTproject.Features.Admin.Customers.DTOs
     public sealed record ImportMatchResult(ImportMatchType MatchType, int? ExistingCustomerId);
     public sealed record CustomerImportIssue(int RowNumber, string CustomerCode, string Message);
 }
-

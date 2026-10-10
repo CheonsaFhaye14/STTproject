@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using STTproject.Data;
@@ -180,8 +181,6 @@ public sealed class ImportCustomersService
 
             var validationIssues = (await CustomerValidations.ValidateAddCustomerAsync(entity, _customerService)).Values.ToList();
 
-            // Import path uses its own duplicate check (real unique key + fillable-blank support)
-            // instead of the generic "already exists" message from the base validator.
             foreach (var msg in validationIssues)
             {
                 if (msg == "This Customer Code already exists for the selected Subdistributor.")
@@ -195,12 +194,14 @@ public sealed class ImportCustomersService
 
             if (dupCheck.Outcome == ImportDuplicateOutcome.ExactDuplicate)
             {
-                rowResult.Warnings.Add(dupCheck.IssueMessage!);
                 rowResult.IsAlreadyImported = true;
                 rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
             }
             else if (dupCheck.Outcome == ImportDuplicateOutcome.FillableBlank)
+            {
                 rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
+                rowResult.Notes.Add("The existing row without a Subd mapping will be filled in with this Subd Customer Code / Store Name.");
+            }
 
             // Cross-check the location against the geographic reference data — only when both are provided.
             if (!string.IsNullOrWhiteSpace(rowResult.Province) && !string.IsNullOrWhiteSpace(rowResult.City))
@@ -219,6 +220,50 @@ public sealed class ImportCustomersService
                     rowResult.ZipCode = match.ZipCode;
                 }
             }
+
+            // Preview updates to an existing customer group (same Subd, Customer Code and Customer Name).
+            // Read-only: nothing is saved until the user commits.
+            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !string.IsNullOrWhiteSpace(rowResult.CustomerName))
+            {
+                var existingGroup = await _customerService.GetCustomersByKeyAsync(
+                    subdistributorId, rowResult.CustomerCode, rowResult.CustomerName);
+
+                if (existingGroup.Count > 0)
+                {
+                    // The file row has no Subd mapping, so it can only update details.
+                    // Mark it as already existing so the commit never inserts a blank-mapping row.
+                    if (string.IsNullOrWhiteSpace(rowResult.SubdCustCode) &&
+                        string.IsNullOrWhiteSpace(rowResult.SubdCustName) &&
+                        !rowResult.IsAlreadyImported)
+                    {
+                        rowResult.IsAlreadyImported = true;
+                        rowResult.ExistingCustomerIdToUpdate = existingGroup[0].CustomerId;
+                    }
+
+                    var details = new CustomerDetailsUpdate(
+                        rowResult.AddressLine, rowResult.City, rowResult.Province, rowResult.ZipCode, rowResult.CustomerType);
+
+                    // A brand-new Subd mapping becomes another row of the same customer, so any detail
+                    // left blank in the file is copied from the customer's existing row.
+                    if (!rowResult.IsAlreadyImported && rowResult.ExistingCustomerIdToUpdate is null)
+                    {
+                        var source = existingGroup[0];
+                        if (string.IsNullOrWhiteSpace(rowResult.AddressLine)) rowResult.AddressLine = source.AddressLine;
+                        if (string.IsNullOrWhiteSpace(rowResult.City)) rowResult.City = source.City;
+                        if (string.IsNullOrWhiteSpace(rowResult.Province)) rowResult.Province = source.Province;
+                        if (string.IsNullOrWhiteSpace(rowResult.CustomerType)) rowResult.CustomerType = source.CustomerType;
+                        if (rowResult.ZipCode is null or 0) rowResult.ZipCode = source.ZipCode;
+                    }
+
+                    var changes = existingGroup.SelectMany(c => details.Apply(c, commit: false)).Distinct().ToList();
+                    if (changes.Count > 0)
+                    {
+                        rowResult.DetailsUpdate = details;
+                        rowResult.Notes.Add("Existing customer will be updated: " + string.Join("; ", changes));
+                    }
+                }
+            }
+
             var dupKey = $"{rowResult.CustomerCode}|{rowResult.CustomerName}|{rowResult.SubdCustCode}|{rowResult.SubdCustName}";
             if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !seenInFile.Add(dupKey))
             {
@@ -236,9 +281,27 @@ public sealed class ImportCustomersService
          }))
         {
             var groupRows = custGroup.OrderBy(r => r.RowNumber).ToList();
+
+            // Nothing in this customer can be saved (it all exists already, with no changes) → Errors tab.
+            if (groupRows.All(r => r.IsAlreadyImported && r.DetailsUpdate is null))
+            {
+                foreach (var r in groupRows)
+                {
+                    r.Issues.Add("Customer already exists for this subdistributor. Nothing to update.");
+                    r.IsSuccess = false;
+                }
+            }
+            else
+            {
+                // Mixed customer: some rows are new or updated, so the existing ones are just skipped.
+                foreach (var r in groupRows.Where(r => r.IsAlreadyImported && r.DetailsUpdate is null && !r.IsDuplicateInFile))
+                    r.Notes.Add("This Subd mapping already exists and will be skipped.");
+            }
+
             var group = new PreparedCustomerGroup(groupRows)
             {
-                Selected = groupRows.All(r => r.IsSuccess)
+                // Nothing starts selected; the user chooses which customers to commit.
+                Selected = false
             };
 
             foreach (var r in groupRows)
@@ -246,11 +309,6 @@ public sealed class ImportCustomersService
                     group.Issues.Add(new CustomerImportIssue(r.RowNumber, r.CustomerCode, issue));
 
             result.PreparedGroups.Add(group);
-        }
-
-        if (result.Rows.Count == 0 && !result.HasIssues)
-        {
-            result.AddError(0, string.Empty, "No customer rows were found in the file.");
         }
 
         if (result.Rows.Count == 0 && !result.HasIssues)
@@ -337,7 +395,8 @@ public sealed class ImportCustomersService
             -1, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             bestCandidateRowNumber, bestCandidateHeaders, bestCandidateMissing,
             new List<(int, string)>(), bestCandidateUnmatchedHeaders);
-    }    
+    }
+
     private static string GetString(IXLRow row, int columnNumber)
     {
         var cell = row.Cell(columnNumber);
@@ -374,6 +433,12 @@ public sealed class ImportCustomersService
 
             try
             {
+                // Update the existing group's details first, so rows that are "already imported"
+                // (which `continue` below) still get their details updated.
+                if (row.DetailsUpdate is not null && !row.IsDuplicateInFile)
+                    await _customerService.UpdateGroupDetailsAsync(
+                        subdistributorId, row.CustomerCode, row.CustomerName, row.DetailsUpdate, userId);
+
                 if (row.IsDuplicateInFile && createdByDupKey.TryGetValue(dupKey, out var reusedId))
                 {
                     row.CustomerId = reusedId;
@@ -383,7 +448,7 @@ public sealed class ImportCustomersService
 
                 if (row.IsAlreadyImported && row.ExistingCustomerIdToUpdate is int alreadyExistingId)
                 {
-                    // Already exists in the database exactly as-is — nothing to save.
+                    // Already exists in the database — the Subd mapping needs no change.
                     row.CustomerId = alreadyExistingId;
                     committed++;
                     continue;
@@ -423,6 +488,7 @@ public sealed class ImportCustomersService
             catch (Exception ex)
             {
                 row.Issues.Add($"Save failed: {ex.Message}");
+                Debug.WriteLine($"Error committing row {row.RowNumber}: {ex}");
                 row.IsSuccess = false;
             }
         }
@@ -621,6 +687,7 @@ public sealed class ImportCustomersService
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
+
     private static string BuildProvinceDefinedName(string province)
     {
         var sanitized = Regex.Replace(province, @"[^A-Za-z0-9]+", "_").Trim('_');
@@ -630,8 +697,9 @@ public sealed class ImportCustomersService
         }
         return $"Prov_{sanitized}";
     }
+
     private static string GetAcceptedAliasesText(string canonicalKey) =>
-    RequiredHeaderMap.TryGetValue(canonicalKey, out var aliases)
+        RequiredHeaderMap.TryGetValue(canonicalKey, out var aliases)
             ? string.Join(", ", aliases)
             : "no known aliases";
 }
