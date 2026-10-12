@@ -215,4 +215,5 @@ namespace STTproject.Features.Admin.Customers.DTOs
     public enum ImportMatchType { None, ExactDuplicate, FillableBlank }
     public sealed record ImportMatchResult(ImportMatchType MatchType, int? ExistingCustomerId);
     public sealed record CustomerImportIssue(int RowNumber, string CustomerCode, string Message);
+    public sealed record CustomerErrorReportEntry(int RowNumber, string ErrorType, string Message);
 }

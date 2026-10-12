@@ -181,13 +181,13 @@
         StateHasChanged();
     }
 
-    private async Task HandleDownloadErrorReport()
+    private async Task HandleDownloadErrorReport(List<STTproject.Features.Admin.Customers.DTOs.CustomerErrorReportEntry> entries)
     {
         if (importResult == null) return;
-
-        var bytes = ImportCustomersService.GenerateErrorReportExcel(importResult);
+    
+        var bytes = ImportCustomersService.GenerateErrorReportExcel(importResult, entries);
         var fileName = $"Customer-Import-Errors-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
-
+    
         await JS.InvokeVoidAsync(
             "downloadFileFromBytes",
             fileName,

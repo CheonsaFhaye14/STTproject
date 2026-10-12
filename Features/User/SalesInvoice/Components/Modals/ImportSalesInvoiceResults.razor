@@ -1,4 +1,7 @@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
+@using STTproject.Shared.Components
+
+<LoadingOverlay Show="isCommitting" Title="Committing selected invoices..." IconClass="fa-solid fa-upload" />
 
 @if (Show)
 {
@@ -12,7 +15,7 @@
                         <i class="ti ti-file-import" aria-hidden="true"></i>
                     </div>
                     <div>
-                        <div class="mh-title">@(ReadOnly ? "Import check (preview)" : "Import results")</div>
+                        <div class="mh-title">@(ReadOnly ? "Sales Invoice Import check (preview)" : "Sales Invoice Import results")</div>
                         <div class="mh-sub">@ImportResult?.PreparedInvoices?.FirstOrDefault()?.SubDistributor</div>
                     </div>
                 </div>
@@ -54,6 +57,40 @@
                     var selectedCount = successCards.Count(c => c.Prepared?.Selected == true && c.Prepared?.IsSaved != true);
                     var selectableCount = successCards.Count(c => c.Prepared != null && c.Prepared.IsSaved != true);
                     var totalRows = ImportResult.TotalRowsProcessed;
+
+                    @if (!string.IsNullOrEmpty(commitError))
+                    {
+                        <div class="global-alert">
+                            <i class="ti ti-alert-triangle global-alert-icon" aria-hidden="true"></i>
+                            <div>
+                                <div class="global-alert-title">⚠️ @commitError</div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (hasCommitted)
+                    {
+                        if (commitFailedCount == 0)
+                        {
+                            <div class="success-banner">
+                                <div class="success-banner-icon"><i class="ti ti-circle-check" aria-hidden="true"></i></div>
+                                <div>
+                                    <div class="success-banner-title">✅ Successfully committed @commitSavedCount invoice(s).</div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="global-alert">
+                                <i class="ti ti-alert-triangle global-alert-icon" aria-hidden="true"></i>
+                                <div>
+                                    <div class="global-alert-title">
+                                        ⚠️ @commitSavedCount invoice(s) committed. @commitFailedCount invoice(s) could not be saved. Check the Errors tab for the reason.
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
 
                     @* ── Sticky header controls (stay in place while cards scroll) ── *@
                     <div class="sticky-controls">
@@ -701,6 +738,39 @@
 
     private InvoiceCardFilter cardFilter = InvoiceCardFilter.SuccessOnly;
     private bool showCommitConfirmModal;
+    private bool isCommitting;
+    private bool hasCommitted;
+    private void InvalidateCaches()
+    {
+        _cachedForResult = null;
+        _cachedCards = null;
+        _cachedErrorMessages = null;
+        _groupedIssuesCache.Clear();
+        _groupedIssuesCacheFilter = null;
+        _cachedItemGroups = null;
+        _cachedItemGroupsFilter = null;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Show && !wasShown)
+        {
+            wasShown = true;
+            hasCommitted = false;
+            commitError = null;
+            InvalidateCaches();
+
+            foreach (var p in ImportResult?.PreparedInvoices ?? new List<PreparedInvoice>())
+            {
+                if (!p.IsSaved) p.Selected = false;
+            }
+        }
+        else if (!Show) { wasShown = false; }
+    }
+    private bool wasShown;
+    private int commitSavedCount;
+    private int commitFailedCount;
+    private string? commitError;
     private string? selectedErrorFilter;
     private string? selectedConflictFilter;
     private string? selectedWarningKindFilter;
@@ -1150,6 +1220,7 @@
     private async Task ConfirmCommit()
     {
         showCommitConfirmModal = false;
+        commitError = null;
 
         foreach (var card in GetInvoiceCards())
         {
@@ -1157,9 +1228,50 @@
                 card.Prepared.Selected = false;
         }
 
-        await Commit();
-    }
+        var toCommit = GetInvoiceCards()
+            .Where(c => c.Prepared != null && !c.HasErrors && !HasWarningOnly(c)
+                        && c.Prepared.Selected && !c.Prepared.IsSaved)
+            .Select(c => c.Prepared!)
+            .ToList();
 
+        try
+        {
+            isCommitting = true;
+            StateHasChanged();
+            await Task.Yield(); 
+            await Commit();
+
+            foreach (var p in toCommit.Where(p => !p.IsSaved))
+            {
+                if ((p.Issues?.Count ?? 0) == 0)
+                {
+                    var rowNo = p.Items?.FirstOrDefault()?.LineItemId ?? 0;
+                    var msg = string.IsNullOrWhiteSpace(p.SaveErrorMessage)
+                        ? "Save failed: this invoice was not processed by the commit."
+                        : p.SaveErrorMessage;
+                    p.Issues ??= new List<ImportSalesInvoiceIssue>();
+                    p.Issues.Add(new ImportSalesInvoiceIssue(rowNo, p.InvoiceNumber, msg, string.Empty, string.Empty));
+                }
+            }
+
+            InvalidateCaches();
+
+            commitSavedCount = toCommit.Count(p => p.IsSaved);
+            commitFailedCount = toCommit.Count - commitSavedCount;
+            hasCommitted = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            commitError = $"Commit failed: {ex.Message}";
+            InvalidateCaches();
+        }
+        finally
+        {
+            isCommitting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
     private string GetErrorBadgeText(InvoiceCardViewModel card)
     {
         var issues = EffectiveIssues(card);

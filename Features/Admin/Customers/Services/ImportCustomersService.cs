@@ -497,51 +497,73 @@ public sealed class ImportCustomersService
     }
     
     // PHASE 3 — build a downloadable Excel report: original columns + an "Error" column, failed rows only.
-    public byte[] GenerateErrorReportExcel(CustomerImportResult result)
+    public byte[] GenerateErrorReportExcel(
+        CustomerImportResult result,
+        IReadOnlyCollection<CustomerErrorReportEntry>? entries = null)
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Errors");
-
+    
         var headers = result.OriginalHeaders.Count > 0
                 ? result.OriginalHeaders
                 : TemplateHeaders.ToList();
-
+    
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
-
+    
         var errorColumn = headers.Count + 1;
         sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
         sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
         sheet.SheetView.FreezeRows(1);
-
-        var failedRows = result.Rows.Where(r => !r.IsSuccess).ToList();
-
+    
+        List<(CustomerImportRowResult Row, string Error)> reportRows;
+    
+        if (entries is null)
+        {
+            reportRows = result.Rows
+                .Where(r => !r.IsSuccess)
+                .Select(r => (r, string.Join("; ", r.Issues)))
+                .ToList();
+        }
+        else
+        {
+            var errorByRow = entries
+                .GroupBy(e => e.RowNumber)
+                .ToDictionary(g => g.Key, g => string.Join("; ", g.Select(e => e.Message).Distinct()));
+    
+            reportRows = result.Rows
+                .Where(r => errorByRow.ContainsKey(r.RowNumber))
+                .OrderBy(r => r.RowNumber)
+                .Select(r => (r, errorByRow[r.RowNumber]))
+                .ToList();
+        }
+    
         int excelRow = 2;
-        foreach (var row in failedRows)
+        foreach (var (row, error) in reportRows)
         {
             for (int i = 0; i < headers.Count; i++)
             {
                 row.RawValues.TryGetValue(headers[i], out var value);
                 sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
             }
-
+    
             var errorCell = sheet.Cell(excelRow, errorColumn);
-            errorCell.Value = string.Join("; ", row.Issues);
-            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D"); 
+            errorCell.Value = error;
+            errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D");
             errorCell.Style.Font.Bold = true;
-
+    
             excelRow++;
         }
-
+    
         sheet.Columns().AdjustToContents();
-
+    
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
-
+    
     private static readonly string[] TemplateHeaders =
     {
         "SUBD CUSTOMER CODE", "SUBD STORE NAME", "ADDRESS LINE",
