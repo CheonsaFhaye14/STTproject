@@ -345,6 +345,14 @@
                     @if (invoiceCards.Any())
                     {
                         <div class="import-results">
+                            @if (cardFilter == InvoiceCardFilter.ErrorOnly && invoiceCards.Any(IsHoldOnly))
+                            {
+                                <p class="hint-text" style="margin:8px 0;">
+                                    <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                    <strong>On hold</strong> means the invoice itself is fine, but another row with the same
+                                    invoice number has a problem. An invoice is only imported when every one of its rows is valid.
+                                </p>
+                            }
                             @if (cardFilter != InvoiceCardFilter.ErrorOnly)
                             {
                                 <Virtualize Items="successCards" Context="card" ItemSize="72">
@@ -429,7 +437,6 @@
                                                 else if (card?.Prepared != null)
                                                 {
                                                     <span class="badge badge-ready">
-                                                        <i class="ti ti-check" aria-hidden="true"></i>
                                                         Ready
                                                     </span>
                                                     @if (!ReadOnly)
@@ -597,35 +604,47 @@
                                         @{
                                             var grouped = GetGroupedIssues(card, selectedErrorFilter);
                                             var isExpanded = expandedCards.Contains(card.CardKey);
+                                            var isHold = IsHoldOnly(card);
                                         }
                                         <div class="icard">
-                                            <div class="ich ich-er @(isExpanded ? "open" : "")"
+                                            <div class="ich @(isHold ? "ich-warn" : "ich-er") @(isExpanded ? "open" : "")"
                                                  @onclick="() => ToggleExpand(card.CardKey)">
                                                 <div class="ich-left">
-                                                    <div class="iicon iicon-er">
-                                                        <i class="ti ti-file-alert" aria-hidden="true"></i>
+                                                    <div class="iicon @(isHold ? "iicon-warn" : "iicon-er")">
+                                                        <i class="ti @(isHold ? "ti-player-pause" : "ti-file-alert")" aria-hidden="true"></i>
                                                     </div>
                                                     <div>
-                                                        <div class="inv-num inv-er">@card.InvoiceNumber</div>
+                                                        <div class="inv-num @(isHold ? "inv-warn" : "inv-er")">@card.InvoiceNumber</div>
                                                     </div>
                                                 </div>
                                                 <div class="ich-right">
-                                                    <span class="badge badge-err">
-                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        @GetErrorBadgeText(card)
-                                                    </span>
+                                                    @if (isHold)
+                                                    {
+                                                        <span class="badge badge-needs-review">
+                                                            <i class="ti ti-player-pause" aria-hidden="true"></i>
+                                                            On hold
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-err">
+                                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                            @GetErrorBadgeText(card)
+                                                        </span>
+                                                    }
                                                     <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
                                                 </div>
                                             </div>
 
-                                            @if (isExpanded && grouped.Any())
+                                            @* On-hold notes are always shown, so users don't have to click to find out why. *@
+                                            @if ((isExpanded || isHold) && grouped.Any())
                                             {
                                                 <div class="icb-err-rows">
                                                     @foreach (var grp in grouped)
                                                     {
                                                         <div class="err-msg-card">
                                                             <div class="err-msg-hdr">
-                                                                <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                                <i class="ti @(isHold ? "ti-info-circle" : "ti-alert-circle") err-msg-icon" aria-hidden="true"></i>
                                                                 <div>
                                                                     <div class="err-msg-text">@grp.Message</div>
                                                                     @if (grp.Rows.Count > 0)
@@ -698,7 +717,7 @@
                 </label>
                 @if (!downloadScopeAll)
                 {
-                    <select style="width:100%;" value="@downloadErrorType"
+                    <select value="@downloadErrorType"
                             @onchange="e => downloadErrorType = e.Value?.ToString()">
                         <option value="">-- select error --</option>
                         @foreach (var t in downloadTypes)
@@ -900,10 +919,12 @@
                 : firstIssue.InvoiceNumber;
 
             var invKey = displayInvoiceNumber.Trim().ToUpperInvariant();
-            var key = keysByInvoice.TryGetValue(invKey, out var keys) && keys.Count == 1
-                ? keys[0]
-                : BuildRawRowKey(firstIssue.RowNumber, firstIssue.InvoiceNumber ?? string.Empty);
 
+            var key = !string.IsNullOrWhiteSpace(firstIssue.GroupKey)
+                ? firstIssue.GroupKey!
+                : keysByInvoice.TryGetValue(invKey, out var keys) && keys.Count == 1
+                    ? keys[0]
+                    : BuildRawRowKey(firstIssue.RowNumber, firstIssue.InvoiceNumber ?? string.Empty);
             allCards.Add(new InvoiceCardViewModel(displayInvoiceNumber, null, issues, key));
         }
 
@@ -932,6 +953,18 @@
         _groupedIssuesCache.Clear();
 
         return _cachedCards;
+    }
+    private static List<ImportSalesInvoiceIssue> DisplayIssues(InvoiceCardViewModel card)
+    {
+        var all = EffectiveIssues(card);
+        var real = all.Where(i => !i.IsHoldNote).ToList();
+        return real.Count > 0 ? real : all;
+    }
+
+    private static bool IsHoldOnly(InvoiceCardViewModel card)
+    {
+        var issues = EffectiveIssues(card);
+        return issues.Count > 0 && issues.All(i => i.IsHoldNote);
     }
     private void OnWarningKindFilterChanged(ChangeEventArgs e)
     {
@@ -1075,7 +1108,10 @@
     {
         if (_cachedErrorMessages != null) return _cachedErrorMessages;
 
-        var all = GetInvoiceCards().SelectMany(EffectiveIssues).Select(NormalizeSalesIssueType).ToList();
+        var all = GetInvoiceCards()
+            .SelectMany(c => EffectiveIssues(c).Where(i => !i.IsHoldNote))
+            .Select(NormalizeSalesIssueType)
+            .ToList();
 
         _cachedErrorMessages = all.Where(m => !string.IsNullOrWhiteSpace(m))
             .GroupBy(m => m)
@@ -1120,7 +1156,7 @@
 
         if (_groupedIssuesCache.TryGetValue(card.CardKey, out var cached)) return cached;
 
-        var visibleIssues = EffectiveIssues(card).AsEnumerable();
+        var visibleIssues = DisplayIssues(card).AsEnumerable();
         if (!string.IsNullOrWhiteSpace(filter))
             visibleIssues = visibleIssues.Where(i => NormalizeSalesIssueType(i) == filter);
 
@@ -1172,6 +1208,7 @@
     private static string NormalizeSalesIssueType(ImportSalesInvoiceIssue issue)
     {
         if (issue == null) return string.Empty;
+        if (issue.IsHoldNote) return "On Hold";
 
         var col = (issue.ColumnName ?? string.Empty).Trim().ToLowerInvariant();
         var msg = NormalizeMessage(issue.Message).ToLowerInvariant();
@@ -1274,7 +1311,9 @@
     }
     private string GetErrorBadgeText(InvoiceCardViewModel card)
     {
-        var issues = EffectiveIssues(card);
+        var issues = DisplayIssues(card);
+        if (issues.Count > 0 && issues.All(i => i.IsHoldNote)) return "On hold";
+
         int errorCount = string.IsNullOrWhiteSpace(selectedErrorFilter)
             ? issues.Count
             : issues.Count(i => NormalizeSalesIssueType(i) == selectedErrorFilter);
@@ -1334,7 +1373,6 @@
 
     private void OpenDownloadModal()
     {
-        // Pre-select whatever error the user is already filtering by
         downloadErrorType = selectedErrorFilter;
         downloadScopeAll = string.IsNullOrWhiteSpace(selectedErrorFilter);
         showDownloadModal = true;
@@ -1345,7 +1383,7 @@
     private List<ErrorReportEntry> BuildReportEntries(string? errorType) =>
         GetInvoiceCards()
             .Where(c => c.HasErrors)
-            .SelectMany(EffectiveIssues)
+            .SelectMany(c => EffectiveIssues(c).Where(i => !i.IsHoldNote))
             .Where(i => i.RowNumber > 0)
             .Select(i => new ErrorReportEntry(i.RowNumber, NormalizeSalesIssueType(i), i.Message))
             .Where(e => string.IsNullOrWhiteSpace(errorType) || e.ErrorType == errorType)

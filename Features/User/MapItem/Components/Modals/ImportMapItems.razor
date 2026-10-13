@@ -78,7 +78,9 @@
 
             using var importStream = new MemoryStream(fileBytes);
             importResult = await ImportMapItemService.ImportFromExcelAsync(importStream, UserContext.UserId ?? 0);
-            selectedGroupKeys = BuildDefaultSelectedGroupKeys(importResult);
+
+            // Nothing is selected when the results open; the user picks what to commit.
+            selectedGroupKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
@@ -96,25 +98,61 @@
 
     private async Task HandleCommitAsync()
     {
-        if (importResult == null || !UserContext.UserId.HasValue) return;
+        if (importResult == null) return;
 
-        var selectedRows = importResult.Rows
-            .Where(r => r.IsSuccess && r.Issues.Count == 0)
-            .Where(r => selectedGroupKeys.Contains(BuildGroupKey(r)))
+        var userId = UserContext.UserId ?? 0;
+
+        // Work with whole groups (one group = one Subd item with all its UOM rows).
+        var selectedGroups = importResult.PreparedGroups
+            .Where(g => g.Selected && !g.IsSaved && g.Rows.Count > 0
+                        && g.Issues.Count == 0 && g.Rows.All(r => r.Issues.Count == 0)
+                        && selectedGroupKeys.Contains(GroupKey(g)))
             .ToList();
 
+        var selectedRows = selectedGroups.SelectMany(g => g.Rows).ToList();
+
+        // Nothing matched the selection. The results modal reports these groups as
+        // "not processed" instead of failing silently.
         if (selectedRows.Count == 0) return;
 
-        var committedGroups = await ImportMapItemService.CommitPreparedRowsAsync(selectedRows, UserContext.UserId.Value);
+        // CommitPreparedRowsAsync quietly returns 0 when there is no user, so stop here
+        // and give every selected row a reason instead of pretending it was saved.
+        if (userId <= 0)
+        {
+            foreach (var row in selectedRows)
+            {
+                row.Issues.Add("Save failed: unable to identify the current user. Please sign in again.");
+                row.IsSuccess = false;
+            }
+            StateHasChanged();
+            return;
+        }
+
+        var committedGroups = 0;
+        try
+        {
+            committedGroups = await ImportMapItemService.CommitPreparedRowsAsync(selectedRows, userId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            foreach (var row in selectedRows.Where(r => r.Issues.Count == 0))
+            {
+                row.Issues.Add($"Save failed: {ex.Message}");
+                row.IsSuccess = false;
+            }
+        }
+
+        // A group counts as saved only when every row succeeded AND got a Subd item id.
+        // The results stay open, so the user sees what was saved and what was not.
+        foreach (var g in selectedGroups)
+        {
+            if (g.Rows.All(r => r.IsSuccess && r.Issues.Count == 0 && r.SubdItemId.HasValue))
+                g.IsSaved = true;
+        }
 
         if (committedGroups > 0)
-        {
-            showResults = false;
-            selectedFile = null;
-            importResult = null;
-            selectedGroupKeys.Clear();
             await OnImportCompleted.InvokeAsync();
-        }
 
         StateHasChanged();
     }
@@ -149,23 +187,19 @@
         await OnClose.InvokeAsync();
     }
 
-    private static HashSet<string> BuildDefaultSelectedGroupKeys(ImportMapItemResult? result)
+    // Must stay identical to BuildGroupKey in ImportMapItemResults.razor
+    // (sub distributor | company item code | company item name | subd item code | subd item name).
+    private static string GroupKey(PreparedItemGroup g)
     {
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (result is null || result.Rows.Count == 0) return selected;
+        var row = g.Rows.FirstOrDefault();
+        if (row == null) return string.Empty;
 
-        var validGroups = result.Rows
-            .GroupBy(BuildGroupKey)
-            .Where(g => g.All(r => r.IsSuccess && r.Issues.Count == 0))
-            .Select(g => g.Key);
-
-        foreach (var key in validGroups) selected.Add(key);
-        return selected;
-    }
-
-    private static string BuildGroupKey(ImportMapItemRowResult row)
-    {
         static string NormalizePart(string? v) => (v ?? string.Empty).Trim().ToUpperInvariant();
-        return string.Join("|", NormalizePart(row.SubDistributorCode), NormalizePart(row.CompanyItemCode), NormalizePart(row.CompanyItemName));
+        return string.Join("|",
+            NormalizePart(row.SubDistributorCode),
+            NormalizePart(row.CompanyItemCode),
+            NormalizePart(row.CompanyItemName),
+            NormalizePart(row.SubdItemCode),
+            NormalizePart(row.SubdItemName));
     }
 }

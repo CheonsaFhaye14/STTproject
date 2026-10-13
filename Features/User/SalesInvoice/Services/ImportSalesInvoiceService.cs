@@ -234,12 +234,20 @@ public sealed class ImportSalesInvoiceService
 
 			try
 			{
-				if (result.ErroredRowsByInvoiceCode.TryGetValue(invoiceNumber, out var badRows))
+				var blockingRows = FindBlockingRows(result.ErroredRows, invoiceNumber, invoiceRows[0]);
+				if (blockingRows.Count > 0)
 				{
-					const string msg = "Invoice has rows with errors and can't be imported partially. Fix the file and re-upload.";
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
-						badRows.Min(), invoiceNumber, msg, string.Empty, string.Empty));
-					result.AddError(badRows.Min(), invoiceNumber, msg);
+					var holdIssue = new ImportSalesInvoiceIssue(
+						blockingRows.Min(b => b.RowNumber),
+						invoiceNumber,
+						BuildHoldMessage(blockingRows),
+						string.Empty,
+						string.Empty,
+						GroupKey: invoiceGroup.Key,
+						IsHoldNote: true);
+
+					preparedInvoice.Issues.Add(holdIssue);
+					result.AddIssue(holdIssue);
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -497,7 +505,50 @@ public sealed class ImportSalesInvoiceService
 
 		return result;
 	}
+	
+	private static List<ErroredRowInfo> FindBlockingRows(
+		IReadOnlyList<ErroredRowInfo> erroredRows, string invoiceCode, ImportedInvoiceRow groupFirstRow)
+	{
+		var code = invoiceCode.Trim();
+		var customerKey = groupFirstRow.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture);
+		var orderKey = (groupFirstRow.OrderType ?? string.Empty).Trim().ToUpperInvariant();
+		var salesKey = (groupFirstRow.SalesManName ?? string.Empty).Trim().ToUpperInvariant();
 
+		return erroredRows
+			.Where(e => string.Equals(e.InvoiceCode, code, StringComparison.OrdinalIgnoreCase))
+			.Where(e => e.HeaderUnresolved
+				|| ((e.CustomerKey.Length == 0 || e.CustomerKey == customerKey)
+					&& (e.OrderType.Length == 0 || e.OrderType == orderKey)
+					&& (e.SalesMan.Length == 0 || e.SalesMan == salesKey)))
+			.OrderBy(e => e.RowNumber)
+			.ToList();
+	}
+
+	private static string BuildHoldMessage(List<ErroredRowInfo> blockers)
+	{
+		var rowNumbers = blockers.Select(b => b.RowNumber).Distinct().ToList();
+		var plural = rowNumbers.Count > 1;
+		var rows = FormatRowsText(rowNumbers);
+		var unresolved = blockers.Where(b => b.HeaderUnresolved).ToList();
+
+		string what;
+		if (unresolved.Count == 0)
+			what = plural ? "with the same invoice number have errors" : "with the same invoice number has an error";
+		else if (!plural)
+			what = $"has the same invoice number but its {unresolved[0].HeaderProblem}, so we can't tell which invoice it belongs to";
+		else
+			what = "have the same invoice number, and some of them have a customer or order type problem, so we can't tell which invoice they belong to";
+
+		return $"On hold: {rows} {what}. Fix {(plural ? "those rows" : "that row")} and this invoice will import.";
+	}
+
+	private static string FormatRowsText(IEnumerable<int> rowNumbers)
+	{
+		var rows = rowNumbers.Distinct().OrderBy(r => r).ToList();
+		if (rows.Count == 1) return $"row {rows[0]}";
+		if (rows.Count <= 5) return $"rows {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
+		return $"rows {string.Join(", ", rows.Take(5))} and {rows.Count - 5} more";
+	}
 	public static List<InputItemModel> BuildAggregatedItems(
 		List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
 	{
@@ -670,6 +721,7 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			result.TotalRowsProcessed++;
+			var issueStart = result.Issues.Count;
 
 			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 			foreach (var kvp in headers)
@@ -686,20 +738,12 @@ public sealed class ImportSalesInvoiceService
 			DateOnly invoiceDate = default;
 			var emittedRows = new List<ImportedInvoiceRow>();
 			var rowHasErrors = false;
+			var orderTypeInvalid = false;
 
-			// Local function to add an error for the current row and mark it as having errors, which will prevent it from being emitted.
 			void AddRowError(string message, string? columnName = null, int? suggestionCount = null)
 			{
 				result.AddError(rowNumber, invoiceCode, message, columnName, suggestionCount);
 				rowHasErrors = true;
-
-				if (!string.IsNullOrWhiteSpace(invoiceCode))
-				{
-					var key = invoiceCode.Trim();
-					if (!result.ErroredRowsByInvoiceCode.TryGetValue(key, out var list))
-						result.ErroredRowsByInvoiceCode[key] = list = new List<int>();
-					if (!list.Contains(rowNumber)) list.Add(rowNumber);
-				}
 			}
 
 			//-------Validate required fields------------
@@ -743,7 +787,10 @@ public sealed class ImportSalesInvoiceService
 			{
 				// Explicit OrderType column — must be valid
 				if (!InvoiceDataValidator.TryParseOrderType(orderType, out normalizedOrderType))
+				{
 					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+					orderTypeInvalid = true;
+				}			
 			}
 			else if (netAmountValue.HasValue)
 			{
@@ -792,6 +839,41 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			// ── Quantity & UOM ───────────────────────────────────────────────────
+			void FinalizeErroredRow()
+			{
+				if (!rowHasErrors || string.IsNullOrWhiteSpace(invoiceCode)) return;
+
+				var customerResolved = resolvedCustomer is not null;
+				var headerProblem = !customerResolved
+					? (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName)
+						? "customer is missing"
+						: "customer was not found")
+					: orderTypeInvalid ? "order type is invalid" : null;
+
+				var finalOrderType = orderTypeInvalid
+					? string.Empty
+					: !string.IsNullOrWhiteSpace(normalizedOrderType)
+						? normalizedOrderType
+						: (emittedRows.FirstOrDefault()?.OrderType ?? string.Empty);
+
+				var code = invoiceCode.Trim();
+				var customerKey = customerResolved
+					? resolvedCustomer!.CustomerId.ToString(CultureInfo.InvariantCulture)
+					: string.Empty;
+				var orderKey = finalOrderType.Trim().ToUpperInvariant();
+				var salesKey = (salesManName ?? string.Empty).Trim().ToUpperInvariant();
+
+				result.ErroredRows.Add(new ErroredRowInfo(
+					rowNumber, code, customerKey, orderKey, salesKey, headerProblem is not null, headerProblem));
+
+				// Same key the invoice group gets in PrepareFromExcelAsync, so the error lands on that invoice's card.
+				if (headerProblem is null && orderKey.Length > 0)
+				{
+					var groupKey = string.Join("|", code.ToUpperInvariant(), customerKey, orderKey, salesKey);
+					for (var i = issueStart; i < result.Issues.Count; i++)
+						result.Issues[i] = result.Issues[i] with { GroupKey = groupKey };
+				}
+			}
 
 			(int UomId, List<Data.ItemsUom>? Ambiguous) ResolveUomWithMatches(string uomString)
 			{
@@ -812,8 +894,6 @@ public sealed class ImportSalesInvoiceService
 
 			if (!useSplitQuantities)
 			{
-				// Simple path — use TryResolveQuantity to normalize quantity + UOM together.
-				// The template might not map a Quantity column at all, so don't touch a cell that isn't there.
 				var quantityCell = hasQuantityColumn ? row.Cell(quantityColumn) : null;
 				var quantityIsEmpty = quantityCell is null || IsCellEffectivelyEmpty(quantityCell);
 
@@ -842,7 +922,10 @@ public sealed class ImportSalesInvoiceService
 				else
 				{
 					if (resolvedQty == 0)
+					{
+						FinalizeErroredRow();
 						continue;
+					}
 
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
@@ -1004,7 +1087,10 @@ public sealed class ImportSalesInvoiceService
 				}
 			}
 			if (rowHasErrors)
+			{
+				FinalizeErroredRow();
 				continue;
+			}
 
 			rows.AddRange(emittedRows);
 		}
@@ -1339,8 +1425,6 @@ public sealed class ImportSalesInvoiceService
 			var row = worksheet.Row(rowNumber);
 			if (row.CellsUsed().All(c => c.IsEmpty())) continue;
 
-			// Read SKU / item / UOM exactly the way ReadRows does, rules included,
-			// so this pre-scan and the real read always agree on which item a row is.
 			var skuCode = ReadValue(row, headers, columnRules, "SkuCode");
 			var itemName = ReadValue(row, headers, columnRules, "ItemName");
 

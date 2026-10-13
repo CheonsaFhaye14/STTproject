@@ -28,7 +28,11 @@ public sealed class ImportSalesInvoiceResult
     public int ImportedRowCount { get; set; }
     public List<ImportSalesInvoiceIssue> Issues { get; } = new();
     public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
-    public Dictionary<string, List<int>> ErroredRowsByInvoiceCode { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // Rows that had errors and were left out of the import, with the header they were meant for
+    // (invoice code, customer, order type, salesman). Used to decide which invoices must be held back.
+    public List<ErroredRowInfo> ErroredRows { get; } = new();
+
     public List<string> RawSheetHeaders { get; set; } = new();
     public Dictionary<int, string[]> RawSheetRowsByRow { get; } = new();
     public bool HasIssues => Issues.Count > 0;
@@ -60,7 +64,20 @@ public sealed class ImportSalesInvoiceResult
         AddError(rowNumber, invoiceNumber, message, string.Empty, string.Empty, columnName, suggestionCount);
     }
 
+    public void AddIssue(ImportSalesInvoiceIssue issue) => Issues.Add(issue);
 }
+
+// CustomerKey / OrderType / SalesMan are empty when unknown (an empty value matches anything).
+// HeaderUnresolved = the customer or the order type is the problem, so we can't tell which invoice the row belongs to.
+public sealed record ErroredRowInfo(
+    int RowNumber,
+    string InvoiceCode,
+    string CustomerKey,
+    string OrderType,
+    string SalesMan,
+    bool HeaderUnresolved,
+    string? HeaderProblem);
+
 public sealed record ErrorReportEntry(int RowNumber, string ErrorType, string Message);
 public sealed record ImportedInvoiceRow(
     int RowNumber,
@@ -90,6 +107,8 @@ public sealed record ImportedInvoiceRow(
     string? UomFallbackWarning = null,
     List<int>? UomReviewCandidateIds = null );
 
+// GroupKey: the invoice (card) this issue belongs to, when known. Lets a row error land on the right invoice card.
+// IsHoldNote: "this invoice is fine, but it is on hold because of another row". Not a real error.
 public sealed record ImportSalesInvoiceIssue(
     int RowNumber,
     string InvoiceNumber,
@@ -97,7 +116,9 @@ public sealed record ImportSalesInvoiceIssue(
     string Body,
     string Footer,
     string? ColumnName = null,
-    int? SuggestionCount = null)
+    int? SuggestionCount = null,
+    string? GroupKey = null,
+    bool IsHoldNote = false)
 {
     public string Message => Header;
 }

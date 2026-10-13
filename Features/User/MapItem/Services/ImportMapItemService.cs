@@ -464,30 +464,30 @@ public sealed class ImportMapItemService
 	{
 		if (rows.Count == 0)
 			return 0;
-
+ 
 		await using var context = _contextFactory.CreateDbContext();
-
+ 
 		var isAdmin = await IsAdminAsync(context, currentUserId, cancellationToken);
-
+ 
 		// Get all subdistributors for mapping — admins see all active subdistributors,
 		// non-admins only see the ones they encoded themselves.
 		var subdDistributorsQuery = context.SubDistributors
 			.AsNoTracking()
 			.Where(s => s.IsActive);
-
+ 
 		if (!isAdmin)
 		{
 			subdDistributorsQuery = subdDistributorsQuery.Where(s => s.EncoderId == currentUserId);
 		}
-
+ 
 		var subdDistributors = await subdDistributorsQuery
 			.ToDictionaryAsync(s => Normalize(s.SubdCode), cancellationToken);
-
+ 
 		var companyItems = await context.CompanyItems
 			.AsNoTracking()
 			.Where(ci => ci.IsActive)
 			.ToDictionaryAsync(ci => Normalize(ci.ItemCode), cancellationToken);
-
+ 
 		// Group by SubDistributor + SubdItemCode + CompanyItemCode + ItemName (description)
 		// to create SubdItems with their UOMs. Including ItemName here is what keeps two
 		// rows with the same code/company but a different description as separate SubdItems
@@ -501,86 +501,132 @@ public sealed class ImportMapItemService
 				ItemName = Normalize(r.SubdItemName)
 			})
 			.ToList();
-
+ 
 		var committedGroups = 0;
-
+ 
 		foreach (var subdItemGroup in groupedBySubdItem)
 		{
-			var subdItemCode = subdItemGroup.First().SubdItemCode.Trim();
 			var subdItemRows = subdItemGroup.ToList();
 			var firstRow = subdItemRows[0];
-
-			// Find the subdistributor
-			if (!subdDistributors.TryGetValue(Normalize(firstRow.SubDistributorCode), out var subdDistributor))
+			var subdItemCode = firstRow.SubdItemCode.Trim();
+			int? createdSubdItemId = null;
+ 
+			try
 			{
-				throw new InvalidOperationException($"SubDistributor '{firstRow.SubDistributorCode}' was not found during commit.");
-			}
-
-			// Find the company item
-			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem) || companyItem is null)
-			{
-				throw new InvalidOperationException($"Company item '{firstRow.CompanyItemCode}' was not found during commit.");
-			}
-
-			var existingByCode = await context.SubdItems
-				.FirstOrDefaultAsync(
-					si => si.SubDistributorId == subdDistributor.SubDistributorId
-						&& si.SubdItemCode == subdItemCode
-						&& si.CompanyItemId == companyItem.CompanyItemId
-						&& si.ItemName == firstRow.SubdItemName,
-					cancellationToken);
-
-			if (existingByCode != null)
-			{
-				throw new InvalidOperationException($"Cannot commit: SubdItem code '{subdItemCode}' with description '{firstRow.SubdItemName}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'. Please review the import and try again.");
-			}
-
-			var subdItem = new SubdItem
-			{
-				SubDistributorId = subdDistributor.SubDistributorId,
-				CompanyItemId = companyItem.CompanyItemId,
-				SubdItemCode = subdItemCode,
-				ItemName = firstRow.SubdItemName,
-				IsActive = true,
-				CreatedDate = DateTime.UtcNow,
-				UpdatedDate = DateTime.UtcNow,
-				CreatedBy = currentUserId,
-				UpdatedBy = currentUserId
-			};
-
-			context.SubdItems.Add(subdItem);
-			await context.SaveChangesAsync(cancellationToken);
-
-			var uomEntries = new Dictionary<string, UomEntry>();
-			foreach (var row in subdItemRows)
-			{
-				if (string.IsNullOrWhiteSpace(row.UomName) || !row.Price.HasValue)
+				if (!subdDistributors.TryGetValue(Normalize(firstRow.SubDistributorCode), out var subdDistributor))
 				{
-					continue;
+					throw new InvalidOperationException($"SubDistributor '{firstRow.SubDistributorCode}' was not found during commit.");
 				}
-
-				var canonicalUom = CanonicalizeUomName(row.UomName);
-				uomEntries[canonicalUom] = new UomEntry
+ 
+				if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem) || companyItem is null)
 				{
-					Conversion = row.Conversion,
-					Price = row.Price
+					throw new InvalidOperationException($"Company item '{firstRow.CompanyItemCode}' was not found during commit.");
+				}
+ 
+				await using var groupContext = _contextFactory.CreateDbContext();
+ 
+				var existingByCode = await groupContext.SubdItems
+					.FirstOrDefaultAsync(
+						si => si.SubDistributorId == subdDistributor.SubDistributorId
+							&& si.SubdItemCode == subdItemCode
+							&& si.CompanyItemId == companyItem.CompanyItemId
+							&& si.ItemName == firstRow.SubdItemName,
+						cancellationToken);
+ 
+				if (existingByCode != null)
+				{
+					throw new InvalidOperationException($"SubdItem code '{subdItemCode}' with description '{firstRow.SubdItemName}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'.");
+				}
+ 
+				var subdItem = new SubdItem
+				{
+					SubDistributorId = subdDistributor.SubDistributorId,
+					CompanyItemId = companyItem.CompanyItemId,
+					SubdItemCode = subdItemCode,
+					ItemName = firstRow.SubdItemName,
+					IsActive = true,
+					CreatedDate = DateTime.UtcNow,
+					UpdatedDate = DateTime.UtcNow,
+					CreatedBy = currentUserId,
+					UpdatedBy = currentUserId
 				};
+ 
+				groupContext.SubdItems.Add(subdItem);
+				await groupContext.SaveChangesAsync(cancellationToken);
+				createdSubdItemId = subdItem.SubdItemId;
+ 
+				var uomEntries = new Dictionary<string, UomEntry>();
+				foreach (var row in subdItemRows)
+				{
+					if (string.IsNullOrWhiteSpace(row.UomName) || !row.Price.HasValue)
+					{
+						continue;
+					}
+ 
+					var canonicalUom = CanonicalizeUomName(row.UomName);
+					uomEntries[canonicalUom] = new UomEntry
+					{
+						Conversion = row.Conversion,
+						Price = row.Price
+					};
+				}
+ 
+				EnsureBaseUnitUom(uomEntries);
+ 
+				var uomSaved = await _mapItemService.SaveSubdItemUomPricesAsync(subdItem.SubdItemId, uomEntries, currentUserId, cancellationToken);
+				if (!uomSaved)
+				{
+					throw new InvalidOperationException($"Failed to save UOM rows for SubdItem '{subdItem.SubdItemCode}'.");
+				}
+ 
+				foreach (var row in subdItemRows)
+				{
+					row.SubdItemId = subdItem.SubdItemId;
+				}
+ 
+				committedGroups++;
 			}
-
-			EnsureBaseUnitUom(uomEntries);
-
-			var uomSaved = await _mapItemService.SaveSubdItemUomPricesAsync(subdItem.SubdItemId, uomEntries, currentUserId, cancellationToken);
-			if (!uomSaved)
+			catch (Exception ex)
 			{
-				throw new InvalidOperationException($"Failed to save UOM rows for SubdItem '{subdItem.SubdItemCode}'.");
+				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+				_logger.LogError(ex, "Failed to commit SubdItem '{SubdItemCode}' for SubDistributor '{SubDistributorCode}': {Message}",
+					subdItemCode, firstRow.SubDistributorCode, baseMsg);
+ 
+				if (createdSubdItemId.HasValue)
+				{
+					await TryRemoveSubdItemAsync(createdSubdItemId.Value);
+				}
+ 
+				foreach (var row in subdItemRows)
+				{
+					row.Issues.Add($"Save failed: {baseMsg}");
+					row.IsSuccess = false;
+				}
 			}
-
-			committedGroups++;
 		}
-
+ 
 		return committedGroups;
 	}
 
+	
+	private async Task TryRemoveSubdItemAsync(int subdItemId)
+	{
+		try
+		{
+			await using var cleanupContext = _contextFactory.CreateDbContext();
+			var entity = await cleanupContext.SubdItems.FindAsync(subdItemId);
+			if (entity != null)
+			{
+				cleanupContext.SubdItems.Remove(entity);
+				await cleanupContext.SaveChangesAsync();
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Could not remove the incomplete SubdItem {SubdItemId} after a failed commit.", subdItemId);
+		}
+	}
+ 
 	private static async Task<bool> IsAdminAsync(
 		EntrielContext context,
 		int currentUserId,
