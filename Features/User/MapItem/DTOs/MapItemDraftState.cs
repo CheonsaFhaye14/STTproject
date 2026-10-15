@@ -14,6 +14,6 @@ public sealed class MapItemDraftState
     public string? SelectedCompanyItemDisplayName { get; set; }
     public int? EditingSubdItemId { get; set; }
     public string? SelectedCompanyItemsFilterString { get; set; }
-    public string? SelectedCompanyItemsCategoryString { get; set; }
+    public string? SelectedCompanyItemsPPGString { get; set; }
     public Dictionary<string, UomEntry> UomEntries { get; set; } = new();
 }

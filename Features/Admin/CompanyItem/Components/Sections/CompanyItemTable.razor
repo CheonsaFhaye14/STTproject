@@ -57,17 +57,27 @@
             </div>
 
             @* Principal *@
+            @if(Principals != null && Principals.Count > 0)
+            {
             <div class="clt-filter-group">
-                <AutoComplete @key="@($"principal-{filterResetKey}")"
-                        Label="Principal"
-                        Placeholder="All principals"
-                        TItem="FilterOption"
-                        Items="PrincipalOptions"
-                        ValueSelector="x => x.Value"
-                        TextSelector="x => x.Text"
-                        SelectedValue="@SelectedPrincipalId"
-                        SelectedValueChanged="OnPrincipalSelected" />
+                <AutoComplete @key="@($"principal-{filterResetKey}")" Label="Principal" Placeholder="All principals" Items="Principals" SelectedValueChanged="OnPrincipalSelected" />
             </div>
+            }
+            @* PPG *@
+            @if(PPGs != null && PPGs.Count > 0)
+            {
+            <div class="clt-filter-group">
+                <AutoComplete @key="@($"ppg-{filterResetKey}")" Label="PPG" Placeholder="All PPGs" Items="PPGs" SelectedValueChanged="OnPPGSelected" />
+            </div>
+            }
+            @* Category *@
+            @if(Categories != null && Categories.Count > 0)
+            {
+            <div class="clt-filter-group">
+                <AutoComplete @key="@($"category-{filterResetKey}")" Label="Category" Placeholder="All categories" Items="Categories" SelectedValueChanged="OnCategorySelected" />
+            </div>
+            }
+
 
             @if (HasActiveFilters)
             {
@@ -81,10 +91,9 @@
                     <table class="clt-table">
                         <thead>
                             <tr>
-                                <th @onclick='() => SortBy("ItemCode")' style="cursor:pointer">Item Code @SortIndicator("ItemCode")</th>
-                                <th @onclick='() => SortBy("ItemName")' style="cursor:pointer">Item Name @SortIndicator("ItemName")</th>
+                                <th @onclick='() => SortBy("ItemCode")' style="cursor:pointer">Sku Code @SortIndicator("ItemCode")</th>
+                                <th @onclick='() => SortBy("ItemName")' style="cursor:pointer">Item Description @SortIndicator("ItemName")</th>
                                 <th @onclick='() => SortBy("Principal")' style="cursor:pointer">Principal @SortIndicator("Principal")</th>
-                                <th @onclick='() => SortBy("Category")' style="cursor:pointer">Category @SortIndicator("Category")</th>
                                 <th @onclick='() => SortBy("CreatedDate")' style="cursor:pointer">Created @SortIndicator("CreatedDate")</th>
                                 <th @onclick='() => SortBy("IsActive")' style="cursor:pointer">Status @SortIndicator("IsActive")</th>
                                 <th>Actions</th>
@@ -113,7 +122,6 @@
                                         <td><span class="clt-code">@companyItem.ItemCode</span></td>
                                         <td class="clt-name">@companyItem.ItemName</td>
                                         <td class="clt-muted">@companyItem.Principal</td>
-                                        <td><span class="clt-type-badge">@companyItem.Category</span></td>
                                         <td class="clt-muted">@companyItem.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
                                         <td>
                                             @if (companyItem.IsActive)
@@ -183,13 +191,13 @@
     private record FilterOption(string Value, string Text);
 
     private List<CompanyItemListDto> PagedCompanyItems { get; set; } = new();
-    private List<string> Principals { get; set; } = new();
-
-    private List<FilterOption> PrincipalOptions =>
-        Principals.Select(p => new FilterOption(p, p)).ToList();
-
+    private IReadOnlyList<string?> Principals { get; set; } = new List<string?>();
+    private IReadOnlyList<string?> PPGs { get; set; } = new List<string?>();
+    private IReadOnlyList<string?> Categories { get; set; } = new List<string?>();
     private string SelectedStatus { get; set; } = "";
-    private string SelectedPrincipalId { get; set; } = "";
+    private string SelectedPrincipal { get; set; } = "";
+    private string SelectedPPG { get; set; } = "";
+    private string SelectedCategory { get; set; } = "";
     private int filterResetKey;
 
     private string SortColumn { get; set; } = "CreatedDate";
@@ -204,7 +212,7 @@
 
     private bool isLoading = true;
     private System.Threading.Timer? _debounceTimer;
-
+    private List<CompanyItemListDto> AllCompanyItems { get; set; } = new();
     private bool showToggleConfirmModal;
     private int pendingToggleId;
     private bool pendingToggleStatus;
@@ -233,20 +241,18 @@
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(_searchTerm) ||
         !string.IsNullOrEmpty(SelectedStatus) ||
-        !string.IsNullOrEmpty(SelectedPrincipalId);
+        !string.IsNullOrEmpty(SelectedPrincipal) ||
+        !string.IsNullOrEmpty(SelectedPPG) ||
+        !string.IsNullOrEmpty(SelectedCategory);
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Load principals once here, not on every LoadPageAsync call
-            var allItems = await AdminCompanyItemService.GetAllAsync();
-            Principals = allItems
-                .Where(x => !string.IsNullOrWhiteSpace(x.Principal))
-                .Select(x => x.Principal!)
-                .Distinct()
-                .OrderBy(x => x)
+            AllCompanyItems = (await AdminCompanyItemService.GetAllAsync())
                 .ToList();
+
+            UpdateFilterOptions();
 
             await LoadPageAsync();
         }
@@ -257,6 +263,82 @@
         }
     }
 
+    private void UpdateFilterOptions()
+    {
+        // Start with all items, then apply the selected filters.
+        var filtered = AllCompanyItems.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(SelectedPrincipal))
+        {
+            filtered = filtered.Where(x =>
+                string.Equals(
+                    x.Principal,
+                    SelectedPrincipal,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedCategory))
+        {
+            filtered = filtered.Where(x =>
+                string.Equals(
+                    x.Category,
+                    SelectedCategory,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedPPG))
+        {
+            filtered = filtered.Where(x =>
+                string.Equals(
+                    x.PPG,
+                    SelectedPPG,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Build the options for each dropdown using the other selections.
+        Principals = AllCompanyItems
+            .Where(x =>
+                (string.IsNullOrWhiteSpace(SelectedCategory) ||
+                string.Equals(x.Category, SelectedCategory,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrWhiteSpace(SelectedPPG) ||
+                string.Equals(x.PPG, SelectedPPG,
+                    StringComparison.OrdinalIgnoreCase)))
+            .Select(x => x.Principal)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
+        Categories = AllCompanyItems
+            .Where(x =>
+                (string.IsNullOrWhiteSpace(SelectedPrincipal) ||
+                string.Equals(x.Principal, SelectedPrincipal,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrWhiteSpace(SelectedPPG) ||
+                string.Equals(x.PPG, SelectedPPG,
+                    StringComparison.OrdinalIgnoreCase)))
+            .Select(x => x.Category)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
+        PPGs = AllCompanyItems
+            .Where(x =>
+                (string.IsNullOrWhiteSpace(SelectedPrincipal) ||
+                string.Equals(x.Principal, SelectedPrincipal,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrWhiteSpace(SelectedCategory) ||
+                string.Equals(x.Category, SelectedCategory,
+                    StringComparison.OrdinalIgnoreCase)))
+            .Select(x => x.PPG)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+    }
+
     public async Task LoadPageAsync()
     {
         isLoading = true;
@@ -265,16 +347,16 @@
         {
             var (items, total) = await AdminCompanyItemService.GetPagedAsync(
                 currentPage, pageSize, _searchTerm, SelectedStatus,
-                SelectedPrincipalId,
+                SelectedPrincipal, SelectedPPG, SelectedCategory,
                 SortColumn, SortAscending);
 
             PagedCompanyItems = items.ToList();
             totalCount = total;
 
             var (_, activeTotal) = await AdminCompanyItemService.GetPagedAsync(
-                1, 1, _searchTerm, "active", SelectedPrincipalId);
+                1, 1, _searchTerm, "active", SelectedPrincipal, SelectedPPG, SelectedCategory);
             var (_, inactiveTotal) = await AdminCompanyItemService.GetPagedAsync(
-                1, 1, _searchTerm, "inactive", SelectedPrincipalId);
+                1, 1, _searchTerm, "inactive", SelectedPrincipal, SelectedPPG, SelectedCategory);
             activeCount = activeTotal;
             inactiveCount = inactiveTotal;
         }
@@ -300,21 +382,82 @@
 
     private async Task OnPrincipalSelected(string? value)
     {
-        SelectedPrincipalId = value ?? string.Empty;
+        SelectedPrincipal = value ?? string.Empty;
+
+        UpdateFilterOptions();
+        ResetInvalidSelections();
+
         currentPage = 1;
         await LoadPageAsync();
     }
 
+    private async Task OnCategorySelected(string? value)
+    {
+        SelectedCategory = value ?? string.Empty;
+
+        UpdateFilterOptions();
+        ResetInvalidSelections();
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task OnPPGSelected(string? value)
+    {
+        SelectedPPG = value ?? string.Empty;
+
+        UpdateFilterOptions();
+        ResetInvalidSelections();
+
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+    private void ResetInvalidSelections()
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedPrincipal) &&
+            !Principals.Contains(
+                SelectedPrincipal,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            SelectedPrincipal = string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedCategory) &&
+            !Categories.Contains(
+                SelectedCategory,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            SelectedCategory = string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedPPG) &&
+            !PPGs.Contains(
+                SelectedPPG,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            SelectedPPG = string.Empty;
+        }
+
+        // Recalculate after clearing any invalid selection.
+        UpdateFilterOptions();
+    }
     private async Task ClearFilters()
     {
         _debounceTimer?.Dispose();
+
         _searchTerm = "";
         SelectedStatus = "";
-        SelectedPrincipalId = "";
+        SelectedPrincipal = "";
+        SelectedPPG = "";
+        SelectedCategory = "";
+
         SortColumn = "CreatedDate";
         SortAscending = true;
         currentPage = 1;
         filterResetKey++;
+
+        UpdateFilterOptions();
+
         await LoadPageAsync();
     }
 

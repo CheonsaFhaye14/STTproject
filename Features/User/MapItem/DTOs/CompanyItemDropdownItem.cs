@@ -6,4 +6,8 @@ public sealed class CompanyItemDropdownItem
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Principal { get; set; } = string.Empty;
+    public string? StockUomName { get; set; }
+    public decimal? StockPrice { get; set; }
+    public decimal? StockPriceRegional { get; set; }
+    public decimal? StockPriceNational { get; set; }
 }

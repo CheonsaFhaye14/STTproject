@@ -10,7 +10,7 @@ public sealed class UomEntry
 
     [JsonConverter(typeof(LenientNullableIntConverter))]
     public int? Conversion { get; set; }
-
+    public bool IsStockUom { get; set; }
     public decimal? Price { get; set; }
     public bool IsAutoCalculated { get; set; }
     public bool IsActive { get; set; } = true;

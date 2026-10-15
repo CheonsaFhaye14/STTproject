@@ -6,7 +6,7 @@ public sealed class MapCompanyItemViewRow
     public string CompanyItemCode { get; set; } = string.Empty;
     public string Principal { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
+    public string PPG { get; set; } = string.Empty;
     public decimal? StockPrice { get; set; }
     public DateTime? EffectivityDate { get; set; }
     public decimal? PriceIncreaseAmount { get; set; }   

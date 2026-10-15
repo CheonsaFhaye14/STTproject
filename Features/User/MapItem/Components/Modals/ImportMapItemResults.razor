@@ -15,7 +15,7 @@
                         <i class="ti ti-replace" aria-hidden="true"></i>
                     </div>
                     <div>
-                        <div class="mh-title">Import results</div>
+                        <div class="mh-title">Mapped Item Import results</div>
                         <div class="mh-sub">@GetHeaderSubtitle()</div>
                     </div>
                 </div>
@@ -340,6 +340,7 @@
                                                     }
                                                     <div class="chk" @onclick:stopPropagation="true">
                                                         <input type="checkbox" checked="@card.Group.Selected"
+                                                               disabled="@(!card.CanSelect)"
                                                                @onchange="(e) => ToggleGroupSelectionLocal(card.Group, e.Value)"
                                                                id="chk-@groupKey" />
                                                         <label for="chk-@groupKey">Select</label>
@@ -376,6 +377,22 @@
                                                         @w
                                                     </div>
                                                 }
+                                                @if (!card.Group.IsSaved)
+                                                {
+                                                    <div style="margin:10px 0; max-width:340px;">
+                                                        <Select TItem="string"
+                                                                Label="Stock UOM"
+                                                                Placeholder="Choose the stock UOM…"
+                                                                Items="card.Group.StockUomOptions"
+                                                                ValueSelector="x => x"
+                                                                TextSelector="x => x"
+                                                                SelectedValue="@card.Group.StockUomName"
+                                                                SelectedValueChanged="v => OnStockUomChosen(card.Group, v)"
+                                                                AddOptionalText="true"
+                                                                OptionalText="@StockUomHint(card.Group)" />
+                                                    </div>
+                                                }
+
                                                 <div class="itbl-wrap">
                                                     <table class="itbl">
                                                         <thead>
@@ -384,6 +401,7 @@
                                                                 <th>UOM</th>
                                                                 <th class="r">Conversion</th>
                                                                 <th class="r">Price</th>
+                                                                <th>Stock</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -394,6 +412,12 @@
                                                                     <td>@row.UomName</td>
                                                                     <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
                                                                     <td class="r">@row.Price?.ToString("N2")</td>
+                                                                    <td>
+                                                                        @if (row.IsStockUom)
+                                                                        {
+                                                                            <i class="ti ti-check" title="Stock UOM" aria-label="Stock UOM"></i>
+                                                                        }
+                                                                    </td>
                                                                 </tr>
                                                             }
                                                         </tbody>
@@ -588,7 +612,7 @@
     {
         public bool HasErrors => (Group.Issues?.Count ?? 0) > 0 || Group.Rows.Any(r => r.Issues.Count > 0);
         public bool IsWarningOnly => !HasErrors && Warnings.Count > 0;
-        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved;
+        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved && Group.HasStockUom;
     }
 
     private sealed record GroupedIssue(string? Message, List<int> RowNumbers);
@@ -964,6 +988,8 @@
         var msg = NormalizeMessage(m).ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
 
+        if (msg.StartsWith("stock uom")) return "Stock UOM";
+
         if (msg.StartsWith("save failed")) return "Save Failed";
         if (msg.Contains("duplicate") && msg.Contains("uom")) return "Duplicate UOM";
         if (msg.Contains("duplicate") && msg.Contains("conversion")) return "Duplicate Conversion";
@@ -1039,6 +1065,25 @@
             .OrderBy(g => g.RowNumbers.FirstOrDefault())
             .ToList();
     }
+
+    // ── Stock UOM ─────────────────────────────────────────────────────────
+    private void OnStockUomChosen(PreparedItemGroup group, string? uomName)
+    {
+        if (string.IsNullOrWhiteSpace(uomName)) return;
+
+        group.ChooseStockUom(uomName);
+        InvalidateCaches();   // the card may move tabs (a warning went away)
+    }
+
+    private static string StockUomHint(PreparedItemGroup group) => group.StockUomSource switch
+    {
+        StockUomSource.Explicit => "(From your file)",
+        StockUomSource.Suggested => string.IsNullOrWhiteSpace(group.StockUomReason)
+            ? "(Suggested. Select this item to confirm, or pick another)"
+            : $"(Suggested: {group.StockUomReason}. Select this item to confirm, or pick another)",
+        StockUomSource.Chosen => "(Chosen by you)",
+        _ => "(Required. Pick one to be able to commit this item)"
+    };
 
     // ── Selection ─────────────────────────────────────────────────────────
     private void SetSelected(GroupCardViewModel card, bool isChecked)
@@ -1149,6 +1194,10 @@
     {
         var msg = (m ?? string.Empty).Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
+
+        if (msg.StartsWith("stock uom suggested")) return "Stock UOM Suggested";
+        if (msg.StartsWith("stock uom not set")) return "Stock UOM Not Set";
+        if (msg.StartsWith("stock uom")) return "Stock UOM Doesn't Match";
 
         if (msg.Contains("duplicate map item")) return "Duplicate Map Item";
         if (msg.Contains("has no conversion")) return "No Conversion (Price Only)";

@@ -7,14 +7,21 @@ public static class PriceIncreaseValidations
 {
     public static class AddPriceIncrease
     {
-        public static readonly PriceIncreaseField CompanyItem = new(nameof(CompanyItem), "Company Item", true, "Company item is required.");
-        public static readonly PriceIncreaseField PriceIncreaseAmount = new(nameof(PriceIncreaseAmount), "Price Adjustment Amount", true, "Price adjustment amount is required.");
-        public static readonly PriceIncreaseField EffectivityDate = new(nameof(EffectivityDate), "Effectivity Date", true, "Effectivity date is required.");
+        public static readonly PriceIncreaseField CompanyItem =
+            new(nameof(CompanyItem), "Company Item", true, "Company item is required.");
+
+        public static readonly PriceIncreaseField PriceIncreaseAmount =
+            new(nameof(PriceIncreaseAmount), "Price Adjustment Amount", true, "Price adjustment amount is required.");
+
+        public static readonly PriceIncreaseField EffectivityDate =
+            new(nameof(EffectivityDate), "Effectivity Date", true, "Effectivity date is required.");
     }
 
     public static string Label(PriceIncreaseField field)
     {
-        return field.Required ? $"{field.Label} *" : field.Label;
+        return field.Required
+            ? $"{field.Label} *"
+            : field.Label;
     }
 
     public static async Task<Dictionary<string, string>> ValidateAddPriceIncreaseAsync(
@@ -25,37 +32,47 @@ public static class PriceIncreaseValidations
 
         if (!dto.CompanyItemId.HasValue || dto.CompanyItemId.Value <= 0)
         {
-            errors[AddPriceIncrease.CompanyItem.Key] = AddPriceIncrease.CompanyItem.ErrorMessage;
+            errors[AddPriceIncrease.CompanyItem.Key] =
+                AddPriceIncrease.CompanyItem.ErrorMessage;
         }
 
-        ValidateAmountAndDate(dto.PriceIncreaseAmount, dto.EffectivityDate, errors);
+        ValidateAmountAndDate(
+            dto.PriceIncreaseAmount,
+            dto.EffectivityDate,
+            errors);
 
-        if (dto.CompanyItemId.HasValue && dto.EffectivityDate.HasValue)
+        if (dto.CompanyItemId.HasValue
+            && dto.CompanyItemId.Value > 0
+            && dto.EffectivityDate.HasValue)
         {
-            var (existing, _) = await service.GetPagedAsync(
-                page: 1,
-                pageSize: 1,
-                search: null,
-                status: "pending",
-                principal: null);
+            var list = string.IsNullOrWhiteSpace(dto.PriceListType)
+                ? null
+                : dto.PriceListType.Trim();
 
-            var hasDuplicatePending = existing.Any(x =>
-                x.CompanyItemId == dto.CompanyItemId.Value);
-
-            if (hasDuplicatePending)
+            if (await service.HasPendingIncreaseOnDateAsync(
+                dto.CompanyItemId.Value,
+                list,
+                dto.EffectivityDate.Value.Date))
             {
-                errors[AddPriceIncrease.EffectivityDate.Key] =
-                    "This company item already has a pending price change scheduled.";
+                errors.TryAdd(
+                    AddPriceIncrease.EffectivityDate.Key,
+                    $"A price increase is already scheduled for this item and price list on {dto.EffectivityDate.Value:MMM dd, yyyy}.");
             }
         }
 
         return errors;
     }
 
-    public static Task<Dictionary<string, string>> ValidateEditPriceIncreaseAsync(AddPriceIncreaseDto dto)
+    public static Task<Dictionary<string, string>> ValidateEditPriceIncreaseAsync(
+        AddPriceIncreaseDto dto)
     {
         var errors = new Dictionary<string, string>();
-        ValidateAmountAndDate(dto.PriceIncreaseAmount, dto.EffectivityDate, errors);
+
+        ValidateAmountAndDate(
+            dto.PriceIncreaseAmount,
+            dto.EffectivityDate,
+            errors);
+
         return Task.FromResult(errors);
     }
 
@@ -66,22 +83,30 @@ public static class PriceIncreaseValidations
     {
         if (!priceIncreaseAmount.HasValue)
         {
-            errors[AddPriceIncrease.PriceIncreaseAmount.Key] = AddPriceIncrease.PriceIncreaseAmount.ErrorMessage;
+            errors[AddPriceIncrease.PriceIncreaseAmount.Key] =
+                AddPriceIncrease.PriceIncreaseAmount.ErrorMessage;
         }
         else if (priceIncreaseAmount.Value == 0)
         {
-            errors[AddPriceIncrease.PriceIncreaseAmount.Key] = "Amount cannot be zero.";
+            errors[AddPriceIncrease.PriceIncreaseAmount.Key] =
+                "Amount cannot be zero.";
         }
 
         if (!effectivityDate.HasValue)
         {
-            errors[AddPriceIncrease.EffectivityDate.Key] = AddPriceIncrease.EffectivityDate.ErrorMessage;
+            errors[AddPriceIncrease.EffectivityDate.Key] =
+                AddPriceIncrease.EffectivityDate.ErrorMessage;
         }
-        else if (effectivityDate.Value.Date < DateTime.Now.Date)
+        else if (effectivityDate.Value.Date < DateTime.Today)
         {
-            errors[AddPriceIncrease.EffectivityDate.Key] = "Effectivity date cannot be in the past.";
+            errors[AddPriceIncrease.EffectivityDate.Key] =
+                "Effectivity date cannot be in the past.";
         }
     }
 }
 
-public sealed record PriceIncreaseField(string Key, string Label, bool Required, string ErrorMessage);
+public sealed record PriceIncreaseField(
+    string Key,
+    string Label,
+    bool Required,
+    string ErrorMessage);

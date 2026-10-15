@@ -20,13 +20,87 @@ public partial class AddUom
     [Parameter] public string? ItemName { get; set; }
     [Parameter] public EventCallback<Dictionary<string, UomEntry>> OnAdd { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public string? CompanyStockUomName { get; set; }
+    [Parameter] public decimal? ApplicableStockPrice { get; set; }
+    [Parameter] public string? PriceListLabel { get; set; }
+    [Parameter] public string? ReferenceNote { get; set; }
 
+    private bool stockUomChosenByUser;
+    private string? suggestedStockUom;
+    private string? suggestionReason;
     [Inject] private AddUomService AddUomService { get; set; } = default!;
 
     private string[] DefaultOptions => new[] { BaseUomName, "Case", "Box", "Pack" };
     private Dictionary<string, UomEntry> workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> validationErrors = new();
     private string selectedUomOption = string.Empty;
+    private string? CurrentStockName =>
+    workingUomEntries.Where(kv => kv.Value.IsActive && kv.Value.IsStockUom)
+                     .Select(kv => kv.Key).FirstOrDefault();
+    private UomEntry? CurrentStockEntry =>
+        workingUomEntries.Values.FirstOrDefault(e => e.IsActive && e.IsStockUom);
+
+    private bool IsSuggested(string name) =>
+        suggestedStockUom is not null && string.Equals(suggestedStockUom, name, StringComparison.OrdinalIgnoreCase);
+
+    private decimal? StockVariancePct
+    {
+        get
+        {
+            if (CurrentStockEntry?.Price is not decimal mapped
+                || ApplicableStockPrice is not decimal company
+                || company == 0) return null;
+            return (mapped - company) / company * 100m;
+        }
+    }
+
+    private bool StockVarianceIsLarge =>
+        StockVariancePct is decimal p && Math.Abs(p) > VarianceWarnPercent;
+
+    private string? StockVarianceNote
+    {
+        get
+        {
+            if (StockVariancePct is not decimal pct || pct == 0) return null;
+
+            var mapped = CurrentStockEntry!.Price!.Value;
+            var company = ApplicableStockPrice!.Value;
+
+            return StockVarianceIsLarge
+                ? $"Your {CurrentStockName} price ({mapped:N2}) is far from the company price ({company:N2}). " +
+                $"Check that this is the same unit as the company's {CompanyStockUomName ?? "stock UOM"}."
+                : $"Company {company:N2} vs your {CurrentStockName} {mapped:N2} ({pct:+0.#;-0.#}%). " +
+                "Sub-distributor prices can include markup, so this is for information only.";
+        }
+    }
+    private async Task SelectStockUom(string uomName)
+    {
+        foreach (var e in workingUomEntries.Values) e.IsStockUom = false;
+        if (workingUomEntries.TryGetValue(uomName, out var entry) && entry.IsActive)
+        {
+            entry.IsStockUom = true;
+            stockUomChosenByUser = true;
+            validationErrors.Remove("stockuom");
+        }
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+    private void RefreshStockUomSuggestion()
+    {
+        foreach (var e in workingUomEntries.Values.Where(e => !e.IsActive)) e.IsStockUom = false;
+
+        if (stockUomChosenByUser && CurrentStockName is null) stockUomChosenByUser = false;
+
+        var s = StockUomSuggester.Suggest(CompanyStockUomName, workingUomEntries);
+        suggestedStockUom = s?.UomName;
+        suggestionReason = s?.Reason;
+
+        if (!stockUomChosenByUser)
+        {
+            foreach (var e in workingUomEntries.Values) e.IsStockUom = false;
+            if (s is not null) workingUomEntries[s.UomName].IsStockUom = true;
+        }
+    }
     private string SelectedUomOption
     {
         get => selectedUomOption;
@@ -122,7 +196,8 @@ public partial class AddUom
                 ConversionBasedOnInput = string.Empty;
                 validationErrors.Clear();
             }
-
+            stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+            RefreshStockUomSuggestion();
             showClearDraftConfirmModal = false;
             lastEditedUom = null;
             shouldFocusUomSelect = true;
@@ -212,6 +287,7 @@ public partial class AddUom
             Conversion = pcConversion,
             ConversionBasedOn = basisName,
             Price = price,
+            IsStockUom = priorEntry?.IsStockUom ?? false,
             IsActive = true,
             IsAutoCalculated = autoCalc || !price.HasValue
         };
@@ -222,6 +298,8 @@ public partial class AddUom
         priceInput = string.Empty;
 
         await RecalculatePricesAsync(uomName);
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         await PersistDraftAsync();
         shouldFocusUomSelect = true;
         await InvokeAsync(StateHasChanged);
@@ -263,23 +341,34 @@ public partial class AddUom
             && workingUomEntries.TryGetValue(uomName, out var entry)
             && entry.Conversion == 1;
     }
-    private static readonly List<string> UomColumns = new()
-    {
-        nameof(UomRow.UnitLabel), nameof(UomRow.Conversion), nameof(UomRow.Price)
-    };
 
     private static readonly List<string> UomEditableColumns = new()
     {
         nameof(UomRow.UnitLabel), nameof(UomRow.Conversion), nameof(UomRow.Price)
     };
 
+    private const string StockColumn = "Stock";
+    private const decimal VarianceWarnPercent = 50m;
+
+    private static readonly List<string> UomColumns = new()
+    {
+        StockColumn, nameof(UomRow.UnitLabel), nameof(UomRow.Conversion), nameof(UomRow.Price)
+    };
+
+    private static readonly List<string> UomTemplateColumns = new() { StockColumn };
+
+    private static readonly Dictionary<string, string> UomColumnWidths = new()
+    {
+        [StockColumn] = "64px"
+    };
+
     private static readonly Dictionary<string, string> UomColumnLabels = new()
     {
+        [StockColumn] = "Stock",
         [nameof(UomRow.UnitLabel)] = "Unit of Measure",
         [nameof(UomRow.Conversion)] = "Conversion per (PC)",
         [nameof(UomRow.Price)] = "Price",
     };
-
     private static readonly Dictionary<string, string> UomColumnInputTypes = new()
     {
         [nameof(UomRow.Conversion)] = "number",
@@ -372,7 +461,8 @@ public partial class AddUom
             validationErrors.Remove($"price_{oldName}");
             validationErrors[$"price_{newName}"] = priceErr;
         }
-
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -410,12 +500,16 @@ public partial class AddUom
         if (IsUomInUse(uomName))
         {
             entry.IsActive = false; 
+            stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+            RefreshStockUomSuggestion();
+            entry.IsStockUom = false;
         }
         else
         {
             workingUomEntries.Remove(uomName); 
         }
-
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -443,6 +537,8 @@ public partial class AddUom
         }
 
         entry.IsActive = true;
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -470,6 +566,13 @@ public partial class AddUom
         }
 
         var finalErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
+        var stock = CurrentStockEntry;
+        if (stock is null)
+            finalErrors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
+        else if (stock.Conversion is not > 0)
+            finalErrors["stockuom"] = "The stock UOM needs a valid conversion.";
+        else if (!stock.Price.HasValue)
+            finalErrors["stockuom"] = "The stock UOM needs a price.";
         var carriedRowErrors = validationErrors
             .Where(kv => kv.Key.StartsWith("uomname_") || kv.Key.StartsWith("conversion_"))
             .Where(kv => !finalErrors.ContainsKey(kv.Key));
@@ -620,6 +723,7 @@ public partial class AddUom
         {
             workingUomEntries[NormalizeBaseUomName(entry.Key)] = new UomEntry
             {
+                IsStockUom = entry.Value.IsStockUom,
                 ItemsUomId = entry.Value.ItemsUomId,
                 Conversion = entry.Value.Conversion,
                 Price = entry.Value.Price,
@@ -716,6 +820,9 @@ public partial class AddUom
 
         workingUomEntries.Clear();
         workingUomEntries[BaseUomName] = new UomEntry { Conversion = 1, Price = null };
+        stockUomChosenByUser = false;
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         selectedUomOption = string.Empty;
         customUom = string.Empty;
         conversionInput = string.Empty;
@@ -790,6 +897,8 @@ private List<string> ConversionBasedOnOptions =>
         }
 
         await RecalculatePricesAsync();
+        stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
+        RefreshStockUomSuggestion();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -878,5 +987,30 @@ private List<string> ConversionBasedOnOptions =>
         SelectedUomOption = value; 
         await PersistDraftAsync();
     }
-    
+
+    private (decimal Expected, decimal Diff)? PriceGap(UomRow row)
+    {
+        var e = row.Entry;
+        var stock = CurrentStockEntry;
+
+        if (!e.IsActive || e.IsStockUom || stock is null) return null;
+        if (e.Price is not decimal actual) return null;
+        if (stock.Price is not decimal stockPrice) return null;
+        if (stock.Conversion is not > 0 || e.Conversion is not > 0) return null;
+
+        var expected = Math.Round(
+            stockPrice * e.Conversion.Value / stock.Conversion.Value,
+            2, MidpointRounding.AwayFromZero);
+
+        var diff = actual - expected;
+        return Math.Abs(diff) <= 0.01m ? null : (expected, diff);  
+    }
+
+    private bool HasPriceGaps => UomRows.Any(r => PriceGap(r) is not null);
+
+    private string PriceGapTooltip(UomRow row)
+    {
+        var stock = CurrentStockEntry!;
+        return $"{CurrentStockName} price {stock.Price:N2} ÷ {stock.Conversion} × {row.Entry.Conversion}";
+    }
 }

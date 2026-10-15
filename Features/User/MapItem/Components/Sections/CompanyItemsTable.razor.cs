@@ -8,16 +8,16 @@ public partial class CompanyItemsTable : IDisposable
     private enum CompanyItemSortColumn
     {
         CompanyItemCode,
-        Category,
+        PPG,
         ItemName
     }
 
     [Parameter] public bool IsSubDistributorSelected { get; set; }
-    [Parameter] public IReadOnlyList<string> CompanyItemCategories { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlyList<string> CompanyItemPPG { get; set; } = Array.Empty<string>();
     [Parameter] public IReadOnlyList<MapCompanyItemViewRow> CompanyItems { get; set; } = Array.Empty<MapCompanyItemViewRow>();
-    [Parameter] public string SelectedCompanyItemsCategoryString { get; set; } = "All";
-    [Parameter] public EventCallback<string> SelectedCompanyItemsCategoryStringChanged { get; set; }
-    [Parameter] public EventCallback OnCompanyItemsCategoryChanged { get; set; }
+    [Parameter] public string SelectedCompanyItemsPPGString { get; set; } = "All";
+    [Parameter] public EventCallback<string> SelectedCompanyItemsPPGStringChanged { get; set; }
+    [Parameter] public EventCallback OnCompanyItemsPPGChanged { get; set; }
     [Parameter] public string SelectedCompanyItemsFilterString { get; set; } = "All";
     [Parameter] public EventCallback<string> SelectedCompanyItemsFilterStringChanged { get; set; }
     [Parameter] public EventCallback OnCompanyItemsFilterStringChanged { get; set; }
@@ -90,7 +90,7 @@ public partial class CompanyItemsTable : IDisposable
     {
         get
         {
-            var key = $"{_committedSearch}|{SelectedCompanyItemsCategoryString}|{SelectedCompanyItemsFilterString}|{SortColumn}|{SortAscending}|{CompanyItems.Count}";
+            var key = $"{_committedSearch}|{SelectedCompanyItemsPPGString}|{SelectedCompanyItemsFilterString}|{SortColumn}|{SortAscending}|{CompanyItems.Count}";
             if (_cacheKey != key)
             {
                 _cachedFiltered = ApplySort(CompanyItems.Where(MatchesSearch).Where(MatchesFilter)).ToList();
@@ -128,13 +128,13 @@ public partial class CompanyItemsTable : IDisposable
         return SortAscending ? " ▲" : " ▼";
     }
 
-    private async Task HandleCategoryChanged()
+    private async Task HandlePPGChanged()
     {
         CurrentPage = 1;
-        if (SelectedCompanyItemsCategoryStringChanged.HasDelegate)
-            await SelectedCompanyItemsCategoryStringChanged.InvokeAsync(SelectedCompanyItemsCategoryString);
-        if (OnCompanyItemsCategoryChanged.HasDelegate)
-            await OnCompanyItemsCategoryChanged.InvokeAsync();
+        if (SelectedCompanyItemsPPGStringChanged.HasDelegate)
+            await SelectedCompanyItemsPPGStringChanged.InvokeAsync(SelectedCompanyItemsPPGString);
+        if (OnCompanyItemsPPGChanged.HasDelegate)
+            await OnCompanyItemsPPGChanged.InvokeAsync();
     }
 
     private async Task HandleFilterChanged()
@@ -176,7 +176,7 @@ public partial class CompanyItemsTable : IDisposable
 
         var search = _committedSearch.Trim();
         return ContainsIgnoreCase(item.CompanyItemCode, search)
-            || ContainsIgnoreCase(item.Category, search)
+            || ContainsIgnoreCase(item.PPG, search)
             || ContainsIgnoreCase(item.ItemName, search);
     }
 
@@ -189,12 +189,12 @@ public partial class CompanyItemsTable : IDisposable
     {
         return SortColumn switch
         {
-            CompanyItemSortColumn.Category => SortAscending
-                ? items.OrderBy(item => string.IsNullOrWhiteSpace(item.Category) ? 1 : 0)
-                    .ThenBy(item => item.Category)
+            CompanyItemSortColumn.PPG => SortAscending
+                ? items.OrderBy(item => string.IsNullOrWhiteSpace(item.PPG) ? 1 : 0)
+                    .ThenBy(item => item.PPG)
                     .ThenBy(item => item.CompanyItemCode)
-                : items.OrderBy(item => string.IsNullOrWhiteSpace(item.Category) ? 1 : 0)
-                    .ThenByDescending(item => item.Category)
+                : items.OrderBy(item => string.IsNullOrWhiteSpace(item.PPG) ? 1 : 0)
+                    .ThenByDescending(item => item.PPG)
                     .ThenBy(item => item.CompanyItemCode),
             CompanyItemSortColumn.ItemName => SortAscending
                 ? items.OrderBy(item => item.ItemName).ThenBy(item => item.CompanyItemCode)

@@ -1,0 +1,36 @@
+.stock-ref { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.stock-chip { font-size: 12px; color: #6B655A; background: #F1EEE4; border: 0.5px solid #DDD6C4; border-radius: 8px; padding: 6px 10px; }
+.stock-chip strong { color: #1B1B1F; font-weight: 600; margin-left: 4px; }
+.stock-chip em { font-style: normal; color: #8A6D14; margin-left: 4px; }
+
+.stock-radio-cell { display: flex; justify-content: center; }
+
+.uom-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.uom-badge-base { background: #F1EEE4; color: #6B655A; border: 0.5px solid #DDD6C4; }
+.uom-badge-suggested { background: #C9A227; color: #fff; }
+.uom-sub { font-size: 11px; color: #9C968A; }
+
+.uom-note { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.uom-note-ok { background: #EEF6EC; color: #2F5D2A; }
+
+.uom-table-block {
+    border-radius: 10px;
+}
+
+.stock-ref.uom-flash-block,
+.uom-table-block.uom-flash-block {
+    animation: uomBlockFlash 1.6s ease-out;
+}
+
+@keyframes uomBlockFlash {
+    0%, 40% { box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.55); }
+    100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stock-ref.uom-flash-block,
+    .uom-table-block.uom-flash-block {
+        animation: none;
+        box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.55);
+    }
+}

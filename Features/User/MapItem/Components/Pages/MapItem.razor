@@ -82,10 +82,10 @@
         <PrincipalTable Principals="@principals" SelectedPrincipal="@selectedPrincipal"
                         SelectedPrincipalChanged="@(p => selectedPrincipal = p)" OnPrincipalSelected="FilterByPrincipalAsync" />
         <CompanyItemsTable IsSubDistributorSelected="@IsSubDistributorSelected"
-                           CompanyItemCategories="@CompanyItemCategories.ToList()" CompanyItems="@companyItems"
-                           SelectedCompanyItemsCategoryString="@selectedCompanyItemsCategoryString"
-                           SelectedCompanyItemsCategoryStringChanged="@(value => selectedCompanyItemsCategoryString = value)"
-                           OnCompanyItemsCategoryChanged="OnCompanyItemsCategoryChanged"
+                           CompanyItemPPG="@CompanyItemPPG.ToList()" CompanyItems="@companyItems"
+                           SelectedCompanyItemsPPGString="@selectedCompanyItemsPPGString"
+                           SelectedCompanyItemsPPGStringChanged="@(value => selectedCompanyItemsPPGString = value)"
+                           OnCompanyItemsPPGChanged="OnCompanyItemsPPGChanged"
                            SelectedCompanyItemsFilterString="@selectedCompanyItemsFilterString"
                            SelectedCompanyItemsFilterStringChanged="@(value => selectedCompanyItemsFilterString = value)"
                            OnCompanyItemsFilterStringChanged="OnCompanyItemsFilterStringChanged"
@@ -130,8 +130,7 @@
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries" BaseUomName="@BaseUomName"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
-            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName"
-            InUseUomNames="@inUseUomNames" />
+            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" InUseUomNames="@inUseUomNames" CompanyStockUomName="@modalStockUomName" ApplicableStockPrice="@modalApplicableStockPrice" PriceListLabel="@modalPriceListLabel" ReferenceNote="@modalReferenceNote"/>
 
     <ImportMapItems Show="showImportMapItemModal"
                OnClose="@(() => showImportMapItemModal = false)"

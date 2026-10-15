@@ -3,8 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using STTproject.Models;
 using STTproject.Data;
 using STTproject.Features.User.MapItem.DTOs;
+using Microsoft.Data.SqlClient;
 namespace STTproject.Services;
-//TODO: Allow to Add Items Uom with out price or conversion.
+
 public interface IMapItemService
 {
     Task<List<string>> GetMapItemPrincipalsAsync(int userId, int subDistributorId, CancellationToken cancellationToken = default);
@@ -18,7 +19,7 @@ public interface IMapItemService
     Task<UpdateSubdItemResult> UpdateSubdItemAsync(SubdItem item, CancellationToken cancellationToken = default);
     Task<DeleteSubdItemResult> DeleteSubdItemAsync(int subdItemId, CancellationToken cancellationToken = default);
     Task<bool> SubdItemCodeExistsAsync(int subDistributorId, string subdItemCode, int? excludeSubdItemId = null, CancellationToken cancellationToken = default);
-    Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default);
+    Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default, bool requireStockUom = true);   
     Task<List<TemplateRow>> GetTemplateDataAsync(int subDistributorId, string? principal, CancellationToken cancellationToken = default);
     Task<List<string>> GetInvoiceUsedUomNamesAsync(int subdItemId, CancellationToken cancellationToken = default);
 }
@@ -76,7 +77,7 @@ public class MapItemService : IMapItemService
             CompanyItemCode = ci.ItemCode,
             Description = ci.ItemName,
             Principal = ci.Principal,
-            Category = ci.Category,
+            PPG = ci.Ppg ?? string.Empty,
             CompanyItemId = ci.CompanyItemId,
             StockPrice = ci.StockPrice,
             EffectivityDate = ci.CompanyItemPriceHistories
@@ -216,7 +217,11 @@ public class MapItemService : IMapItemService
                     CompanyItemId = ci.CompanyItemId,
                     ItemCode = ci.ItemCode,
                     ItemName = ci.ItemName,
-                    Principal = ci.Principal
+                    Principal = ci.Principal,
+                    StockUomName = ci.StockUomName,
+                    StockPrice = ci.StockPrice,
+                    StockPriceRegional = ci.StockPriceRegional,
+                    StockPriceNational = ci.StockPriceNational,
                 })
                 .ToListAsync(cancellationToken);
 
@@ -338,16 +343,36 @@ public class MapItemService : IMapItemService
             return UpdateSubdItemResult.Failed("Unable to update the sub distributor item.");
         }
     }
-    public async Task<bool> SaveSubdItemUomPricesAsync(int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId, CancellationToken cancellationToken = default)
+
+    public async Task<bool> SaveSubdItemUomPricesAsync(
+        int subdItemId, Dictionary<string, UomEntry> uomEntries, int currentUserId,
+        CancellationToken cancellationToken = default, bool requireStockUom = true)
     {
-        await using var context = _contextFactory.CreateDbContext();
+        if (uomEntries == null) return false;
+
+        if (requireStockUom)
+        {
+            var stocks = uomEntries.Where(kv => kv.Value.IsActive && kv.Value.IsStockUom).ToList();
+            if (stocks.Count == 0)
+                throw new InvalidOperationException("Select which UOM is the stock UOM before saving.");
+            if (stocks.Count > 1)
+                throw new InvalidOperationException("Only one UOM can be the stock UOM.");
+            if (stocks[0].Value.Conversion is not > 0)
+                throw new InvalidOperationException("The stock UOM needs a valid conversion.");
+            if (!stocks[0].Value.Price.HasValue)
+                throw new InvalidOperationException("The stock UOM needs a price.");
+        }
+
         try
         {
-            if (uomEntries == null) return false;
-
+            await using var context = _contextFactory.CreateDbContext();
             await using var tx = await context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
+                await context.ItemsUoms
+                    .Where(u => u.SubdItemId == subdItemId && u.IsStockUom)
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsStockUom, false), cancellationToken);
+
                 var existingUoms = await context.ItemsUoms
                     .Where(u => u.SubdItemId == subdItemId)
                     .ToListAsync(cancellationToken);
@@ -359,15 +384,15 @@ public class MapItemService : IMapItemService
                     .Distinct()
                     .ToListAsync(cancellationToken);
 
+                var existingIds = existingUoms.Select(e => e.ItemsUomId).ToList();
                 var uomIdsWithHistory = await context.ItemsUomPriceHistories
                     .AsNoTracking()
-                    .Where(h => existingUoms.Select(e => e.ItemsUomId).Contains(h.ItemsUomId))
+                    .Where(h => existingIds.Contains(h.ItemsUomId))
                     .Select(h => h.ItemsUomId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
 
                 var now = DateTime.Now;
-
                 var matchedExistingIds = new HashSet<int>();
 
                 foreach (var kv in uomEntries)
@@ -393,6 +418,7 @@ public class MapItemService : IMapItemService
                     }
 
                     var isBaseUnit = entry.Conversion == 1;
+                    var isStock = entry.IsActive && entry.IsStockUom;
 
                     if (existing != null)
                     {
@@ -402,27 +428,28 @@ public class MapItemService : IMapItemService
                         existing.ConversionToBase = entry.Conversion;
                         existing.Price = entry.Price ?? 0m;
                         existing.IsBaseUnit = isBaseUnit;
-                        existing.IsActive = true;
+                        existing.IsStockUom = isStock;          
+                        existing.IsActive = entry.IsActive;    
                         existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
                         existing.UpdatedDate = now;
                         context.ItemsUoms.Update(existing);
                     }
                     else
                     {
-                        var newUom = new ItemsUom
+                        context.ItemsUoms.Add(new ItemsUom
                         {
                             UomName = name,
                             ConversionToBase = entry.Conversion,
                             Price = entry.Price ?? 0m,
                             IsBaseUnit = isBaseUnit,
+                            IsStockUom = isStock,              
                             IsActive = entry.IsActive,
                             SubdItemId = subdItemId,
                             CreatedDate = now,
                             UpdatedDate = now,
                             CreatedBy = currentUserId > 0 ? currentUserId : null,
                             UpdatedBy = currentUserId > 0 ? currentUserId : null
-                        };
-                        context.ItemsUoms.Add(newUom);
+                        });
                     }
                 }
 
@@ -438,6 +465,7 @@ public class MapItemService : IMapItemService
                 foreach (var entry in toDeactivate)
                 {
                     entry.IsActive = false;
+                    entry.IsStockUom = false;                 
                     entry.UpdatedBy = currentUserId > 0 ? currentUserId : entry.UpdatedBy;
                     entry.UpdatedDate = now;
                     context.ItemsUoms.Update(entry);
@@ -450,18 +478,27 @@ public class MapItemService : IMapItemService
                 await tx.CommitAsync(cancellationToken);
                 return true;
             }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 } sql
+                                            && sql.Message.Contains("OneStockPerSubdItem"))
+            {
+                await tx.RollbackAsync(cancellationToken);
+                throw new InvalidOperationException("Only one UOM can be the stock UOM for this item.");
+            }
             catch
             {
                 await tx.RollbackAsync(cancellationToken);
                 return false;
             }
         }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
         catch
         {
             return false;
         }
     }
-
     public async Task<List<string>> GetInvoiceUsedUomNamesAsync(int subdItemId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
@@ -673,7 +710,7 @@ public sealed class MapCompanyItemRow
     public decimal Price { get; set; }
     public decimal? StockPrice { get; set; }
     public string Principal { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
+    public string PPG { get; set; } = string.Empty;
     public int CompanyItemId { get; set; }
     public string UomName { get; set; } = string.Empty;
     public DateTime? EffectivityDate { get; set; }

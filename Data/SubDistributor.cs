@@ -29,6 +29,8 @@ public partial class SubDistributor
 
     public string? CompanySubdCode { get; set; }
 
+    public string? PriceListType { get; set; }
+
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();

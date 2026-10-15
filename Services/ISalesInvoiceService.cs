@@ -53,7 +53,9 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         var itemUoms = await context.ItemsUoms
             .AsNoTracking()
-            .Where(i => subdItemIds.Contains(i.SubdItemId))
+            .Where(i =>
+                i.SubdItem.SubDistributorId == subDistributorId &&
+                i.SubdItem.IsActive)
             .OrderBy(i => i.UomName)
             .ToListAsync(cancellationToken);
 
@@ -116,7 +118,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
             
         }
-        invoice.SalesManName = NormalizeSalesMan(invoice.SalesManName);
+        invoice.SalesManName = NormalizeSalesMan(invoice.SalesManName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
         {
             return new SaveInvoiceResult

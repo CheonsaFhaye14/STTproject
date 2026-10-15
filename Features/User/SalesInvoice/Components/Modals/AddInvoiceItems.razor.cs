@@ -13,7 +13,7 @@ public partial class AddInvoiceItems
 {
     private ElementReference PrincipalSelect;
 
-    private ElementReference CategorySelect;
+    private ElementReference PPGSelect;
 
     private ElementReference SkuCodeInput;
 
@@ -49,17 +49,17 @@ public partial class AddInvoiceItems
     [Parameter] public bool IsCredit { get; set; }
 
     private string SelectedPrincipal { get; set; } = string.Empty;
-    private string SelectedCategory { get; set; } = string.Empty;
+    private string SelectedPPG { get; set; } = string.Empty;
 
     private bool principalEnterPrimed;
-    private bool categoryEnterPrimed;
+    private bool PPGEnterPrimed;
 
     private List<SubdItem> FilteredAvailableItems => AvailableItems
         .Where(i => i.SubDistributorId == SelectedSubdistributorId)
         .Where(i => string.IsNullOrWhiteSpace(SelectedPrincipal)
             || string.Equals(i.CompanyItem?.Principal?.Trim(), SelectedPrincipal?.Trim(), StringComparison.OrdinalIgnoreCase))
-        .Where(i => string.IsNullOrWhiteSpace(SelectedCategory)
-            || string.Equals(i.CompanyItem?.Category?.Trim(), SelectedCategory?.Trim(), StringComparison.OrdinalIgnoreCase))
+        .Where(i => string.IsNullOrWhiteSpace(SelectedPPG)
+            || string.Equals(i.CompanyItem?.Ppg?.Trim(), SelectedPPG?.Trim(), StringComparison.OrdinalIgnoreCase))
         .ToList();
 
     private List<string> AvailablePrincipals => AvailableItems
@@ -71,10 +71,10 @@ public partial class AddInvoiceItems
         .OrderBy(p => p)
         .ToList();
 
-    private List<string> AvailableCategories => AvailableItems
+    private List<string> AvailablePPG => AvailableItems
         .Where(i => i.SubDistributorId == SelectedSubdistributorId)
         .Where(i => string.IsNullOrWhiteSpace(SelectedPrincipal) || string.Equals(i.CompanyItem?.Principal?.Trim(), SelectedPrincipal?.Trim(), StringComparison.OrdinalIgnoreCase))
-        .Select(i => i.CompanyItem?.Category)
+        .Select(i => i.CompanyItem?.Ppg)
         .Where(c => !string.IsNullOrWhiteSpace(c))
         .Select(c => c!.Trim())
         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -96,10 +96,10 @@ public partial class AddInvoiceItems
             SelectedPrincipal = string.Empty;
         }
 
-        if (!string.IsNullOrWhiteSpace(SelectedCategory)
-            && !AvailableCategories.Any(c => string.Equals(c, SelectedCategory?.Trim(), StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrWhiteSpace(SelectedPPG)
+            && !AvailablePPG.Any(c => string.Equals(c, SelectedPPG?.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
-            SelectedCategory = string.Empty;
+            SelectedPPG = string.Empty;
         }
 
         await UpdateCurrentUnitPriceAsync();
@@ -109,19 +109,19 @@ public partial class AddInvoiceItems
     {
         SelectedPrincipal = e.Value?.ToString()?.Trim() ?? string.Empty;
 
-        // Clear category when principal changes so user can pick appropriate category.
-        SelectedCategory = string.Empty;
+        // Clear PPG when principal changes so user can pick appropriate PPG.
+        SelectedPPG = string.Empty;
 
-        // Clear current item/UOM fields but keep the active principal/category filters.
+        // Clear current item/UOM fields but keep the active principal/PPG filters.
         ResetItemDraftFields();
         return OnDraftChanged.InvokeAsync();
     }
 
-    private Task OnCategoryChanged(ChangeEventArgs e)
+    private Task OnPPGChanged(ChangeEventArgs e)
     {
-        SelectedCategory = e.Value?.ToString()?.Trim() ?? string.Empty;
+        SelectedPPG = e.Value?.ToString()?.Trim() ?? string.Empty;
 
-        // Clear current item/UOM fields but keep the active principal/category filters.
+        // Clear current item/UOM fields but keep the active principal/PPG filters.
         ResetItemDraftFields();
         return OnDraftChanged.InvokeAsync();
     }
@@ -139,22 +139,22 @@ public partial class AddInvoiceItems
 
             principalEnterPrimed = false;
             await Task.Delay(10);
-            await CategorySelect.FocusAsync();
+            await PPGSelect.FocusAsync();
         }
     }
 
-    private async Task HandleCategoryKeyDown(KeyboardEventArgs e)
+    private async Task HandlePPGKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            if (!categoryEnterPrimed)
+            if (!PPGEnterPrimed)
             {
-                await OpenSelectDropdownAsync(CategorySelect);
-                categoryEnterPrimed = true;
+                await OpenSelectDropdownAsync(PPGSelect);
+                PPGEnterPrimed = true;
                 return;
             }
 
-            categoryEnterPrimed = false;
+            PPGEnterPrimed = false;
             await Task.Delay(10);
             await SkuCodeInput.FocusAsync();
         }
@@ -166,9 +166,9 @@ public partial class AddInvoiceItems
         return Task.CompletedTask;
     }
 
-    private Task HandleCategoryBlur(FocusEventArgs _)
+    private Task HandlePPGBlur(FocusEventArgs _)
     {
-        categoryEnterPrimed = false;
+        PPGEnterPrimed = false;
         return Task.CompletedTask;
     }
 
@@ -220,7 +220,7 @@ SelectedSubdistributorId);
         if (selected != null)
         {
             SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
-            SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
+            SelectedPPG = selected.CompanyItem?.Ppg?.Trim() ?? string.Empty;
             CurrentSubdItem = selected;
             NewItem.SubdItemId = selected.SubdItemId;
             NewItem.ItemName = GetItemDisplayLabel(selected);
@@ -259,7 +259,7 @@ SelectedSubdistributorId);
             return Task.CompletedTask;
         }
         SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
-        SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
+        SelectedPPG = selected.CompanyItem?.Ppg?.Trim() ?? string.Empty;
         NewItem.ItemName = GetItemDisplayLabel(selected);
         NewItem.ItemCode = selected.SubdItemCode; // Auto-fill SKU
         CurrentSubdItem = selected;
@@ -448,7 +448,7 @@ SelectedSubdistributorId);
     private void ResetNewItem()
     {
         SelectedPrincipal = string.Empty;
-        SelectedCategory = string.Empty;
+        SelectedPPG = string.Empty;
         ResetItemDraftFields();
         ShowValidationErrors = false;
         ValidationErrors.Clear();
@@ -558,7 +558,7 @@ SelectedSubdistributorId);
         }
 
         SelectedPrincipal = selected.CompanyItem?.Principal?.Trim() ?? string.Empty;
-        SelectedCategory = selected.CompanyItem?.Category?.Trim() ?? string.Empty;
+        SelectedPPG = selected.CompanyItem?.Ppg?.Trim() ?? string.Empty;
         CurrentSubdItem = selected;
         NewItem.SubdItemId = selected.SubdItemId;
         NewItem.ItemCode = selected.SubdItemCode;

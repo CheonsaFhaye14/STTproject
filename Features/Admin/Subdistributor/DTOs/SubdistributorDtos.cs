@@ -6,6 +6,7 @@ namespace STTproject.Features.Admin.Subdistributor.DTOs
         public string SubdName { get; set; } = null!;
         public string? CityMunicipality { get; set; } = null!;
         public string? Province { get; set; } = null!;
+        public string? PriceListType { get; set; } 
         public int? EncoderId { get; set; }
         public bool IsActive { get; set; } = true;
         public int? CreatedBy { get; set; }
@@ -17,6 +18,7 @@ namespace STTproject.Features.Admin.Subdistributor.DTOs
         public string? SubdCode { get; set; }
         public string? SubdName { get; set; }
         public string? CityMunicipality { get; set; }
+        public string? PriceListType { get; set; }
         public string? Province { get; set; }
         public int? EncoderId { get; set; }
         public bool IsActive { get; set; }
@@ -32,6 +34,7 @@ namespace STTproject.Features.Admin.Subdistributor.DTOs
         public string? Province { get; set; } = null!;
         public int? EncoderId { get; set; }
         public string? EncoderName { get; set; }
+        public string? PriceListType { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? UpdatedDate { get; set; }
@@ -44,5 +47,11 @@ namespace STTproject.Features.Admin.Subdistributor.DTOs
         public int UserId { get; set; }
         public string? FullName { get; set; }
         public string? UserName { get; set; }
+    }
+    public static class PriceListTypes
+    {
+        public const string National = "National";
+        public const string Regional = "Regional";
+        public static readonly string[] All = { National, Regional };
     }
 }

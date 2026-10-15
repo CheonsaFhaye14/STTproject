@@ -4,6 +4,9 @@
 <Modal ShowModal="ShowAddUomModal" Width="900px" MaxWidth="100%" MaxHeight="80vh"
     Title="Add Unit of Measure" OnClose="CancelAsync" IconType="ModalIconType.Ruler" Subtitle="@getModalSubtitle()">
     <ChildContent>
+        @{
+            var messages = BuildMessages();
+        }
         <FormSection Icon="ti ti-library-plus" Title="Additional Units of Measure" Expandable="true" IsExpanded="true">
             <ChildContent>
                 <div class="form-group">
@@ -15,7 +18,7 @@
                 @if (SelectedUomOption == "__custom")
                 {
                     <div class="form-group">
-                        <Input Label="Custom Unit of Measure" Required="true" @bind-Value="CustomUom" Placeholder="Enter unit name" 
+                        <Input Label="Custom Unit of Measure" Required="true" @bind-Value="CustomUom" Placeholder="Enter unit name"
                                  ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("customUom")))" ErrorText='@GetFieldError("customUom")' />
                     </div>
                 }
@@ -47,7 +50,7 @@
                             SelectedValueChanged="OnConversionBasedOnChanged"
                             Disabled="@IsBaseUom(GetSelectedUomName())" />
                 </div>
-                }  
+                }
                 else
                 {
                     <div class="form-group">
@@ -69,38 +72,96 @@
 
         <FormSection Title="All Units of Measures" Icon="ti ti-clipboard-list" IsExpanded="true" Expandable="true">
             <ChildContent>
+                <div class="stock-ref" id="uom-ref">
+                    <span class="stock-chip">
+                        Company stock UOM
+                        <strong>@(string.IsNullOrWhiteSpace(CompanyStockUomName) ? "Not set" : CompanyStockUomName)</strong>
+                    </span>
+                    <span class="stock-chip">
+                        Applicable price
+                        <strong>@(ApplicableStockPrice?.ToString("N2") ?? "-")</strong>
+                        @if (!string.IsNullOrWhiteSpace(PriceListLabel))
+                        {
+                            <em>· @PriceListLabel</em>
+                        }
+                    </span>
+                </div>
                 @{
                     var uomRows = UomRows;
                 }
                 @if (uomRows.Count > 0)
                 {
-                        <AddTable TItem="UomRow"
-                                Items="uomRows"
-                                Columns="UomColumns"
-                                ColumnLabels="UomColumnLabels"
-                                EditableColumns="UomEditableColumns"
-                                ColumnInputTypes="UomColumnInputTypes"
-                                DisplayValueSelector="GetUomDisplayValue"
-                                OnCellChanged="HandleUomCellChangedAsync"
-                                RemoveButtonVisible="true"
-                                ShowError="true"
-                                ErrorSelector='idx => GetRowError(idx)'>
-                                <RowActionsTemplate Context="row">
-                                    @if (!row.IsBase)
-                                    {
-                                        @if (row.Entry.IsActive)
-                                        {
-                                            <Button OnClick="() => RemoveUomEntry(row.Name)" Tooltip="@(IsUomInUse(row.Name) ? "Deactivate" : "Remove")" Variant="ButtonVariant.IconActionDelete" Icon="ti ti-trash"></Button>
-                                        }
-                                        else
-                                        {
-                                            <Button OnClick="() => ReactivateUomEntry(row.Name)" Title="Reactivate"></Button>
-                                        }
-                                    }
-                                </RowActionsTemplate>
-                        </AddTable>
+                    <div id="uom-table" class="uom-table-block">
+                    <AddTable TItem="UomRow"
+                            Items="uomRows"
+                            Columns="UomColumns"
+                            ColumnLabels="UomColumnLabels"
+                            ColumnWidths="UomColumnWidths"
+                            EditableColumns="UomEditableColumns"
+                            ColumnInputTypes="UomColumnInputTypes"
+                            TemplateColumns="UomTemplateColumns"
+                            DisplayValueSelector="GetUomDisplayValue"
+                            RowClassSelector="@(r => r.Entry.IsActive && r.Entry.IsStockUom ? "row-highlight" : null)"
+                            RowIdSelector="@(r => UomRowDomId(r.Name))"
+                            CellClassSelector="GetCellClass"
+                            OnCellChanged="HandleUomCellChangedAsync"
+                            RemoveButtonVisible="true"
+                            ShowError="false">
+                        <CellTemplate Context="cell">
+                            @if (cell.Column == StockColumn)
+                            {
+                                <div class="stock-radio-cell">
+                                    <input type="radio" name="stock-uom" data-col="@StockColumn"
+                                        aria-label="Use @cell.Item.Name as the stock UOM"
+                                        checked="@cell.Item.Entry.IsStockUom"
+                                        disabled="@(!cell.Item.Entry.IsActive)"
+                                        @onchange="() => SelectStockUom(cell.Item.Name)" />
+                                </div>
+                            }
+                        </CellTemplate>
+                        <CellSuffixTemplate Context="cell">
+                            @if (cell.Column == nameof(UomRow.UnitLabel))
+                            {
+                                @if (cell.Item.IsBase)
+                                {
+                                    <span class="uom-badge uom-badge-base">Base</span>
+                                }
+                                @if (IsSuggested(cell.Item.Name))
+                                {
+                                    <span class="uom-badge uom-badge-suggested">Suggested</span>
+                                }
+                            }
+                            else if (cell.Column == nameof(UomRow.Conversion) && !cell.Item.IsBase && cell.Item.Entry.Conversion is > 0)
+                            {
+                                <span class="uom-sub">1 @cell.Item.Name = @cell.Item.Entry.Conversion @BaseUomName</span>
+                            }
+                            else if (cell.Column == nameof(UomRow.Price)
+                                && cell.Item.Entry.IsActive && cell.Item.Entry.IsStockUom
+                                && StockUomSuggester.PriceMatches(ApplicableStockPrice, cell.Item.Entry))
+                            {
+                                <span class="uom-note uom-note-ok" role="img" aria-label="Matches company price" title="Matches company price">
+                                    <i class="ti ti-check" aria-hidden="true"></i>
+                                </span>
+                            }
+                        </CellSuffixTemplate>
+                        <RowActionsTemplate Context="row">
+                            @if (!row.IsBase)
+                            {
+                                @if (row.Entry.IsActive)
+                                {
+                                    <Button OnClick="() => RemoveUomEntry(row.Name)" Tooltip="@(IsUomInUse(row.Name) ? "Deactivate" : "Remove")" Variant="ButtonVariant.IconActionDelete" Icon="ti ti-trash"></Button>
+                                }
+                                else
+                                {
+                                    <Button OnClick="() => ReactivateUomEntry(row.Name)" Title="Reactivate"></Button>
+                                }
+                            }
+                        </RowActionsTemplate>
+                    </AddTable>
+                    </div>
                 }
 
+                <UomReviewPanel @ref="reviewPanel" Messages="messages" PanelId="@ReviewPanelId" OnJump="JumpToMessageAsync" />
             </ChildContent>
         </FormSection>
     </ChildContent>

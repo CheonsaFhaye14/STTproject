@@ -25,6 +25,8 @@ public partial class ItemsUomPriceHistory
 
     public int? CompanyItemPriceHistoryId { get; set; }
 
+    public bool IsManualOverride { get; set; }
+
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual CompanyItemPriceHistory? CompanyItemPriceHistory { get; set; }

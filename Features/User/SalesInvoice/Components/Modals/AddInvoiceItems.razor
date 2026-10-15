@@ -35,11 +35,11 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Category</label>
-                        <select @ref="CategorySelect" @onchange="OnCategoryChanged" value="@SelectedCategory"
-                              @onkeydown="HandleCategoryKeyDown" @onblur="HandleCategoryBlur">
-                            <option value="">-- All Categories --</option>
-                            @foreach (var cat in AvailableCategories)
+                        <label>PPG</label>
+                        <select @ref="PPGSelect" @onchange="OnPPGChanged" value="@SelectedPPG"
+                              @onkeydown="HandlePPGKeyDown" @onblur="HandlePPGBlur">
+                            <option value="">-- All PPG --</option>
+                            @foreach (var cat in AvailablePPG)
                             {
                                 <option value="@cat">@cat</option>
                             }

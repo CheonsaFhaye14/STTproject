@@ -44,31 +44,6 @@
     text-align: center;
 }
 
-::deep .table input {
-    width: 100%;
-    height: 32px;
-    border: 0.5px solid #DDD6C4;
-    border-radius: 7px;
-    background: #fff;
-    padding: 0 10px;
-    font-size: 12.5px;
-    color: #1B1B1F;
-    box-sizing: border-box;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-    ::deep .table input:focus {
-        outline: none;
-        border-color: #C9A227;
-        box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.15);
-    }
-
-    ::deep .table input:disabled {
-        background: #F1EEE4;
-        color: #9C968A;
-        cursor: not-allowed;
-    }
-
 .remove-btn {
     display: inline-flex;
     align-items: center;
@@ -136,4 +111,98 @@
     display: inline-block;
     width: 100%;
     height: 32px;
+}
+
+::deep .table input:where(:not([type="radio"]):not([type="checkbox"])) {
+    width: 100%;
+    height: 32px;
+    border: 0.5px solid #DDD6C4;
+    border-radius: 7px;
+    background: #fff;
+    padding: 0 10px;
+    font-size: 12.5px;
+    color: #1B1B1F;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+::deep .table input:where(:not([type="radio"]):not([type="checkbox"])):focus {
+    outline: none;
+    border-color: #C9A227;
+    box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.15);
+}
+
+::deep .table input:where(:not([type="radio"]):not([type="checkbox"])):disabled {
+    background: #F1EEE4;
+    color: #9C968A;
+    cursor: not-allowed;
+}
+
+::deep .table input[type="radio"],
+::deep .table input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #C9A227;
+    cursor: pointer;
+}
+
+::deep .table tr.row-highlight td {
+    background: #FBF5DC;
+}
+
+.cell-suffix {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;        
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.cell-suffix:empty {
+    display: none;
+}
+
+::deep .table input.cell-warn {
+    border-color: #D8B24A;
+    background: #FFFBEA;
+}
+
+::deep .table input.cell-error {
+    border-color: #C0392B;
+    background: #FDF3F2;
+}
+
+::deep .table input.cell-error:focus {
+    border-color: #C0392B;
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.15);
+}
+
+::deep .table tr.uom-flash td {
+    animation: uomFlashRow 1.6s ease-out;
+}
+
+@keyframes uomFlashRow {
+    0%, 40% { background-color: #F5DE8F; }
+}
+
+::deep .table input.uom-flash-field {
+    animation: uomFlashField 1.6s ease-out;
+}
+
+@keyframes uomFlashField {
+    0%, 40% { box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.55); }
+    100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::deep .table tr.uom-flash td {
+        animation: none;
+        background-color: #F5DE8F;
+    }
+
+    ::deep .table input.uom-flash-field {
+        animation: none;
+        box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.55);
+    }
 }

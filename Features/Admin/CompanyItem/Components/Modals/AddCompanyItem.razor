@@ -19,16 +19,52 @@
                     ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
                 </div>
                 <div class="form-group">
-                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" Required="true" ShowError="@ShowValidationErrors" 
-                    Placeholder="Select a principal" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
+                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" AllowCustomValue="true" Required="true" ShowError="@ShowValidationErrors" 
+                    Placeholder="Select a principal or Enter a new one" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
                 </div>
                 <div class="form-group">
-                    <Input Label="Category" @bind-Value="Category" Required="true" Disabled="@isViewMode" Placeholder="Enter Category"
-                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Category.Key)" />
+                    <AutoComplete Label="PPG" Items="PPGs" AddOptionalText="true" Disabled="@isViewMode" SelectedValue="@PPG" Placeholder="Select a PPG or Enter a new one" AllowCustomValue="true" />
                 </div>
                 <div class="form-group">
-                    <Input Label="Stock Price" @bind-Value="StockPrice" Disabled="@isViewMode" Placeholder="Enter Stock Price" />
+                    <AutoComplete Label="Category" Items="Categories" AddOptionalText="true" Disabled="@isViewMode" SelectedValue="@Category" Placeholder="Select a category or Enter a new one" AllowCustomValue="true" />
                 </div>
+                <div class="form-group">
+                    <Input Label="Stock UOM" @bind-Value="StockUomName" Disabled="@isViewMode" Placeholder="Enter Stock UOM" Required="true" ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockUomName.Key)"/>
+                </div>
+
+                @if(Principal == "KCPI")
+                {
+                    <div class="form-group">
+                    <Input Label="Regional Stock Price"
+                        Required="true"
+                        @bind-Value="StockPriceRegional"
+                        Disabled="@isViewMode"
+                        Placeholder="Enter Regional Stock Price"
+                        ShowError="@ShowValidationErrors"
+                        ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceRegional.Key)" />                    
+                    </div>
+                    <div class="form-group">
+                        <Input Label="National Stock Price"
+                            Required="true"
+                            @bind-Value="StockPriceNational"
+                            Disabled="@isViewMode"
+                            Placeholder="Enter National Stock Price"
+                            ShowError="@ShowValidationErrors"
+                            ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceNational.Key)" />
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <Input Label="Stock Price"
+                            Required="true"
+                            @bind-Value="StockPrice"
+                            Disabled="@isViewMode"
+                            Placeholder="Enter Stock Price"
+                            ShowError="@ShowValidationErrors"
+                            ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPrice.Key)" />                    
+                    </div>
+                }
                 <div class="form-group">
                     <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
                 </div>
@@ -104,12 +140,19 @@
     public CompanyItemCreateDto? PendingDto { get; private set; }
     public CompanyItemUpdateDto? PendingUpdateDto { get; private set; }
     private IReadOnlyList<string?> Principals { get; set; } = new List<string?>();
+    private IReadOnlyList<string?> PPGs { get; set; } = new List<string?>();
+    private IReadOnlyList<string?> Categories { get; set; } = new List<string?>();
     private string? ItemCode { get; set; }
     private string? ItemName { get; set; }
     private string? Principal { get; set; }
     private decimal? StockPrice { get; set; }
+    private string? StockUomName { get; set; }
+    private decimal? StockPriceRegional { get; set; }
+    private decimal? StockPriceNational { get; set; }
+    private string? PPG { get; set; }
     private string? Category { get; set; }
     private bool IsActive { get; set; } = true;
+    private bool IsSingleStockPrice { get; set; } = true;
     private bool isViewMode = false;
 
     // Audit fields (view mode only)
@@ -135,6 +178,8 @@ private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = n
     protected override async Task OnInitializedAsync()
     {
         Principals = await AdminCompanyItemService.GetAllPrincipalsAsync();
+        PPGs = await AdminCompanyItemService.GetAllPPGsAsync();
+        Categories = await AdminCompanyItemService.GetAllCategoriesAsync();
         if (isEdit)
         {
             isViewMode = true;
@@ -145,9 +190,13 @@ private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = n
                 ItemCode = companyItem.ItemCode;
                 ItemName = companyItem.ItemName;
                 Principal = companyItem.Principal;
+                PPG = companyItem.PPG;
                 Category = companyItem.Category;
                 IsActive = companyItem.IsActive;
                 StockPrice = companyItem.StockPrice;
+                StockPriceRegional = companyItem.StockPriceRegional;
+                StockPriceNational = companyItem.StockPriceNational;
+                StockUomName = companyItem.StockUomName;
                 // Audit
                 CreatedDate = companyItem.CreatedDate;
                 UpdatedDate = companyItem.UpdatedDate;
@@ -170,12 +219,13 @@ private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = n
             ItemCode = ItemCode ?? string.Empty,
             ItemName = ItemName ?? string.Empty,
             Principal = Principal ?? string.Empty,
-            Category = Category ?? string.Empty,
+            StockUomName = StockUomName ?? string.Empty,
         };
 
-Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService, CompanyItemId);        ShowValidationErrors = true;
-
-        if (Errors.Any()) return;
+        Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService, CompanyItemId, 
+        IsSingleStockPrice, StockPrice, StockPriceRegional, StockPriceNational); 
+        ShowValidationErrors = true; 
+        if (Errors.Any()) return;       
 
         if (isEdit)
         {
@@ -185,8 +235,12 @@ Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToV
                 ItemCode = ItemCode,
                 ItemName = ItemName,
                 Principal = Principal,
+                PPG = PPG,
                 Category = Category,
                 StockPrice = StockPrice,
+                StockPriceRegional = StockPriceRegional,
+                StockPriceNational = StockPriceNational,
+                StockUomName = StockUomName,
                 IsActive = IsActive,
                 UpdatedBy = CurrentUserId
             };
@@ -198,8 +252,12 @@ Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToV
                 ItemCode = ItemCode,
                 ItemName = ItemName,
                 Principal = Principal,
+                PPG = PPG,
                 Category = Category,
                 StockPrice = StockPrice,
+                StockPriceRegional = StockPriceRegional,
+                StockPriceNational = StockPriceNational,
+                StockUomName = StockUomName,
                 IsActive = IsActive,
                 CreatedBy = CurrentUserId
             };

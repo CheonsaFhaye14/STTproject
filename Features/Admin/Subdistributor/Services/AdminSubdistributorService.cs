@@ -32,6 +32,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 CityMunicipality = dto.CityMunicipality ?? null,
                 Province = dto.Province ?? null,
                 EncoderId = dto.EncoderId,
+                PriceListType = NormalizePriceListType(dto.PriceListType),
                 IsActive = dto.IsActive,
                 CreatedDate = NowPh(),
                 CreatedBy = dto.CreatedBy,
@@ -54,6 +55,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
             entity.CityMunicipality = dto.CityMunicipality ?? entity.CityMunicipality ?? null;
             entity.Province = dto.Province ?? entity.Province ?? null;
             entity.EncoderId = dto.EncoderId;
+            entity.PriceListType = NormalizePriceListType(dto.PriceListType);
             entity.IsActive = dto.IsActive;
             entity.UpdatedBy = dto.UpdatedBy;
             entity.UpdatedDate = NowPh();
@@ -85,13 +87,19 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubdName = s.SubdName,
                     CityMunicipality = s.CityMunicipality ?? null,
                     Province = s.Province ?? null,
+                    PriceListType = s.PriceListType,
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
-                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
-                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
+                    CreatedByName = s.CreatedByNavigation == null
+                        ? null
+                        : (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username),
+
+                    UpdatedByName = s.UpdatedByNavigation == null
+                        ? null
+                        : (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username)
                 })
                 .ToListAsync();
         }
@@ -131,6 +139,8 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                 ("EncoderName", false) => query.OrderByDescending(s => s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null),
                 ("Province", true) => query.OrderBy(s => s.Province),
                 ("Province", false) => query.OrderByDescending(s => s.Province),
+                ("PriceListType", true)  => query.OrderBy(s => s.PriceListType),
+                ("PriceListType", false) => query.OrderByDescending(s => s.PriceListType),
                 ("CreatedDate", false) => query.OrderBy(s => s.CreatedDate),
                 ("CreatedDate", true) => query.OrderByDescending(s => s.CreatedDate),
                 ("IsActive", false) => query.OrderBy(s => s.IsActive),
@@ -146,6 +156,7 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     SubDistributorId = s.SubDistributorId,
                     SubdCode = s.SubdCode,
                     SubdName = s.SubdName,
+                    PriceListType = s.PriceListType,
                     CityMunicipality = s.CityMunicipality ?? null,
                     Province = s.Province ?? null,
                     EncoderId = s.EncoderId,
@@ -153,14 +164,27 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     IsActive = s.IsActive,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
-                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
-                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
+                    CreatedByName = s.CreatedByNavigation == null
+                        ? null
+                        : (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username),
+
+                    UpdatedByName = s.UpdatedByNavigation == null
+                        ? null
+                        : (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username)
                 })
                 .ToListAsync();
 
             return (items, total);
         }
+        private static string? NormalizePriceListType(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
 
+            var match = PriceListTypes.All.FirstOrDefault(
+                t => t.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            return match ?? throw new ArgumentException($"Invalid price list type: {value}");
+        }
         public async Task<SubDistributorListDto?> GetSubDistributorByIdAsync(int id)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -177,10 +201,15 @@ namespace STTproject.Features.Admin.Subdistributor.Services
                     EncoderId = s.EncoderId,
                     EncoderName = s.Encoder != null ? (s.Encoder.FullName ?? s.Encoder.Username) : null,
                     IsActive = s.IsActive,
+                    PriceListType = s.PriceListType,
                     CreatedDate = s.CreatedDate,
                     UpdatedDate = s.UpdatedDate,
-                    CreatedByName = s.CreatedBy != null ? (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username) : null,
-                    UpdatedByName = s.UpdatedBy != null ? (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username) : null
+                    CreatedByName = s.CreatedByNavigation == null
+                        ? null
+                        : (s.CreatedByNavigation.FullName ?? s.CreatedByNavigation.Username),
+                    UpdatedByName = s.UpdatedByNavigation == null
+                        ? null
+                        : (s.UpdatedByNavigation.FullName ?? s.UpdatedByNavigation.Username)
                 })
                 .FirstOrDefaultAsync();
         }

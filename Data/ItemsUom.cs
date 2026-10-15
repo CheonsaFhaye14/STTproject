@@ -27,6 +27,8 @@ public partial class ItemsUom
 
     public bool IsActive { get; set; }
 
+    public bool IsStockUom { get; set; }
+
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();

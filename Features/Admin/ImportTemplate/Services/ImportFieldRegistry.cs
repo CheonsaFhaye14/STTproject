@@ -1,7 +1,3 @@
-
-
-
-
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
 public enum ImportFieldType { Text, Integer, Decimal, Date }
@@ -90,7 +86,7 @@ public static class ImportFieldRegistry
             {
                 new("CompanyItemCode", "Company Item Code", T),
                 new("CompanyItemName", "Company Item Name", T),
-                new("Category",        "Category",          T),
+                new("PPG",        "PPG",          T),
                 new("Principal",       "Principal",         T, "Required only when no principal is picked on the import screen."),
                 new("Price",           "Stock Price",       D),
             },
@@ -109,6 +105,7 @@ public static class ImportFieldRegistry
                 new("Conversion",         "Conversion",          I),
                 new("ConversionBasedOn",  "Conversion Based On", T, "Optional. Names the UOM this conversion is relative to."),
                 new("Price",              "Price",               D),
+                new("StockUom",           "Stock UOM",           T, "Optional. Which of the item's own UOMs the company stock price applies to (not the company's unit). Leave blank to let the system suggest one."),
             },
             new[]
             {

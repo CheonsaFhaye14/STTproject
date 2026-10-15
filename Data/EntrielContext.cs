@@ -21,6 +21,10 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
+    public virtual DbSet<DeletedSalesInvoice> DeletedSalesInvoices { get; set; }
+
+    public virtual DbSet<DeletedSalesInvoiceItem> DeletedSalesInvoiceItems { get; set; }
+
     public virtual DbSet<ImportFile> ImportFiles { get; set; }
 
     public virtual DbSet<ImportFileColumnMapping> ImportFileColumnMappings { get; set; }
@@ -40,6 +44,8 @@ public partial class EntrielContext : DbContext
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
 
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
+
+    public virtual DbSet<SalesInvoiceDeletionBatch> SalesInvoiceDeletionBatches { get; set; }
 
     public virtual DbSet<SalesInvoiceItem> SalesInvoiceItems { get; set; }
 
@@ -73,10 +79,17 @@ public partial class EntrielContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.ItemName).HasMaxLength(150);
+            entity.Property(e => e.Ppg)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("PPG");
             entity.Property(e => e.Principal)
                 .HasMaxLength(150)
                 .IsUnicode(false);
             entity.Property(e => e.StockPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.StockPriceNational).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.StockPriceRegional).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.StockUomName).HasMaxLength(20);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CompanyItemCreatedByNavigations)
@@ -94,14 +107,22 @@ public partial class EntrielContext : DbContext
 
             entity.ToTable("CompanyItemPriceHistory");
 
+            entity.HasIndex(e => new { e.CompanyItemId, e.PriceListType, e.EffectivityDateOnly }, "UX_CompanyItemPriceHistory_Pending")
+                .IsUnique()
+                .HasFilter("([AppliedDate] IS NULL)");
+
             entity.Property(e => e.AppliedDate).HasColumnType("datetime");
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
+            entity.Property(e => e.EffectivityDateOnly).HasComputedColumnSql("(CONVERT([date],[EffectivityDate]))", true);
             entity.Property(e => e.NewPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.OldPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.PriceIncreaseAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PriceListType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
 
             entity.HasOne(d => d.CompanyItem).WithMany(p => p.CompanyItemPriceHistories)
                 .HasForeignKey(d => d.CompanyItemId)
@@ -153,6 +174,40 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CustomerUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_Customer_UpdatedBy");
+        });
+
+        modelBuilder.Entity<DeletedSalesInvoice>(entity =>
+        {
+            entity.HasKey(e => e.DeletedSalesInvoiceId).HasName("PK__DeletedS__FAABA1B9C3C943E8");
+
+            entity.ToTable("DeletedSalesInvoice");
+
+            entity.HasIndex(e => e.DeletionBatchId, "IX_DSI_Batch");
+
+            entity.Property(e => e.OrderType).HasMaxLength(50);
+            entity.Property(e => e.SalesInvoiceCode).HasMaxLength(100);
+            entity.Property(e => e.SalesMan).HasMaxLength(200);
+
+            entity.HasOne(d => d.DeletionBatch).WithMany(p => p.DeletedSalesInvoices)
+                .HasForeignKey(d => d.DeletionBatchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__DeletedSa__Delet__00AA174D");
+        });
+
+        modelBuilder.Entity<DeletedSalesInvoiceItem>(entity =>
+        {
+            entity.HasKey(e => e.DeletedSalesInvoiceItemId).HasName("PK__DeletedS__185AA697D2142B6D");
+
+            entity.ToTable("DeletedSalesInvoiceItem");
+
+            entity.HasIndex(e => e.DeletedSalesInvoiceId, "IX_DSII_Invoice");
+
+            entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.DeletedSalesInvoice).WithMany(p => p.DeletedSalesInvoiceItems)
+                .HasForeignKey(d => d.DeletedSalesInvoiceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__DeletedSa__Delet__038683F8");
         });
 
         modelBuilder.Entity<ImportFile>(entity =>
@@ -410,6 +465,22 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_SalesInvoice_UpdatedBy");
         });
 
+        modelBuilder.Entity<SalesInvoiceDeletionBatch>(entity =>
+        {
+            entity.HasKey(e => e.DeletionBatchId).HasName("PK__SalesInv__897FF3163671BA3D");
+
+            entity.ToTable("SalesInvoiceDeletionBatch");
+
+            entity.Property(e => e.DeletedDate).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.DeletionType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Deleted");
+        });
+
         modelBuilder.Entity<SalesInvoiceItem>(entity =>
         {
             entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64DC7B368D");
@@ -454,6 +525,9 @@ public partial class EntrielContext : DbContext
                 .HasDefaultValueSql("(getdate())", "DF__SubDistri__Creat__10566F31")
                 .HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__SubDistri__IsAct__0F624AF8");
+            entity.Property(e => e.PriceListType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.Province).HasMaxLength(100);
             entity.Property(e => e.SubdCode)
                 .HasMaxLength(50)

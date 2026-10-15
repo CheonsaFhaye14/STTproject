@@ -25,7 +25,7 @@
                         Label="Province" 
                         Placeholder="Search province..."
                         Items="Provinces" 
-                        SelectedValue="@Province"
+                     SelectedValue="@Province"
                         SelectedValueChanged="OnProvinceSelected"
                         Disabled="@isViewMode"/>
                 </div>
@@ -51,6 +51,15 @@
                         TextSelector="@(e => e.FullName ?? e.UserName)"
                         ValueSelector="@(e => e.UserId.ToString())"
                         ShowAllOnOpen="true"/>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Principal Price List</label>
+                    <select class="form-select" @bind="PriceListType" disabled="@isViewMode">
+                        <option value="">None</option>
+                        <option value="@PriceListTypes.National">National</option>
+                        <option value="@PriceListTypes.Regional">Regional</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -107,7 +116,7 @@
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
     public SubDistributorCreateDto? PendingDto { get; private set; }
     public SubDistributorUpdateDto? PendingUpdateDto { get; private set; }
-
+    private string? PriceListType { get; set; }
     private bool isViewMode = false;
     private GenericAutocomplete<UserListDto>? encoderAutocomplete;
     private ElementReference subdCodeInput;
@@ -161,6 +170,7 @@
                 CityMunicipality = subd.CityMunicipality;
                 IsActive = subd.IsActive;
                 EncoderId = subd.EncoderId;
+                PriceListType = subd.PriceListType;
                 SelectedEncoderId = subd.EncoderId?.ToString();  
 
                 if (!string.IsNullOrWhiteSpace(Province))
@@ -234,6 +244,7 @@
                 Province = Province,
                 CityMunicipality = CityMunicipality,
                 EncoderId = EncoderId,
+                PriceListType = string.IsNullOrWhiteSpace(PriceListType) ? null : PriceListType,
                 IsActive = IsActive,
                 UpdatedBy = CurrentUserId
             };
@@ -244,6 +255,7 @@
             {
                 SubdCode = SubdCode ?? string.Empty,
                 SubdName = SubdName ?? string.Empty,
+                PriceListType = string.IsNullOrWhiteSpace(PriceListType) ? null : PriceListType,
                 Province = Province ?? string.Empty,
                 CityMunicipality = CityMunicipality ?? string.Empty,
                 EncoderId = EncoderId,

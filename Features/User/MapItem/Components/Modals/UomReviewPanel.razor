@@ -1,0 +1,145 @@
+@using STTproject.Features.User.MapItem.DTOs
+
+@if (Messages.Count > 0)
+{
+    var errorCount = CountOf(UomMessageSeverity.Error);
+    var warningCount = CountOf(UomMessageSeverity.Warning);
+    var noteCount = CountOf(UomMessageSeverity.Note);
+    var visible = GetVisible();
+
+    <section id="@PanelId" class="review" aria-label="Review">
+        <div class="review-head">
+            <button type="button" class="review-toggle" aria-expanded="@(open ? "true" : "false")"
+                    aria-controls="@ListId" @onclick="ToggleOpen">
+                <i class="ti @(open ? "ti-chevron-down" : "ti-chevron-up")" aria-hidden="true"></i>
+                <span>@(errorCount > 0 ? "Fix before saving" : "Review")</span>
+            </button>
+
+            <div class="review-chips">
+                @foreach (var chip in GetChips(errorCount, warningCount, noteCount))
+                {
+                    var severity = chip.Severity;
+                    var pressed = filter == severity;
+
+                    <button type="button" class="@ChipClass(severity, pressed)"
+                            aria-pressed="@(pressed ? "true" : "false")" title="Show only this type"
+                            @onclick="() => ToggleFilter(severity)">
+                        <i class="ti @IconName(severity)" aria-hidden="true"></i>@chip.Label
+                    </button>
+                }
+            </div>
+
+            @if (!open && visible.Count > 0)
+            {
+                <span class="review-preview">@visible[0].Text</span>
+            }
+        </div>
+
+        @if (open)
+        {
+            <ul id="@ListId" class="review-list">
+                @foreach (var message in visible)
+                {
+                    <li class="@MessageClass(message.Severity)" data-msg-key="@message.Key">
+                        <button type="button" class="msg-btn" title="Go to this field"
+                                @onclick="() => OnJump.InvokeAsync(message)">
+                            <i class="ti @IconName(message.Severity)" aria-hidden="true"></i>
+                            <span class="msg-text">
+                                @if (!string.IsNullOrWhiteSpace(message.RowName))
+                                {
+                                    <strong>@message.RowName:</strong>
+                                }
+                                @message.Text
+                            </span>
+                            <i class="ti ti-arrow-right msg-go" aria-hidden="true"></i>
+                        </button>
+                    </li>
+                }
+
+                @if (filter is null && noteCount > 0)
+                {
+                    <li class="notes-toggle">
+                        <button type="button" aria-expanded="@(notesExpanded ? "true" : "false")" @onclick="ToggleNotes">
+                            <i class="ti @(notesExpanded ? "ti-chevron-down" : "ti-chevron-right")" aria-hidden="true"></i>
+                            @(notesExpanded ? "Hide" : "Show") @noteCount @(noteCount == 1 ? "note" : "notes")
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<UomMessage> Messages { get; set; } = Array.Empty<UomMessage>();
+    [Parameter] public string PanelId { get; set; } = "uom-review-panel";
+    [Parameter] public EventCallback<UomMessage> OnJump { get; set; }
+
+    private bool open = true;
+    private bool notesExpanded;
+    private UomMessageSeverity? filter;
+
+    private string ListId => $"{PanelId}-list";
+
+    /// <summary>Called by the parent after a failed Save so the errors are on screen.</summary>
+    public void Open()
+    {
+        open = true;
+        filter = null;
+        StateHasChanged();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // If the filtered type no longer has any messages, go back to showing everything.
+        if (filter is { } f && CountOf(f) == 0)
+        {
+            filter = null;
+        }
+    }
+
+    private int CountOf(UomMessageSeverity severity) => Messages.Count(m => m.Severity == severity);
+
+    private List<UomMessage> GetVisible() =>
+        Messages
+            .Where(m => filter is { } f
+                ? m.Severity == f
+                : m.Severity != UomMessageSeverity.Note || notesExpanded)
+            .OrderBy(m => (int)m.Severity)
+            .ToList();
+
+    private IEnumerable<(UomMessageSeverity Severity, string Label)> GetChips(int errors, int warnings, int notes)
+    {
+        if (errors > 0) yield return (UomMessageSeverity.Error, errors == 1 ? "1 error" : $"{errors} errors");
+        if (warnings > 0) yield return (UomMessageSeverity.Warning, warnings == 1 ? "1 warning" : $"{warnings} warnings");
+        if (notes > 0) yield return (UomMessageSeverity.Note, notes == 1 ? "1 note" : $"{notes} notes");
+    }
+
+    private void ToggleOpen() => open = !open;
+    private void ToggleNotes() => notesExpanded = !notesExpanded;
+
+    private void ToggleFilter(UomMessageSeverity severity)
+    {
+        filter = filter == severity ? null : severity;
+        open = true;
+    }
+
+    private static string CssName(UomMessageSeverity severity) => severity switch
+    {
+        UomMessageSeverity.Error => "error",
+        UomMessageSeverity.Warning => "warning",
+        _ => "note"
+    };
+
+    private static string IconName(UomMessageSeverity severity) => severity switch
+    {
+        UomMessageSeverity.Error => "ti-alert-circle",
+        UomMessageSeverity.Warning => "ti-alert-triangle",
+        _ => "ti-info-circle"
+    };
+
+    private static string ChipClass(UomMessageSeverity severity, bool pressed) =>
+        $"chip chip-{CssName(severity)}{(pressed ? " chip-pressed" : string.Empty)}";
+
+    private static string MessageClass(UomMessageSeverity severity) => $"msg msg-{CssName(severity)}";
+}

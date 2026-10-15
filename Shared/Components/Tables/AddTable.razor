@@ -9,7 +9,7 @@
                 <th class="row-num"></th>
                 @foreach (var column in Columns)
                 {
-                    <th>@(ColumnLabels.TryGetValue(column, out var label) ? label : column)</th>
+                    <th style="@GetColumnStyle(column)">@(ColumnLabels.TryGetValue(column, out var label) ? label : column)</th>
                 }
                 @if (RemoveButtonVisible || RowActionsTemplate is not null)
                 {
@@ -25,7 +25,7 @@
                 var isGroupStart = string.IsNullOrEmpty(GroupColumn)
                     || idx == 0
                     || GetPropertyValue(Items[idx - 1], GroupColumn) != GetPropertyValue(item, GroupColumn);
-                <tr class="@(string.IsNullOrEmpty(GroupColumn) ? "" : (isGroupStart ? "group-start" : "group-continuation"))">
+                <tr id="@RowIdSelector?.Invoke(item)" class="@GetRowClass(item, isGroupStart)">
                     <td class="row-num">@(idx + 1)</td>
                     @foreach (var column in Columns)
                     {
@@ -45,6 +45,8 @@
                             else if (editable)
                             {
                                 <input value="@GetEditableValue(item, col)"
+                                       class="@CellClassSelector?.Invoke(item, col)"
+                                       data-col="@col"
                                        type="@(ColumnInputTypes.TryGetValue(col, out var it) ? it : "text")"
                                        placeholder="@GetPlaceholder(item, col)"
                                        size="@GetInputSize(item, col)"
@@ -58,7 +60,11 @@
                             }
                             else
                             {
-                                <input value="@GetPropertyValue(item, col)" size="@GetInputSize(item, col)" disabled />
+                                <input value="@GetPropertyValue(item, col)" data-col="@col" size="@GetInputSize(item, col)" disabled />
+                            }
+                            @if (!isSuppressedGroupCell && CellSuffixTemplate is not null)
+                            {
+                                <div class="cell-suffix">@CellSuffixTemplate((item, col))</div>
                             }
                         </td>
                     }
@@ -137,13 +143,29 @@
     [Parameter] public EventCallback<(TItem Item, string Column)> OnCellChanged { get; set; }
     [Parameter] public RenderFragment<TItem>? RowActionsTemplate { get; set; }
     [Parameter] public Dictionary<string, string> ColumnInputTypes { get; set; } = new();
-
-    // Lets a numeric/editable cell show its own raw value (not the formatted
-    // display string, which may be non-numeric text like "Enter manually" and
-    // would be silently rejected by <input type="number">), plus an optional
-    // per-row placeholder hint shown when that value is empty.
     [Parameter] public Func<TItem, string, string?>? EditableValueSelector { get; set; }
     [Parameter] public Func<TItem, string, string?>? PlaceholderSelector { get; set; }
+    [Parameter] public Func<TItem, string?>? RowClassSelector { get; set; }
+    [Parameter] public RenderFragment<(TItem Item, string Column)>? CellSuffixTemplate { get; set; }
+    [Parameter] public Dictionary<string, string> ColumnWidths { get; set; } = new();
+    [Parameter] public Func<TItem, string>? RowIdSelector { get; set; }
+    [Parameter] public Func<TItem, string, string?>? CellClassSelector { get; set; }
+
+    private string? GetColumnStyle(string column) =>
+        ColumnWidths.TryGetValue(column, out var w) ? $"width:{w}" : null;
+
+    private string? GetRowClass(TItem item, bool isGroupStart)
+    {
+        var parts = new List<string>(2);
+        if (!string.IsNullOrEmpty(GroupColumn))
+            parts.Add(isGroupStart ? "group-start" : "group-continuation");
+
+        var extra = RowClassSelector?.Invoke(item);
+        if (!string.IsNullOrWhiteSpace(extra))
+            parts.Add(extra);
+
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
 
     private static readonly Dictionary<string, PropertyInfo?> PropertyCache = new();
 

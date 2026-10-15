@@ -23,9 +23,17 @@ public partial class CompanyItem
 
     public string Principal { get; set; } = null!;
 
-    public string Category { get; set; } = null!;
+    public string? Category { get; set; }
 
     public decimal? StockPrice { get; set; }
+
+    public decimal? StockPriceRegional { get; set; }
+
+    public decimal? StockPriceNational { get; set; }
+
+    public string? StockUomName { get; set; }
+
+    public string? Ppg { get; set; }
 
     public virtual ICollection<CompanyItemPriceHistory> CompanyItemPriceHistories { get; set; } = new List<CompanyItemPriceHistory>();
 

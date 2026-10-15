@@ -23,6 +23,10 @@ public partial class CompanyItemPriceHistory
 
     public int? CreatedBy { get; set; }
 
+    public string? PriceListType { get; set; }
+
+    public DateOnly? EffectivityDateOnly { get; set; }
+
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();

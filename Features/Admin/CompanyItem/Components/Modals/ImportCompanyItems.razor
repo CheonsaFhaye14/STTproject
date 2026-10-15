@@ -13,16 +13,16 @@
 {
     <Modal ShowModal="Show"
            Title="CompanyItem Batch Data Import"
-           Subtitle="Add new company items to your database by importing a CSV file."
+           Subtitle="Add or update company items by importing an Excel file. The file decides what happens."
            IconType="ModalIconType.Upload"
-           Details="Excel should contain the following column headers: CompanyItem Code, CompanyItem Name (required); Principal (required in the file only if not assigned below); Category and Price (optional)."
+           Details="Excel should contain: Sku Code, Item Description, Stock UOM, Principal (required in the file only if not assigned below). Prices are optional. Add an Effectivity Date column to import price history instead; items that do not exist yet are created from the same rows, so they also need an Item Description, Stock UOM and Principal."
            OnClose="OnClose">
         <ChildContent>
             <AutoComplete
                 Label="Assign a Principal (optional — leave blank to use each row's Principal column instead)"
                 Items="Principals"
                 SelectedValue="selectedPrincipal"
-                SelectedValueChanged="OnPrincipalChanged" /> 
+                SelectedValueChanged="OnPrincipalChanged" />
             <FileInput OnFileSelected="HandleFileSelected" />
         </ChildContent>
         <FooterContent>
@@ -37,11 +37,12 @@
 }
 
 <ImportCompanyItemsResult Show="showResults"
-                        ImportResult="importResult"
-                        SelectedGroupKeys="selectedGroupKeys"
-                        OnCommit="HandleCommitAsync"
-                        OnClose="CloseResults"
-                        OnDownloadErrorReport="HandleDownloadErrorReport" />
+                          IsHistorical="resultIsHistorical"
+                          ImportResult="importResult"
+                          SelectedGroupKeys="selectedGroupKeys"
+                          OnCommit="HandleCommitAsync"
+                          OnClose="CloseResults"
+                          OnDownloadErrorReport="HandleDownloadErrorReport" />
 
 @code {
     [Parameter] public bool Show { get; set; }
@@ -52,6 +53,10 @@
     private IBrowserFile? selectedFile;
     private bool isPreparing;
     private bool showResults;
+
+    // Set from the file once it has been checked.
+    private bool resultIsHistorical;
+
     private STTproject.Features.Admin.CompanyItem.DTOs.CompanyItemImportResult? importResult;
     private HashSet<string> selectedGroupKeys = new(StringComparer.OrdinalIgnoreCase);
 
@@ -92,16 +97,17 @@
             Show = false;
 
             using var importStream = new MemoryStream(fileBytes);
-            importResult = await ImportCompanyItemsService.PrepareFromExcelAsync(importStream, selectedPrincipal);
+            importStream.Position = 0;
 
-            selectedGroupKeys = importResult.PreparedGroups
-                .Where(g => g.Selected && !g.IsSaved)
-                .Select(GroupKey)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            importResult = await ImportCompanyItemsService.PrepareAutoFromExcelAsync(importStream, selectedPrincipal);
+            resultIsHistorical = importResult.Mode == STTproject.Features.Admin.CompanyItem.DTOs.CompanyItemImportMode.PriceHistory;
+
+            // Nothing is selected when the results open; the user picks what to commit.
+            selectedGroupKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString()); // full type, message, stack trace, AND inner exception
+            Console.WriteLine(ex.ToString());
             Show = false;
             importResult = new STTproject.Features.Admin.CompanyItem.DTOs.CompanyItemImportResult();
             importResult.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
@@ -113,7 +119,7 @@
             StateHasChanged();
         }
     }
-    
+
     private async Task HandleCommitAsync()
     {
         if (importResult == null) return;
@@ -125,13 +131,45 @@
             .ToList();
 
         var selectedRows = selectedGroups.SelectMany(g => g.Rows).ToList();
+
+        // Nothing matched the selection. The results modal reports these groups as
+        // "not processed" instead of failing silently.
         if (selectedRows.Count == 0) return;
 
-        var committedCount = await ImportCompanyItemsService.CommitPreparedRowsAsync(selectedRows, selectedPrincipal, userId);
-        
+        // The commit methods quietly return 0 when there is no user, so stop here
+        // and give every selected row a reason instead of pretending it was saved.
+        if (userId <= 0)
+        {
+            foreach (var row in selectedRows)
+            {
+                row.Issues.Add("Save failed: unable to identify the current user. Please sign in again.");
+                row.IsSuccess = false;
+            }
+            StateHasChanged();
+            return;
+        }
+
+        var committedCount = 0;
+        try
+        {
+            committedCount = resultIsHistorical
+                ? await ImportCompanyItemsService.CommitHistoricalRowsAsync(selectedRows, userId)
+                : await ImportCompanyItemsService.CommitPreparedRowsAsync(selectedRows, selectedPrincipal, userId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            foreach (var row in selectedRows.Where(r => r.Issues.Count == 0))
+            {
+                row.Issues.Add($"Save failed: {ex.Message}");
+                row.IsSuccess = false;
+            }
+        }
+
+        // A group only counts as saved when every row succeeded AND ended up with a company item id.
         foreach (var g in selectedGroups)
         {
-            if (g.Rows.All(r => r.IsSuccess))
+            if (g.Rows.All(r => r.IsSuccess && r.Issues.Count == 0 && r.CompanyItemId.HasValue))
                 g.IsSaved = true;
         }
 
@@ -160,9 +198,10 @@
         showResults = false;
         importResult = null;
         selectedGroupKeys.Clear();
-        await OnClose.InvokeAsync(); 
+        await OnClose.InvokeAsync();
     }
 
+    // Must stay identical to GroupKey in ImportCompanyItemsResult.razor (row number of the group's first row).
     private static string GroupKey(STTproject.Features.Admin.CompanyItem.DTOs.PreparedCompanyItemGroup g)
         => (g.Rows.FirstOrDefault()?.RowNumber ?? 0).ToString();
 }

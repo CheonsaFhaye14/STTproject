@@ -119,7 +119,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
 				map["InvoiceDate"] = new[] { "invoicedate" };
 				map["CustomerCode"] = new[] { "customer_id" };
 				map["CustomerName"] = new[] { "customername" };
-				map["CustomerType"] = new[] { "subcategory" };
+				map["CustomerType"] = new[] { "subPPG" };
 				map["OrderType"] = new[] { "trxtype" };
 				map["SkuCode"] = new[] { "item_id" };
 				map["ItemName"] = new[] { "product" };

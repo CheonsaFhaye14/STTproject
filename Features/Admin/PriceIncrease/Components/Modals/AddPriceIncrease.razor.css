@@ -1,0 +1,50 @@
+.pl-warning { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0 16px; padding: 12px 14px; border: 1px solid #E6D08A; background: #FBF5DC; border-radius: 8px; font-size: 13px; color: #5A4A12; }
+.pl-warning p { margin: 4px 0; }
+.pl-warning ul { margin: 4px 0 4px 18px; padding: 0; }
+.pl-blocked { border-color: #E3B4AE; background: #FDECEA; color: #7A2A22; }
+
+.pl-card { border: 1px solid #DDD6C4; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: #fff; }
+.pl-card-title { font-weight: 600; margin-bottom: 8px; }
+
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid #DDD6C4; border-radius: 8px; background: #F7F4EA; }
+.seg-item { position: relative; padding: 6px 14px; border-radius: 6px; font-size: 13px; color: #6B655A; cursor: pointer; }
+.seg .seg-item input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+.seg-item.seg-on { background: #FBF5DC; color: #5A4A12; font-weight: 600; box-shadow: inset 0 0 0 1px #E6D08A; }
+.seg-item:has(input:focus-visible) { outline: 2px solid #C9A227; outline-offset: 1px; }
+
+.same-row { display: flex; gap: 12px; align-items: center; margin: 4px 0 14px; padding: 10px 12px; border: 1px solid #DDD6C4; border-radius: 8px; cursor: pointer; }
+.same-row strong { display: block; font-size: 13px; font-weight: 600; }
+.same-row small { font-size: 12px; color: #6B655A; }
+.same-row input[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #CFC8B4; position: relative; cursor: pointer; transition: background .15s; }
+.same-row input[type="checkbox"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.same-row input[type="checkbox"]:checked { background: #C9A227; }
+.same-row input[type="checkbox"]:checked::after { left: 16px; }
+
+.sum-wrap { border: 1px solid #DDD6C4; border-radius: 10px; overflow: hidden; margin: 4px 0 14px; }
+.sum-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sum-table th { font-size: 11px; font-weight: 600; color: #9C968A; text-align: right; padding: 6px 12px; background: #F1EEE4; }
+.sum-table td { padding: 7px 12px; border-top: 1px solid #EBE7DC; text-align: right; }
+.sum-table th:first-child, .sum-table td:first-child { text-align: left; color: #6B655A; }
+.sum-new { font-weight: 600; }
+
+.uom-caption { font-size: 12px; color: #6B655A; margin: 0 0 8px; }
+.uom-note { display: flex; gap: 8px; align-items: center; font-size: 12px; background: #FBF5DC; color: #5A4A12; border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; }
+.uom-group { border: 1px solid #DDD6C4; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.uom-group-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #F1EEE4; font-size: 13px; font-weight: 600; }
+.pl-pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.pl-national { background: #F3EBD3; color: #6B5210; }
+.pl-regional { background: #E3EDF6; color: #24527A; }
+.uom-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.uom-table th { font-size: 11px; font-weight: 600; color: #9C968A; text-align: right; padding: 6px 12px; }
+.uom-table td { padding: 8px 12px; border-top: 1px solid #EBE7DC; text-align: right; vertical-align: middle; }
+.uom-table th:first-child, .uom-table td:first-child { text-align: left; }
+.uom-conv { display: block; font-size: 11px; color: #9C968A; }
+.uom-tag { margin-left: 6px; padding: 1px 7px; border-radius: 10px; font-size: 11px; background: #EEF6EC; color: #2F5D2A; }
+.uom-up { color: #2F5D2A; }
+.uom-manual td { background: #FBF5DC; }
+.uom-skipped td { color: #9C968A; background: #F7F5EE; }
+.uom-table .uom-input { width: 110px; height: 30px; padding: 0 8px; font-size: 13px; text-align: right; box-sizing: border-box; }
+.uom-table .uom-why-cell { border-top: 0; padding-top: 0; text-align: left; }
+.uom-why { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: #5A4A12; }
+.uom-why label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.uom-why input[type="checkbox"] { width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #C9A227; }

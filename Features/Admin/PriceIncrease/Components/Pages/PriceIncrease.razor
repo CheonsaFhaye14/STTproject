@@ -26,12 +26,14 @@
         <PriceIncreaseTable @ref="priceIncreaseTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
                             OnEditPriceIncrease="OpenEditModal"
                              />
-
         <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
                     Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Change" : "Confirm Creation of Price Change")"
-                    Message="@(editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?")"
+                    Message="@(showConfirmError ? null : (editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?"))"
+                    ErrorMessage="@confirmErrorMessage"
+                    ShowError="showConfirmError"
                     OnYes="ConfirmAddPriceIncrease"
-                    OnNo="CancelConfirm" />
+                    OnNo="CancelConfirm"
+                    OnErrorConfirm="DismissConfirmError" />
 
         @if (showAddModal)
         {
@@ -65,40 +67,51 @@
         editPriceIncreaseId = null; 
         showAddModal = true;
     }
-
-    // called from PriceIncreaseTable OnViewPriceIncrease
     private void OpenEditModal(int id)
     {
         editPriceIncreaseId = id;
         showAddModal = true;
     }
+    private bool showConfirmError;
+    private string? confirmErrorMessage;
 
-    private void OnCountChanged(int count) => totalCount = count;
-
-    private void OpenConfirmModal() => showConfirmAddModal = true;
-
-    private void CancelConfirm() => showConfirmAddModal = false;
-
-    private void CancelAddPriceIncrease() => showAddModal = false;
+    private void OpenConfirmModal()
+    {
+        showConfirmError = false;
+        confirmErrorMessage = null;
+        showConfirmAddModal = true;
+    }
 
     private async Task ConfirmAddPriceIncrease()
     {
-        showConfirmAddModal = false;
-
         if (addPriceIncreaseModal == null) return;
 
         var (success, error) = await addPriceIncreaseModal.SubmitAsync();
 
         if (success)
         {
+            showConfirmAddModal = false;
             showAddModal = false;
             if (priceIncreaseTable != null)
                 await priceIncreaseTable.LoadPageAsync();
         }
         else
         {
-            // surface the error somewhere visible — e.g. a toast, or re-show the modal with the message
-            Console.WriteLine($"Price change save failed: {error}");
+            confirmErrorMessage = error ?? "An unexpected error occurred. Please try again.";
+            showConfirmError = true;
         }
     }
+
+    private void DismissConfirmError()
+    {
+        showConfirmError = false;
+        confirmErrorMessage = null;
+        showConfirmAddModal = false;
+    }
+    private void OnCountChanged(int count) => totalCount = count;
+
+    private void CancelConfirm() => showConfirmAddModal = false;
+
+    private void CancelAddPriceIncrease() => showAddModal = false;
+
 }

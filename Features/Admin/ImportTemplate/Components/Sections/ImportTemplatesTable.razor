@@ -39,7 +39,7 @@
                         <input type="radio" name="status" value=""
                             @onchange="() => OnStatusChanged(string.Empty)"
                             checked="@(SelectedStatus == "")" />
-                        <span>All</span>
+                      <span>All</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
                         <input type="radio" name="status" value="active"

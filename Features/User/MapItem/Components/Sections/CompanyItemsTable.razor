@@ -17,11 +17,11 @@
             <input type="text" placeholder="Search" @bind="SearchText" @bind:event="oninput" />
         </div>
         <div class="filter-group">
-            <select @bind="SelectedCompanyItemsCategoryString" @bind:after="HandleCategoryChanged">
-                <option value="All">All categories</option>
-                @foreach (var category in CompanyItemCategories)
+            <select @bind="SelectedCompanyItemsPPGString" @bind:after="HandlePPGChanged">
+                <option value="All">All PPG</option>
+                @foreach (var PPG in CompanyItemPPG)
                 {
-                    <option value="@category">@category</option>
+                    <option value="@PPG">@PPG</option>
                 }
             </select>
         </div>
@@ -38,7 +38,7 @@
             <thead>
                 <tr>
                     <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.CompanyItemCode)">COMPANY ITEM CODE @GetSortIndicator(CompanyItemSortColumn.CompanyItemCode)</th>
-                    <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.Category)">CATEGORY @GetSortIndicator(CompanyItemSortColumn.Category)</th>
+                    <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.PPG)">PPG @GetSortIndicator(CompanyItemSortColumn.PPG)</th>
                     <th class="text-col" @onclick="() => SetSortByColumnAsync(CompanyItemSortColumn.ItemName)">ITEM NAME @GetSortIndicator(CompanyItemSortColumn.ItemName)</th>
                 </tr>
             </thead>
@@ -53,7 +53,7 @@
                         <tr @onclick="() => HandleRowClicked(item)"
                             class="company-items-row @(isSelected ? "selected-row" : string.Empty) @(isMapped ? "mapped-row" : string.Empty)">
                             <td class="text-col">@item.CompanyItemCode</td>
-                            <td class="text-col">@(string.IsNullOrWhiteSpace(item.Category) ? "No category found" : item.Category)</td>
+                            <td class="text-col">@(string.IsNullOrWhiteSpace(item.PPG) ? "No PPG found" : item.PPG)</td>
                             <td class="text-col">
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
                                     <span>@item.ItemName</span>

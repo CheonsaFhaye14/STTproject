@@ -41,7 +41,7 @@
 
         @if (showImportModal)
         {
-            <ImportCompanyItems Show="true" OnClose="CloseImportModal" />
+            <ImportCompanyItems Show="true" OnClose="CloseImportModal" OnImportCompleted="OnImportCompleted" />        
         }
 
     </div>
@@ -56,7 +56,10 @@
     private int totalCount = 0;
     private CompanyItemTable? companyItemTable;
     private AddCompanyItem? addCompanyItemModal;
-
+    private async Task OnImportCompleted()
+    {
+        if (companyItemTable != null) await companyItemTable.LoadPageAsync();
+    }
     private async Task OnTableLoaded()
     {
         isLoading = false;

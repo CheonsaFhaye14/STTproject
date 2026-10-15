@@ -8,6 +8,9 @@ using STTproject.Features.User.MapItem.Validators;
 using STTproject.Models;
 using STTproject.Services;
 using STTproject.Shared.Helper;
+using PricingStructure = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructure;
+using PricingStructureResolver = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructureResolver;
+using PriceListTypes = STTproject.Features.Admin.Subdistributor.DTOs.PriceListTypes;
 
 
 namespace STTproject.Features.User.MapItem.Components.Pages
@@ -34,6 +37,31 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private string? selectedPrincipal;
         private string? itemCode;
         private string? itemName;
+        private string? modalStockUomName;
+        private decimal? modalApplicableStockPrice;
+        private string? modalPriceListLabel;
+        private string? modalReferenceNote;
+
+        private (decimal? Price, string? List, string? Note) ResolveStockReference(CompanyItemDropdownItem? ci)
+        {
+            if (ci is null) return (null, null, null);
+
+            var list = subdList.FirstOrDefault(s => s.SubDistributorId == selectedSubdId)?.PriceListType;
+            var structure = PricingStructureResolver.Resolve(ci.StockPrice, ci.StockPriceRegional, ci.StockPriceNational);
+
+            return structure switch
+            {
+                PricingStructure.Dual when list == PriceListTypes.Regional => (ci.StockPriceRegional, "Regional", null),
+                PricingStructure.Dual when list == PriceListTypes.National => (ci.StockPriceNational, "National", null),
+                PricingStructure.Dual => (null, null,
+                    "This item has Regional and National prices, but this sub-distributor has no price list. " +
+                    "It won't receive price changes until one is assigned in Sub-Distributors admin."),
+                PricingStructure.Single => (ci.StockPrice, null, null),
+                PricingStructure.Invalid => (null, null,
+                    "This company item has only one of its Regional/National prices. Ask an admin to complete it."),
+                _ => (null, null, "This company item has no stock price configured yet.")
+            };
+        }
         private IJSObjectReference? jsModule;
         private IJSObjectReference? mapItemJsModule;
         private DotNetObjectReference<MapItem>? objRef;
@@ -96,14 +124,17 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
             modalCompanyItemCode = ci?.ItemCode;
             modalCompanyItemName = ci?.ItemName;
+            modalStockUomName = ci?.StockUomName;
+            (modalApplicableStockPrice, modalPriceListLabel, modalReferenceNote) = ResolveStockReference(ci);
         }
         else
         {
             modalCompanyItemCode = null;
             modalCompanyItemName = null;
+            modalStockUomName = null;
+            modalApplicableStockPrice = null;
         }
 
-        // Fetch in-use UOM names only when editing an existing item
         if (editingSubdItemId.HasValue)
         {
             var usedNames = await mapItemService.GetInvoiceUsedUomNamesAsync(editingSubdItemId.Value);
@@ -169,7 +200,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private string? selectedDropdownPrincipal;
         private string? selectedCompanyItemDisplayName;
         private string selectedCompanyItemsFilterString = "All";
-        private string selectedCompanyItemsCategoryString = "All";
+        private string selectedCompanyItemsPPGString = "All";
         private CompanyItemFilterMode selectedCompanyItemsFilter = CompanyItemFilterMode.All;
         private List<MapCompanyItemViewRow> companyItemsAll = new();
         private List<MapCompanyItemViewRow> companyItems = new();
@@ -195,12 +226,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 ? companyItemsForDropdown
                 : companyItemsForDropdown.Where(i => i.Principal == selectedDropdownPrincipal);
 
-        private IEnumerable<string> CompanyItemCategories =>
+        private IEnumerable<string> CompanyItemPPG =>
             companyItemsAll
-                .Select(item => item.Category)
-                .Where(category => !string.IsNullOrWhiteSpace(category))
+                .Select(item => item.PPG)
+                .Where(PPG => !string.IsNullOrWhiteSpace(PPG))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(category => category);
+                .OrderBy(PPG => PPG);
 
         private IEnumerable<string> PrincipalsDropdown =>
             companyItemsForDropdown
@@ -379,7 +410,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 principals = new();
                 selectedPrincipal = null;
                 selectedCompanyItemsFilterString = "All";
-                selectedCompanyItemsCategoryString = "All";
+                selectedCompanyItemsPPGString = "All";
                 selectedCompanyItemsFilter = CompanyItemFilterMode.All;
                 companyItemsAll = new();
                 companyItems = new();
@@ -408,7 +439,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 principals = new();
                 selectedPrincipal = null;
                 selectedCompanyItemsFilterString = "All";
-                selectedCompanyItemsCategoryString = "All";
+                selectedCompanyItemsPPGString = "All";
                 selectedCompanyItemsFilter = CompanyItemFilterMode.All;
                 companyItemsAll = new();
                 companyItems = new();
@@ -421,7 +452,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             {
                 selectedSubdId = 0;
                 selectedCompanyItemsFilterString = "All";
-                selectedCompanyItemsCategoryString = "All";
+                selectedCompanyItemsPPGString = "All";
                 selectedCompanyItemsFilter = CompanyItemFilterMode.All;
                 ResetItemForm();
             }
@@ -662,14 +693,14 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 : new List<MapSubDistributorItemRow>();
 
             companyItemsAll = companyRows
-                .GroupBy(x => new { x.CompanyItemId, x.CompanyItemCode, x.Description, x.Category })
+                .GroupBy(x => new { x.CompanyItemId, x.CompanyItemCode, x.Description, x.PPG })
                 .Select(group => new MapCompanyItemViewRow
                 {
                     CompanyItemId = group.Key.CompanyItemId,
                     CompanyItemCode = group.Key.CompanyItemCode,
                     Principal = group.Select(x => x.Principal).FirstOrDefault() ?? string.Empty,
                     ItemName = group.Key.Description,
-                    Category = group.Key.Category,
+                    PPG = group.Key.PPG,
                     EffectivityDate = group.Where(x => x.EffectivityDate.HasValue)
                         .Select(x => x.EffectivityDate)
                         .OrderByDescending(date => date)
@@ -838,12 +869,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await PersistDraftAsync();
         }
 
-        private Task OnCompanyItemsCategoryChanged()
+        private Task OnCompanyItemsPPGChanged()
         {
-            if (!selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
-                !CompanyItemCategories.Contains(selectedCompanyItemsCategoryString, StringComparer.OrdinalIgnoreCase))
+            if (!selectedCompanyItemsPPGString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
+                !CompanyItemPPG.Contains(selectedCompanyItemsPPGString, StringComparer.OrdinalIgnoreCase))
             {
-                selectedCompanyItemsCategoryString = "All";
+                selectedCompanyItemsPPGString = "All";
             }
 
             selectedCompanyItemIdForFilter = null;
@@ -1154,7 +1185,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     {
                         ItemsUomId = matched.ItemsUomId,
                         Conversion = matched.ConversionToBase,
-                        Price = matched.Price
+                        Price = matched.Price,
+                        IsStockUom = matched.IsStockUom
                     };
                 }
             }
@@ -1198,7 +1230,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             ResetItemForm(persistDraft: false);
             selectedPrincipal = null;
             selectedCompanyItemsFilterString = "All";
-            selectedCompanyItemsCategoryString = "All";
+            selectedCompanyItemsPPGString = "All";
             selectedCompanyItemsFilter = CompanyItemFilterMode.All;
 
             StateHasChanged();
@@ -1286,7 +1318,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 SelectedCompanyItemDisplayName = selectedCompanyItemDisplayName,
                 EditingSubdItemId = editingSubdItemId,
                 SelectedCompanyItemsFilterString = selectedCompanyItemsFilterString,
-                SelectedCompanyItemsCategoryString = selectedCompanyItemsCategoryString,
+                SelectedCompanyItemsPPGString = selectedCompanyItemsPPGString,
                 UomEntries = new Dictionary<string, UomEntry>(uomEntries, StringComparer.OrdinalIgnoreCase)
             };
 
@@ -1315,7 +1347,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             selectedCompanyItemDisplayName = draft.SelectedCompanyItemDisplayName;
             editingSubdItemId = draft.EditingSubdItemId;
             selectedCompanyItemsFilterString = draft.SelectedCompanyItemsFilterString ?? "All";
-            selectedCompanyItemsCategoryString = draft.SelectedCompanyItemsCategoryString ?? "All";
+            selectedCompanyItemsPPGString = draft.SelectedCompanyItemsPPGString ?? "All";
             uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in draft.UomEntries)
             {
@@ -1331,10 +1363,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             selectedCompanyItemsFilter = restoredFilter;
             UpdateSelectedSubdLocation();
 
-            if (!selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
-                !CompanyItemCategories.Contains(selectedCompanyItemsCategoryString, StringComparer.OrdinalIgnoreCase))
+            if (!selectedCompanyItemsPPGString.Equals("All", StringComparison.OrdinalIgnoreCase) &&
+                !CompanyItemPPG.Contains(selectedCompanyItemsPPGString, StringComparer.OrdinalIgnoreCase))
             {
-                selectedCompanyItemsCategoryString = "All";
+                selectedCompanyItemsPPGString = "All";
             }
 
             ApplyCompanyItemFilters();
@@ -1403,8 +1435,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private void ApplyCompanyItemFilters()
         {
             companyItems = companyItemsAll
-                .Where(item => selectedCompanyItemsCategoryString.Equals("All", StringComparison.OrdinalIgnoreCase)
-                    || item.Category.Equals(selectedCompanyItemsCategoryString, StringComparison.OrdinalIgnoreCase))
+                .Where(item => selectedCompanyItemsPPGString.Equals("All", StringComparison.OrdinalIgnoreCase)
+                    || item.PPG.Equals(selectedCompanyItemsPPGString, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(item => item.CompanyItemCode)
                 .ToList();
             UpdateFilteredSubDistributorItems();

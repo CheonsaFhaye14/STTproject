@@ -49,10 +49,11 @@ public class DownloadTemplateService
             worksheet.Cell(1, 8).Value = "ConversionBasedOn";
             worksheet.Cell(1, 9).Value = "Conversion";
             worksheet.Cell(1, 10).Value = "Price";
+            worksheet.Cell(1, 11).Value = "StockUom";
 
             // Extra unlocked cells for user scratch space; the import parser ignores these columns.
-            // Moved past column J now that ConversionBasedOn occupies H.
-            worksheet.Range("K2:AA1000").Style.Protection.Locked = false;
+            // Moved past column K now that StockUom occupies K.
+            worksheet.Range("L2:AA1000").Style.Protection.Locked = false;
 
             // change number format to text for code/name columns, now including ConversionBasedOn (a UOM name)
             worksheet.Range("E2:H1000").Style.NumberFormat.Format = "@";
@@ -92,7 +93,7 @@ public class DownloadTemplateService
                     worksheet.Cell(currentRow, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
                     // Empty unlocked columns for user to fill in (now includes ConversionBasedOn, col 8)
-                    for (int col = 5; col <= 10; col++)
+                    for (int col = 5; col <= 11; col++)
                     {
                         worksheet.Cell(currentRow, col);
                         worksheet.Cell(currentRow, col).Style.Protection.Locked = false;
@@ -152,6 +153,16 @@ public class DownloadTemplateService
                 basedOnValidation.InputTitle = "Conversion Based On";
                 basedOnValidation.InputMessage = "Optional. Which UOM the Conversion count refers to. Leave blank to base directly on PC.";
                 basedOnValidation.ShowErrorMessage = false; // Allow custom entries
+
+                // Stock UOM validation: same dropdown list, optional
+                var stockUomRange = worksheet.Range($"K2:K{lastDataRow}");
+                var stockUomValidation = stockUomRange.CreateDataValidation();
+                stockUomValidation.List(uomSourceRange);
+                stockUomValidation.IgnoreBlanks = true;
+                stockUomValidation.ShowInputMessage = true;
+                stockUomValidation.InputTitle = "Stock UOM";
+                stockUomValidation.InputMessage = "Optional. Put the UOM that the company stock price applies to on one row of the item. Leave blank to get a suggestion.";
+                stockUomValidation.ShowErrorMessage = false; // Allow custom entries
             }
 
             // Auto-fit column widths
@@ -207,6 +218,9 @@ public class DownloadTemplateService
 
         worksheet.Cell(row, 10).Value = item.Price;
         worksheet.Cell(row, 10).Style.Protection.Locked = false;
+
+        // Stock UOM is filled in by the user (optional): the UOM the company stock price applies to.
+        worksheet.Cell(row, 11).Style.Protection.Locked = false;
     }
     public byte[] GenerateErrorReportExcel(ImportMapItemResult result, List<ImportMapItemRowResult> rowsToExport)
     {
