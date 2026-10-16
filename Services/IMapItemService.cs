@@ -119,12 +119,8 @@ public class MapItemService : IMapItemService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(
-        int userId,
-        int subDistributorId,
-        string? principal,
-        bool includeAllSubDistributors = false,
-        CancellationToken cancellationToken = default)
+
+    public async Task<List<MapSubDistributorItemRow>> GetMapSubDistributorItemsAsync(int userId, int subDistributorId, string? principal, bool includeAllSubDistributors = false, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
 
@@ -135,17 +131,18 @@ public class MapItemService : IMapItemService
 
         if (!includeAllSubDistributors)
         {
-            subdItemsQuery = subdItemsQuery.Where(si => si.SubDistributor.EncoderId == userId);
+            subdItemsQuery = subdItemsQuery
+                .Where(si => si.SubDistributor.EncoderId == userId);
         }
 
         var uomsQuery = context.ItemsUoms
             .AsNoTracking()
             .Where(u => u.IsActive);
 
-
         var query =
             from si in subdItemsQuery
-            join uom in uomsQuery on si.SubdItemId equals uom.SubdItemId into uomGroup
+            join uom in uomsQuery
+                on si.SubdItemId equals uom.SubdItemId into uomGroup
             from uom in uomGroup.DefaultIfEmpty()
             select new
             {
@@ -155,16 +152,22 @@ public class MapItemService : IMapItemService
                 si.ItemName,
                 si.CompanyItemId,
                 CompanyItemName = si.CompanyItem.ItemName,
-                Price = uom != null ? uom.Price : 0m,
+                Price = uom != null ? uom.Price : (decimal?)null,
                 Principal = si.CompanyItem.Principal,
                 UomName = uom != null ? uom.UomName : string.Empty,
+                ConversionToBase = uom != null
+                    ? uom.ConversionToBase
+                    : (int?)null,
+                IsStockUom = uom != null && uom.IsStockUom,
+                IsBaseUnit = uom != null && uom.IsBaseUnit,
                 si.SubDistributor.SubdName,
                 si.CreatedDate
             };
 
         if (subDistributorId > 0)
         {
-            query = query.Where(item => item.SubDistributorId == subDistributorId);
+            query = query.Where(
+                item => item.SubDistributorId == subDistributorId);
         }
 
         if (!string.IsNullOrWhiteSpace(principal))
@@ -178,27 +181,43 @@ public class MapItemService : IMapItemService
             .ToListAsync(cancellationToken);
 
         return results
-            .GroupBy(x => x.SubdItemId)
-            .Select(group => new MapSubDistributorItemRow
+            .GroupBy(item => item.SubdItemId)
+            .Select(group =>
             {
-                SubdItemId = group.Key,
-                SubDistributorId = group.First().SubDistributorId,
-                SubItemCode = group.First().SubdItemCode,
-                Description = group.First().ItemName,
-                Price = group.First().Price ?? 0m,
-                Principal = group.First().Principal,
-                CompanyItemId = group.First().CompanyItemId,
-                CompanyItemName = group.First().CompanyItemName,
-                SubdName = group.First().SubdName,
-                CreatedDate = group.First().CreatedDate,
-                UomName = string.Join(", ", group
-                    .Where(x => !string.IsNullOrWhiteSpace(x.UomName))
-                    .Select(x => $"{x.UomName} - {x.Price:N2}"))
+                var first = group.First();
+
+                var uoms = group
+                    .Where(item => !string.IsNullOrWhiteSpace(item.UomName))
+                    .Select(item => new MapSubDistributorUomRow
+                    {
+                        UomName = item.UomName,
+                        Price = item.Price,
+                        ConversionToBase = item.ConversionToBase,
+                        IsStockUom = item.IsStockUom,
+                        IsBaseUnit = item.IsBaseUnit
+                    })
+                    .ToList();
+
+                return new MapSubDistributorItemRow
+                {
+                    SubdItemId = group.Key,
+                    SubDistributorId = first.SubDistributorId,
+                    SubItemCode = first.SubdItemCode,
+                    Description = first.ItemName,
+                    Price = first.Price ?? 0m,
+                    Principal = first.Principal,
+                    CompanyItemId = first.CompanyItemId,
+                    CompanyItemName = first.CompanyItemName,
+                    SubdName = first.SubdName,
+                    CreatedDate = first.CreatedDate,
+                    UomName = string.Join(", ", uoms.Select(u => u.UomName)),
+                    Uoms = uoms
+                };
             })
-            .OrderBy(x => x.SubItemCode)
+            .OrderBy(item => item.SubItemCode)
             .ToList();
-    }    
-        
+    }
+   
     public async Task<List<CompanyItemDropdownItem>> GetCompanyItemsForDropdownAsync(
         int userId,
         int subDistributorId,

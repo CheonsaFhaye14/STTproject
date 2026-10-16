@@ -235,4 +235,31 @@ public partial class SubdItemTable
     {
         return !string.IsNullOrEmpty(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string GetUomTooltip(MapSubDistributorItemRow item, MapSubDistributorUomRow entry)
+    {
+        var roles = new List<string>();
+
+        if (entry.IsStockUom)
+            roles.Add("Stock UOM");
+
+        if (entry.IsBaseUnit)
+            roles.Add("Base UOM");
+
+        var description = string.Join(" and ", roles);
+
+        var baseUom = item.Uoms.FirstOrDefault(u => u.IsBaseUnit);
+
+        if (entry.ConversionToBase.HasValue &&
+            baseUom?.ConversionToBase is > 0)
+        {
+            var conversion = (decimal)entry.ConversionToBase.Value
+                / baseUom.ConversionToBase.Value;
+
+            description +=
+                $"\n1 {entry.UomName} = {conversion:N0} {baseUom.UomName}";
+        }
+
+        return description;
+    }
 }

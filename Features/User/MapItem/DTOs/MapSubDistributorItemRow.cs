@@ -13,4 +13,15 @@ public sealed class MapSubDistributorItemRow
     public string SubdName { get; set; } = string.Empty;
     public string UomName { get; set; } = string.Empty;
     public DateTime? CreatedDate { get; set; }
+
+    public List<MapSubDistributorUomRow> Uoms { get; set; } = new();
+}
+
+public sealed class MapSubDistributorUomRow
+{
+    public string UomName { get; set; } = string.Empty;
+    public decimal? Price { get; set; }
+    public int? ConversionToBase { get; set; }
+    public bool IsStockUom { get; set; }
+    public bool IsBaseUnit { get; set; }
 }

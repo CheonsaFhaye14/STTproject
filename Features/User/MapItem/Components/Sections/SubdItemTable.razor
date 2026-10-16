@@ -67,8 +67,23 @@
 						@GetSortIndicator(SubItemSortColumn.Description)
 					</th>
 					<th @onclick="() => SetSortByColumn(SubItemSortColumn.UomName)">
-						UNIT OF MEASURES
-						@GetSortIndicator(SubItemSortColumn.UomName)
+						<div class="uom-header">
+							<span>
+								UNIT OF MEASURES
+								@GetSortIndicator(SubItemSortColumn.UomName)
+							</span>
+
+							<div class="uom-legend">
+								<span>
+									<span class="uom-dot uom-dot-stock"></span>
+									Stock
+								</span>
+								<span>
+									<span class="uom-dot uom-dot-base"></span>
+									Base
+								</span>
+							</div>
+						</div>
 					</th>
 					<th>ACTIONS</th>
 				</tr>
@@ -87,18 +102,47 @@
 							<td class="text-col">@item.SubItemCode</td>
 							<td class="text-col">@item.Description</td>
 							<td class="uom-td">
-								@if (uomEntries.Count == 0)
+								@if (item.Uoms.Count == 0)
 								{
 									<span>—</span>
+									<span class="uom-missing-stock">
+										<span class="uom-dot uom-dot-missing"></span>
+										No stock UOM
+									</span>
 								}
 								else
 								{
 									<div class="uom-pill-list">
-										@foreach (var entry in uomEntries)
+										@foreach (var entry in item.Uoms)
 										{
-											<span class="uom-pill">@entry.Label @entry.Value</span>
+											<span class="uom-pill" title="@GetUomTooltip(item, entry)">
+												@if (entry.IsStockUom)
+												{
+													<span class="uom-dot uom-dot-stock" title="Stock UOM"></span>
+												}
+
+												@if (entry.IsBaseUnit)
+												{
+													<span class="uom-dot uom-dot-base" title="Base UOM"></span>												
+												}
+												@entry.UomName
+												@if (entry.Price.HasValue)
+												{
+													<span>@entry.Price.Value.ToString("N2")</span>
+												}
+												
+
+
+											</span>
 										}
 									</div>
+									@if (!item.Uoms.Any(u => u.IsStockUom))
+									{
+										<span class="uom-missing-stock">
+											<span class="uom-dot uom-dot-missing"></span>
+											No stock UOM
+										</span>
+									}
 								}
 							</td>
 							<td>
