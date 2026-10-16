@@ -49,12 +49,13 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     PriceListType = h.PriceListType,
                     StockPrice = h.PriceListType == "Regional" ? h.CompanyItem.StockPriceRegional
                             : h.PriceListType == "National" ? h.CompanyItem.StockPriceNational
-                            : h.CompanyItem.StockPrice,                    
+                            : h.CompanyItem.StockPrice,
                     PriceIncreaseAmount = h.PriceIncreaseAmount,
                     EffectivityDate = h.EffectivityDate,
                     AppliedDate = h.AppliedDate,
                     CreatedBy = h.CreatedBy,
                     CreatedDate = h.CreatedDate,
+                    Principal = h.CompanyItem.Principal,
                     Status = h.AppliedDate != null
                         ? "Applied"
                         : (h.EffectivityDate <= now ? "Overdue" : "Pending")
@@ -184,39 +185,60 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     CompanyItemName = g.First().CompanyItemName,
                     Principal = g.First().Principal,
                     CreatedDate = g.Max(x => x.CreatedDate),
+
                     Schedules = g
-                        .OrderBy(x => x.PriceListType == "Regional" ? 0 :
-                                    x.PriceListType == "National" ? 1 : 2)
+                        .OrderBy(x =>
+                            x.PriceListType == "Regional" ? 0 :
+                            x.PriceListType == "National" ? 1 : 2)
                         .ThenByDescending(x => x.CreatedDate)
                         .ToList()
                 });
+
 
             grouped = (sortColumn, sortAscending) switch
             {
                 ("CompanyItemCode", true) =>
                     grouped.OrderBy(x => x.CompanyItemCode),
+
                 ("CompanyItemCode", false) =>
                     grouped.OrderByDescending(x => x.CompanyItemCode),
+
                 ("CompanyItemName", true) =>
                     grouped.OrderBy(x => x.CompanyItemName),
+
                 ("CompanyItemName", false) =>
                     grouped.OrderByDescending(x => x.CompanyItemName),
-                ("CreatedDate", true) =>
-                    grouped.OrderBy(x => x.CreatedDate),
+
                 ("CreatedDate", false) =>
+                    grouped.OrderBy(x => x.CreatedDate),
+
+                ("CreatedDate", true) =>
                     grouped.OrderByDescending(x => x.CreatedDate),
+
                 ("PriceIncreaseAmount", true) =>
-                    grouped.OrderBy(x => x.Schedules.Min(s => s.PriceIncreaseAmount)),
+                    grouped.OrderBy(x =>
+                        x.Schedules.Min(s => s.PriceIncreaseAmount)),
+
                 ("PriceIncreaseAmount", false) =>
-                    grouped.OrderByDescending(x => x.Schedules.Max(s => s.PriceIncreaseAmount)),
-                ("EffectivityDate", true) =>
-                    grouped.OrderBy(x => x.Schedules.Min(s => s.EffectivityDate)),
+                    grouped.OrderByDescending(x =>
+                        x.Schedules.Max(s => s.PriceIncreaseAmount)),
+
                 ("EffectivityDate", false) =>
-                    grouped.OrderByDescending(x => x.Schedules.Max(s => s.EffectivityDate)),
+                    grouped.OrderBy(x =>
+                        x.Schedules.Min(s => s.EffectivityDate)),
+
+                ("EffectivityDate", true) =>
+                    grouped.OrderByDescending(x =>
+                        x.Schedules.Max(s => s.EffectivityDate)),
+
                 ("Status", true) =>
-                    grouped.OrderBy(x => x.Schedules.First().Status),
+                    grouped.OrderBy(x =>
+                        x.Schedules.First().Status),
+
                 ("Status", false) =>
-                    grouped.OrderByDescending(x => x.Schedules.First().Status),
+                    grouped.OrderByDescending(x =>
+                        x.Schedules.First().Status),
+
                 _ => grouped.OrderByDescending(x => x.CreatedDate)
             };
 
@@ -264,7 +286,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 .OrderBy(p => p)
                 .ToListAsync();
         }
-        
+
         public async Task<PriceIncreaseTableListDto?> GetPriceIncreaseByIdAsync(int id)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -287,7 +309,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     PriceListTypes.Regional => entity.CompanyItem.StockPriceRegional,
                     PriceListTypes.National => entity.CompanyItem.StockPriceNational,
                     _ => entity.CompanyItem.StockPrice
-                },                
+                },
                 PriceIncreaseAmount = entity.PriceIncreaseAmount,
                 EffectivityDate = entity.EffectivityDate,
                 AppliedDate = entity.AppliedDate,
@@ -696,7 +718,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             if (priceListType != null)
                 query = query.Where(u => u.SubdItem.SubDistributor.PriceListType == priceListType);
             else if (usesPriceLists)
-                query = query.Where(u => u.SubdItem.SubDistributor.PriceListType != null);  
+                query = query.Where(u => u.SubdItem.SubDistributor.PriceListType != null);
 
             var uoms = await query
                 .Select(u => new
@@ -729,7 +751,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 .ToListAsync();
 
             var historyByUomId = pendingHistory.ToDictionary(h => h.ItemsUomId);
-            
+
             return uoms
                 .Select(u =>
                 {

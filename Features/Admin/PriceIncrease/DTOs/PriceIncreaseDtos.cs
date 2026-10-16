@@ -2,7 +2,7 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
 {
     public class PriceIncreaseTableListDto
     {
-        public int GroupKey => CompanyItemId ?? -CompanyItemPriceHistoryId;
+        public int GroupKey => CompanyItemPriceHistoryId;
         public int CompanyItemPriceHistoryId { get; set; }
         public int? CompanyItemId { get; set; }
         public string? CompanyItemName { get; set; }
@@ -70,8 +70,8 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
     }
     public class PriceIncreaseLineDto
     {
-        public string? PriceListType { get; set; }  
-        public DateTime? EffectivityDate { get; set; }  
+        public string? PriceListType { get; set; }
+        public DateTime? EffectivityDate { get; set; }
         public decimal Amount { get; set; }
     }
 
@@ -82,10 +82,10 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public string? SubdItemName { get; set; }
         public int ItemsUomId { get; set; }
         public bool IsStockUom { get; set; }
-        public int? StockConversionToBase { get; set; } 
+        public int? StockConversionToBase { get; set; }
         public decimal? CurrentPrice { get; set; }
         public decimal? Increase { get; set; }
-        public bool IsManual { get; set; }       
+        public bool IsManual { get; set; }
         public string? UomName { get; set; }
         public int? ConversionToBase { get; set; }
         public decimal? OldPrice { get; set; }

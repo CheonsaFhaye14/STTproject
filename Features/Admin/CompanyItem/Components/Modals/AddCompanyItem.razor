@@ -3,70 +3,67 @@
 @inject STTproject.Services.IUserContextService UserContextService
 
 
-<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" 
-    IconType="ModalIconType.ItemView"
-    Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
-    OnClose="Cancel">
+<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" IconType="ModalIconType.ItemView"
+       Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
+       OnClose="Cancel">
     <ChildContent>
         <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="@isEdit" IsExpanded="true">
             <ChildContent>
-                <div class="form-group"
-                    <Input Label="Sku Code" Required="true" @bind-Value="ItemCode" Disabled="@isViewMode" Placeholder="Enter SKU Code" 
-                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
+                <div class="form-group" <Input Label="Sku Code" Required="true" @bind-Value="ItemCode"
+                                                   Disabled="@isViewMode" Placeholder="Enter SKU Code" ShowError="@ShowValidationErrors"
+                                                   ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
                 </div>
                 <div class="form-group">
-                    <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode" Placeholder="Enter Item Name"
-                    ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
+                    <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode"
+                           Placeholder="Enter Item Name" ShowError="@ShowValidationErrors"
+                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
                 </div>
                 <div class="form-group">
-                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal" AllowCustomValue="true" Required="true" ShowError="@ShowValidationErrors" 
-                    Placeholder="Select a principal or Enter a new one" SelectedValueChanged="@(v => Principal = v)" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)"/>
+                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal"
+                                  AllowCustomValue="true" Required="true" ShowError="@ShowValidationErrors"
+                                  Placeholder="Select a principal or Enter a new one" SelectedValueChanged="@(v => Principal = v)"
+                                  ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)" />
                 </div>
                 <div class="form-group">
-                    <AutoComplete Label="PPG" Items="PPGs" AddOptionalText="true" Disabled="@isViewMode" SelectedValue="@PPG" Placeholder="Select a PPG or Enter a new one" AllowCustomValue="true" />
+                    <AutoComplete Label="PPG" Items="PPGs" AddOptionalText="true" Disabled="@isViewMode"
+                                  SelectedValue="@PPG" Placeholder="Select a PPG or Enter a new one" AllowCustomValue="true" />
                 </div>
                 <div class="form-group">
-                    <AutoComplete Label="Category" Items="Categories" AddOptionalText="true" Disabled="@isViewMode" SelectedValue="@Category" Placeholder="Select a category or Enter a new one" AllowCustomValue="true" />
+                    <AutoComplete Label="Category" Items="Categories" AddOptionalText="true" Disabled="@isViewMode"
+                                  SelectedValue="@Category" Placeholder="Select a category or Enter a new one"
+                                  AllowCustomValue="true" />
                 </div>
                 <div class="form-group">
-                    <Input Label="Stock UOM" @bind-Value="StockUomName" Disabled="@isViewMode" Placeholder="Enter Stock UOM" Required="true" ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockUomName.Key)"/>
+                    <Input Label="Stock UOM" @bind-Value="StockUomName" Disabled="@isViewMode"
+                           Placeholder="Enter Stock UOM" Required="true" ShowError="@ShowValidationErrors"
+                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockUomName.Key)" />
                 </div>
 
-                @if(Principal == "KCPI")
+                @if (Principal == "KCPI")
                 {
                     <div class="form-group">
-                    <Input Label="Regional Stock Price"
-                        Required="true"
-                        @bind-Value="StockPriceRegional"
-                        Disabled="@isViewMode"
-                        Placeholder="Enter Regional Stock Price"
-                        ShowError="@ShowValidationErrors"
-                        ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceRegional.Key)" />                    
+                        <Input Label="Regional Stock Price" Required="true" @bind-Value="StockPriceRegional"
+                               Disabled="@isViewMode" Placeholder="Enter Regional Stock Price"
+                               ShowError="@ShowValidationErrors"
+                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceRegional.Key)" />
                     </div>
                     <div class="form-group">
-                        <Input Label="National Stock Price"
-                            Required="true"
-                            @bind-Value="StockPriceNational"
-                            Disabled="@isViewMode"
-                            Placeholder="Enter National Stock Price"
-                            ShowError="@ShowValidationErrors"
-                            ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceNational.Key)" />
+                        <Input Label="National Stock Price" Required="true" @bind-Value="StockPriceNational"
+                               Disabled="@isViewMode" Placeholder="Enter National Stock Price"
+                               ShowError="@ShowValidationErrors"
+                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceNational.Key)" />
                     </div>
                 }
                 else
                 {
                     <div class="form-group">
-                        <Input Label="Stock Price"
-                            Required="true"
-                            @bind-Value="StockPrice"
-                            Disabled="@isViewMode"
-                            Placeholder="Enter Stock Price"
-                            ShowError="@ShowValidationErrors"
-                            ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPrice.Key)" />                    
+                        <Input Label="Stock Price" Required="true" @bind-Value="StockPrice" Disabled="@isViewMode"
+                               Placeholder="Enter Stock Price" ShowError="@ShowValidationErrors"
+                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPrice.Key)" />
                     </div>
                 }
                 <div class="form-group">
-                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode"/>
+                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode" />
                 </div>
             </ChildContent>
         </FormSection>
@@ -74,19 +71,14 @@
         {
             <FormSection Icon="ti ti-history" Title="Price History" Expandable="true" IsExpanded="false">
                 <ChildContent>
-                    <AddTable TItem="CompanyItemPriceHistoryDto"
-                            Items="@PriceHistory.ToList()"
-                            Columns="@(new List<string> { "EffectivityDate", "NewPrice", "CreatedDate" })"
-                            ColumnLabels="@(new Dictionary<string,string> {
-                                ["EffectivityDate"] = "Effectivity Date",
-                                ["NewPrice"] = "New Price",
-                                ["CreatedDate"] = "Created Date"
-                            })"
-                            DisplayValueSelector="@FormatPriceHistoryColumn"
-                            ViewMode="true"
-                            Disabled="true"
-                            RemoveButtonVisible="false"
-                            AddButtonVisible="false" />
+                    <AddTable TItem="CompanyItemPriceHistoryDto" Items="@PriceHistory.ToList()"
+                              Columns="@(new List<string> { "EffectivityDate", "NewPrice", "CreatedDate" })" ColumnLabels="@(new Dictionary<string, string>
+                              {
+                                  ["EffectivityDate"] = "Effectivity Date",
+                                  ["NewPrice"] = "New Price",
+                                  ["CreatedDate"] = "Created Date"
+                              })" DisplayValueSelector="@FormatPriceHistoryColumn" ViewMode="true" Disabled="true"
+                              RemoveButtonVisible="false" AddButtonVisible="false" />
                 </ChildContent>
             </FormSection>
         }
@@ -94,26 +86,26 @@
         {
             <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="false">
                 <ChildContent>
-                    @if(CreatedByName != null)
+                    @if (CreatedByName != null)
                     {
-                    <div class="form-group">
-                        <Input Label="Created By" Disabled="true" @bind-Value="@CreatedByName" />
-                    </div>
+                        <div class="form-group">
+                            <Input Label="Created By" Disabled="true" @bind-Value="@CreatedByName" />
+                        </div>
                     }
                     <div class="form-group">
                         <Input Label="Created Date" Disabled="true" Value="CreatedDateDisplay" />
                     </div>
-                    @if(UpdatedByName != null)
+                    @if (UpdatedByName != null)
                     {
-                    <div class="form-group">
-                        <Input Label="Updated By" Disabled="true" @bind-Value="@UpdatedByName" />
-                    </div>
+                        <div class="form-group">
+                            <Input Label="Updated By" Disabled="true" @bind-Value="@UpdatedByName" />
+                        </div>
                     }
-                    @if(UpdatedDate != null)
+                    @if (UpdatedDate != null)
                     {
-                    <div class="form-group">
-                        <Input Label="Updated Date" Disabled="true" Value="UpdatedDateDisplay" />
-                    </div>
+                        <div class="form-group">
+                            <Input Label="Updated Date" Disabled="true" Value="UpdatedDateDisplay" />
+                        </div>
                     }
                 </ChildContent>
             </FormSection>
@@ -121,7 +113,7 @@
         
     </ChildContent>
     <FooterContent>
-        @if(isEdit && isViewMode)
+        @if (isEdit && isViewMode)
         {
             <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
             <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
@@ -129,8 +121,10 @@
         else
         {
             <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
-            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Company Item"))" Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" Disabled="@isSubmitting"></Button>
-        }    
+            <Button
+            Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Company Item"))"
+            Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" Disabled="@isSubmitting"></Button>
+        }
     </FooterContent>
 </Modal>
 
@@ -152,7 +146,6 @@
     private string? PPG { get; set; }
     private string? Category { get; set; }
     private bool IsActive { get; set; } = true;
-    private bool IsSingleStockPrice { get; set; } = true;
     private bool isViewMode = false;
 
     // Audit fields (view mode only)
@@ -174,7 +167,7 @@
 
     private string GetFieldError(string key) =>
         Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
-private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = new List<CompanyItemPriceHistoryDto>();
+    private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = new List<CompanyItemPriceHistoryDto>();
     protected override async Task OnInitializedAsync()
     {
         Principals = await AdminCompanyItemService.GetAllPrincipalsAsync();
@@ -222,10 +215,26 @@ private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = n
             StockUomName = StockUomName ?? string.Empty,
         };
 
-        Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(companyItemToValidate, AdminCompanyItemService, CompanyItemId, 
-        IsSingleStockPrice, StockPrice, StockPriceRegional, StockPriceNational); 
-        ShowValidationErrors = true; 
-        if (Errors.Any()) return;       
+        bool isSingleStockPrice = !string.Equals(
+            Principal?.Trim(),
+            "KCPI",
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(
+            companyItemToValidate,
+            AdminCompanyItemService,
+            CompanyItemId,
+            isSingleStockPrice,
+            StockPrice,
+            StockPriceRegional,
+            StockPriceNational
+        );
+
+        ShowValidationErrors = true;
+
+        if (Errors.Any())
+            return;
 
         if (isEdit)
         {

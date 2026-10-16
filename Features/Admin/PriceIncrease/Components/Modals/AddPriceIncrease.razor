@@ -14,7 +14,8 @@
        IconType="@(isEdit ? (isReadOnly ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
        OnClose="Cancel">
     <ChildContent>
-        <FormSection Icon="ti ti-info-circle" Title="Company Item" IsExpanded="@IsCompanyItemExpanded" Expandable="true" Summary="@(SelectedCompanyItem is null ? "No item selected" : $"{SelectedCompanyItem.CompanyItemCode} - {SelectedCompanyItem.CompanyItemName} ({SelectedCompanyItem.Principal})")">
+        <FormSection Icon="ti ti-info-circle" Title="Company Item" IsExpanded="@IsCompanyItemExpanded" Expandable="true"
+                     Summary="@(SelectedCompanyItem is null ? "No item selected" : $"{SelectedCompanyItem.CompanyItemCode} - {SelectedCompanyItem.CompanyItemName} ({SelectedCompanyItem.Principal})")">
             <ChildContent>
                 @if (!isEdit)
                 {
@@ -25,12 +26,10 @@
 
                     <div class="form-group">
                         <AutoComplete Label="Company Item" Required="true" Placeholder="Search company item..."
-                                      TItem="CompanyItemDropdownItem"
-                                      Items="FilteredCompanyItems"
+                                      TItem="CompanyItemDropdownItem" Items="FilteredCompanyItems"
                                       ValueSelector="@(x => x.CompanyItemId.ToString())"
                                       TextSelector="@(x => $"{x.CompanyItemCode} - {x.CompanyItemName}")"
-                                      SelectedValue="@(SelectedCompanyItemId?.ToString())"
-                                      SelectedItemChanged="OnCompanyItemSelected"
+                                      SelectedValue="@(SelectedCompanyItemId?.ToString())" SelectedItemChanged="OnCompanyItemSelected"
                                       ShowError="@ShowValidationErrors"
                                       ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)" />
                     </div>
@@ -38,7 +37,8 @@
                 else
                 {
                     <div class="form-group">
-                        <Input Label="Company Item" Value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")" Disabled="true" />
+                        <Input Label="Company Item" Value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")"
+                               Disabled="true" />
                     </div>
                     <div class="form-group">
                         <Input Label="Price List" Value="@(ViewPriceListType ?? "Stock Price")" Disabled="true" />
@@ -47,7 +47,7 @@
             </ChildContent>
         </FormSection>
 
-        @if(SelectedCompanyItem != null && !isEdit)
+        @if (SelectedCompanyItem != null && !isEdit)
         {
             <FormSection Icon="ti ti-circle-plus" Title="Price Change Details" IsExpanded="true" Expandable="true">
                 <ChildContent>
@@ -73,9 +73,7 @@
                             @if (IsDual)
                             {
                                 <label class="same-row">
-                                    <input type="checkbox"
-                                        role="switch"
-                                        @bind="UseSameSettings" />
+                                    <input type="checkbox" role="switch" @bind="UseSameSettings" />
 
                                     <span>
                                         <strong>Use the same amount and effectivity date for both</strong>
@@ -107,21 +105,22 @@
                     {
                         <div class="form-group">
                             <Input Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)"
-                                @bind-Value="PriceIncreaseAmount" Step="0.01" Disabled="@isReadOnly"
-                                ShowError="@ShowValidationErrors"
-                                ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)" />
+                                   @bind-Value="PriceIncreaseAmount" Step="0.01" Disabled="@isReadOnly"
+                                   ShowError="@ShowValidationErrors"
+                                   ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)" />
                         </div>
                         @if (IsSingle && SelectedStockPrice.HasValue && PriceIncreaseAmount.HasValue)
                         {
                             <div class="form-group">
-                                <Input Label="New Stock Price" Value="@Fmt(SelectedStockPrice + PriceIncreaseAmount)" Disabled="true" />
+                                <Input Label="New Stock Price" Value="@Fmt(SelectedStockPrice + PriceIncreaseAmount)"
+                                       Disabled="true" />
                             </div>
                         }
                         <div class="form-group">
-                            <DateInput Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)"
-                                    @bind-Value="EffectivityDate" Disabled="@isReadOnly"
-                                    ShowError="@ShowValidationErrors"
-                                    ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)" />
+                            <DateInput
+                            Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)"
+                            @bind-Value="EffectivityDate" Disabled="@isReadOnly" ShowError="@ShowValidationErrors"
+                            ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)" />
                         </div>
                     }
                     else if (IsDual)
@@ -130,18 +129,14 @@
                         {
                             <div class="pl-card">
                                 <div class="form-group">
-                                    <Input TValue="decimal?" Label="@($"{list} adjustment amount *")"
-                                        Value="@GetAmount(list)"
-                                        ValueChanged="@((decimal? v) => SetAmount(list, v))"
-                                        Step="0.01" ShowError="@ShowValidationErrors"
-                                        ErrorText="@GetFieldError(AmountErrorKey(list))" />
+                                    <Input TValue="decimal?" Label="@($"{list} adjustment amount *")" Value="@GetAmount(list)"
+                                           ValueChanged="@((decimal? v) => SetAmount(list, v))"
+                                           Step="0.01" ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(AmountErrorKey(list))" />
                                 </div>
                                 <div class="form-group">
-                                    <DateInput Label="@($"{list} effectivity date *")"
-                                            Value="@DateFor(list)"
-                                            ValueChanged="@((DateTime? d) => SetDate(list, d))"
-                                            ShowError="@ShowValidationErrors"
-                                            ErrorText="@GetFieldError(DateErrorKey(list))" />
+                                    <DateInput Label="@($"{list} effectivity date *")" Value="@DateFor(list)"
+                                               ValueChanged="@((DateTime? d) => SetDate(list, d))" ShowError="@ShowValidationErrors"
+                                               ErrorText="@GetFieldError(DateErrorKey(list))" />
                                 </div>
                             </div>
                         }
@@ -152,140 +147,173 @@
                         <div class="sum-wrap">
                             <table class="sum-table">
                                 <thead>
-                                    <tr><th></th>@foreach (var l in SelectedLists) { <th>@l</th> }</tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Current price</td>@foreach (var l in SelectedLists) { <td>@Fmt(CurrentFor(l))</td> }</tr>
-                                    <tr><td>Increase</td>@foreach (var l in SelectedLists) { <td>@FmtSigned(GetAmount(l))</td> }</tr>
-                                    <tr><td>New price</td>@foreach (var l in SelectedLists) { <td class="sum-new">@Fmt(CurrentFor(l) + GetAmount(l))</td> }</tr>
-                                    <tr><td>Effectivity date</td>@foreach (var l in SelectedLists) { <td>@(DateFor(l)?.ToString("MMM d, yyyy") ?? "-")</td> }</tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    }
+                                    <tr><th></th>@foreach (var l in SelectedLists) {
+                                        <th>@l</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Current price</td>@foreach (var l in SelectedLists) {
+                                    <td>@Fmt(CurrentFor(l))</td>
+                                }
+                            </tr>
+                            <tr>
+                                <td>Increase</td>@foreach (var l in SelectedLists) {
+                                <td>@FmtSigned(GetAmount(l))</td>
+                            }
+                        </tr>
+                        <tr>
+                            <td>New price</td>@foreach (var l in SelectedLists) {
+                            <td class="sum-new">
+                                @Fmt(CurrentFor(l) + GetAmount(l))</td>
+                            }
+                        </tr>
+                        <tr>
+                            <td>Effectivity date</td>@foreach (var l in SelectedLists) {
+                            <td>
+                                @(DateFor(l)?.ToString("MMM d, yyyy") ?? "-")</td>
+                            }
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
 
-                    @if (isEdit)
-                    {
-                        <div class="form-group">
-                            <Input Label="Status" Value="@ViewStatus" Disabled="true" />
-                        </div>
-                    }
+        @if (isEdit)
+        {
+            <div class="form-group">
+                <Input Label="Status" Value="@ViewStatus" Disabled="true" />
+            </div>
+        }
 
-                    @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
-                    {
-                        <span class="error-text">@generalError</span>
-                    }
-                </ChildContent>
-            </FormSection>
+        @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
+        {
+            <span class="error-text">@generalError</span>
+        }
+    </ChildContent>
+</FormSection>
         }
 
 
         @if (PreviewUomPrices.Any())
-        {
-            <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
-                <ChildContent>
-                    @if (!isEdit)
-                    {
-                        <p class="uom-caption">
-                            Increase = price change ÷ stock UOM conversion × UOM conversion, rounded to 2 decimals.
-                        </p>
-                        @if (ManualCount > 0)
-                        {
-                            <div class="uom-note">
-                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                @ManualCount UOM@(ManualCount == 1 ? " needs" : "s need") a manual price. Enter one or skip it.
-                            </div>
-                        }
-                    }
+{
+    <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
+        <ChildContent>
+            @if (!isEdit)
+            {
+                <p class="uom-caption">
+                    Increase = price change ÷ stock UOM conversion × UOM conversion, rounded to 2 decimals.
+                </p>
+                @if (ManualCount > 0)
+                {
+                    <div class="uom-note">
+                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                        @ManualCount UOM@(ManualCount == 1 ? " needs" : "s need") a manual price. Enter one or skip it.
+                    </div>
+                }
+            }
 
-                    @foreach (var g in PreviewGroups)
-                    {
-                        var head = g.First();
-                        <div class="uom-group">
-                            <div class="uom-group-head">
-                                <span>@head.SubdItemCode - @head.SubdItemName</span>
-                                @if (head.PriceListType is { } pl)
-                                {
-                                    <span class="pl-pill pl-@pl.ToLowerInvariant()">@pl</span>
-                                }
-                            </div>
-                            <table class="uom-table">
-                                <colgroup>
-                                    <col style="width:34%" /><col style="width:22%" /><col style="width:20%" /><col style="width:24%" />
-                                </colgroup>
-                                <thead>
-                                    <tr><th>UOM</th><th>Current</th><th>Increase</th><th>New price</th></tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var row in g)
-                                    {
-                                        var skipped = !isEdit && SkippedUomIds.Contains(row.ItemsUomId);
-                                        var needsInput = !isEdit && RequiresManualPrice(row) && !skipped;
-                                        <tr class="@(needsInput ? "uom-manual" : skipped ? "uom-skipped" : "")">
-                                            <td>
-                                                <span>@row.UomName</span>
-                                                @if (row.IsStockUom) { <span class="uom-tag">Stock</span> }
-                                                <span class="uom-conv">@(row.ConversionToBase == 1 ? "Base unit" : $"× {row.ConversionToBase} base")</span>
-                                            </td>
-                                            <td>@FormatUomPriceColumn(row, "OldPrice")</td>
-                                            <td class="@(row.Increase > 0 ? "uom-up" : "")">@FormatUomPriceColumn(row, "Increase")</td>
-                                            <td>
-                                                @if (needsInput)
-                                                {
-                                                    <input class="uom-input" type="number" step="0.01" placeholder="Enter price"
-                                                           value="@GetEditableUomValue(row, "NewPrice")"
-                                                           @onchange="e => SetManualPrice(row.ItemsUomId, e.Value?.ToString())" />
-                                                }
-                                                else
-                                                {
-                                                    @FormatUomPriceColumn(row, "NewPrice")
-                                                }
-                                            </td>
-                                        </tr>
-                                        @if (!isEdit && RequiresManualPrice(row))
+            @foreach (var g in PreviewGroups)
+            {
+                var head = g.First();
+                <div class="uom-group">
+                    <div class="uom-group-head">
+                        <span>@head.SubdItemCode - @head.SubdItemName</span>
+                        @if (head.PriceListType is { } pl)
+                        {
+                            <span class="pl-pill pl-@pl.ToLowerInvariant()">@pl</span>
+                        }
+                    </div>
+                    <table class="uom-table">
+                        <colgroup>
+                            <col style="width:34%" />
+                            <col style="width:22%" />
+                            <col style="width:20%" />
+                            <col style="width:24%" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>UOM</th>
+                                <th>Current</th>
+                                <th>Increase</th>
+                                <th>New price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in g)
+                            {
+                                var skipped = !isEdit && SkippedUomIds.Contains(row.ItemsUomId);
+                                var needsInput = !isEdit && RequiresManualPrice(row) && !skipped;
+                                <tr class="@(needsInput ? "uom-manual" : skipped ? "uom-skipped" : "")">
+                                    <td>
+                                        <span>@row.UomName</span>
+                                        @if (row.IsStockUom)
                                         {
-                                            <tr class="@(skipped ? "uom-skipped" : "uom-manual")">
-                                                <td colspan="4" class="uom-why-cell">
-                                                 <div class="uom-why">
-                                                        <span>@ManualReason(row)</span>
-                                                        <label>
-                                                            <input type="checkbox" checked="@skipped"
-                                                                   @onchange="e => ToggleSkipPrice(row.ItemsUomId, e.Value)" />
-                                                            Skip this UOM
-                                                        </label>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                            <span class="uom-tag">Stock</span>
                                         }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </ChildContent>
-            </FormSection>
-        }
-        else if ((SelectedCompanyItem != null && !IsBlocked) || isEdit)
-        {
-            <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
-                <ChildContent>
-                    <p><em>No active UOMs found for this selection.</em></p>
-                </ChildContent>
-            </FormSection>
-        }
-    </ChildContent>
-    <FooterContent>
-        @if (isReadOnly)
-        {
-            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
-        }
-        else
-        {
-            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
-            <Button Title="@(isSubmitting ? (isEdit ? "Saving..." : "Scheduling...") : (isEdit ? "Save Changes" : "Schedule Increase"))"
-                    Variant="ButtonVariant.Primary" OnClick="RequestConfirm" Disabled="@(isSubmitting || IsBlocked)"></Button>
-        }
-    </FooterContent>
+                                        <span class="uom-conv">@(row.ConversionToBase == 1 ? "Base unit" : $"×                                      {row.ConversionToBase} base")</span>
+                                    </td>
+                                    <td>@FormatUomPriceColumn(row, "OldPrice")</td>
+                                    <td class="@(row.Increase > 0 ? "uom-up" : "")">@FormatUomPriceColumn(row, "Increase")
+                                    </td>
+                                    <td>
+                                        @if (needsInput)
+                                        {
+                                            <input class="uom-input" type="number" step="0.01" placeholder="Enter price"
+                                                   value="@GetEditableUomValue(row, "NewPrice")"
+                                                   @onchange="e => SetManualPrice(row.ItemsUomId, e.Value?.ToString())" />
+                                        }
+                                        else
+                                        {
+                                            @FormatUomPriceColumn(row, "NewPrice")
+                                        }
+                                    </td>
+                                </tr>
+                                @if (!isEdit && RequiresManualPrice(row))
+                                {
+                                    <tr class="@(skipped ? "uom-skipped" : "uom-manual")">
+                                        <td colspan="4" class="uom-why-cell">
+                                            <div class="uom-why">
+                                                <span>@ManualReason(row)</span>
+                                                <label>
+                                                    <input type="checkbox" checked="@skipped"
+                                                           @onchange="e => ToggleSkipPrice(row.ItemsUomId, e.Value)" />
+                                                    Skip this UOM
+                                                </label>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </ChildContent>
+    </FormSection>
+}
+else if ((SelectedCompanyItem != null && !IsBlocked) || isEdit)
+{
+    <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
+        <ChildContent>
+            <p><em>No active UOMs found for this selection.</em></p>
+        </ChildContent>
+    </FormSection>
+}
+</ChildContent>
+<FooterContent>
+    @if (isReadOnly)
+    {
+        <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+    }
+    else
+    {
+        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
+        <Button
+        Title="@(isSubmitting ? (isEdit ? "Saving..." : "Scheduling...") : (isEdit ? "Save Changes" : "Schedule Increase"))"
+        Variant="ButtonVariant.Primary" OnClick="RequestConfirm" Disabled="@(isSubmitting || IsBlocked)"></Button>
+    }
+</FooterContent>
 </Modal>
 
 @code {
@@ -352,7 +380,8 @@
     // ---------------- Pricing structure ----------------
 
     private PricingStructure? Structure => SelectedCompanyItem?.Structure;
-    private bool IsBlocked => !isEdit && SelectedCompanyItem != null && Structure is PricingStructure.Invalid or PricingStructure.Incomplete;
+    private bool IsBlocked => !isEdit && SelectedCompanyItem != null && Structure is PricingStructure.Invalid or
+PricingStructure.Incomplete;
     private static string Fmt(decimal? v) => v?.ToString("N2") ?? "-";
 
     private static string FmtSigned(decimal? v) =>
@@ -527,8 +556,8 @@
 
     private static string ManualReason(CompanyItemUomPriceDto r) =>
         !(r.StockConversionToBase > 0) ? "No stock UOM set for this sub-item"
-        : !(r.ConversionToBase > 0)    ? "No conversion set"
-        :                                "No current price";
+        : !(r.ConversionToBase > 0) ? "No conversion set"
+        : "No current price";
 
     private IEnumerable<CompanyItemUomPriceDto> UomsInScope =>
         IsDual ? UomPrices.Where(u => ListSelected(u.PriceListType)) : UomPrices;

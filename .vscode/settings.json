@@ -1,5 +1,34 @@
 {
-    "chat.tools.terminal.autoApprove": {
-        "ForEach-Object": true
-    }
+ // --- Formatting Configuration ---*
+  "editor.formatOnSave": true,
+ // Languages handled by Prettier*
+ "[javascript]": {
+ "editor.defaultFormatter": "esbenp.prettier-vscode"
+ },
+ "[typescript]": {
+"editor.defaultFormatter": "esbenp.prettier-vscode"
+ },
+ "[json]": {
+"editor.defaultFormatter": "esbenp.prettier-vscode"
+ },
+ // C# and Razor files*
+ "[csharp]": {
+ "editor.defaultFormatter": "ms-dotnettools.csharp"
+ },
+ "[aspnetcorerazor]": {
+ "editor.defaultFormatter": "ms-dotnettools.csharp"
+ },
+ // --- AI Agent Terminal Settings ---*
+  "chat.tools.terminal.enableAutoApprove": true,
+   "chat.tools.terminal.autoApprove": {
+ "ForEach-Object": true,
+  // Recommended safe defaults to keep things moving smoothly:*
+ "git": true,
+ "dotnet": true,
+ "ls": true,
+ // Explicitly block high-risk commands just to be safe:*
+  "rm": false,
+   "del": false
+ }
+ 
 }

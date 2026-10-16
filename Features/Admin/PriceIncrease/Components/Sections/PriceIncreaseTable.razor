@@ -1,7 +1,6 @@
-@using STTproject.Features.Admin.PriceIncrease.DTOs
-@using STTproject.Shared.Components
-@using STTproject.Shared.Components.Buttons
+
 @inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
+
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
 
 <div class="clt-page">
@@ -88,94 +87,217 @@
         <main class="clt-main">
             <div class="clt-table-card">
                 <div class="clt-table-scroll">
-                    <table class="clt-table">
-                        <thead>
-                            <tr>
-                                <th @onclick='() => SortBy("CompanyItemCode")'>
-                                    Company Item
-                                    @SortIndicator("CompanyItemCode")
-                                </th>
-                                <th>Regional Price Change</th>
-                                <th>National Price Change</th>
-                                <th @onclick='() => SortBy("CreatedDate")'>
-                                    Created
-                                    @SortIndicator("CreatedDate")
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (isLoading)
+
+
+<table class="clt-table">
+    <thead>
+        <tr>
+            <th @onclick='() => SortBy("CompanyItemCode")'>
+                Company Item @SortIndicator("CompanyItemCode")
+            </th>
+
+            <th @onclick='() => SortBy("EffectivityDate")'>
+                Effective Date @SortIndicator("EffectivityDate")
+            </th>
+
+            <th @onclick='() => SortBy("PriceIncreaseAmount")'>
+                Amount @SortIndicator("PriceIncreaseAmount")
+            </th>
+
+            <th @onclick='() => SortBy("Status")'>
+                Status @SortIndicator("Status")
+            </th>
+
+            <th @onclick='() => SortBy("CreatedDate")'>
+                Created @SortIndicator("CreatedDate")
+            </th>
+
+            <th>Actions</th>
+        </tr>
+    </thead>
+
+
+<tbody>
+    @if (isLoading)
+    {
+        <tr>
+            <td colspan="6" class="clt-empty">
+                <div class="clt-empty-inner">
+                    <p>Loading…</p>
+                </div>
+            </td>
+        </tr>
+    }
+    else if (!PagedPriceIncrease.Any())
+    {
+        <tr>
+            <td colspan="6" class="clt-empty">
+                <div class="clt-empty-inner">
+                    <p>
+                        @(HasActiveFilters
+                            ? "No price changes match your filters"
+                            : "No price changes found")
+                    </p>
+                </div>
+            </td>
+        </tr>
+    }
+    else
+    {
+        @foreach (var item in PagedPriceIncrease)
+        {
+            var schedules = item.Schedules
+                .Where(x => x != null)
+                .ToList();
+
+            var sameDate = schedules.Count > 1 &&
+                schedules.Select(x => x.EffectivityDate?.Date)
+                    .Distinct()
+                    .Count() == 1;
+
+            var sameAmount = schedules.Count > 1 &&
+                schedules.Select(x => x.PriceIncreaseAmount)
+                    .Distinct()
+                    .Count() == 1;
+
+            var sameStatus = schedules.Count > 1 &&
+                schedules.Select(x => x.Status)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count() == 1;
+
+            <tr>
+                @* Company Item *@
+                <td>
+                    <span class="clt-code">
+                        @item.CompanyItemCode
+                    </span>
+                    <div class="clt-name">
+                        @item.CompanyItemName
+                    </div>
+                    @if (schedules.Count > 1)
+                    {
+                        <div class="clt-muted">Dual price list</div>
+                    }
+                    else
+                    {
+                        <div class="clt-muted">Single price list</div>
+                    }
+                </td>
+
+                @* Effective Date *@
+                <td>
+                    @if (schedules.Count <= 1 || sameDate)
+                    {
+                        var schedule = schedules.FirstOrDefault();
+
+                        <div>
+                            @(schedule?.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var schedule in schedules)
+                        {
+                            <div class="clt-schedule-row">
+                                <strong>@schedule.PriceListType:</strong>
+                                @(schedule.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")
+                            </div>
+                        }
+                    }
+                </td>
+
+                @* Amount *@
+                <td>
+                    @if (schedules.Count <= 1 || sameAmount)
+                    {
+                        var schedule = schedules.FirstOrDefault();
+
+                        <div>
+                            @(schedule?.PriceIncreaseAmount?.ToString("N2") ?? "-")
+                        </div>
+
+                        @if (schedules.Count > 1)
+                        {
+                            <div class="clt-muted">
+                                National / Regional
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var schedule in schedules)
+                        {
+                            <div class="clt-schedule-row">
+                                <strong>@schedule.PriceListType:</strong>
+                                @(schedule.PriceIncreaseAmount?.ToString("N2") ?? "-")
+                            </div>
+                        }
+                    }
+                </td>
+
+                @* Status *@
+                <td>
+                    @if (schedules.Count <= 1 || sameStatus)
+                    {
+                        var schedule = schedules.FirstOrDefault();
+
+                        @if (schedule != null)
+                        {
+                            <span class="clt-status clt-status-@(schedule.Status?.ToLowerInvariant())">
+                                @schedule.Status
+                            </span>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var schedule in schedules)
+                        {
+                            <div class="clt-schedule-row">
+                                <strong>@schedule.PriceListType:</strong>
+                                <span class="clt-status clt-status-@(schedule.Status?.ToLowerInvariant())">
+                                    @schedule.Status
+                                </span>
+                            </div>
+                        }
+                    }
+                </td>
+
+                @* Created *@
+                <td class="clt-muted">
+                    @item.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
+                </td>
+
+                @* Actions *@
+                <td>
+                    @foreach (var schedule in schedules)
+                    {
+                        <div class="clt-actions">
+                            <Button Variant="ButtonVariant.Primary"
+                                    Title="View"
+                                    OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
+                                        schedule.CompanyItemPriceHistoryId))" />
+
+                            @if (!string.Equals(
+                                schedule.Status,
+                                "Applied",
+                                StringComparison.OrdinalIgnoreCase))
                             {
-                                <tr><td colspan="4" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
+                                <Button Variant="ButtonVariant.Secondary"
+                                        Title="Cancel"
+                                        OnClick="@(() => RequestCancel(
+                                            schedule.CompanyItemPriceHistoryId))" />
                             }
-                            else if (!PagedPriceIncrease.Any())
-                            {
-                                <tr>
-                                    <td colspan="4" class="clt-empty">
-                                        <div class="clt-empty-inner">
-                                            <p>@(HasActiveFilters ? "No price changes match your filters" : "No price changes found")</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var item in PagedPriceIncrease)
-                                {
-                                    var regional = item.Schedules
-                                        .FirstOrDefault(x => x.PriceListType == "Regional");
+                        </div>
+                    }
+                </td>
+            </tr>
+        }
+    }
+</tbody>
 
-                                    var national = item.Schedules
-                                        .FirstOrDefault(x => x.PriceListType == "National");
+</table>
 
-                                    var single = item.Schedules
-                                        .FirstOrDefault(x => x.PriceListType == null);
 
-                                    <tr>
-                                        <td>
-                                            <span class="clt-code">@item.CompanyItemCode</span>
-                                            <div class="clt-name">@item.CompanyItemName</div>
-                                        </td>
-
-                                        @if (single != null)
-                                        {
-                                            <td colspan="2">
-                                                @PriceScheduleCell(single)
-                                            </td>
-                                        }
-                                        else
-                                        {
-                                            <td>
-                                                @if (regional != null)
-                                                {
-                                                    @PriceScheduleCell(regional)
-                                                }
-                                                else
-                                                {
-                                                    <span class="clt-muted">No Regional schedule</span>
-                                                }
-                                            </td>
-
-                                            <td>
-                                                @if (national != null)
-                                                {
-                                                    @PriceScheduleCell(national)
-                                                }
-                                                else
-                                                {
-                                                    <span class="clt-muted">No National schedule</span>
-                                                }
-                                            </td>
-                                        }
-
-                                        <td class="clt-muted">
-                                            @item.CreatedDate.ToString("MMM d, yyyy hh:mm tt")
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
@@ -349,35 +471,35 @@
     }
     private RenderFragment PriceScheduleCell(
         PriceIncreaseTableListDto schedule) => @<div class="price-schedule-cell">
-            <div>
-                <strong>Increase:</strong>
-                @(schedule.PriceIncreaseAmount?.ToString("N2") ?? "-")
-            </div>
+        <div>
+            <strong>Increase:</strong>
+            @(schedule.PriceIncreaseAmount?.ToString("N2") ?? "-")
+        </div>
 
-            <div>
-                <strong>Effective:</strong>
-                @(schedule.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")
-            </div>
+        <div>
+            <strong>Effective:</strong>
+            @(schedule.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")
+        </div>
 
-            <span class="clt-status clt-status-@(schedule.Status?.ToLowerInvariant())">
-                @schedule.Status
-            </span>
+        <span class="clt-status clt-status-@(schedule.Status?.ToLowerInvariant())">
+            @schedule.Status
+        </span>
 
-            <div class="clt-actions">
-                <Button Variant="ButtonVariant.Primary"
-                        Title="View"
-                        OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
+        <div class="clt-actions">
+            <Button Variant="ButtonVariant.Primary"
+                    Title="View"
+                    OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
+                        schedule.CompanyItemPriceHistoryId))" />
+
+            @if (schedule.Status != "Applied")
+            {
+                <Button Variant="ButtonVariant.Secondary"
+                        Title="Cancel"
+                        OnClick="@(() => RequestCancel(
                             schedule.CompanyItemPriceHistoryId))" />
-
-                @if (schedule.Status != "Applied")
-                {
-                    <Button Variant="ButtonVariant.Secondary"
-                            Title="Cancel"
-                            OnClick="@(() => RequestCancel(
-                                schedule.CompanyItemPriceHistoryId))" />
-                }
-            </div>
-        </div>;
+            }
+        </div>
+    </div>;
     private async Task GoToPage(int page)
     {
         currentPage = page;
@@ -418,4 +540,22 @@
         if (SortColumn != column) return string.Empty;
         return SortAscending ? " ▲" : " ▼";
     }
+
+    
+    private RenderFragment RenderScheduleActions(
+        PriceIncreaseTableListDto schedule) => @<div class="clt-actions">
+        <Button Variant="ButtonVariant.Primary"
+                Title="View"
+                OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
+                    schedule.CompanyItemPriceHistoryId))" />
+
+        @if (schedule.Status != "Applied")
+        {
+            <Button Variant="ButtonVariant.Secondary"
+                    Title="Cancel"
+                    OnClick="@(() => RequestCancel(
+                        schedule.CompanyItemPriceHistoryId))" />
+        }
+    </div>;
+
 }
