@@ -58,6 +58,11 @@
                     var warningSelectableCount = cards.Count(c => c.CanSelect && c.IsWarningOnly);
                     var warningSelectedCount = cards.Count(c => c.CanSelect && c.IsWarningOnly && SelectedGroupKeys.Contains(c.Key));
                     var totalRows = ImportResult.Rows.Count;
+                    var onWarnTab = groupFilter == GroupFilter.WarningOnly;
+                    var tabSelectable = onWarnTab ? warningSelectableCount : selectableCount;
+                    var tabSelected = onWarnTab ? warningSelectedCount : selectedCount;
+                    var bulkOptions = onWarnTab ? GetBulkOptions() : new List<(string Value, string Label)>();
+                    var bulkTargetCount = onWarnTab ? GetBulkTargets(cards, selectedBulkAction).Count() : 0;
 
                     @if (!string.IsNullOrEmpty(commitError))
                     {
@@ -146,102 +151,114 @@
                                     </button>
                                 }
                             </div>
-
-                            @* ── Error filter bar (only on error tab) ── *@
-                            @if (groupFilter == GroupFilter.ErrorOnly)
-                            {
-                                <div class="err-filter-bar">
-                                    <span class="err-filter-label">
-                                        <i class="ti ti-filter" aria-hidden="true"></i>
-                                        Filter by error
-                                    </span>
-                                    <select @onchange="OnErrorFilterChanged" value="@(selectedErrorFilter ?? string.Empty)">
-                                        <option value="">All errors</option>
-                                        @foreach (var entry in GetDistinctErrorMessages())
-                                        {
-                                            var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
-                                            <option value="@entry.Message">@display (@entry.Count)</option>
-                                        }
-                                    </select>
-                                    @if (!string.IsNullOrEmpty(selectedErrorFilter))
-                                    {
-                                        <button type="button" class="clear-filter-btn" @onclick="ClearErrorFilter">
-                                            <i class="ti ti-x" aria-hidden="true"></i>
-                                            Clear
-                                        </button>
-                                    }
-                                    <button type="button" class="btn-download-errors" @onclick="OpenDownloadModal">
-                                        <i class="ti ti-download" aria-hidden="true"></i>
-                                        Download
-                                    </button>
-                                </div>
-                            }
-
-                            @* ── Select all (valid tab selects valid only, warnings tab selects warnings only) ── *@
-                            @if (groupFilter == GroupFilter.SuccessOnly && selectableCount > 0)
-                            {
-                                <div class="sel-all-bar">
-                                    <input type="checkbox" id="select-all-check"
-                                           checked="@(selectedCount == selectableCount)"
-                                           @onchange="(e) => ToggleSelectAllCards(e.Value)" />
-                                    <label for="select-all-check">Select all valid (@selectedCount / @selectableCount ready)</label>
-                                </div>
-                            }
-                            else if (groupFilter == GroupFilter.WarningOnly && warningSelectableCount > 0)
-                            {
-                                <div class="sel-all-bar">
-                                    <input type="checkbox" id="select-all-warnings-check"
-                                           checked="@(warningSelectedCount == warningSelectableCount)"
-                                           @onchange="(e) => ToggleSelectAllWarningCards(e.Value)" />
-                                    <label for="select-all-warnings-check">Select all with warnings (@warningSelectedCount / @warningSelectableCount ready)</label>
-                                </div>
-                            }
-
-                            @* ── Warning filter bar (only on warning tab) ── *@
-                            @if (groupFilter == GroupFilter.WarningOnly && hasWarningGroups)
-                            {
-                                <div class="err-filter-bar">
-                                    <span class="err-filter-label">
-                                        <i class="ti ti-filter" aria-hidden="true"></i>
-                                        Rows with Warnings: @GetTotalWarningCount(cards)
-                                    </span>
-                                    <select @onchange="OnWarningFilterChanged" value="@(selectedWarningFilter ?? string.Empty)">
-                                        <option value="">All warnings</option>
-                                        @foreach (var entry in GetDistinctWarningMessages(cards))
-                                        {
-                                            var display = entry.Message.Length > 80 ? entry.Message[..77] + "..." : entry.Message;
-                                            <option value="@entry.Message">@display (@entry.Count)</option>
-                                        }
-                                    </select>
-                                    @if (!string.IsNullOrEmpty(selectedWarningFilter))
-                                    {
-                                        <button type="button" class="clear-filter-btn" @onclick="ClearWarningFilter">
-                                            <i class="ti ti-x" aria-hidden="true"></i>
-                                            Clear
-                                        </button>
-                                    }
-                                </div>
-                            }
-
-                            @* ── Search + sort ── *@
+                            
                             <div class="search-sort-bar">
                                 <div class="search-input-wrap">
                                     <i class="ti ti-search" aria-hidden="true"></i>
                                     <input type="text"
-                                           placeholder="Search item, code, row or any value from the file…"
-                                           value="@searchTerm"
-                                           @oninput="OnSearchInput" />
+                                        placeholder="Search item, code, row or any value from the file..."
+                                        value="@searchTerm"
+                                        @oninput="OnSearchInput" />
                                 </div>
-                                <select @onchange="OnSortChanged" value="@sortMode">
+
+                                @if (onWarnTab && hasWarningGroups)
+                                {
+                                    <select id="rp-warning-filter"
+                                            class="toolbar-select"
+                                            @onchange="OnWarningFilterChanged"
+                                            value="@(selectedWarningFilter ?? string.Empty)">
+                                        <option value="">All warnings (@counts.Warning)</option>
+                                        @foreach (var entry in GetDistinctWarningMessages(cards))
+                                        {
+                                            var display = entry.Message.Length > 80
+                                                ? entry.Message[..77] + "..."
+                                                : entry.Message;
+
+                                            <option value="@entry.Message">
+                                                @display (@entry.Count)
+                                            </option>
+                                        }
+                                    </select>
+                                }
+                                else if (groupFilter == GroupFilter.ErrorOnly)
+                                {
+                                    <select class="toolbar-select"
+                                            aria-label="Filter by error"
+                                            @onchange="OnErrorFilterChanged"
+                                            value="@(selectedErrorFilter ?? string.Empty)">
+                                        <option value="">All errors</option>
+                                        @foreach (var entry in GetDistinctErrorMessages())
+                                        {
+                                            var display = entry.Message.Length > 80
+                                                ? entry.Message[..77] + "..."
+                                                : entry.Message;
+
+                                            <option value="@entry.Message">
+                                                @display (@entry.Count)
+                                            </option>
+                                        }
+                                    </select>
+
+                                    <Button Variant="ButtonVariant.IconAction" OnClick="OpenDownloadModal" Icon="ti ti-download">
+                                    </Button>
+                                }
+
+                                <select class="toolbar-select sort-select"
+                                        aria-label="Sort results"
+                                        @onchange="OnSortChanged"
+                                        value="@sortMode">
                                     <option value="@ItemSortMode.RowAscending">Row order</option>
                                     <option value="@ItemSortMode.CompanyItem">Company Item Code</option>
                                     <option value="@ItemSortMode.SubdItem">Subd Item Code</option>
                                 </select>
                             </div>
                         }
-                    </div>
+                    
+                    @* ── Select all and bulk actions ── *@
+                    @if (cards.Count > 0 && groupFilter != GroupFilter.ErrorOnly)
+                    {
+                        <div class="rp-panel">
+                            <div class="rp-toolbar">
+                                <label class="rp-check">
+                                    <input type="checkbox"
+                                        checked="@(tabSelectable > 0 && tabSelected == tabSelectable)"
+                                        disabled="@(tabSelectable == 0)"
+                                        @onchange="(e) => HandleSelectAllChanged(e, onWarnTab)" />
+                                    <span>Select all ready</span>
+                                </label>
+
+                                <span class="rp-muted">@tabSelected selected</span>
+
+                                @if (onWarnTab && hasWarningGroups && bulkOptions.Count > 0)
+                                {
+                                    <span class="rp-bulk-label">Bulk action</span>
+
+                                    <select class="rp-select"
+                                            aria-label="Bulk action"
+                                            @onchange="OnBulkActionChanged"
+                                            value="@(selectedBulkAction ?? string.Empty)">
+                                        <option value="">Choose action</option>
+                                        @foreach (var o in bulkOptions)
+                                        {
+                                            <option value="@o.Value">@o.Label</option>
+                                        }
+                                    </select>
+
+                                    <button type="button"
+                                            class="btn-bulk-apply"
+                                            disabled="@(string.IsNullOrEmpty(selectedBulkAction) || bulkTargetCount == 0)"
+                                            @onclick="ApplyBulkAction">
+                                        Apply to @bulkTargetCount matching
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
 
                     @* ── Global file-level failure ── *@
+                    
+                    </div>
+
                     @if (globalIssues.Any())
                     {
                         <div class="global-alert">
@@ -291,7 +308,7 @@
                                             : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} - {first.CompanyItemName}");
                                         var groupKey = card.Key;
                                         var isWarn = card.IsWarningOnly;
-                                        var isExpanded = expandedGroups.Contains(groupKey) || groupFilter == GroupFilter.WarningOnly;
+                                        var isExpanded = expandedGroups.Contains(groupKey);                                    
                                     }
 
                                     <div class="icard">
@@ -308,6 +325,11 @@
                                                             <span>@first.Principal</span>
                                                             <span class="sep">·</span>
                                                             <span>@first.SubdItemCode - @first.SubdItemName</span>
+                                                            @if (HasMultipleSubdistributors())
+                                                            {
+                                                                <span class="sep">·</span>
+                                                                <span>@first.SubDistributorCode</span>
+                                                            }
                                                             <span class="sep">·</span>
                                                             <span>@groupRows.Count uom@(groupRows.Count == 1 ? "" : "s")</span>
                                                         </div>
@@ -326,7 +348,7 @@
                                                 {
                                                     @if (isWarn)
                                                     {
-                                                        <span class="badge badge-warn">
+                                                        <span class="badge badge-needs-review">
                                                             <i class="ti ti-alert-triangle" aria-hidden="true"></i>
                                                             Warning
                                                         </span>
@@ -352,56 +374,85 @@
 
                                         @if (isExpanded && first != null)
                                         {
+                                            var stockWarnings = card.Warnings.Where(IsStockUomWarning).ToList();
+                                            var otherWarnings = card.Warnings.Where(w => !IsStockUomWarning(w) && !IsPriceWarningText(w)).ToList();
+                                            var hasPriceCheck = groupRows.Any(r => r.HasPricePrompt);
+
                                             <div class="icb">
-                                                <div class="cust-meta">
-                                                    <div>
-                                                        <span class="cust-meta-label">Principal</span>
-                                                        <strong>@first.Principal</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span class="cust-meta-label">Subdistributor Item</span>
-                                                        <strong>@first.SubdItemCode - @first.SubdItemName</strong>
-                                                    </div>
-                                                    @if (HasMultipleSubdistributors())
-                                                    {
-                                                        <div style="grid-column: 1 / -1;">
-                                                            <span class="cust-meta-label">Subdistributor</span>
-                                                            <strong>@first.SubDistributorCode - @first.SubDistributorName</strong>
-                                                        </div>
-                                                    }
-                                                </div>
-                                                @foreach (var w in card.Warnings)
+                                                @foreach (var w in otherWarnings)
                                                 {
-                                                    <div class="dup-warning-banner">
+                                                    <div class="warn-msg">
                                                         <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        @w
+                                                        <span>@w</span>
                                                     </div>
                                                 }
                                                 @if (!card.Group.IsSaved)
                                                 {
-                                                    <div style="margin:10px 0; max-width:340px;">
-                                                        <Select TItem="string"
-                                                                Label="Stock UOM"
-                                                                Placeholder="Choose the stock UOM…"
-                                                                Items="card.Group.StockUomOptions"
-                                                                ValueSelector="x => x"
-                                                                TextSelector="x => x"
-                                                                SelectedValue="@card.Group.StockUomName"
-                                                                SelectedValueChanged="v => OnStockUomChosen(card.Group, v)"
-                                                                AddOptionalText="true"
-                                                                OptionalText="@StockUomHint(card.Group)" />
+                                                    var fileUom = card.Group.FileStockUom;
+                                                    var suggestedUom = card.Group.SuggestedStockUom;
+                                                    var pendingUom = PendingStockUom(card.Group);
+                                                    var pendingDiffers = !string.Equals(pendingUom, card.Group.StockUomName, StringComparison.OrdinalIgnoreCase);
+                                                    var showConfirm = !string.IsNullOrWhiteSpace(pendingUom) && (stockWarnings.Count > 0 || pendingDiffers);
+                                                    var confirmTitle = stockWarnings.Count > 0 ? "Confirm" : "Apply";
+
+                                                    <div class="stk-box @(stockWarnings.Count > 0 ? "is-warn" : "")">
+                                                        @if (stockWarnings.Count > 0)
+                                                        {
+                                                            <div class="stk-head">
+                                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                @StockWarningTitle(stockWarnings[0])
+                                                            </div>
+                                                            @foreach (var w in stockWarnings)
+                                                            {
+                                                                <div class="stk-text">@w</div>
+                                                            }
+                                                        }
+                                                        <div class="stk-line">
+                                                            <span><span class="stk-l">From file</span><strong>@(string.IsNullOrWhiteSpace(fileUom) ? "Not provided" : fileUom)</strong></span>
+                                                            <span><span class="stk-l">Suggested</span><strong>@(string.IsNullOrWhiteSpace(suggestedUom) ? "None" : suggestedUom)</strong></span>
+                                                            <span><span class="stk-l">Using now</span><strong>@(card.Group.StockUomName ?? "Not set")</strong></span>
+                                                            @if (card.Group.ApplicableStockPrice.HasValue)
+                                                            {
+                                                                <span><span class="stk-l">Company price@(string.IsNullOrWhiteSpace(card.Group.PriceListLabel) ? "" : $" ({card.Group.PriceListLabel})")</span><strong>@card.Group.ApplicableStockPrice.Value.ToString("N2")</strong></span>
+                                                            }
+                                                        </div>
+                                                        <div class="stk-row">
+                                                            <div class="stk-select">
+                                                                <Select TItem="string"
+                                                                        Label="Stock UOM"
+                                                                        Placeholder="Choose the stock UOM…"
+                                                                        Items="card.Group.StockUomOptions"
+                                                                        ValueSelector="x => x"
+                                                                        TextSelector="x => x"
+                                                                        SelectedValue="@pendingUom"
+                                                                        SelectedValueChanged="v => OnStockUomPicked(card.Group, v)"
+                                                                        AddOptionalText="true"
+                                                                        OptionalText="@StockUomHint(card.Group)" />
+                                                            </div>
+                                                            @if (showConfirm)
+                                                            {
+                                                                <Button Title="@confirmTitle" OnClick="() => ConfirmStockUom(card.Group)" />
+                                                            }
+                                                        </div>
                                                     </div>
                                                 }
 
+                                                <div class="uom-head">
+                                                    <span>UOM details</span>
+                                                    <span class="rp-muted">@groupRows.Count unit@(groupRows.Count == 1 ? "" : "s")</span>
+                                                </div>
                                                 <div class="itbl-wrap">
                                                     <table class="itbl">
                                                         <thead>
                                                             <tr>
-                                                                <th>Row</th>
+                                                                <th class="c-row">Row</th>
                                                                 <th>UOM</th>
                                                                 <th class="r">Conversion</th>
                                                                 <th class="r">Price</th>
-                                                                <th>Stock</th>
+                                                                @if (hasPriceCheck)
+                                                                {
+                                                                    <th class="pc-col">Price check</th>
+                                                                }
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -409,15 +460,50 @@
                                                             {
                                                                 <tr>
                                                                     <td class="mono">@row.RowNumber</td>
-                                                                    <td>@row.UomName</td>
-                                                                    <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
-                                                                    <td class="r">@row.Price?.ToString("N2")</td>
                                                                     <td>
+                                                                        @row.UomName
                                                                         @if (row.IsStockUom)
                                                                         {
-                                                                            <i class="ti ti-check" title="Stock UOM" aria-label="Stock UOM"></i>
+                                                                            <span class="stock-pill">Stock</span>
                                                                         }
                                                                     </td>
+                                                                    <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
+                                                                    <td class="r">@row.Price?.ToString("N2")</td>
+                                                                    @if (hasPriceCheck)
+                                                                    {
+                                                                        <td>
+                                                                            @if (row.HasPricePrompt)
+                                                                            {
+                                                                                @if (row.PriceChoice == PriceChoice.Undecided)
+                                                                                {
+                                                                                    <div>Imported <strong>@row.ImportedPrice?.ToString("N2")</strong> · Suggested <strong>@row.SuggestedPrice?.ToString("N2")</strong></div>
+                                                                                    <div class="pc-actions">
+                                                                                        <Button Title="Use imported" OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Imported)" />
+                                                                                        <Button Title="Use suggested" OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Suggested)" />
+                                                                                    </div>
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <div class="pc-done">
+                                                                                        <span>
+                                                                                            @if (row.PriceChoice == PriceChoice.Imported)
+                                                                                            {
+                                                                                                <text>Using imported <strong>@row.ImportedPrice?.ToString("N2")</strong> (manual price)</text>
+                                                                                            }
+                                                                                            else
+                                                                                            {
+                                                                                                <text>Using suggested <strong>@row.SuggestedPrice?.ToString("N2")</strong> (imported was @row.ImportedPrice?.ToString("N2"))</text>
+                                                                                            }
+                                                                                        </span>
+                                                                                        @if (!card.Group.IsSaved)
+                                                                                        {
+                                                                                            <Button Title="Change" OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Undecided)" />
+                                                                                        }
+                                                                                    </div>
+                                                                                }
+                                                                            }
+                                                                        </td>
+                                                                    }
                                                                 </tr>
                                                             }
                                                         </tbody>
@@ -490,7 +576,7 @@
                             }
                         </div>
                     }
-                }
+                    }
             </div>
 
             @* ── Modal footer ── *@
@@ -567,7 +653,7 @@
 }
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items"
-              Message="@($"Commit {GetSelectedCardCount()} selected item(s)?")"
+              Message="@CommitConfirmMessage()"
               OnYes="ConfirmCommit" OnNo="CancelCommit" CloseOnOverlayClick="true" />
 
 @code {
@@ -612,7 +698,7 @@
     {
         public bool HasErrors => (Group.Issues?.Count ?? 0) > 0 || Group.Rows.Any(r => r.Issues.Count > 0);
         public bool IsWarningOnly => !HasErrors && Warnings.Count > 0;
-        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved && Group.HasStockUom;
+        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved && Group.HasStockUom && Group.PendingPriceDecisions == 0;
     }
 
     private sealed record GroupedIssue(string? Message, List<int> RowNumbers);
@@ -629,6 +715,7 @@
             searchTerm = string.Empty;
             sortMode = ItemSortMode.RowAscending;
             showDownloadModal = false;
+            selectedBulkAction = null;
             InvalidateCaches();
 
             if (ImportResult != null)
@@ -1072,15 +1159,166 @@
         if (string.IsNullOrWhiteSpace(uomName)) return;
 
         group.ChooseStockUom(uomName);
+        DropSelectionIfNotReady(group);   // a new stock UOM re-checks every price
         InvalidateCaches();   // the card may move tabs (a warning went away)
+    }
+
+    // The Stock UOM picked in the dropdown is only held here until the user presses Confirm,
+    // so the card does not jump to another tab while they are still looking at it.
+    private readonly Dictionary<PreparedItemGroup, string?> pendingStockUom = new(ReferenceEqualityComparer.Instance);
+
+    private string? PendingStockUom(PreparedItemGroup g) =>
+        pendingStockUom.TryGetValue(g, out var v) ? v : g.StockUomName;
+
+    private void OnStockUomPicked(PreparedItemGroup g, string? uomName) => pendingStockUom[g] = uomName;
+
+    private void ConfirmStockUom(PreparedItemGroup g)
+    {
+        var uom = PendingStockUom(g);
+        pendingStockUom.Remove(g);
+        OnStockUomChosen(g, uom);
+    }
+
+    // ── Bulk actions (Warnings tab) ───────────────────────────────────────
+    private string? selectedBulkAction;
+    private const string BulkStockSuggested = "stock-suggested";
+    private const string BulkPriceImported = "price-imported";
+    private const string BulkPriceSuggested = "price-suggested";
+
+    private static bool IsStockUomType(string? type) => type is "Stock UOM Suggested" or "Stock UOM Doesn't Match";
+    private static bool IsPriceType(string? type) => type is "Stock Price Differs" or "UOM Price Differs";
+    private static bool IsStockUomWarning(string w) => w.StartsWith("Stock UOM", StringComparison.OrdinalIgnoreCase);
+    private static bool IsPriceWarningText(string w) =>
+        w.StartsWith("Stock price", StringComparison.OrdinalIgnoreCase) || w.StartsWith("UOM price", StringComparison.OrdinalIgnoreCase);
+
+    private static string StockWarningTitle(string w) => NormalizeWarningMessageType(w) switch
+    {
+        "Stock UOM Suggested" => "Stock UOM suggested",
+        "Stock UOM Not Set" => "Stock UOM not set",
+        _ => "Stock UOM differs"
+    };
+
+    // Only actions that make sense for the selected warning type are offered.
+    private List<(string Value, string Label)> GetBulkOptions()
+    {
+        var options = new List<(string Value, string Label)>();
+        var f = selectedWarningFilter;
+
+        if (string.IsNullOrEmpty(f) || IsStockUomType(f))
+            options.Add((BulkStockSuggested, "Apply suggested Stock UOM"));
+
+        if (string.IsNullOrEmpty(f) || IsPriceType(f))
+        {
+            options.Add((BulkPriceImported, "Use imported prices"));
+            options.Add((BulkPriceSuggested, "Use suggested prices"));
+        }
+
+        return options;
+    }
+
+    private string GetBulkHint() =>
+        selectedWarningFilter == "Stock UOM Not Set"
+            ? "No bulk action for this type. Each item needs its Stock UOM chosen by hand."
+            : string.IsNullOrEmpty(selectedWarningFilter)
+                ? "Only actions that apply to the warnings listed are offered."
+                : "Applies to the unresolved items listed below.";
+
+    private PriceScope GetPriceScope() => selectedWarningFilter switch
+    {
+        "Stock Price Differs" => PriceScope.StockOnly,
+        "UOM Price Differs" => PriceScope.OthersOnly,
+        _ => PriceScope.All
+    };
+
+    private void OnBulkActionChanged(ChangeEventArgs e) => selectedBulkAction = e.Value?.ToString();
+
+    private IEnumerable<GroupCardViewModel> GetBulkTargets(List<GroupCardViewModel> cards, string? action)
+    {
+        if (string.IsNullOrEmpty(action)) return Enumerable.Empty<GroupCardViewModel>();
+
+        var listed = GetFilteredAndSortedCards(cards).Where(c => !c.HasErrors && !c.Group.IsSaved);
+
+        return action switch
+        {
+            BulkStockSuggested => listed.Where(c => HasUsableSuggestion(c.Group)
+                && c.Warnings.Any(w => IsStockUomType(NormalizeWarningMessageType(w)))),
+            BulkPriceImported or BulkPriceSuggested => listed.Where(c => c.Group.HasPendingPrices(GetPriceScope())),
+            _ => Enumerable.Empty<GroupCardViewModel>()
+        };
+    }
+
+    private static bool HasUsableSuggestion(PreparedItemGroup g) =>
+        !string.IsNullOrWhiteSpace(g.SuggestedStockUom)
+        && g.StockUomOptions.Any(o => string.Equals(o, g.SuggestedStockUom, StringComparison.OrdinalIgnoreCase));
+
+    private void ApplyBulkAction()
+    {
+        if (ImportResult == null || string.IsNullOrEmpty(selectedBulkAction)) return;
+
+        pendingStockUom.Clear();
+
+        var targets = GetBulkTargets(GetCards(), selectedBulkAction).Select(c => c.Group).ToList();
+        var scope = GetPriceScope();
+
+        foreach (var g in targets)
+        {
+            switch (selectedBulkAction)
+            {
+                case BulkStockSuggested: g.ChooseStockUom(g.SuggestedStockUom!); break;
+                case BulkPriceImported: g.DecideAllPrices(PriceChoice.Imported, scope); break;
+                case BulkPriceSuggested: g.DecideAllPrices(PriceChoice.Suggested, scope); break;
+            }
+
+            DropSelectionIfNotReady(g);
+        }
+
+        selectedBulkAction = null;
+        InvalidateCaches();
+    }
+
+    // Resolving a warning never selects an item. Re-opening one (or changing what it depends on) deselects it.
+    private void DropSelectionIfNotReady(PreparedItemGroup g)
+    {
+        if (g.HasStockUom && g.PendingPriceDecisions == 0) return;
+
+        g.Selected = false;
+        var first = g.Rows.FirstOrDefault();
+        if (first != null) SelectedGroupKeys.Remove(BuildGroupKey(first));
+    }
+
+    // ── Price decisions ───────────────────────────────────────────────────
+    private void OnPriceDecided(PreparedItemGroup group, ImportMapItemRowResult row, PriceChoice choice)
+    {
+        group.DecidePrice(row.RowNumber, choice);
+        DropSelectionIfNotReady(group);
+        InvalidateCaches();   // the card may leave the Warnings tab once nothing is waiting
+    }
+
+    // The last look before saving: how many prices will be saved as the file had them, and how many
+    // were replaced by the suggested value.
+    private string CommitConfirmMessage()
+    {
+        var groups = GetCards()
+            .Where(c => c.CanSelect && SelectedGroupKeys.Contains(c.Key))
+            .Select(c => c.Group)
+            .ToList();
+
+        var rows = groups.SelectMany(g => g.Rows).Where(r => r.HasPricePrompt).ToList();
+        var message = $"Commit {groups.Count} selected item(s)?";
+        if (rows.Count == 0) return message;
+
+        var kept = rows.Count(r => r.PriceChoice == PriceChoice.Imported);
+        var replaced = rows.Count(r => r.PriceChoice == PriceChoice.Suggested);
+        return $"{message} {kept} imported price(s) that differ from the suggestion will be saved as manual prices, " +
+               $"and {replaced} price(s) will use the suggested value.";
     }
 
     private static string StockUomHint(PreparedItemGroup group) => group.StockUomSource switch
     {
         StockUomSource.Explicit => "(From your file)",
         StockUomSource.Suggested => string.IsNullOrWhiteSpace(group.StockUomReason)
-            ? "(Suggested. Select this item to confirm, or pick another)"
-            : $"(Suggested: {group.StockUomReason}. Select this item to confirm, or pick another)",
+            ? "(Suggested. Confirm to accept it, or pick another)"
+            : $"(Suggested: {group.StockUomReason}. Confirm to accept it, or pick another)",
         StockUomSource.Chosen => "(Chosen by you)",
         _ => "(Required. Pick one to be able to commit this item)"
     };
@@ -1118,6 +1356,14 @@
 
         foreach (var c in GetCards().Where(c => c.CanSelect && c.IsWarningOnly))
             SetSelected(c, isChecked);
+    }
+
+    private void HandleSelectAllChanged(ChangeEventArgs e, bool warningTab)
+    {
+        if (warningTab)
+            ToggleSelectAllWarningCards(e.Value);
+        else
+            ToggleSelectAllCards(e.Value);
     }
 
     private int GetSelectedCardCount() =>
@@ -1185,8 +1431,8 @@
     }
 
     // ── Warnings ──────────────────────────────────────────────────────────
-    private void OnWarningFilterChanged(ChangeEventArgs e) => selectedWarningFilter = e?.Value?.ToString();
-    private void ClearWarningFilter() => selectedWarningFilter = null;
+    private void OnWarningFilterChanged(ChangeEventArgs e) { selectedWarningFilter = e?.Value?.ToString(); selectedBulkAction = null; }
+    private void ClearWarningFilter() { selectedWarningFilter = null; selectedBulkAction = null; }
 
     // Warning text mostly embeds per-row detail (row numbers, UOM, price), so
     // bucket into categories the same way NormalizeMessageType does for errors.
@@ -1195,6 +1441,8 @@
         var msg = (m ?? string.Empty).Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(msg)) return string.Empty;
 
+        if (msg.StartsWith("stock price")) return "Stock Price Differs";
+        if (msg.StartsWith("uom price")) return "UOM Price Differs";
         if (msg.StartsWith("stock uom suggested")) return "Stock UOM Suggested";
         if (msg.StartsWith("stock uom not set")) return "Stock UOM Not Set";
         if (msg.StartsWith("stock uom")) return "Stock UOM Doesn't Match";
@@ -1222,7 +1470,7 @@
                 }
 
         _cachedWarningTypes = messageTypes
-            .Select(type => (Message: type, Count: warningCards.Sum(c => GetGroupWarningRowCount(c.Group, type))))
+            .Select(type => (Message: type, Count: warningCards.Count(c => c.Warnings.Any(w => NormalizeWarningMessageType(w) == type))))
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Message)
             .ToList();

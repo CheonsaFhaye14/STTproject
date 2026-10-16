@@ -107,6 +107,7 @@
             .Where(g => g.Selected && !g.IsSaved && g.Rows.Count > 0
                         && g.Issues.Count == 0 && g.Rows.All(r => r.Issues.Count == 0)
                         && g.HasStockUom
+                        && g.PendingPriceDecisions == 0
                         && selectedGroupKeys.Contains(GroupKey(g)))
             .ToList();
 

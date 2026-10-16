@@ -5,6 +5,9 @@ using STTproject.Data;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Models;
 using STTproject.Services;
+using PricingStructure = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructure;
+using PricingStructureResolver = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructureResolver;
+using PriceListTypes = STTproject.Features.Admin.Subdistributor.DTOs.PriceListTypes;
 
 namespace STTproject.Features.User.MapItem.Services;
 
@@ -315,7 +318,9 @@ public sealed class ImportMapItemService
 			}
 
 			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors);
-				var stock = ResolveStockUom(groupRows, companyItem.StockUomName, computedPricesByRow, rowErrors, groupWarnings);
+				var stock = ResolveStockUom(groupRows, companyItem.StockUomName, computedPricesByRow, rowErrors, groupWarnings,
+						out var fileStockUom, out var suggestedStockUom, out var suggestedStockUomReason);
+				var applicablePrice = ResolveApplicablePrice(companyItem, subdDistributor.PriceListType);
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
 			{
@@ -341,6 +346,8 @@ public sealed class ImportMapItemService
 						UomName = row.UOM,
 						Conversion = row.Conversion,
 						Price = row.Price ?? computedPrice,
+							ImportedPrice = row.Price ?? computedPrice,
+							PriceFromFile = row.Price.HasValue,
 							StockUom = row.StockUom,
 							IsStockUom = IsStockRow(row, stock.Name),
 						IsSuccess = rowIssues.Count == 0
@@ -356,7 +363,13 @@ public sealed class ImportMapItemService
 						Selected = false,
 						StockUomName = stock.Name,
 						StockUomSource = stock.Source,
-						StockUomReason = stock.Reason
+						StockUomReason = stock.Reason,
+						FileStockUom = fileStockUom,
+						SuggestedStockUom = suggestedStockUom,
+						SuggestedStockUomReason = suggestedStockUomReason,
+						CompanyStockUomName = companyItem.StockUomName,
+						ApplicableStockPrice = applicablePrice.Price,
+						PriceListLabel = applicablePrice.Label
 					};
 				foreach (var kvp in rowErrors)
 				{
@@ -393,6 +406,8 @@ public sealed class ImportMapItemService
 					UomName = row.UOM,
 					Conversion = row.Conversion,
 					Price = effectivePrice,
+						ImportedPrice = effectivePrice,
+						PriceFromFile = row.Price.HasValue,
 						StockUom = row.StockUom,
 						IsStockUom = IsStockRow(row, stock.Name),
 					IsSuccess = true
@@ -455,12 +470,27 @@ public sealed class ImportMapItemService
 
 			var preparedSuccess = new PreparedItemGroup(uomResults)
 			{
-				Selected = uomResults.All(r => r.Issues.Count == 0),
+				Selected = false,
 				IsSaved = false,
 				StockUomName = stock.Name,
 				StockUomSource = stock.Source,
-				StockUomReason = stock.Reason
-			};
+				StockUomReason = stock.Reason,
+						FileStockUom = fileStockUom,
+						SuggestedStockUom = suggestedStockUom,
+						SuggestedStockUomReason = suggestedStockUomReason,
+						CompanyStockUomName = companyItem.StockUomName,
+						ApplicableStockPrice = applicablePrice.Price,
+						PriceListLabel = applicablePrice.Label
+					};
+			// Compare the imported prices with the company price and the calculated UOM prices.
+			// Differences become warnings the admin decides; nothing is changed here.
+			if (uomResults.All(r => r.Issues.Count == 0))
+			{
+				preparedSuccess.RefreshPricePrompts(preserveChoices: false);
+			}
+			preparedSuccess.Selected = uomResults.All(r => r.Issues.Count == 0)
+				&& preparedSuccess.PendingPriceDecisions == 0
+				&& preparedSuccess.HasStockUom;
 			foreach (var rr in uomResults.SelectMany(r => r.Issues.Select(i => new ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))))
 			{
 				preparedSuccess.Issues.Add(rr);
@@ -582,7 +612,10 @@ public sealed class ImportMapItemService
 					{
 						Conversion = row.Conversion,
 						Price = row.Price,
-							IsStockUom = row.IsStockUom
+							IsStockUom = row.IsStockUom,
+						// A price from the file is kept as typed, so it is a manual price. A price that was
+						// computed, or where the admin took the suggested value, follows the stock price.
+						IsAutoCalculated = !row.PriceFromFile || row.PriceChoice == PriceChoice.Suggested
 					};
 				}
  
@@ -1097,18 +1130,31 @@ public sealed class ImportMapItemService
 		!string.IsNullOrWhiteSpace(stockName)
 		&& string.Equals(row.UOM.Trim(), stockName.Trim(), StringComparison.OrdinalIgnoreCase);
 
-	// Decides which UOM of an item is its stock UOM.
-	//  - A value in the file wins when it names one of the item's own UOMs.
-	//    A value that matches none of them is a warning: the admin must choose, and nothing is guessed.
-	//    Two different values for one item, or a stock UOM without conversion/price, stay errors.
-	//  - With no value, StockUomSuggester proposes one. That is a warning the admin confirms or changes.
-	//  - With no proposal, the item is held back (warning) until the admin picks one.
+	// The company price this sub-distributor's stock price is compared with.
+	// Same rule as the Add UOM modal: KCPI items with Regional and National prices use the price list
+	// assigned to the sub-distributor; everything else uses the single stock price.
+	private static (decimal? Price, string? Label) ResolveApplicablePrice(CompanyItem ci, string? priceListType)
+	{
+		var structure = PricingStructureResolver.Resolve(ci.StockPrice, ci.StockPriceRegional, ci.StockPriceNational);
+
+		return structure switch
+		{
+			PricingStructure.Dual when priceListType == PriceListTypes.Regional => (ci.StockPriceRegional, "Regional"),
+			PricingStructure.Dual when priceListType == PriceListTypes.National => (ci.StockPriceNational, "National"),
+			PricingStructure.Single => (ci.StockPrice, null),
+			_ => (null, null)
+		};
+	}
+
 	private static (string? Name, StockUomSource Source, string? Reason) ResolveStockUom(
 		List<ImportedMapItemRow> groupRows,
 		string? companyStockUomName,
 		IReadOnlyDictionary<int, decimal> computedPrices,
 		Dictionary<int, List<string>> rowErrors,
-		Dictionary<int, List<string>> rowWarnings)
+		Dictionary<int, List<string>> rowWarnings,
+		out string? fileValue,
+		out string? suggestedName,
+		out string? suggestedReason)
 	{
 		static void Add(Dictionary<int, List<string>> target, int rowNumber, string message)
 		{
@@ -1139,6 +1185,23 @@ public sealed class ImportMapItemService
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToList();
 
+		var entries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+		foreach (var r in groupRows.Where(r => !string.IsNullOrWhiteSpace(r.UOM)))
+		{
+			entries[r.UOM.Trim()] = new UomEntry
+			{
+				Conversion = r.Conversion,
+				Price = EffectivePrice(r),
+				IsActive = true
+			};
+		}
+
+		var suggestion = StockUomSuggester.Suggest(companyStockUomName, entries);
+		fileValue = explicitValues.Count == 0 ? null : string.Join(", ", explicitValues);
+		suggestedName = suggestion?.UomName;
+		suggestedReason = suggestion?.Reason;
+		var why = string.IsNullOrWhiteSpace(suggestedReason) ? string.Empty : $" ({suggestedReason})";
+
 		if (explicitValues.Count > 1)
 		{
 			var shown = string.Join(", ", explicitValues.Select(v => $"'{v}'"));
@@ -1163,8 +1226,9 @@ public sealed class ImportMapItemService
 				var companyNote = string.IsNullOrWhiteSpace(companyStockUomName)
 					? $" The company item {explicitRows[0].CompanyItemCode} also has no stock UOM set, so none can be suggested."
 					: string.Empty;
+				var suggestNote = suggestedName is null ? string.Empty : $" Suggested: {suggestedName}{why}.";
 				Add(rowWarnings, explicitRows[0].RowNumber,
-					$"Stock UOM '{value}' from your file doesn't match any UOM of this item ({string.Join(", ", uomNames)}). " +
+					$"Stock UOM '{value}' from your file doesn't match any UOM of this item ({string.Join(", ", uomNames)}).{suggestNote} " +
 					$"Choose the stock UOM here.{companyNote}");
 				return (null, StockUomSource.None, null);
 			}
@@ -1179,32 +1243,35 @@ public sealed class ImportMapItemService
 				return (first.UOM.Trim(), StockUomSource.Explicit, null);
 			}
 
+			if (suggestedName is not null
+				&& !string.Equals(suggestedName, usable.UOM.Trim(), StringComparison.OrdinalIgnoreCase))
+			{
+				Add(rowWarnings, usable.RowNumber,
+					$"Stock UOM '{usable.UOM.Trim()}' from your file differs from the suggested '{suggestedName}'{why}. " +
+					"Your file's value is used unless you change it.");
+			}
+
 			return (usable.UOM.Trim(), StockUomSource.Explicit, null);
 		}
 
-		var entries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-		foreach (var r in groupRows.Where(r => !string.IsNullOrWhiteSpace(r.UOM)))
-		{
-			entries[r.UOM.Trim()] = new UomEntry
-			{
-				Conversion = r.Conversion,
-				Price = EffectivePrice(r),
-				IsActive = true
-			};
-		}
-
-		var suggestion = StockUomSuggester.Suggest(companyStockUomName, entries);
-		var suggestedName = suggestion?.UomName;
-		var suggestedReason = suggestion?.Reason;
-
 		if (!string.IsNullOrWhiteSpace(suggestedName))
 		{
-			var anchor = groupRows.FirstOrDefault(r => string.Equals(r.UOM.Trim(), suggestedName, StringComparison.OrdinalIgnoreCase))
+			var localSuggestedName = suggestedName;
+
+			var anchor = groupRows.FirstOrDefault(r =>
+				string.Equals(
+					r.UOM.Trim(),
+					localSuggestedName,
+					StringComparison.OrdinalIgnoreCase))
 				?? groupRows[0];
-			var why = string.IsNullOrWhiteSpace(suggestedReason) ? string.Empty : $" ({suggestedReason})";
-			Add(rowWarnings, anchor.RowNumber,
-				$"Stock UOM suggested: {suggestedName}{why}. Select this item to confirm it, or change it first.");
-			return (suggestedName, StockUomSource.Suggested, suggestedReason);
+
+			Add(
+				rowWarnings,
+				anchor.RowNumber,
+				$"Stock UOM suggested: {localSuggestedName}{why}. " +
+				"Select this item to confirm it, or change it first.");
+
+			return (localSuggestedName, StockUomSource.Suggested, suggestedReason);
 		}
 
 		var firstRow = groupRows[0];
