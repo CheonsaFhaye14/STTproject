@@ -54,6 +54,7 @@ namespace STTproject.Features.Admin.Customers.DTOs
     public class CustomerGroupUpdateDto
     {
         public int CustomerId { get; set; }
+        public List<int> ExistingIds { get; set; } = new();
         public List<SubdMappingDto> Mappings { get; set; } = new();
     }
 

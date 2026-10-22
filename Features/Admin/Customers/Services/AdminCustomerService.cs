@@ -109,8 +109,8 @@ namespace STTproject.Features.Admin.Customers.Services
             var entity = await db.Customers.FindAsync(id);
             if (entity == null) return;
             entity.IsActive = isActive;
-            entity.UpdatedDate = NowPh();  
-            entity.UpdatedBy = updatedBy;  
+            entity.UpdatedDate = NowPh();
+            entity.UpdatedBy = updatedBy;
             await db.SaveChangesAsync();
         }
 
@@ -147,7 +147,7 @@ namespace STTproject.Features.Admin.Customers.Services
                 })
                 .ToListAsync();
         }
-        
+
         public async Task<(IEnumerable<CustomerListDto> Items, int TotalCount)> GetPagedAsync(
             int page,
             int pageSize,
@@ -193,7 +193,7 @@ namespace STTproject.Features.Admin.Customers.Services
                 .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
                 .Select(g => new CustomerListDto
                 {
-                    CustomerId = g.Min(c => c.CustomerId),           
+                    CustomerId = g.Min(c => c.CustomerId),
                     CustomerCode = g.Key.CustomerCode,
                     CustomerName = g.Key.CustomerName,
                     SubDistributorId = g.Key.SubDistributorId,
@@ -304,7 +304,7 @@ namespace STTproject.Features.Admin.Customers.Services
 
         public async Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto)
             => await UpdateCustomerAsync(dto.CustomerId, dto);
-    
+
         public async Task<IEnumerable<SubdMappingDto>> GetCustomerGroupMappingsAsync(int customerId)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -314,7 +314,7 @@ namespace STTproject.Features.Admin.Customers.Services
 
             return await db.Customers
                 .AsNoTracking()
-                .Where(c => c.CustomerCode == anchor.CustomerCode)
+                .Where(c => c.CustomerCode == anchor.CustomerCode && c.CustomerName == anchor.CustomerName && c.SubDistributorId == anchor.SubDistributorId)
                 .OrderBy(c => c.CustomerId)
                 .Select(c => new SubdMappingDto
                 {
@@ -344,7 +344,7 @@ namespace STTproject.Features.Admin.Customers.Services
                 }
 
                 var siblings = await db.Customers
-                    .Where(c => c.CustomerCode == anchor.CustomerCode && c.CustomerId != anchor.CustomerId)
+                    .Where(c => dto.ExistingIds.Contains(c.CustomerId) && c.CustomerId != anchor.CustomerId)
                     .ToListAsync();
 
                 var incomingIds = dto.Mappings
