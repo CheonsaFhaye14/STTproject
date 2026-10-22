@@ -1,6 +1,7 @@
 @using Microsoft.JSInterop
 @typeparam TItem
 @using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
 @inject IJSRuntime JS
 
 @if (!string.IsNullOrWhiteSpace(Label))
@@ -11,7 +12,7 @@
         {
             <span class="required">*</span>
         }
-        @if(AddOptionalText)
+        @if (AddOptionalText)
         {
             <span class="optional-text">@OptionalText</span>
         }
@@ -19,15 +20,8 @@
 }
 
 <div class="autocomplete-wrapper" @onfocusout="HandleFocusOut">
-    <input type="text"
-           class="form-control"
-           placeholder="@(Placeholder ?? "-- Search --")"
-           disabled="@Disabled"
-           value="@SearchText"
-           @ref="InputElement"
-           @oninput="OnInputChanged"
-           @onfocus="OnFocus"
-           @onkeydown="OnKeyDown"
+    <input type="text" class="form-control" placeholder="@(Placeholder ?? "-- Search --")" disabled="@Disabled"
+           value="@SearchText" @ref="InputElement" @oninput="OnInputChanged" @onfocus="OnFocus" @onkeydown="OnKeyDown"
            autocomplete="off" />
 
     @if (ShowSuggestions && FilteredItems.Any())
@@ -37,12 +31,14 @@
             {
                 var item = FilteredItems[i];
                 var index = i;
-                <li class="autocomplete-item @(index == HighlightedIndex ? "active" : "")"
-                    @onmousedown:preventDefault="true"
-                    @onmousedown="() => SelectItem(item)"
-                    @onmouseover="() => HighlightedIndex = index">
+                <li class="autocomplete-item @(index == HighlightedIndex ? "active" : "")" @onmousedown:preventDefault="true"
+                    @onmousedown="() => SelectItem(item)">
                     @GetText(item)
                 </li>
+            }
+            @if (HasMoreResults)
+            {
+                <li class="autocomplete-item disabled">Keep typing to narrow the results…</li>
             }
         </ul>
     }
@@ -60,55 +56,56 @@
 
 
 <style>
-.optional-text {
-    font-size: 0.9em;
-    color: #6c757d;
-    margin-left: 5px;
-}
-.autocomplete-wrapper {
-    position: relative;
-}
+    .optional-text {
+        font-size: 0.9em;
+        color: #6c757d;
+        margin-left: 5px;
+    }
 
-.required {
-    color: #dc3545;
-    margin-left: 2px;
-}
+    .autocomplete-wrapper {
+        position: relative;
+    }
 
-.autocomplete-list {
-    position: absolute;
-    z-index: 1000;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    margin: 2px 0 0 0;
-    padding: 4px 0;
-    list-style: none;
-    background: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
+    .required {
+        color: #dc3545;
+        margin-left: 2px;
+    }
 
-.autocomplete-item {
-    padding: 6px 12px;
-    cursor: pointer;
-}
+    .autocomplete-list {
+        position: absolute;
+        z-index: 1000;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 220px;
+        overflow-y: auto;
+        margin: 2px 0 0 0;
+        padding: 4px 0;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
 
-.autocomplete-item:hover,
-.autocomplete-item.active {
-    background-color: #e9ecef;
-}
+    .autocomplete-item {
+        padding: 6px 12px;
+        cursor: pointer;
+    }
 
-.autocomplete-item.disabled {
-    color: #6c757d;
-    cursor: default;
-}
+    .autocomplete-item:hover,
+    .autocomplete-item.active {
+        background-color: #e9ecef;
+    }
 
-.autocomplete-item.disabled:hover {
-    background-color: transparent;
-}
+    .autocomplete-item.disabled {
+        color: #6c757d;
+        cursor: default;
+    }
+
+    .autocomplete-item.disabled:hover {
+        background-color: transparent;
+    }
 </style>
 
 @code {
@@ -140,14 +137,36 @@
     [Parameter] public bool ShowError { get; set; } = true;
     [Parameter] public bool AllowCustomValue { get; set; } = false;
 
+    /// <summary>Most rows rendered in the dropdown. Keeps big lists fast.</summary>
+    [Parameter] public int MaxResults { get; set; } = 50;
+
+    /// <summary>How long typing must pause before the list is filtered.</summary>
+    [Parameter] public int DebounceMs { get; set; } = 150;
+
     private string SearchText { get; set; } = string.Empty;
     private bool ShowSuggestions { get; set; }
     private int HighlightedIndex { get; set; } = -1;
     private bool ShowingAll { get; set; }
     private bool HasSelectedItem { get; set; }
+    private bool HasMoreResults { get; set; }
     private List<TItem> FilteredItems { get; set; } = new();
 
     private ElementReference InputElement;
+    private CancellationTokenSource? debounce;
+
+    // ── Cached text/value per item (built once per Items list) ────────────
+    private (TItem Item, string Text, string Value)[]? index;
+    private IEnumerable<TItem>? indexedFor;
+
+    private (TItem Item, string Text, string Value)[] EnsureIndex()
+    {
+        if (index is null || !ReferenceEquals(indexedFor, Items))
+        {
+            index = Items.Select(i => (i, GetText(i), GetValue(i))).ToArray();
+            indexedFor = Items;
+        }
+        return index;
+    }
 
     private string GetValue(TItem item) => ValueSelector is not null
         ? ValueSelector(item)
@@ -157,61 +176,120 @@
         ? TextSelector(item)
         : item?.ToString() ?? string.Empty;
 
+    private (TItem Item, string Text, string Value)? FindBySelectedValue()
+    {
+        if (string.IsNullOrEmpty(SelectedValue)) return null;
+
+        foreach (var x in EnsureIndex())
+        {
+            if (x.Value == SelectedValue || x.Text == SelectedValue) return x;
+        }
+        return null;
+    }
+
+    // ── Sync with the parent only when something actually changed ─────────
+    private string? lastSyncedValue;
+    private IEnumerable<TItem>? lastItems;
+
     protected override void OnParametersSet()
     {
-        if (!string.IsNullOrEmpty(SelectedValue) && string.IsNullOrEmpty(SearchText))
-        {
-            var match = Items.FirstOrDefault(i =>
-                GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
+        var current = SelectedValue ?? string.Empty;
+        var valueChanged = current != lastSyncedValue;
+        var itemsChanged = !ReferenceEquals(Items, lastItems);
+        if (!valueChanged && !itemsChanged) return;
 
+        lastSyncedValue = current;
+        lastItems = Items;
+
+        if (current.Length == 0)
+        {
+            // The parent cleared the value (e.g. a dependent field was reset).
+            if (valueChanged)
+            {
+                SearchText = string.Empty;
+                HasSelectedItem = false;
+            }
+            return;
+        }
+
+        if (valueChanged || SearchText.Length == 0)
+        {
+            var match = FindBySelectedValue();
             if (match is not null)
             {
-                SearchText = GetText(match);
+                SearchText = match.Value.Text;
             }
             else if (AllowCustomValue)
             {
-                SearchText = SelectedValue;
+                SearchText = SelectedValue!;
             }
         }
     }
 
     private void RefreshFilteredItems()
     {
-        FilteredItems = ShowingAll
-            ? Items.ToList()
-            : (SearchText.Length >= MinSearchLength
-                ? Items.Where(i => GetText(i).Contains(SearchText, StringComparison.OrdinalIgnoreCase)).ToList()
-                : new List<TItem>());
+        HasMoreResults = false;
+
+        if (!ShowingAll && SearchText.Length < MinSearchLength)
+        {
+            FilteredItems = new();
+            return;
+        }
+
+        IEnumerable<TItem> query = ShowingAll
+            ? EnsureIndex().Select(x => x.Item)
+            : EnsureIndex()
+                .Where(x => x.Text.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.Item);
+
+        // Take one extra so we know whether the list was cut off.
+        var list = query.Take(MaxResults + 1).ToList();
+        HasMoreResults = list.Count > MaxResults;
+        if (HasMoreResults) list.RemoveAt(list.Count - 1);
+
+        FilteredItems = list;
     }
 
-    private void OnInputChanged(ChangeEventArgs e)
+    private async Task OnInputChanged(ChangeEventArgs e)
     {
         SearchText = e.Value?.ToString() ?? string.Empty;
         HighlightedIndex = -1;
         HasSelectedItem = false;
         ShowingAll = false;
         ShowSuggestions = SearchText.Length >= MinSearchLength;
-        RefreshFilteredItems();
 
         if (SelectedValue is not null)
         {
-            var current = Items.FirstOrDefault(i =>
-                GetValue(i) == SelectedValue || GetText(i) == SelectedValue);
+            var current = FindBySelectedValue();
 
-            if (current is not null && GetText(current) != SearchText)
+            if (current is not null && current.Value.Text != SearchText && AllowCustomValue)
             {
-                 _ = AcceptCustomValueAsync();
+                _ = AcceptCustomValueAsync();
             }
             if (current is null)
             {
                 _ = ClearSelectionAsync();
             }
         }
+
+        // Filter only after the user pauses typing.
+        debounce?.Cancel();
+        debounce?.Dispose();
+        debounce = new CancellationTokenSource();
+        var token = debounce.Token;
+
+        try { await Task.Delay(DebounceMs, token); }
+        catch (TaskCanceledException) { return; }
+
+        RefreshFilteredItems();
     }
 
     private void OnFocus()
     {
-        ShowingAll = ShowAllOnOpen;
+        // When the box holds the selected item's own text, show every option so it can be changed.
+        var selected = FindBySelectedValue();
+        ShowingAll = ShowAllOnOpen || (selected is not null && selected.Value.Text == SearchText);
+
         ShowSuggestions = true;
         RefreshFilteredItems();
         HighlightedIndex = FilteredItems.Any() ? 0 : -1;
@@ -221,22 +299,28 @@
     {
         if (AllowCustomValue && !HasSelectedItem && !string.IsNullOrWhiteSpace(SearchText))
         {
-            var match = Items.FirstOrDefault(i => GetText(i).Equals(SearchText, StringComparison.OrdinalIgnoreCase));
-            if (match is not null)
+            var match = EnsureIndex().FirstOrDefault(x => x.Text.Equals(SearchText, StringComparison.OrdinalIgnoreCase));
+            if (match.Item is not null)
             {
-                _ = SelectItem(match);
+                _ = SelectItem(match.Item);
             }
             else
             {
                 _ = AcceptCustomValueAsync();
             }
         }
+        else if (!AllowCustomValue && !string.IsNullOrEmpty(SelectedValue))
+        {
+            // Leaving with half-typed text: put the selected item's text back.
+            var match = FindBySelectedValue();
+            if (match is not null) SearchText = match.Value.Text;
+        }
 
         ShowSuggestions = false;
         HighlightedIndex = -1;
     }
 
-    // NEW: two-stage Enter (like doc2) + OnConfirmed
+    // Two-stage Enter + OnConfirmed
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         switch (e.Key)
@@ -269,6 +353,10 @@
 
                 if (ShowSuggestions)
                 {
+                    // Make sure Enter acts on the latest text even if the debounce hasn't fired yet.
+                    debounce?.Cancel();
+                    RefreshFilteredItems();
+
                     var toSelect = HighlightedIndex >= 0 && HighlightedIndex < FilteredItems.Count
                         ? FilteredItems[HighlightedIndex]
                         : FilteredItems.FirstOrDefault();
@@ -308,6 +396,7 @@
     {
         SearchText = GetText(item);
         SelectedValue = GetValue(item);
+        lastSyncedValue = SelectedValue ?? string.Empty; // the parent echoing this value back is not a change
         ShowSuggestions = false;
         HighlightedIndex = -1;
         HasSelectedItem = true;
@@ -316,21 +405,24 @@
         await SelectedValueChanged.InvokeAsync(SelectedValue);
         await SelectedItemChanged.InvokeAsync(item);
     }
+
     private async Task AcceptCustomValueAsync()
     {
         SelectedValue = SearchText;
+        lastSyncedValue = SelectedValue ?? string.Empty;
         ShowSuggestions = false;
         HighlightedIndex = -1;
         HasSelectedItem = true;
         ShowingAll = false;
 
         await SelectedValueChanged.InvokeAsync(SelectedValue);
-        await SelectedItemChanged.InvokeAsync(default); 
+        await SelectedItemChanged.InvokeAsync(default);
     }
 
     private async Task ClearSelectionAsync()
     {
         SelectedValue = null;
+        lastSyncedValue = string.Empty;
         HasSelectedItem = false;
         await SelectedValueChanged.InvokeAsync(SelectedValue);
         await SelectedItemChanged.InvokeAsync(default);
@@ -347,4 +439,10 @@
     }
 
     public ElementReference GetInputRef() => InputElement;
+
+    public void Dispose()
+    {
+        debounce?.Cancel();
+        debounce?.Dispose();
+    }
 }
