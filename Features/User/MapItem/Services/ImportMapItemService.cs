@@ -204,8 +204,8 @@ public sealed class ImportMapItemService
 			Principal = Normalize(row.Principal),
 			CompanyItemCode = Normalize(row.CompanyItemCode),
 			CompanyItemName = Normalize(row.CompanyItemName),
-			SubdItemCode = Normalize(row.SubdItemCode),    
-			SubdItemName = Normalize(row.SubdItemName)      
+			SubdItemCode = Normalize(row.SubdItemCode),
+			SubdItemName = Normalize(row.SubdItemName)
 		}))
 		{
 			var groupRows = ResolveConversionsForGroup(rowGroup.OrderBy(row => row.RowNumber).ToList());
@@ -278,6 +278,15 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
+			// A company item without a Stock UOM (e.g. free goods) needs no stock UOM and no price on the
+			// mapped item. Unpriced UOMs are stored as 0.00, matching SaveSubdItemUomPricesAsync.
+			var requiresStock = !string.IsNullOrWhiteSpace(companyItem.StockUomName);
+
+			decimal? Effective(ImportedMapItemRow r, IReadOnlyDictionary<int, decimal> computed) =>
+				r.Price
+				?? (computed.TryGetValue(r.RowNumber, out var c) ? c : (decimal?)null)
+				?? (requiresStock ? null : 0m);
+
 			var subdDistributorKey = (
 				Normalize(firstRow.SubDistributorCode),
 				Normalize(firstRow.SubdItemCode),
@@ -299,7 +308,7 @@ public sealed class ImportMapItemService
 			}
 
 			var baseRow = groupRows.FirstOrDefault(r => r.Conversion == 1);
-			if (baseRow is not null && !baseRow.Price.HasValue)
+			if (requiresStock && baseRow is not null && !baseRow.Price.HasValue)
 			{
 				var hasConvertibleReference = groupRows.Any(r =>
 					r.RowNumber != baseRow.RowNumber &&
@@ -317,19 +326,17 @@ public sealed class ImportMapItemService
 				}
 			}
 
-			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors);
-				var stock = ResolveStockUom(groupRows, companyItem.StockUomName, computedPricesByRow, rowErrors, groupWarnings,
-						out var fileStockUom, out var suggestedStockUom, out var suggestedStockUomReason);
-				var applicablePrice = ResolveApplicablePrice(companyItem, subdDistributor.PriceListType);
+			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors, requiresStock);
+			var stock = ResolveStockUom(groupRows, companyItem.StockUomName, computedPricesByRow, rowErrors, groupWarnings,
+					out var fileStockUom, out var suggestedStockUom, out var suggestedStockUomReason);
+			var applicablePrice = ResolveApplicablePrice(companyItem, subdDistributor.PriceListType);
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
 			{
 				var createdRows = new List<ImportMapItemRowResult>();
 				foreach (var row in groupRows)
 				{
-					var computedPrice = computedPricesByRow.TryGetValue(row.RowNumber, out var value)
-						? value
-						: (decimal?)null;
+					var effectivePrice = Effective(row, computedPricesByRow);
 					var rowIssues = rowErrors.TryGetValue(row.RowNumber, out var issues)
 						? issues
 						: new List<string>();
@@ -345,11 +352,11 @@ public sealed class ImportMapItemService
 						SubdItemName = row.SubdItemName,
 						UomName = row.UOM,
 						Conversion = row.Conversion,
-						Price = row.Price ?? computedPrice,
-							ImportedPrice = row.Price ?? computedPrice,
-							PriceFromFile = row.Price.HasValue,
-							StockUom = row.StockUom,
-							IsStockUom = IsStockRow(row, stock.Name),
+						Price = effectivePrice,
+						ImportedPrice = effectivePrice,
+						PriceFromFile = row.Price.HasValue,
+						StockUom = row.StockUom,
+						IsStockUom = IsStockRow(row, stock.Name),
 						IsSuccess = rowIssues.Count == 0
 					};
 					ApplyRawValues(rowResult, row.RawValues);
@@ -358,19 +365,19 @@ public sealed class ImportMapItemService
 					createdRows.Add(rowResult);
 				}
 
-					var prepared = new PreparedItemGroup(createdRows)
-					{
-						Selected = false,
-						StockUomName = stock.Name,
-						StockUomSource = stock.Source,
-						StockUomReason = stock.Reason,
-						FileStockUom = fileStockUom,
-						SuggestedStockUom = suggestedStockUom,
-						SuggestedStockUomReason = suggestedStockUomReason,
-						CompanyStockUomName = companyItem.StockUomName,
-						ApplicableStockPrice = applicablePrice.Price,
-						PriceListLabel = applicablePrice.Label
-					};
+				var prepared = new PreparedItemGroup(createdRows)
+				{
+					Selected = false,
+					StockUomName = stock.Name,
+					StockUomSource = stock.Source,
+					StockUomReason = stock.Reason,
+					FileStockUom = fileStockUom,
+					SuggestedStockUom = suggestedStockUom,
+					SuggestedStockUomReason = suggestedStockUomReason,
+					CompanyStockUomName = companyItem.StockUomName,
+					ApplicableStockPrice = applicablePrice.Price,
+					PriceListLabel = applicablePrice.Label
+				};
 				foreach (var kvp in rowErrors)
 				{
 					foreach (var msg in kvp.Value.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -388,10 +395,7 @@ public sealed class ImportMapItemService
 
 			foreach (var row in groupRows)
 			{
-				var computedPrice = computedPricesByRow.TryGetValue(row.RowNumber, out var value)
-					? value
-					: (decimal?)null;
-				var effectivePrice = row.Price ?? computedPrice;
+				var effectivePrice = Effective(row, computedPricesByRow);
 
 				var rowResult = new ImportMapItemRowResult
 				{
@@ -406,15 +410,15 @@ public sealed class ImportMapItemService
 					UomName = row.UOM,
 					Conversion = row.Conversion,
 					Price = effectivePrice,
-						ImportedPrice = effectivePrice,
-						PriceFromFile = row.Price.HasValue,
-						StockUom = row.StockUom,
-						IsStockUom = IsStockRow(row, stock.Name),
+					ImportedPrice = effectivePrice,
+					PriceFromFile = row.Price.HasValue,
+					StockUom = row.StockUom,
+					IsStockUom = IsStockRow(row, stock.Name),
 					IsSuccess = true
 				};
 				ApplyRawValues(rowResult, row.RawValues);
 
-				// NEW — carry over non-blocking duplicate-map warnings
+				// Carry over non-blocking duplicate-map warnings
 				if (groupWarnings.TryGetValue(row.RowNumber, out var rowWarnings))
 				{
 					rowResult.Warnings.AddRange(rowWarnings);
@@ -426,7 +430,7 @@ public sealed class ImportMapItemService
 					rowResult.IsSuccess = false;
 					rowResult.Issues.Add("Conversion must be a whole number greater than 0 when provided.");
 				}
-				else if (!row.Conversion.HasValue && !row.Price.HasValue)
+				else if (!row.Conversion.HasValue && !row.Price.HasValue && requiresStock)
 				{
 					rowResult.IsSuccess = false;
 					rowResult.Issues.Add("Conversion is required unless a price is entered directly for this row.");
@@ -444,11 +448,11 @@ public sealed class ImportMapItemService
 					rowResult.IsSuccess = false;
 					rowResult.Issues.Add("Price must be provided or computable from another UOM row, and cannot be negative.");
 				}
-				else if (effectivePrice.Value == 0)
+				else if (effectivePrice.Value == 0 && requiresStock)
 				{
 					// Non-blocking — 0 is technically valid, but it's much more likely a
 					// mistake (blank cell, copy-paste slip) than an intentional free item.
-					// Flag it so the user notices and can fix it before committing.
+					// For free goods (no company Stock UOM) 0 is the intended value, so no warning.
 					var priceSource = row.Price.HasValue ? "entered directly" : "computed from another UOM row";
 					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has a price of 0 ({priceSource}). Double-check this was intentional.");
 				}
@@ -475,13 +479,13 @@ public sealed class ImportMapItemService
 				StockUomName = stock.Name,
 				StockUomSource = stock.Source,
 				StockUomReason = stock.Reason,
-						FileStockUom = fileStockUom,
-						SuggestedStockUom = suggestedStockUom,
-						SuggestedStockUomReason = suggestedStockUomReason,
-						CompanyStockUomName = companyItem.StockUomName,
-						ApplicableStockPrice = applicablePrice.Price,
-						PriceListLabel = applicablePrice.Label
-					};
+				FileStockUom = fileStockUom,
+				SuggestedStockUom = suggestedStockUom,
+				SuggestedStockUomReason = suggestedStockUomReason,
+				CompanyStockUomName = companyItem.StockUomName,
+				ApplicableStockPrice = applicablePrice.Price,
+				PriceListLabel = applicablePrice.Label
+			};
 			// Compare the imported prices with the company price and the calculated UOM prices.
 			// Differences become warnings the admin decides; nothing is changed here.
 			if (uomResults.All(r => r.Issues.Count == 0))
@@ -490,7 +494,7 @@ public sealed class ImportMapItemService
 			}
 			preparedSuccess.Selected = uomResults.All(r => r.Issues.Count == 0)
 				&& preparedSuccess.PendingPriceDecisions == 0
-				&& preparedSuccess.HasStockUom;
+				&& preparedSuccess.StockUomReady;
 			foreach (var rr in uomResults.SelectMany(r => r.Issues.Select(i => new ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))))
 			{
 				preparedSuccess.Issues.Add(rr);
@@ -501,37 +505,34 @@ public sealed class ImportMapItemService
 		return result;
 	}
 
-	private async Task<int> CommitMapItemRowsAsync(
-		List<ImportMapItemRowResult> rows,
-		int currentUserId,
-		CancellationToken cancellationToken = default)
+	private async Task<int> CommitMapItemRowsAsync(List<ImportMapItemRowResult> rows, int currentUserId, CancellationToken cancellationToken = default)
 	{
 		if (rows.Count == 0)
 			return 0;
- 
+
 		await using var context = _contextFactory.CreateDbContext();
- 
+
 		var isAdmin = await IsAdminAsync(context, currentUserId, cancellationToken);
- 
+
 		// Get all subdistributors for mapping — admins see all active subdistributors,
 		// non-admins only see the ones they encoded themselves.
 		var subdDistributorsQuery = context.SubDistributors
 			.AsNoTracking()
 			.Where(s => s.IsActive);
- 
+
 		if (!isAdmin)
 		{
 			subdDistributorsQuery = subdDistributorsQuery.Where(s => s.EncoderId == currentUserId);
 		}
- 
+
 		var subdDistributors = await subdDistributorsQuery
 			.ToDictionaryAsync(s => Normalize(s.SubdCode), cancellationToken);
- 
+
 		var companyItems = await context.CompanyItems
 			.AsNoTracking()
 			.Where(ci => ci.IsActive)
 			.ToDictionaryAsync(ci => Normalize(ci.ItemCode), cancellationToken);
- 
+
 		// Group by SubDistributor + SubdItemCode + CompanyItemCode + ItemName (description)
 		// to create SubdItems with their UOMs. Including ItemName here is what keeps two
 		// rows with the same code/company but a different description as separate SubdItems
@@ -545,30 +546,32 @@ public sealed class ImportMapItemService
 				ItemName = Normalize(r.SubdItemName)
 			})
 			.ToList();
- 
+
 		var committedGroups = 0;
- 
+
 		foreach (var subdItemGroup in groupedBySubdItem)
 		{
 			var subdItemRows = subdItemGroup.ToList();
 			var firstRow = subdItemRows[0];
 			var subdItemCode = firstRow.SubdItemCode.Trim();
 			int? createdSubdItemId = null;
- 
+
 			try
 			{
 				if (!subdDistributors.TryGetValue(Normalize(firstRow.SubDistributorCode), out var subdDistributor))
 				{
 					throw new InvalidOperationException($"SubDistributor '{firstRow.SubDistributorCode}' was not found during commit.");
 				}
- 
+
 				if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem) || companyItem is null)
 				{
 					throw new InvalidOperationException($"Company item '{firstRow.CompanyItemCode}' was not found during commit.");
 				}
- 
+
+				var requiresStock = !string.IsNullOrWhiteSpace(companyItem.StockUomName);
+
 				await using var groupContext = _contextFactory.CreateDbContext();
- 
+
 				var existingByCode = await groupContext.SubdItems
 					.FirstOrDefaultAsync(
 						si => si.SubDistributorId == subdDistributor.SubDistributorId
@@ -576,12 +579,12 @@ public sealed class ImportMapItemService
 							&& si.CompanyItemId == companyItem.CompanyItemId
 							&& si.ItemName == firstRow.SubdItemName,
 						cancellationToken);
- 
+
 				if (existingByCode != null)
 				{
 					throw new InvalidOperationException($"SubdItem code '{subdItemCode}' with description '{firstRow.SubdItemName}' already exists for SubDistributor '{firstRow.SubDistributorCode}' with Company Item '{firstRow.CompanyItemCode}'.");
 				}
- 
+
 				var subdItem = new SubdItem
 				{
 					SubDistributorId = subdDistributor.SubDistributorId,
@@ -594,49 +597,52 @@ public sealed class ImportMapItemService
 					CreatedBy = currentUserId,
 					UpdatedBy = currentUserId
 				};
- 
+
 				groupContext.SubdItems.Add(subdItem);
 				await groupContext.SaveChangesAsync(cancellationToken);
 				createdSubdItemId = subdItem.SubdItemId;
- 
+
 				var uomEntries = new Dictionary<string, UomEntry>();
 				foreach (var row in subdItemRows)
 				{
-					if (string.IsNullOrWhiteSpace(row.UomName) || !row.Price.HasValue)
+					if (string.IsNullOrWhiteSpace(row.UomName) || (requiresStock && !row.Price.HasValue))
 					{
 						continue;
 					}
- 
+
 					var canonicalUom = CanonicalizeUomName(row.UomName);
 					uomEntries[canonicalUom] = new UomEntry
 					{
 						Conversion = row.Conversion,
 						Price = row.Price,
-							IsStockUom = row.IsStockUom,
+						IsStockUom = row.IsStockUom,
 						// A price from the file is kept as typed, so it is a manual price. A price that was
 						// computed, or where the admin took the suggested value, follows the stock price.
-						IsAutoCalculated = !row.PriceFromFile || row.PriceChoice == PriceChoice.Suggested
+						// Free-goods prices are fixed at 0, so they never follow the stock price.
+						IsAutoCalculated = requiresStock && (!row.PriceFromFile || row.PriceChoice == PriceChoice.Suggested)
 					};
 				}
- 
+
 				EnsureBaseUnitUom(uomEntries);
 
-					if (!uomEntries.Values.Any(e => e.IsStockUom))
-					{
-						throw new InvalidOperationException("Stock UOM is required. Choose one in the import results before committing.");
-					}
- 
-				var uomSaved = await _mapItemService.SaveSubdItemUomPricesAsync(subdItem.SubdItemId, uomEntries, currentUserId, cancellationToken);
+				if (requiresStock && !uomEntries.Values.Any(e => e.IsStockUom))
+				{
+					throw new InvalidOperationException("Stock UOM is required. Choose one in the import results before committing.");
+				}
+
+				var uomSaved = await _mapItemService.SaveSubdItemUomPricesAsync(
+					subdItem.SubdItemId, uomEntries, currentUserId, cancellationToken,
+					requireStockUom: requiresStock);
 				if (!uomSaved)
 				{
 					throw new InvalidOperationException($"Failed to save UOM rows for SubdItem '{subdItem.SubdItemCode}'.");
 				}
- 
+
 				foreach (var row in subdItemRows)
 				{
 					row.SubdItemId = subdItem.SubdItemId;
 				}
- 
+
 				committedGroups++;
 			}
 			catch (Exception ex)
@@ -644,12 +650,12 @@ public sealed class ImportMapItemService
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
 				_logger.LogError(ex, "Failed to commit SubdItem '{SubdItemCode}' for SubDistributor '{SubDistributorCode}': {Message}",
 					subdItemCode, firstRow.SubDistributorCode, baseMsg);
- 
+
 				if (createdSubdItemId.HasValue)
 				{
 					await TryRemoveSubdItemAsync(createdSubdItemId.Value);
 				}
- 
+
 				foreach (var row in subdItemRows)
 				{
 					row.Issues.Add($"Save failed: {baseMsg}");
@@ -657,11 +663,10 @@ public sealed class ImportMapItemService
 				}
 			}
 		}
- 
+
 		return committedGroups;
 	}
 
-	
 	private async Task TryRemoveSubdItemAsync(int subdItemId)
 	{
 		try
@@ -679,7 +684,7 @@ public sealed class ImportMapItemService
 			_logger.LogError(ex, "Could not remove the incomplete SubdItem {SubdItemId} after a failed commit.", subdItemId);
 		}
 	}
- 
+
 	private static async Task<bool> IsAdminAsync(
 		EntrielContext context,
 		int currentUserId,
@@ -691,10 +696,12 @@ public sealed class ImportMapItemService
 			.Select(u => u.Role == "Admin")
 			.FirstOrDefaultAsync(cancellationToken);
 	}
+
 	private static string CanonicalizeUomName(string? uom)
 	{
 		return (uom ?? string.Empty).Trim();
 	}
+
 	private static List<ImportedMapItemRow> ReadMapItemRows(
 		IXLWorksheet worksheet,
 		IReadOnlyDictionary<string, int> headers,
@@ -777,7 +784,7 @@ public sealed class ImportMapItemService
 				conversion,
 				conversionBasedOn,
 				price,
-					string.IsNullOrWhiteSpace(stockUom) ? null : stockUom,
+				string.IsNullOrWhiteSpace(stockUom) ? null : stockUom,
 				rawValues));
 		}
 
@@ -1025,7 +1032,8 @@ public sealed class ImportMapItemService
 
 	private static Dictionary<int, decimal> ComputeMissingPrices(
 		List<ImportedMapItemRow> rows,
-		Dictionary<int, List<string>> rowErrors)
+		Dictionary<int, List<string>> rowErrors,
+		bool pricesRequired)
 	{
 		var computedPricesByRow = new Dictionary<int, decimal>();
 
@@ -1054,9 +1062,12 @@ public sealed class ImportMapItemService
 		}
 
 		var unresolvable = missingPriceRows.Where(row => !row.Conversion.HasValue).ToList();
-		foreach (var row in unresolvable)
+		if (pricesRequired)
 		{
-			AddError(row.RowNumber, $"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
+			foreach (var row in unresolvable)
+			{
+				AddError(row.RowNumber, $"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
+			}
 		}
 
 		var resolvableMissingPriceRows = missingPriceRows.Except(unresolvable).ToList();
@@ -1067,9 +1078,12 @@ public sealed class ImportMapItemService
 
 		if (pricedRows.Count == 0)
 		{
-			foreach (var row in resolvableMissingPriceRows)
+			if (pricesRequired)
 			{
-				AddError(row.RowNumber, "At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
+				foreach (var row in resolvableMissingPriceRows)
+				{
+					AddError(row.RowNumber, "At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
+				}
 			}
 			return computedPricesByRow;
 		}
@@ -1091,7 +1105,7 @@ public sealed class ImportMapItemService
 
 		return computedPricesByRow;
 	}
-		
+
 	private static void EnsureBaseUnitUom(Dictionary<string, UomEntry> uomEntries)
 	{
 		if (uomEntries.Count == 0)
@@ -1254,6 +1268,12 @@ public sealed class ImportMapItemService
 			return (usable.UOM.Trim(), StockUomSource.Explicit, null);
 		}
 
+		// The company item has no Stock UOM (e.g. free goods): the mapped item doesn't need one either.
+		if (string.IsNullOrWhiteSpace(companyStockUomName))
+		{
+			return (null, StockUomSource.None, null);
+		}
+
 		if (!string.IsNullOrWhiteSpace(suggestedName))
 		{
 			var localSuggestedName = suggestedName;
@@ -1275,11 +1295,8 @@ public sealed class ImportMapItemService
 		}
 
 		var firstRow = groupRows[0];
-		var notSet = string.IsNullOrWhiteSpace(companyStockUomName)
-			? $"Stock UOM not set: the company item {firstRow.CompanyItemCode} has no stock UOM, so none can be suggested. " +
-			  "Set it on the company item, or choose one here."
-			: $"Stock UOM not set: none of this item's UOMs matches the company stock UOM '{companyStockUomName}'. Choose one here.";
-		Add(rowWarnings, firstRow.RowNumber, notSet);
+		Add(rowWarnings, firstRow.RowNumber,
+			$"Stock UOM not set: none of this item's UOMs matches the company stock UOM '{companyStockUomName}'. Choose one here.");
 		return (null, StockUomSource.None, null);
 	}
 
@@ -1429,6 +1446,7 @@ public sealed class ImportMapItemService
 	{
 		return value?.Trim().ToLowerInvariant() ?? string.Empty;
 	}
+
 	private static void ApplyRawValues(ImportMapItemRowResult target, IReadOnlyDictionary<string, string?> source)
 	{
 		foreach (var kvp in source)
@@ -1437,19 +1455,18 @@ public sealed class ImportMapItemService
 		}
 	}
 
-private sealed record ImportedMapItemRow(
-    int RowNumber,
-    string SubDistributorCode,
-    string Principal,
-    string CompanyItemCode,
-    string CompanyItemName,
-    string SubdItemCode,
-    string SubdItemName,
-    string UOM,
-    int? Conversion,
-	string? ConversionBasedOn,
-    decimal? Price,
-    string? StockUom,
-    IReadOnlyDictionary<string, string?> RawValues);
-	
+	private sealed record ImportedMapItemRow(
+		int RowNumber,
+		string SubDistributorCode,
+		string Principal,
+		string CompanyItemCode,
+		string CompanyItemName,
+		string SubdItemCode,
+		string SubdItemName,
+		string UOM,
+		int? Conversion,
+		string? ConversionBasedOn,
+		decimal? Price,
+		string? StockUom,
+		IReadOnlyDictionary<string, string?> RawValues);
 }

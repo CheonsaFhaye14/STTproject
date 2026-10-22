@@ -2,7 +2,6 @@ using System.Text.RegularExpressions;
 using Microsoft.JSInterop;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Features.User.MapItem.Validators;
-using STTproject.Models;
 
 namespace STTproject.Features.User.MapItem.Components.Modals;
 
@@ -71,7 +70,7 @@ public partial class AddUom
 
         if (stock is null)
         {
-            if (rows.Any(r => r.Entry.IsActive) && !validationErrors.ContainsKey("stockuom"))
+            if (StockUomRequired && rows.Any(r => r.Entry.IsActive) && !validationErrors.ContainsKey("stockuom"))
             {
                 Add(new UomMessage("stock-missing", UomMessageSeverity.Warning,
                     "Select which unit matches the company's stock-price unit.", null, StockColumn));
@@ -154,16 +153,16 @@ public partial class AddUom
         switch (key)
         {
             case "stockuom":
-            {
-                var stock = CurrentStockEntry;
-                if (stock is null)
                 {
-                    return new UomMessage(key, UomMessageSeverity.Error, text, null, StockColumn);
-                }
+                    var stock = CurrentStockEntry;
+                    if (stock is null)
+                    {
+                        return new UomMessage(key, UomMessageSeverity.Error, text, null, StockColumn);
+                    }
 
-                var field = stock.Conversion is not > 0 ? nameof(UomRow.Conversion) : nameof(UomRow.Price);
-                return new UomMessage(key, UomMessageSeverity.Error, text, CurrentStockName, field);
-            }
+                    var field = stock.Conversion is not > 0 ? nameof(UomRow.Conversion) : nameof(UomRow.Price);
+                    return new UomMessage(key, UomMessageSeverity.Error, text, CurrentStockName, field);
+                }
             case "prices":
                 return new UomMessage(key, UomMessageSeverity.Error, text);
             case "conversion_base":
@@ -203,7 +202,7 @@ public partial class AddUom
 
     private Dictionary<string, string> BuildFinalErrors()
     {
-        var errors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
+        var errors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName, pricesRequired: StockUomRequired);
 
         var baseEntry = workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
         if (baseEntry is not null && workingUomEntries.Values.Any(e =>
@@ -212,13 +211,16 @@ public partial class AddUom
             errors.Remove($"price_{BaseUomName}");
         }
 
-        var stock = CurrentStockEntry;
-        if (stock is null)
-            errors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
-        else if (stock.Conversion is not > 0)
-            errors["stockuom"] = "The stock UOM needs a valid conversion.";
-        else if (!stock.Price.HasValue)
-            errors["stockuom"] = "The stock UOM needs a price.";
+        if (StockUomRequired)
+        {
+            var stock = CurrentStockEntry;
+            if (stock is null)
+                errors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
+            else if (stock.Conversion is not > 0)
+                errors["stockuom"] = "The stock UOM needs a valid conversion.";
+            else if (!stock.Price.HasValue)
+                errors["stockuom"] = "The stock UOM needs a price.";
+        }
 
         foreach (var (name, entry) in workingUomEntries.Where(kv => kv.Value.IsActive))
         {

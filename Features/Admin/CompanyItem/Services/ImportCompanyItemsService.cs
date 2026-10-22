@@ -713,8 +713,11 @@ public sealed class ImportCompanyItemsService
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 
-        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var value) && value > 0)
-            return value;
+        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var value))
+        {
+            var rounded = Math.Round(value, 2, MidpointRounding.AwayFromZero);
+            if (rounded > 0) return rounded;
+        }
 
         row.Issues.Add($"{label} '{text}' is not a valid number.");
         return null;

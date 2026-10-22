@@ -141,7 +141,6 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public CompanyItemRowAction Action { get; set; }
         public string? ExistingStockUomName { get; set; }
         public bool? ExistingIsActive { get; set; }
-        // The item exists with no Stock UOM and the file supplies one: committing fills it in.
         public bool BackfillStockUom { get; set; }
 
         public decimal? ExistingStockPriceRegional { get; set; }

@@ -30,7 +30,10 @@ public partial class SubdItemTable
     [Parameter] public EventCallback<MapSubDistributorItemRow> OnDeleteItem { get; set; }
     [Parameter] public EventCallback OnClearCompanyItemFilter { get; set; }
     [Parameter] public EventCallback<int> OnMapCompanyItemRequested { get; set; }
+    [Parameter] public HashSet<int> CompanyItemsWithStockUom { get; set; } = new();
 
+    private bool CompanyRequiresStockUom(MapSubDistributorItemRow item) =>
+        CompanyItemsWithStockUom.Contains(item.CompanyItemId);
     private string SearchText { get; set; } = string.Empty;
     private SubItemSortOrder SortOrder { get; set; } = SubItemSortOrder.CreatedDateDesc;
     private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.SubItemCode;

@@ -11,7 +11,7 @@ namespace STTproject.Features.User.MapItem.Components.Modals;
 
 public partial class AddUom
 {
-    [Parameter] public string BaseUomName { get; set; } = "PC";    
+    [Parameter] public string BaseUomName { get; set; } = "PC";
     [Parameter] public HashSet<string> InUseUomNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     [Parameter] public bool ShowAddUomModal { get; set; }
     [Parameter] public Dictionary<string, UomEntry> ExistingUomEntries { get; set; } = new();
@@ -24,7 +24,7 @@ public partial class AddUom
     [Parameter] public decimal? ApplicableStockPrice { get; set; }
     [Parameter] public string? PriceListLabel { get; set; }
     [Parameter] public string? ReferenceNote { get; set; }
-
+    private bool StockUomRequired => !string.IsNullOrWhiteSpace(CompanyStockUomName);
     private bool stockUomChosenByUser;
     private string? suggestedStockUom;
     private string? suggestionReason;
@@ -90,6 +90,13 @@ public partial class AddUom
         foreach (var e in workingUomEntries.Values.Where(e => !e.IsActive)) e.IsStockUom = false;
 
         if (stockUomChosenByUser && CurrentStockName is null) stockUomChosenByUser = false;
+
+        if (!StockUomRequired)
+        {
+            suggestedStockUom = null;
+            suggestionReason = null;
+            return;
+        }
 
         var s = StockUomSuggester.Suggest(CompanyStockUomName, workingUomEntries);
         suggestedStockUom = s?.UomName;
@@ -229,8 +236,8 @@ public partial class AddUom
             return (CustomUom ?? string.Empty).Trim();
         return selectedUomOption;
     }
-        
-   private async Task AddUomEntryAsync(bool autoCalc = false)
+
+    private async Task AddUomEntryAsync(bool autoCalc = false)
     {
         var uomName = selectedUomOption == "__custom"
             ? (CustomUom ?? string.Empty).Trim()
@@ -265,7 +272,7 @@ public partial class AddUom
         }
 
         validationErrors = AddUomValidator.ValidateUomEntry(uomName, conversionInput, pcConversion, priceInput, workingUomEntries, BaseUomName);
-        
+
         if (validationErrors.Any())
         {
             return;
@@ -384,7 +391,7 @@ public partial class AddUom
                 + (!row.Entry.IsActive ? " (Inactive)" : string.Empty);
         }
 
-        return null; 
+        return null;
     }
 
     private async Task HandleUomCellChangedAsync((UomRow Row, string Column) args)
@@ -499,14 +506,14 @@ public partial class AddUom
 
         if (IsUomInUse(uomName))
         {
-            entry.IsActive = false; 
+            entry.IsActive = false;
             stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
             RefreshStockUomSuggestion();
             entry.IsStockUom = false;
         }
         else
         {
-            workingUomEntries.Remove(uomName); 
+            workingUomEntries.Remove(uomName);
         }
         stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
         RefreshStockUomSuggestion();
@@ -548,7 +555,7 @@ public partial class AddUom
         showReactivateConflictModal = false;
         reactivateConflictMessage = string.Empty;
     }
-    
+
     private async Task AddAsync()
     {
         var baseEntry = workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
@@ -565,14 +572,19 @@ public partial class AddUom
             }
         }
 
-        var finalErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName);
-        var stock = CurrentStockEntry;
-        if (stock is null)
-            finalErrors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
-        else if (stock.Conversion is not > 0)
-            finalErrors["stockuom"] = "The stock UOM needs a valid conversion.";
-        else if (!stock.Price.HasValue)
-            finalErrors["stockuom"] = "The stock UOM needs a price.";
+        var finalErrors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName, pricesRequired: StockUomRequired);
+
+        if (StockUomRequired)
+        {
+            var stock = CurrentStockEntry;
+            if (stock is null)
+                finalErrors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
+            else if (stock.Conversion is not > 0)
+                finalErrors["stockuom"] = "The stock UOM needs a valid conversion.";
+            else if (!stock.Price.HasValue)
+                finalErrors["stockuom"] = "The stock UOM needs a price.";
+        }
+
         var carriedRowErrors = validationErrors
             .Where(kv => kv.Key.StartsWith("uomname_") || kv.Key.StartsWith("conversion_"))
             .Where(kv => !finalErrors.ContainsKey(kv.Key));
@@ -691,7 +703,7 @@ public partial class AddUom
             await uomSelectRef.FocusAsync();
         }
     }
-        
+
     private async Task HandlePriceKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
@@ -732,7 +744,7 @@ public partial class AddUom
         }
 
     }
-    
+
     private void ApplyDraftState(AddUomModalDraftState draft)
     {
         workingUomEntries = new(StringComparer.OrdinalIgnoreCase);
@@ -874,11 +886,11 @@ public partial class AddUom
         IsConversionNotSet = false;
         await InvokeAsync(StateHasChanged);
     }
-private List<string> ConversionBasedOnOptions =>
-    workingUomEntries.Keys
-        .Where(k => k != GetSelectedUomName() && workingUomEntries[k]?.IsActive == true)
-        .OrderBy(k => k)
-        .ToList();
+    private List<string> ConversionBasedOnOptions =>
+        workingUomEntries.Keys
+            .Where(k => k != GetSelectedUomName() && workingUomEntries[k]?.IsActive == true)
+            .OrderBy(k => k)
+            .ToList();
     private async Task HandleRowConversionChangedAsync(string uomName)
     {
         if (!workingUomEntries.TryGetValue(uomName, out var entry))
@@ -949,20 +961,20 @@ private List<string> ConversionBasedOnOptions =>
     }
 
     private string getLabelForConversionBased()
-        {
-            return $"How many {ConversionBasedOnInput} per {GetSelectedUomName() ?? "unit"}?";
-        }
+    {
+        return $"How many {ConversionBasedOnInput} per {GetSelectedUomName() ?? "unit"}?";
+    }
     private async Task SetRowConversionAsync(string uomName)
+    {
+        if (workingUomEntries.TryGetValue(uomName, out var entry))
         {
-            if (workingUomEntries.TryGetValue(uomName, out var entry))
-            {
-                entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
-            }
-
-            await RecalculatePricesAsync();
-            await PersistDraftAsync();
-            await InvokeAsync(StateHasChanged);
+            entry.IsAutoCalculated = entry.IsAutoCalculated && entry.Conversion is null;
         }
+
+        await RecalculatePricesAsync();
+        await PersistDraftAsync();
+        await InvokeAsync(StateHasChanged);
+    }
     private string getModalSubtitle()
     {
         if (!string.IsNullOrWhiteSpace(ItemCode) && !string.IsNullOrWhiteSpace(ItemName))
@@ -984,7 +996,7 @@ private List<string> ConversionBasedOnOptions =>
     }
     private async Task OnUomSelectChanged(string value)
     {
-        SelectedUomOption = value; 
+        SelectedUomOption = value;
         await PersistDraftAsync();
     }
 
@@ -1003,7 +1015,7 @@ private List<string> ConversionBasedOnOptions =>
             2, MidpointRounding.AwayFromZero);
 
         var diff = actual - expected;
-        return Math.Abs(diff) <= 0.01m ? null : (expected, diff);  
+        return Math.Abs(diff) <= 0.01m ? null : (expected, diff);
     }
 
     private bool HasPriceGaps => UomRows.Any(r => PriceGap(r) is not null);

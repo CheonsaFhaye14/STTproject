@@ -18,13 +18,11 @@
 @using STTproject.Shared.Components.Buttons
 @inject STTproject.Features.User.MapItem.Services.DownloadTemplateService downloadTemplateService
 
-<LoadingOverlay Show="isPageLoading " Title="Loading all data..." Subtitle="Please wait while we load all the data."
-                      IconClass="fa-solid fa-sitemap" />
+<LoadingOverlay Show="isPageLoading" Title="Loading all data..." Subtitle="Please wait while we load all the data."
+                IconClass="fa-solid fa-sitemap" />
 
-<LoadingOverlay Show="isDownloadingTemplate"
-                      Title="Downloading Excel Template…"
-                      Subtitle="Please wait while we prepare the template for download."
-                      IconClass="fa-solid fa-upload" />
+<LoadingOverlay Show="isDownloadingTemplate" Title="Downloading Excel Template…"
+                Subtitle="Please wait while we prepare the template for download." IconClass="fa-solid fa-upload" />
 
 <div>
     <div class="top-header-row">
@@ -45,14 +43,22 @@
 
         <!-- DOWNLOAD TEMPLATE + IMPORT -->
         <div class="top-buttons">
-            <Button Variant="ButtonVariant.Primary" Title="Download Template" OnClick="@(() => showDownloadTemplateModal = true)">
+            <Button Variant="ButtonVariant.Primary" Title="Download Template"
+                    OnClick="@(() => showDownloadTemplateModal = true)">
                 <IconContent>
-                    <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z" /></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                        d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z" />
+                    </svg>
                 </IconContent>
             </Button>
-            <Button Variant="ButtonVariant.Primary" Title="Import Excel" OnClick="@(() => showImportMapItemModal = true)">
+            <Button Variant="ButtonVariant.Primary" Title="Import Excel"
+                    OnClick="@(() => showImportMapItemModal = true)">
                 <IconContent>
-                    <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z" /></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                        d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z" />
+                    </svg>
                 </IconContent>
             </Button>
         </div>
@@ -74,8 +80,7 @@
                         GetUnitOfMeasureSummary="GetUnitOfMeasureSummary" OnFormFieldBlur="HandleFormFieldBlur"
                         OnItemCodeKeyDown="HandleItemCodeKeyDown" OnItemNameKeyDown="HandleItemNameKeyDown"
                         OnPrincipalKeyDown="HandlePrincipalKeyDown" OnOpenAddUomModal="OpenAddUomModal" OnSaveItem="SaveItemAsync"
-                        OnClearDraftRequested="ShowClearConfirmModal" OnCancelEdit="CancelEditAsync" 
-                        />
+                        OnClearDraftRequested="ShowClearConfirmModal" OnCancelEdit="CancelEditAsync" />
 
     <!-- DASHBOARD PANELS -->
     <div class="dashboard">
@@ -93,7 +98,8 @@
                            SelectedCompanyItemIdForFilterChanged="@(value => selectedCompanyItemIdForFilter = value)"
                            OnCompanyItemRowClicked="OnCompanyItemRowClicked" OnClearCompanyItemFilter="ClearCompanyItemFilterAsync" />
         <SubdItemTable IsSubDistributorSelected="@IsSubDistributorSelected" CompanyItems="@companyItems"
-                       SubdItems="@filteredSubDistributorItems" SelectedCompanyItemIdForFilter="@selectedCompanyItemIdForFilter"
+                       CompanyItemsWithStockUom="@companyItemsWithStockUom" SubdItems="@filteredSubDistributorItems"
+                       SelectedCompanyItemIdForFilter="@selectedCompanyItemIdForFilter"
                        SelectedCompanyItemIdForFilterChanged="@(value => selectedCompanyItemIdForFilter = value)"
                        OnEditItem="BeginEditItem" OnDeleteItem="DeleteItemAsync"
                        OnClearCompanyItemFilter="ClearCompanyItemFilterAsync"
@@ -103,8 +109,10 @@
     @if (showConfirmModal)
     {
         <ConfirmModal Show="showConfirmModal" Title="@modalTitle" Message="@modalMessage" OnYes="ConfirmAction"
-                      OnNo="CancelConfirmation" ErrorMessage="@itemActionErrorMessage" ShowError="@(!string.IsNullOrWhiteSpace(itemActionErrorMessage))" OnErrorConfirm="CancelConfirmation">
-            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary) && string.IsNullOrWhiteSpace(itemActionErrorMessage))
+                      OnNo="CancelConfirmation" ErrorMessage="@itemActionErrorMessage"
+                      ShowError="@(!string.IsNullOrWhiteSpace(itemActionErrorMessage))" OnErrorConfirm="CancelConfirmation">
+            @if (!string.IsNullOrWhiteSpace(confirmedCompanyItemSummary) &&
+        string.IsNullOrWhiteSpace(itemActionErrorMessage))
             {
                 <div class="modal-help">
                     <div><strong>SKU:</strong> @itemCode</div>
@@ -130,9 +138,10 @@
                       OnDownload="HandleDownloadTemplateSubmit" OnCancel="HandleDownloadTemplateCancel" />
     <AddUom ShowAddUomModal="@showAddUomModal" ExistingUomEntries="uomEntries" BaseUomName="@BaseUomName"
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
-            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" InUseUomNames="@inUseUomNames" CompanyStockUomName="@modalStockUomName" ApplicableStockPrice="@modalApplicableStockPrice" PriceListLabel="@modalPriceListLabel" ReferenceNote="@modalReferenceNote"/>
+            ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" InUseUomNames="@inUseUomNames"
+            CompanyStockUomName="@modalStockUomName" ApplicableStockPrice="@modalApplicableStockPrice"
+            PriceListLabel="@modalPriceListLabel" ReferenceNote="@modalReferenceNote" />
 
-    <ImportMapItems Show="showImportMapItemModal"
-               OnClose="@(() => showImportMapItemModal = false)"
-               OnImportCompleted="HandleImportMapItemCompletedAsync" />
+    <ImportMapItems Show="showImportMapItemModal" OnClose="@(() => showImportMapItemModal = false)"
+                    OnImportCompleted="HandleImportMapItemCompletedAsync" />
 </div>

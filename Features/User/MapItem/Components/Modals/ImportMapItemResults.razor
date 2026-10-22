@@ -300,7 +300,7 @@
                                         var first = card.First;
                                         var displayName = first == null
                                         ? "[Orphan]"
-                                        : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -       {first.CompanyItemName}");
+                                        : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                  {first.CompanyItemName}");
                                         var groupKey = card.Key;
                                         var isWarn = card.IsWarningOnly;
                                         var isExpanded = expandedGroups.Contains(groupKey);
@@ -382,7 +382,7 @@
                                                         <span>@w</span>
                                                     </div>
                                                 }
-                                                @if (!card.Group.IsSaved)
+                                                @if (!card.Group.IsSaved && (card.Group.RequiresStockUom || card.Group.HasStockUom || !string.IsNullOrWhiteSpace(card.Group.FileStockUom)))
                                                 {
                                                     var fileUom = card.Group.FileStockUom;
                                                     var suggestedUom = card.Group.SuggestedStockUom;
@@ -408,10 +408,10 @@
                                                         <div class="stk-line">
                                                             <span><span class="stk-l">From
                                                                 file</span><strong>@(string.IsNullOrWhiteSpace(fileUom) ? "Not provided" :
-                                                                                                                                                                            fileUom)</strong></span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                            fileUom)</strong></span>
                                                                 <span><span
                                                                     class="stk-l">Suggested</span><strong>@(string.IsNullOrWhiteSpace(suggestedUom)
-                                                                                                    ? "None" : suggestedUom)</strong></span>
+                                                                                                                    ? "None" : suggestedUom)</strong></span>
                                                                     <span><span class="stk-l">Using now</span><strong>@(card.Group.StockUomName ?? "Not set")</strong></span>
                                                                     @if (card.Group.ApplicableStockPrice.HasValue)
                                                                     {
@@ -527,7 +527,7 @@
                                                                 var first = card.First;
                                                                 var displayName = first == null
                                                                 ? "[Orphan]"
-                                                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -          {first.CompanyItemName}");
+                                                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                    {first.CompanyItemName}");
                                                                 var groupErrorCount = GetGroupErrorRowCount(card.Group);
                                                                 var grouped = GetGroupedIssues(card);
                                                             }
@@ -703,7 +703,7 @@
     {
         public bool HasErrors => (Group.Issues?.Count ?? 0) > 0 || Group.Rows.Any(r => r.Issues.Count > 0);
         public bool IsWarningOnly => !HasErrors && Warnings.Count > 0;
-        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved && Group.HasStockUom &&
+        public bool CanSelect => First != null && !HasErrors && !Group.IsSaved && Group.StockUomReady &&
         Group.PendingPriceDecisions == 0;
     }
 
@@ -1193,7 +1193,6 @@
     private const string BulkStockSuggested = "stock-suggested";
     private const string BulkPriceImported = "price-imported";
     private const string BulkPriceSuggested = "price-suggested";
-
     private static bool IsStockUomType(string? type) => type is "Stock UOM Suggested" or "Stock UOM Doesn't Match";
     private static bool IsPriceType(string? type) => type is "Stock Price Differs" or "UOM Price Differs";
     private static bool IsStockUomWarning(string w) => w.StartsWith("Stock UOM", StringComparison.OrdinalIgnoreCase);
@@ -1289,7 +1288,7 @@
     // Resolving a warning never selects an item. Re-opening one (or changing what it depends on) deselects it.
     private void DropSelectionIfNotReady(PreparedItemGroup g)
     {
-        if (g.HasStockUom && g.PendingPriceDecisions == 0) return;
+        if (g.StockUomReady && g.PendingPriceDecisions == 0) return;
 
         g.Selected = false;
         var first = g.Rows.FirstOrDefault();
@@ -1327,10 +1326,12 @@
     {
         StockUomSource.Explicit => "(From your file)",
         StockUomSource.Suggested => string.IsNullOrWhiteSpace(group.StockUomReason)
-        ? "(Suggested. Confirm to accept it, or pick another)"
-        : $"(Suggested: {group.StockUomReason}. Confirm to accept it, or pick another)",
+            ? "(Suggested. Confirm to accept it, or pick another)"
+            : $"(Suggested: {group.StockUomReason}. Confirm to accept it, or pick another)",
         StockUomSource.Chosen => "(Chosen by you)",
-        _ => "(Required. Pick one to be able to commit this item)"
+        _ => group.RequiresStockUom
+            ? "(Required. Pick one to be able to commit this item)"
+            : "(Optional)"
     };
 
     // ── Selection ─────────────────────────────────────────────────────────

@@ -54,11 +54,12 @@ public static class AddUomValidator
 
     public static Dictionary<string, string> ValidateFinalUomEntries(
         Dictionary<string, UomEntry> entries,
-        string baseUomName)
+        string baseUomName,
+        bool pricesRequired = true)
     {
         var errors = new Dictionary<string, string>();
 
-        if (!entries.Any(x => x.Value.Price.HasValue))
+        if (pricesRequired && !entries.Any(x => x.Value.Price.HasValue))
         {
             errors["prices"] = "At least one unit of measure must have a price set for calculation.";
         }
@@ -91,13 +92,8 @@ public static class AddUomValidator
             }
         }
 
-        foreach (var kv in entries)
-        {
-            if (!kv.Value.IsActive) continue;
-
-        }
-
-        if (entries.TryGetValue(baseUomName, out var baseUnitEntry) &&
+        if (pricesRequired &&
+            entries.TryGetValue(baseUomName, out var baseUnitEntry) &&
             (!baseUnitEntry.Price.HasValue || baseUnitEntry.Price <= 0))
         {
             errors[$"price_{baseUomName}"] = "Base unit price must be provided or derivable from another priced unit.";
@@ -114,13 +110,13 @@ public static class AddUomValidator
 
         return errors;
     }
-    
+
     private static bool IsBaseUnit(string? uom, string baseUomName)
     {
         return string.Equals((uom ?? string.Empty).Trim(), baseUomName.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    public static Dictionary<string, string> ValidateUomRename( string oldName, string newName, Dictionary<string, UomEntry> existingEntries, string baseUomName)
+    public static Dictionary<string, string> ValidateUomRename(string oldName, string newName, Dictionary<string, UomEntry> existingEntries, string baseUomName)
     {
         var errors = new Dictionary<string, string>();
 

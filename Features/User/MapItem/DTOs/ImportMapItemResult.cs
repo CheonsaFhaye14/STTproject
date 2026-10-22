@@ -27,13 +27,13 @@ public sealed class ImportMapItemResult
 	public List<ImportMapItemRowResult> Rows { get; } = new();
 	public List<PreparedItemGroup> PreparedGroups { get; } = new();
 	public List<ImportMapItemIssue> Issues { get; } = new();
-    public List<string> OriginalHeaders { get; set; } = new();
+	public List<string> OriginalHeaders { get; set; } = new();
 
 	public int SuccessCount => Rows.Count(row => row.IsSuccess);
 
 	public int ErrorCount => Rows.Count(row => !row.IsSuccess);
 
-	public bool HasRows => Rows.Count > 0; 
+	public bool HasRows => Rows.Count > 0;
 
 	public bool HasIssues => Issues.Count > 0;
 
@@ -78,7 +78,7 @@ public sealed class ImportMapItemRowResult
 	public int? SubdItemId { get; set; }
 	public int? ItemsUomId { get; set; }
 	public List<string> Issues { get; } = new();
-	public List<string> Warnings { get; } = new(); 
+	public List<string> Warnings { get; } = new();
 	public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -103,6 +103,12 @@ public sealed class PreparedItemGroup
 	public string? CompanyStockUomName { get; set; }
 	public decimal? ApplicableStockPrice { get; set; }
 	public string? PriceListLabel { get; set; }
+
+	/// <summary>The company item has a Stock UOM, so this mapped item needs one too.</summary>
+	public bool RequiresStockUom => !string.IsNullOrWhiteSpace(CompanyStockUomName);
+
+	/// <summary>True when the stock UOM requirement is met, or there is no requirement.</summary>
+	public bool StockUomReady => !RequiresStockUom || HasStockUom;
 
 	private const decimal PriceTolerance = 0.01m;
 
@@ -138,6 +144,9 @@ public sealed class PreparedItemGroup
 			row.Price = row.ImportedPrice;
 			row.Warnings.RemoveAll(IsPriceWarning);
 		}
+
+		// Free goods (company item has no Stock UOM) are unpriced by convention (0.00): nothing to compare.
+		if (!RequiresStockUom) return;
 
 		void Prompt(ImportMapItemRowResult row, decimal suggested, string warning)
 		{

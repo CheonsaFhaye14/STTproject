@@ -27,7 +27,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             await LoadMapTablesAsync();
         }
         private HashSet<string> inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
-        private string BaseUomName => "Piece"; 
+        private string BaseUomName => "Piece";
         private bool isPageLoading = true;
         private bool isDownloadingTemplate = false;
         private bool showAddUomModal = false;
@@ -45,7 +45,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private (decimal? Price, string? List, string? Note) ResolveStockReference(CompanyItemDropdownItem? ci)
         {
             if (ci is null) return (null, null, null);
-
+            if (string.IsNullOrWhiteSpace(ci.StockUomName)) return (null, null, null);
             var list = subdList.FirstOrDefault(s => s.SubDistributorId == selectedSubdId)?.PriceListType;
             var structure = PricingStructureResolver.Resolve(ci.StockPrice, ci.StockPriceRegional, ci.StockPriceNational);
 
@@ -92,8 +92,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             try
             {
                 isDownloadingTemplate = true;
-                    await InvokeAsync(StateHasChanged);
-                    await Task.Yield();
+                await InvokeAsync(StateHasChanged);
+                await Task.Yield();
                 var templateData = await mapItemService.GetTemplateDataAsync(filters.SubdistributorId, filters.Principal);
                 await downloadTemplateService.GenerateAndDownloadExcelAsync(templateData);
             }
@@ -105,10 +105,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 showErrorModal = true;
             }
             finally
-             {
+            {
                 isDownloadingTemplate = false;
                 await InvokeAsync(StateHasChanged);
-             }
+            }
         }
 
         private Task HandleDownloadTemplateCancel()
@@ -117,37 +117,39 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             return Task.CompletedTask;
         }
 
-    private async Task OpenAddUomModal()
-    {
-        if (selectedCompanyItemId.HasValue)
+        private async Task OpenAddUomModal()
         {
-            var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
-            modalCompanyItemCode = ci?.ItemCode;
-            modalCompanyItemName = ci?.ItemName;
-            modalStockUomName = ci?.StockUomName;
-            (modalApplicableStockPrice, modalPriceListLabel, modalReferenceNote) = ResolveStockReference(ci);
-        }
-        else
-        {
-            modalCompanyItemCode = null;
-            modalCompanyItemName = null;
-            modalStockUomName = null;
-            modalApplicableStockPrice = null;
-        }
+            if (selectedCompanyItemId.HasValue)
+            {
+                var ci = companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value);
+                modalCompanyItemCode = ci?.ItemCode;
+                modalCompanyItemName = ci?.ItemName;
+                modalStockUomName = ci?.StockUomName;
+                (modalApplicableStockPrice, modalPriceListLabel, modalReferenceNote) = ResolveStockReference(ci);
+            }
+            else
+            {
+                modalCompanyItemCode = null;
+                modalCompanyItemName = null;
+                modalStockUomName = null;
+                modalApplicableStockPrice = null;
+                modalPriceListLabel = null;
+                modalReferenceNote = null;
+            }
 
-        if (editingSubdItemId.HasValue)
-        {
-            var usedNames = await mapItemService.GetInvoiceUsedUomNamesAsync(editingSubdItemId.Value);
-            inUseUomNames = usedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        }
-        else
-        {
-            inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
-        }
+            if (editingSubdItemId.HasValue)
+            {
+                var usedNames = await mapItemService.GetInvoiceUsedUomNamesAsync(editingSubdItemId.Value);
+                inUseUomNames = usedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+            else
+            {
+                inUseUomNames = new(StringComparer.OrdinalIgnoreCase);
+            }
 
-        showAddUomModal = true;
-        _ = PersistDraftAsync();
-    }
+            showAddUomModal = true;
+            _ = PersistDraftAsync();
+        }
 
         private Task CloseAddUomModalAsync()
         {
@@ -181,7 +183,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         {
             var userId = userContext.UserId ?? 0;
             var companyItemId = selectedCompanyItemId ?? 0;
-            var subdItemKey = editingSubdItemId ?? 0; 
+            var subdItemKey = editingSubdItemId ?? 0;
             return $"mapitem-add-uom-draft:{userId}:{selectedSubdId}:{companyItemId}:{subdItemKey}";
         }
         private string GetLastSelectedSubdStorageKey()
@@ -676,6 +678,11 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             companyItemsForDropdown = await mapItemService.GetCompanyItemsForDropdownAsync(
                 userContext.UserId.Value, selectedSubdId);
 
+            companyItemsWithStockUom = companyItemsForDropdown
+                .Where(i => !string.IsNullOrWhiteSpace(i.StockUomName))
+                .Select(i => i.CompanyItemId)
+                .ToHashSet();
+
             principals = await mapItemService.GetMapItemPrincipalsAsync(userContext.UserId.Value, selectedSubdId);
             var companyRows = await mapItemService.GetMapCompanyItemsAsync(
                 userContext.UserId.Value,
@@ -761,97 +768,99 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             }
         }
 
-    private Task ValidateFormAsync()
-    {
-        return ValidateFormInternalAsync();
-    }
-
-    private async Task ValidateFormInternalAsync()
-    {
-        validationErrors = await MapItemValidation.ValidateFormAsync(
-            editingSubdItemId,
-            itemCode,
-            itemName,
-            selectedCompanyItemId,
-            uomEntries.Any(),
-            async () => await IsExactDuplicateMappingAsync());
-    }
-
-    private async Task<bool> IsExactDuplicateMappingAsync()
-    {
-        if (!IsSubDistributorSelected
-            || string.IsNullOrWhiteSpace(itemCode)
-            || string.IsNullOrWhiteSpace(itemName)
-            || !selectedCompanyItemId.HasValue)
+        private Task ValidateFormAsync()
         {
-            return false;
+            return ValidateFormInternalAsync();
         }
 
-        var candidates = subDistributorItems
-            .Where(x => x.SubdItemId != (editingSubdItemId ?? 0))
-            .Where(x => string.Equals(x.SubItemCode, itemCode, StringComparison.OrdinalIgnoreCase))
-            .Where(x => string.Equals(x.Description, itemName, StringComparison.OrdinalIgnoreCase))
-            .Where(x => x.CompanyItemId == selectedCompanyItemId.Value)
-            .ToList();
-
-        if (candidates.Count == 0)
+        private async Task ValidateFormInternalAsync()
         {
-            return false;
+            validationErrors = await MapItemValidation.ValidateFormAsync(
+                editingSubdItemId,
+                itemCode,
+                itemName,
+                selectedCompanyItemId,
+                uomEntries.Any(),
+                async () => await IsExactDuplicateMappingAsync());
         }
 
-        foreach (var candidate in candidates)
+        private async Task<bool> IsExactDuplicateMappingAsync()
         {
-            var existingUoms = await mapItemService.GetSubdItemUomsAsync(candidate.SubdItemId);
-            if (UomEntriesMatchExactly(existingUoms, uomEntries))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool UomEntriesMatchExactly(IEnumerable<ItemsUom>? existingUoms, Dictionary<string, UomEntry> currentEntries)
-    {
-        var existingList = existingUoms?.ToList() ?? new List<ItemsUom>();
-
-        var existingNormalized = existingList
-            .ToDictionary(
-                u => NormalizeBaseUomName(u.UomName),
-                u => (Conversion: u.ConversionToBase, Price: u.Price),
-                StringComparer.OrdinalIgnoreCase);
-
-        var currentNormalized = currentEntries
-            .Where(e => e.Value.Price.HasValue)
-            .ToDictionary(
-                e => NormalizeBaseUomName(e.Key),
-                e => (Conversion: e.Value.Conversion, Price: e.Value.Price!.Value),
-                StringComparer.OrdinalIgnoreCase);
-
-        if (existingNormalized.Count != currentNormalized.Count)
-        {
-            return false;
-        }
-        foreach (var (uomName, existing) in existingNormalized)
-        {
-            if (!currentNormalized.TryGetValue(uomName, out var current))
+            if (!IsSubDistributorSelected
+                || string.IsNullOrWhiteSpace(itemCode)
+                || string.IsNullOrWhiteSpace(itemName)
+                || !selectedCompanyItemId.HasValue)
             {
                 return false;
             }
 
-            if (existing.Conversion != current.Conversion || existing.Price != current.Price)
+            var candidates = subDistributorItems
+                .Where(x => x.SubdItemId != (editingSubdItemId ?? 0))
+                .Where(x => string.Equals(x.SubItemCode, itemCode, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.Equals(x.Description, itemName, StringComparison.OrdinalIgnoreCase))
+                .Where(x => x.CompanyItemId == selectedCompanyItemId.Value)
+                .ToList();
+
+            if (candidates.Count == 0)
             {
                 return false;
             }
+
+            foreach (var candidate in candidates)
+            {
+                var existingUoms = await mapItemService.GetSubdItemUomsAsync(candidate.SubdItemId);
+                if (UomEntriesMatchExactly(existingUoms, uomEntries))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
-        return true;
-    }
+        private bool SelectedCompanyItemRequiresStockUom =>
+            selectedCompanyItemId.HasValue &&
+            !string.IsNullOrWhiteSpace(
+                companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == selectedCompanyItemId.Value)?.StockUomName);
+        private bool UomEntriesMatchExactly(IEnumerable<ItemsUom>? existingUoms, Dictionary<string, UomEntry> currentEntries)
+        {
+            var existingList = existingUoms?.ToList() ?? new List<ItemsUom>();
+
+            var existingNormalized = existingList
+                .ToDictionary(
+                    u => NormalizeBaseUomName(u.UomName),
+                    u => (Conversion: u.ConversionToBase, Price: u.Price),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var currentNormalized = currentEntries
+                .ToDictionary(
+                    e => NormalizeBaseUomName(e.Key),
+                    e => (Conversion: e.Value.Conversion, Price: e.Value.Price ?? 0m),
+                    StringComparer.OrdinalIgnoreCase);
+
+            if (existingNormalized.Count != currentNormalized.Count)
+            {
+                return false;
+            }
+            foreach (var (uomName, existing) in existingNormalized)
+            {
+                if (!currentNormalized.TryGetValue(uomName, out var current))
+                {
+                    return false;
+                }
+
+                if (existing.Conversion != current.Conversion || existing.Price != current.Price)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         private Task HandleFormFieldBlur(FocusEventArgs _)
         {
             principalEnterPrimed = false;
             return ValidateFormAsync();
         }
-
+        private HashSet<int> companyItemsWithStockUom = new();
         private async Task OnCompanyItemsFilterStringChanged()
         {
             if (Enum.TryParse<CompanyItemFilterMode>(selectedCompanyItemsFilterString, out var filterMode))
@@ -973,7 +982,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 mapTablesLoadLock.Release();
             }
         }
-        
+
         private void ClearCompanyItemSelection()
         {
             selectedCompanyItemId = null;
@@ -1018,189 +1027,188 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 }));
         }
 
-    private async Task SaveItemAsync()
-    {
-        await ValidateFormAsync();
-
-        if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+        private async Task SaveItemAsync()
         {
-            return;
-        }
+            await ValidateFormAsync();
 
-        if (!uomEntries.Any() || !uomEntries.Any(x => x.Value.Price.HasValue))
-        {
+            if (validationErrors.Any() || !userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+            {
+                return;
+            }
+
+            if (!uomEntries.Any() || (SelectedCompanyItemRequiresStockUom && !uomEntries.Any(x => x.Value.Price.HasValue)))
+            {
+                modalTitle = IsEditingItem ? "Update Item" : "Add Item";
+                modalMessage = string.Empty;
+                pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
+                confirmedCompanyItemSummary = GetSelectedCompanyItemName();
+                itemActionErrorMessage = uomEntries.Any() ? "At least one UOM with a price must be added before saving this item." : "At least one UOM must be added before saving this item.";
+                showConfirmModal = true;
+                await PersistDraftAsync();
+                return;
+            }
+
             modalTitle = IsEditingItem ? "Update Item" : "Add Item";
-            modalMessage = string.Empty;
+            modalMessage = IsEditingItem
+                ? $"Do you want to update '{itemCode}'?"
+                : $"Do you want to add '{itemCode}'?";
             pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
             confirmedCompanyItemSummary = GetSelectedCompanyItemName();
-            itemActionErrorMessage = "At least one UOM with a price must be added before saving this item.";
+            itemActionErrorMessage = null;
             showConfirmModal = true;
             await PersistDraftAsync();
-            return;
         }
 
-        modalTitle = IsEditingItem ? "Update Item" : "Add Item";
-        modalMessage = IsEditingItem
-            ? $"Do you want to update '{itemCode}'?"
-            : $"Do you want to add '{itemCode}'?";
-        pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
-        confirmedCompanyItemSummary = GetSelectedCompanyItemName();
-        itemActionErrorMessage = null;
-        showConfirmModal = true;
-        await PersistDraftAsync();
-    }
-
-    private async Task PersistItemAsync()
-    {
-        await mapTablesLoadLock.WaitAsync();
-        try
+        private async Task PersistItemAsync()
         {
-            if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
+            await mapTablesLoadLock.WaitAsync();
+            try
             {
-                return;
-            }
-
-            var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
-            Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
-
-            var item = new SubdItem
-            {
-                SubdItemId = editingSubdItemId ?? 0,
-                SubdItemCode = itemCode ?? string.Empty,
-                ItemName = itemName ?? string.Empty,
-                SubDistributorId = selectedSubdId,
-                CompanyItemId = selectedCompanyItemId.Value,
-                IsActive = true,
-                CreatedDate = DateTime.UtcNow,
-                CreatedBy = userContext.UserId.Value,
-                UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
-                UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
-            };
-
-            if (IsEditingItem)
-            {
-                var updateResult = await mapItemService.UpdateSubdItemAsync(item);
-                if (updateResult.IsUpdated)
+                if (!userContext.UserId.HasValue || !selectedCompanyItemId.HasValue)
                 {
-                    try
+                    return;
+                }
+
+                var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
+                Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+
+                var item = new SubdItem
+                {
+                    SubdItemId = editingSubdItemId ?? 0,
+                    SubdItemCode = itemCode ?? string.Empty,
+                    ItemName = itemName ?? string.Empty,
+                    SubDistributorId = selectedSubdId,
+                    CompanyItemId = selectedCompanyItemId.Value,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                    CreatedBy = userContext.UserId.Value,
+                    UpdatedBy = IsEditingItem ? userContext.UserId.Value : null,
+                    UpdatedDate = IsEditingItem ? DateTime.UtcNow : null
+                };
+
+                if (IsEditingItem)
+                {
+                    var updateResult = await mapItemService.UpdateSubdItemAsync(item);
+                    if (updateResult.IsUpdated)
                     {
-                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(editingSubdItemId ?? 0,
-                            uomEntries, userContext.UserId ?? 0);
-                        if (!saved)
+                        try
                         {
-                            itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
-                            showErrorModal = true;
-                            return; 
+                            var saved = await mapItemService.SaveSubdItemUomPricesAsync(editingSubdItemId ?? 0, uomEntries, userContext.UserId ?? 0, requireStockUom: SelectedCompanyItemRequiresStockUom);
+                            if (!saved)
+                            {
+                                itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
+                                showErrorModal = true;
+                                return;
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
-                        showErrorModal = true;
-                        return;
-                    }
-    
-                    ResetItemForm();
-                    await _LoadMapTablesAsyncInternal();
-                    await ClearDraftAsync();
-                }
-                else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
-                {
-                    itemActionErrorMessage = updateResult.ErrorMessage;
-                    showErrorModal = true;
-                }
-
-                return;
-            }
-
-            // Plain insert path — same wrapping
-            var success = await mapItemService.AddSubdItemAsync(item);
-
-            if (success)
-            {
-                if (item.SubdItemId > 0)
-                {
-                    try
-                    {
-                        var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0);
-                        if (!saved)
+                        catch (Exception ex)
                         {
-                            itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
+                            itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
+                            showErrorModal = true;
+                            return;
+                        }
+
+                        ResetItemForm();
+                        await _LoadMapTablesAsyncInternal();
+                        await ClearDraftAsync();
+                    }
+                    else if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+                    {
+                        itemActionErrorMessage = updateResult.ErrorMessage;
+                        showErrorModal = true;
+                    }
+
+                    return;
+                }
+
+                // Plain insert path — same wrapping
+                var success = await mapItemService.AddSubdItemAsync(item);
+
+                if (success)
+                {
+                    if (item.SubdItemId > 0)
+                    {
+                        try
+                        {
+                            var saved = await mapItemService.SaveSubdItemUomPricesAsync(item.SubdItemId, uomEntries, userContext.UserId ?? 0, requireStockUom: SelectedCompanyItemRequiresStockUom);
+                            if (!saved)
+                            {
+                                itemActionErrorMessage = "Unable to save UOM prices. Check that the UOMs and prices are valid and try again. If the problem persists, contact support.";
+                                showErrorModal = true;
+                                return;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
                             showErrorModal = true;
                             return;
                         }
                     }
-                    catch (Exception ex)
+
+                    ResetItemForm();
+                    await _LoadMapTablesAsyncInternal();
+                    if (mapItemInputHeader is not null)
                     {
-                        itemActionErrorMessage = $"Unable to save UOM prices: {ex.GetBaseException().Message}";
-                        showErrorModal = true;
-                        return;
+                        await mapItemInputHeader.FocusItemCodeAsync();
+                    }
+                    await ClearDraftAsync();
+                }
+            }
+            finally
+            {
+                mapTablesLoadLock.Release();
+            }
+        }
+
+        private async Task BeginEditItem(MapSubDistributorItemRow item)
+        {
+            editingSubdItemId = item.SubdItemId;
+            itemCode = item.SubItemCode;
+            itemName = item.Description;
+            selectedCompanyItemId = item.CompanyItemId;
+            selectedCompanyItemDisplayName = item.CompanyItemName;
+            selectedDropdownPrincipal = item.Principal;
+
+            var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
+            if (existingUoms is not null && existingUoms.Any())
+            {
+                var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1);
+
+                availableUoms = existingUoms
+                    .Select(u => (u.UomName ?? string.Empty).Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(u => u)
+                    .ToList();
+
+                uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+                foreach (var name in availableUoms)
+                {
+                    var matched = existingUoms.FirstOrDefault(e =>
+                        string.Equals((e.UomName ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
+
+                    if (matched != null)
+                    {
+                        uomEntries[name] = new UomEntry
+                        {
+                            ItemsUomId = matched.ItemsUomId,
+                            Conversion = matched.ConversionToBase,
+                            Price = matched.Price,
+                            IsStockUom = matched.IsStockUom
+                        };
                     }
                 }
-
-                ResetItemForm();
-                await _LoadMapTablesAsyncInternal();
-                if (mapItemInputHeader is not null)
-                {
-                    await mapItemInputHeader.FocusItemCodeAsync();
-                }
-                await ClearDraftAsync();
             }
-        }
-        finally
-        {
-            mapTablesLoadLock.Release();
-        }
-    }        
-
-    private async Task BeginEditItem(MapSubDistributorItemRow item)
-    {
-        editingSubdItemId = item.SubdItemId;
-        itemCode = item.SubItemCode;
-        itemName = item.Description;
-        selectedCompanyItemId = item.CompanyItemId;
-        selectedCompanyItemDisplayName = item.CompanyItemName;
-        selectedDropdownPrincipal = item.Principal;
-
-        var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
-        if (existingUoms is not null && existingUoms.Any())
-        {
-            var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1);
-
-            availableUoms = existingUoms
-                .Select(u => (u.UomName ?? string.Empty).Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(u => u)
-                .ToList();
-
-            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-            foreach (var name in availableUoms)
+            else
             {
-                var matched = existingUoms.FirstOrDefault(e =>
-                    string.Equals((e.UomName ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
-
-                if (matched != null)
-                {
-                    uomEntries[name] = new UomEntry
-                    {
-                        ItemsUomId = matched.ItemsUomId,
-                        Conversion = matched.ConversionToBase,
-                        Price = matched.Price,
-                        IsStockUom = matched.IsStockUom
-                    };
-                }
+                availableUoms = new List<string>();
+                uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
             }
-        }
-        else
-        {
-            availableUoms = new List<string>();
-            uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
+
+            ClearValidationErrors();
+            await PersistDraftAsync();
         }
 
-        ClearValidationErrors();
-        await PersistDraftAsync();
-    }
-        
         private void DeleteItemAsync(MapSubDistributorItemRow item)
         {
             pendingItem = item;

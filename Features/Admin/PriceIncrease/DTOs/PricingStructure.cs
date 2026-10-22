@@ -2,10 +2,10 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
 {
     public enum PricingStructure
     {
-        Incomplete,   
-        Single,       
-        Dual,         
-        Invalid       
+        Incomplete,
+        Single,
+        Dual,
+        Invalid
     }
 
     public static class PricingStructureResolver

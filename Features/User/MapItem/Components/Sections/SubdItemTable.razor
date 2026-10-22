@@ -1,7 +1,7 @@
 ﻿@using STTproject.Shared.Components.Buttons
 <div class="card-section">
 	<h3 class="subd-items-title">
-		(@_filteredSubdItems.Count) SUB DISTRIBUTOR ITEMS 
+		(@_filteredSubdItems.Count) SUB DISTRIBUTOR ITEMS
 		@if (SelectedCompanyItemIdForFilter.HasValue)
 		{
 			var selectedItem = CompanyItems.FirstOrDefault(x => x.CompanyItemId == SelectedCompanyItemIdForFilter);
@@ -34,10 +34,7 @@
 	</h3>
 	<div class="filters">
 		<div class="filter-group">
-			<input type="text"
-				placeholder="Search"
-				value="@SearchText"
-				@oninput="HandleSearchChanged" />
+			<input type="text" placeholder="Search" value="@SearchText" @oninput="HandleSearchChanged" />
 		</div>
 		<div class="filter-group">
 			<select @bind="SortOrder" @bind:after="HandleSortOrderChanged">
@@ -105,10 +102,13 @@
 								@if (item.Uoms.Count == 0)
 								{
 									<span>—</span>
-									<span class="uom-missing-stock">
-										<span class="uom-dot uom-dot-missing"></span>
-										No stock UOM
-									</span>
+									@if (CompanyRequiresStockUom(item))
+									{
+										<span class="uom-missing-stock">
+											<span class="uom-dot uom-dot-missing"></span>
+											No stock UOM
+										</span>
+									}
 								}
 								else
 								{
@@ -120,23 +120,19 @@
 												{
 													<span class="uom-dot uom-dot-stock" title="Stock UOM"></span>
 												}
-
 												@if (entry.IsBaseUnit)
 												{
-													<span class="uom-dot uom-dot-base" title="Base UOM"></span>												
+													<span class="uom-dot uom-dot-base" title="Base UOM"></span>
 												}
 												@entry.UomName
 												@if (entry.Price.HasValue)
 												{
 													<span>@entry.Price.Value.ToString("N2")</span>
 												}
-												
-
-
 											</span>
 										}
 									</div>
-									@if (!item.Uoms.Any(u => u.IsStockUom))
+									@if (CompanyRequiresStockUom(item) && !item.Uoms.Any(u => u.IsStockUom))
 									{
 										<span class="uom-missing-stock">
 											<span class="uom-dot uom-dot-missing"></span>
@@ -147,14 +143,18 @@
 							</td>
 							<td>
 								<Button Variant="ButtonVariant.IconActionEdit" OnClick="() => HandleEditClicked(item)"
-										Tooltip="Edit"
-										Disabled="@(!IsSubDistributorSelected)">
-									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 8.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></svg></IconContent>
+										Tooltip="Edit" Disabled="@(!IsSubDistributorSelected)">
+									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true">
+										<path
+										d="M3 17.25V21h3.75L17.81 8.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+									</svg></IconContent>
 								</Button>
 								<Button Variant="ButtonVariant.IconActionDelete" OnClick="() => HandleDeleteClicked(item)"
-										Tooltip="Delete"
-										Disabled="@(!IsSubDistributorSelected)">
-									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm2 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2h4v2H4V7h4zm2 0h4V5h-4v2z" /></svg></IconContent>
+										Tooltip="Delete" Disabled="@(!IsSubDistributorSelected)">
+									<IconContent><svg viewBox="0 0 24 24" aria-hidden="true">
+										<path
+										d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm2 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2h4v2H4V7h4zm2 0h4V5h-4v2z" />
+									</svg></IconContent>
 								</Button>
 							</td>
 						</tr>
@@ -179,11 +179,12 @@
 		</table>
 	</div>
 	@if (TotalPages > 1)
-    {
-        <div class="filters" style="justify-content: flex-end; gap: 8px;">
-            <button class="btn-secondary" disabled="@(CurrentPage <= 1)" @onclick="() => CurrentPage--">Prev</button>
-            <span>Page @CurrentPage of @TotalPages</span>
-            <button class="btn-secondary" disabled="@(CurrentPage >= TotalPages)" @onclick="() => CurrentPage++">Next</button>
-        </div>
-    }
+	{
+		<div class="filters" style="justify-content: flex-end; gap: 8px;">
+			<button class="btn-secondary" disabled="@(CurrentPage <= 1)" @onclick="() => CurrentPage--">Prev</button>
+			<span>Page @CurrentPage of @TotalPages</span>
+			<button class="btn-secondary" disabled="@(CurrentPage >= TotalPages)"
+					@onclick="() => CurrentPage++">Next</button>
+		</div>
+	}
 </div>
