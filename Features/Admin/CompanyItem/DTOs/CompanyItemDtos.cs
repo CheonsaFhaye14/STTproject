@@ -11,7 +11,7 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public string? Category { get; set; }
         public string? Principal { get; set; }
         public decimal? StockPrice { get; set; }
-        public decimal? StockPriceRegional { get; set; }  
+        public decimal? StockPriceRegional { get; set; }
         public decimal? StockPriceNational { get; set; }
         public string? StockUomName { get; set; }
         public bool IsActive { get; set; }
@@ -27,8 +27,8 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public string? ItemName { get; set; }
         public string? PPG { get; set; }
         public string? Category { get; set; }
-        public decimal? StockPriceRegional { get; set; }  
-        public decimal? StockPriceNational { get; set; }  
+        public decimal? StockPriceRegional { get; set; }
+        public decimal? StockPriceNational { get; set; }
         public string? StockUomName { get; set; }
 
         public string? Principal { get; set; }
@@ -44,8 +44,8 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public string? ItemName { get; set; }
         public string? PPG { get; set; }
         public string? Category { get; set; }
-        public decimal? StockPriceRegional { get; set; }  
-        public decimal? StockPriceNational { get; set; }   
+        public decimal? StockPriceRegional { get; set; }
+        public decimal? StockPriceNational { get; set; }
         public string? StockUomName { get; set; }
 
         public string? Principal { get; set; }
@@ -61,7 +61,7 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public decimal NewPrice { get; set; }
         public decimal OldPrice { get; set; }
         public DateTime EffectivityDate { get; set; }
-        public DateTime CreatedDate { get; set; }      
+        public DateTime CreatedDate { get; set; }
         public int? CreatedBy { get; set; }
     }
 
@@ -101,19 +101,16 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         IReadOnlyList<string> IImportGroup<CompanyItemImportRowDto>.Issues => Issues;
     }
 
-    public enum CompanyItemImportMode { Standard, PriceHistory }
-
-    // What committing a row will do, worked out from the file and the database.
+    // Kept so CompanyItemImportRowResult.Action still compiles; the unified service no longer sets it.
     public enum CompanyItemRowAction { None, Create, UpdatePrice, FillStockUom, AddPriceHistory, SchedulePrice, CreateWithHistory }
 
     public sealed class CompanyItemImportResult
     {
         public string? Principal { get; set; }
         public List<string> OriginalHeaders { get; set; } = new();
-        public CompanyItemImportMode Mode { get; set; } = CompanyItemImportMode.Standard;
         public List<CompanyItemImportRowResult> Rows { get; } = new();
         public List<PreparedCompanyItemGroup> PreparedGroups { get; } = new();
-        public List<CompanyItemImportIssue> Issues { get; } = new(); 
+        public List<CompanyItemImportIssue> Issues { get; } = new();
 
         public int SuccessCount => Rows.Count(r => r.IsSuccess);
         public int ErrorCount => Rows.Count(r => !r.IsSuccess);
@@ -123,11 +120,7 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public void AddError(int rowNumber, string companyItemCode, string message)
             => Issues.Add(new CompanyItemImportIssue(rowNumber, companyItemCode, message));
     }
-    public enum CompanyItemPriceResolutionMode
-    {
-        DirectUpdate,
-        ScheduleIncrease
-    }
+
     public sealed class CompanyItemImportRowResult
     {
         public int RowNumber { get; set; }
@@ -156,7 +149,6 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public bool IsExistingItem { get; set; }
         public int? ExistingCompanyItemId { get; set; }
         public decimal? ExistingStockPrice { get; set; }
-        public CompanyItemPriceResolutionMode PriceResolution { get; set; } = CompanyItemPriceResolutionMode.DirectUpdate;
         public DateTime? PriceChangeEffectivityDate { get; set; }
 
         public Dictionary<string, string?> RawValues { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -167,45 +159,27 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
                 ExistingStockPrice is decimal oldStockPrice &&
                 stockPrice != oldStockPrice)
             {
-                yield return new(
-                    null,
-                    oldStockPrice,
-                    stockPrice);
+                yield return new(null, oldStockPrice, stockPrice);
             }
 
             if (StockPriceRegional is decimal regionalPrice &&
                 ExistingStockPriceRegional is decimal oldRegionalPrice &&
                 regionalPrice != oldRegionalPrice)
             {
-                yield return new(
-                    PriceListTypes.Regional,
-                    oldRegionalPrice,
-                    regionalPrice);
+                yield return new(PriceListTypes.Regional, oldRegionalPrice, regionalPrice);
             }
 
             if (StockPriceNational is decimal nationalPrice &&
                 ExistingStockPriceNational is decimal oldNationalPrice &&
                 nationalPrice != oldNationalPrice)
             {
-                yield return new(
-                    PriceListTypes.National,
-                    oldNationalPrice,
-                    nationalPrice);
+                yield return new(PriceListTypes.National, oldNationalPrice, nationalPrice);
             }
         }
-
     }
 
-    public sealed class PreparedCompanyItemGroup
-    {
-        public List<CompanyItemImportRowResult> Rows { get; } = new();
-        public List<CompanyItemImportIssue> Issues { get; } = new();
-        public bool Selected { get; set; }
-        public bool IsSaved { get; set; }
+    // PreparedCompanyItemGroup now lives in CompanyItemImportPlan.cs.
 
-        public PreparedCompanyItemGroup() { }
-        public PreparedCompanyItemGroup(List<CompanyItemImportRowResult> rows) => Rows = rows ?? new();
-    }
     public sealed record CompanyItemImportIssue(int RowNumber, string CompanyItemCode, string Message);
     public sealed record CompanyItemPriceChange(string? PriceListType, decimal? OldPrice, decimal NewPrice)
     {
