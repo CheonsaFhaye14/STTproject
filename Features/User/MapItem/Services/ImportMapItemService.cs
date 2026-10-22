@@ -1379,7 +1379,7 @@ public sealed class ImportMapItemService
 	{
 		if (cell.DataType == XLDataType.Number)
 		{
-			value = (int)cell.GetDouble();
+			value = (int)Math.Round(cell.GetDouble(), MidpointRounding.AwayFromZero);
 			return true;
 		}
 
