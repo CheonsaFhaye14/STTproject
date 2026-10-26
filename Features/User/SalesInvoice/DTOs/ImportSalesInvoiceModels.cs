@@ -1,3 +1,4 @@
+using System.Globalization;
 using STTproject.Models;
 
 namespace STTproject.Features.User.SalesInvoice.DTOs;
@@ -6,7 +7,7 @@ public sealed class PreparedInvoice
 {
     public string GroupKey { get; set; } = string.Empty;
     public string InvoiceNumber { get; set; } = string.Empty;
-    public string SubDistributor {get; set; } = string.Empty;
+    public string SubDistributor { get; set; } = string.Empty;
     public InputInvoiceModel Invoice { get; set; } = null!;
     public List<InputItemModel> Items { get; set; } = new();
     public List<ImportSalesInvoiceIssue> Issues { get; set; } = new();
@@ -16,6 +17,27 @@ public sealed class PreparedInvoice
     public bool Selected { get; set; }
     public bool IsSaved { get; set; }
     public string? SaveErrorMessage { get; set; }
+    public PendingCustomerChoice? CustomerChoice { get; set; }
+    public string OrderTypeKey { get; set; } = string.Empty;
+    public string SalesManKey { get; set; } = string.Empty;
+    public string BuildGroupKey(int customerId) => string.Join("|",
+        InvoiceNumber.Trim().ToUpperInvariant(),
+        customerId.ToString(CultureInfo.InvariantCulture),
+        OrderTypeKey, SalesManKey);
+    public bool HasUnresolvedDecisions =>
+        ItemChoices.Any(c => !c.IsConfirmed) || CustomerChoice is { IsConfirmed: false };
+    public bool HasErrors => Issues.Count > 0;
+    public bool IsReadyToCommit => !IsSaved && !HasErrors && !HasUnresolvedDecisions;
+    public bool TrySetSelected(bool value)
+    {
+        if (value && !IsReadyToCommit) { Selected = false; return false; }
+        Selected = value;
+        return true;
+    }
+    public void DropSelectionIfNotReady()
+    {
+        if (!IsReadyToCommit) Selected = false;
+    }
 }
 
 public sealed class ImportSalesInvoiceResult
@@ -28,11 +50,7 @@ public sealed class ImportSalesInvoiceResult
     public int ImportedRowCount { get; set; }
     public List<ImportSalesInvoiceIssue> Issues { get; } = new();
     public Dictionary<int, Dictionary<string, string?>> RawValuesByRow { get; } = new();
-
-    // Rows that had errors and were left out of the import, with the header they were meant for
-    // (invoice code, customer, order type, salesman). Used to decide which invoices must be held back.
     public List<ErroredRowInfo> ErroredRows { get; } = new();
-
     public List<string> RawSheetHeaders { get; set; } = new();
     public Dictionary<int, string[]> RawSheetRowsByRow { get; } = new();
     public bool HasIssues => Issues.Count > 0;
@@ -67,8 +85,6 @@ public sealed class ImportSalesInvoiceResult
     public void AddIssue(ImportSalesInvoiceIssue issue) => Issues.Add(issue);
 }
 
-// CustomerKey / OrderType / SalesMan are empty when unknown (an empty value matches anything).
-// HeaderUnresolved = the customer or the order type is the problem, so we can't tell which invoice the row belongs to.
 public sealed record ErroredRowInfo(
     int RowNumber,
     string InvoiceCode,
@@ -79,36 +95,12 @@ public sealed record ErroredRowInfo(
     string? HeaderProblem);
 
 public sealed record ErrorReportEntry(int RowNumber, string ErrorType, string Message);
-public sealed record ImportedInvoiceRow(
-    int RowNumber,
-    string InvoiceCode,
-    DateOnly InvoiceDate,
-    string CustomerCode,
-    string CustomerName,
-    string OrderType,
-    string SalesManName,
-    string SkuCode,
-    string ItemName,
-    string UOM,
-    int Quantity,
-    string? Province,
-    string? CityMunicipality,
-    string? CustomerType,
-    string? AddressLine,
-    int ResolvedCustomerId,
-    string ResolvedCustomerCode,
-    string ResolvedCustomerName,
-    int ResolvedSubdItemId,
-    string ResolvedSubdItemCode,
-    int ResolvedItemsUomId,
-    bool IsFreeItem,
-    string? AmbiguousItemWarning = null,
-    List<int>? AmbiguousSubdItemIds = null,
-    string? UomFallbackWarning = null,
-    List<int>? UomReviewCandidateIds = null );
+public sealed record ImportedInvoiceRow(int RowNumber, string InvoiceCode, DateOnly InvoiceDate, string CustomerCode, string CustomerName, string OrderType,
+    string SalesManName, string SkuCode, string ItemName, string UOM, int Quantity, string? Province, string? CityMunicipality, string? CustomerType, string? AddressLine,
+    int ResolvedCustomerId, string ResolvedCustomerCode, string ResolvedCustomerName, int ResolvedSubdItemId, string ResolvedSubdItemCode, int ResolvedItemsUomId,
+    bool IsFreeItem, string? AmbiguousItemWarning = null, string? UomFallbackWarning = null, List<int>? UomReviewCandidateIds = null,
+    List<int>? CustomerCandidateIds = null, List<int>? SkuCandidateIds = null, int LineId = 0);
 
-// GroupKey: the invoice (card) this issue belongs to, when known. Lets a row error land on the right invoice card.
-// IsHoldNote: "this invoice is fine, but it is on hold because of another row". Not a real error.
 public sealed record ImportSalesInvoiceIssue(
     int RowNumber,
     string InvoiceNumber,
@@ -133,8 +125,72 @@ public sealed record ItemCandidateOption(
 
 public sealed class PendingItemChoice
 {
+    public ChoiceKind Kind { get; init; } = ChoiceKind.Sku;
     public int LineItemId { get; init; }
     public string SkuCode { get; init; } = string.Empty;
     public List<ItemCandidateOption> Candidates { get; init; } = new();
-    public int SelectedSubdItemId { get; set; }
+    public string Key { get; init; } = string.Empty;
+    public string Label { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public int SelectedSubdItemId { get; private set; }
+    public int SelectedItemsUomId { get; private set; }
+    public bool IsConfirmed { get; private set; }
+
+    public ItemCandidateOption? Selected =>
+        Candidates.FirstOrDefault(c => c.ItemsUomId == SelectedItemsUomId);
+
+    public void Select(ItemCandidateOption candidate)
+    {
+        if (candidate.ItemsUomId == SelectedItemsUomId) return;
+        SelectedSubdItemId = candidate.SubdItemId;
+        SelectedItemsUomId = candidate.ItemsUomId;
+        IsConfirmed = false;
+    }
+
+    public void SetDefault(ItemCandidateOption candidate)
+    {
+        SelectedSubdItemId = candidate.SubdItemId;
+        SelectedItemsUomId = candidate.ItemsUomId;
+        IsConfirmed = false;
+    }
+
+    public void Confirm() => IsConfirmed = true;
 }
+
+public enum ChoiceKind { Sku, Uom, Customer }
+
+public sealed record CustomerCandidateOption(
+    int CustomerId, string CustomerCode, string CustomerName, string? Address, string? CustomerType = null);
+
+public sealed class PendingCustomerChoice
+{
+    public string Key { get; init; } = string.Empty;
+    public string Label { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public List<CustomerCandidateOption> Candidates { get; init; } = new();
+    public int SelectedCustomerId { get; private set; }
+    public bool IsConfirmed { get; private set; }
+    public bool IsUserSelected { get; private set; }
+    public string? ValidationMessage { get; set; }
+    public bool CanConfirm => string.IsNullOrEmpty(ValidationMessage);
+
+    public CustomerCandidateOption? Selected =>
+        Candidates.FirstOrDefault(c => c.CustomerId == SelectedCustomerId);
+
+    public void SetDefault(CustomerCandidateOption candidate)
+    {
+        SelectedCustomerId = candidate.CustomerId;
+        IsConfirmed = false;
+    }
+
+    public void Select(CustomerCandidateOption candidate)
+    {
+        IsUserSelected = true;
+        if (candidate.CustomerId == SelectedCustomerId) return;
+        SelectedCustomerId = candidate.CustomerId;
+        IsConfirmed = false;
+    }
+
+    public void Confirm() { if (CanConfirm) IsConfirmed = true; }
+}
+    

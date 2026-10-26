@@ -43,7 +43,7 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		var validPreparedInvoices = result.PreparedInvoices
-			.Where(prepared => prepared.Issues.Count == 0)
+			.Where(prepared => prepared.IsReadyToCommit)
 			.ToList();
 
 		if (validPreparedInvoices.Count == 0)
@@ -132,9 +132,9 @@ public sealed class ImportSalesInvoiceService
 
 		var worksheet = resolved.Worksheet;
 		var headerRowNumber = resolved.HeaderRow;
-		var dataStartMinusOne = resolved.FirstDataRow - 1;  
-		var headers = resolved.Headers;          
-		var columnRules = resolved.Columns;    
+		var dataStartMinusOne = resolved.FirstDataRow - 1;
+		var headers = resolved.Headers;
+		var columnRules = resolved.Columns;
 
 		result.OriginalHeaders = headers
 			.OrderBy(kvp => kvp.Value)
@@ -146,7 +146,7 @@ public sealed class ImportSalesInvoiceService
 		result.RawSheetHeaders = Enumerable.Range(1, sheetLastColumn)
 			.Select(c => TemplateSheetResolver.HeaderText(worksheet, headerRowNumber, headerRowCount, c))
 			.ToList();
-			
+
 		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
 		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
 		if (!isValid)
@@ -165,11 +165,11 @@ public sealed class ImportSalesInvoiceService
 			.AsNoTracking()
 			.Where(item => item.SubDistributorId == subDistributorId && item.IsActive)
 			.ToListAsync(cancellationToken);
-		
+
 		var uoms = await (from u in context.ItemsUoms.AsNoTracking()
-						join i in context.SubdItems on u.SubdItemId equals i.SubdItemId
-						where i.SubDistributorId == subDistributorId && i.IsActive
-						select u).ToListAsync(cancellationToken);
+						  join i in context.SubdItems on u.SubdItemId equals i.SubdItemId
+						  where i.SubDistributorId == subDistributorId && i.IsActive
+						  select u).ToListAsync(cancellationToken);
 
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
@@ -209,12 +209,11 @@ public sealed class ImportSalesInvoiceService
 				result.AddError(0, string.Empty, "No invoice rows were found in the template.");
 			return result;
 		}
+
 		foreach (var invoiceGroup in parsedRows.GroupBy(row =>
 					string.Join("|",
 						(row.InvoiceCode ?? string.Empty).Trim().ToUpperInvariant(),
-						row.ResolvedCustomerId > 0
-							? row.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture)
-							: (row.ResolvedCustomerCode ?? row.CustomerCode ?? row.CustomerName ?? string.Empty).Trim().ToUpperInvariant(),
+						BuildCustomerGroupPart(row),
 						(row.OrderType ?? string.Empty).Trim().ToUpperInvariant(),
 						(row.SalesManName ?? string.Empty).Trim().ToUpperInvariant()),
 					StringComparer.OrdinalIgnoreCase))
@@ -227,6 +226,8 @@ public sealed class ImportSalesInvoiceService
 				SubDistributor = subDistributor.SubdCode + " - " + subDistributor.SubdName,
 				InvoiceNumber = invoiceNumber,
 				GroupKey = invoiceGroup.Key,
+				OrderTypeKey = (invoiceRows[0].OrderType ?? string.Empty).Trim().ToUpperInvariant(),
+				SalesManKey = (invoiceRows[0].SalesManName ?? string.Empty).Trim().ToUpperInvariant(),
 				Items = new List<InputItemModel>(),
 				Issues = new List<ImportSalesInvoiceIssue>(),
 				Selected = true
@@ -309,14 +310,31 @@ public sealed class ImportSalesInvoiceService
 					CustomerType = customer.CustomerType ?? string.Empty,
 					SubdistributorId = subDistributorId,
 					SalesManName = SalesInvoiceService.NormalizeSalesMan(firstRow.SalesManName) ?? string.Empty,
-					CustomerAddress = string.Join(", ", new[]
-					{
-						customer.AddressLine,
-						customer.City,
-						customer.Province,
-						customer.ZipCode?.ToString()
-					}.Where(s => !string.IsNullOrWhiteSpace(s)))
+					CustomerAddress = BuildCustomerAddress(customer)
 				};
+
+				if (firstRow.CustomerCandidateIds is { Count: > 1 } customerIds)
+				{
+					var customerOptions = customerIds
+						.Where(customerById.ContainsKey)
+						.Select(id => customerById[id])
+						.Select(c => new CustomerCandidateOption(
+							c.CustomerId, c.CustomerCode, c.CustomerName, BuildCustomerAddress(c), c.CustomerType))
+						.ToList();
+
+					if (customerOptions.Count > 1)
+					{
+						var customerChoice = new PendingCustomerChoice
+						{
+							Key = firstRowCustomerValue.Trim().ToUpperInvariant(),
+							Label = firstRowCustomerValue,
+							Message = $"Customer '{firstRowCustomerValue}' matched {customerOptions.Count} records. Pick the correct one.",
+							Candidates = customerOptions
+						};
+						customerChoice.SetDefault(customerOptions.First(o => o.CustomerId == customer.CustomerId));
+						preparedInvoice.CustomerChoice = customerChoice;
+					}
+				}
 
 				var items = new List<(InputItemModel Item, bool IsFreeItem)>();
 				var unitPriceCache = new Dictionary<int, decimal>();
@@ -340,7 +358,7 @@ public sealed class ImportSalesInvoiceService
 						if (reportedMissingSkus.Add(itemKey))
 						{
 							var msg = $"SKU '{itemKey}' was not found.";
-							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "SkuCode", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), row.SkuCode));
+							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "SkuCode"));
 							result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
 						}
 						items.Clear();
@@ -351,51 +369,52 @@ public sealed class ImportSalesInvoiceService
 					{
 						var itemNameSuffix = !string.IsNullOrWhiteSpace(subdItem.ItemName) ? $" ({subdItem.ItemName})" : string.Empty;
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'{itemNameSuffix}.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, "UOM", BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName)));
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "UOM"));
 						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
 						items.Clear();
 						break;
 					}
-					bool skuChoiceAdded = false;
 
-					if (row.AmbiguousSubdItemIds != null && row.AmbiguousSubdItemIds.Count > 1 &&
-					!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
+					if (row.SkuCandidateIds != null && row.SkuCandidateIds.Count > 1 &&
+					!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.LineId))
 					{
 						var options = new List<ItemCandidateOption>();
-						foreach (var candidateId in row.AmbiguousSubdItemIds)
+						foreach (var candidateId in row.SkuCandidateIds)
 						{
 							if (!subdItemById.TryGetValue(candidateId, out var candidateItem)) continue;
 
-							int candidateUomId = 0; string candidateUomName = row.UOM;
+							List<ItemsUom>? candidateUoms = null;
 							foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(row.UOM))
 							{
-								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m, out _) && m is not null)
-								{ candidateUomId = m.ItemsUomId; candidateUomName = m.UomName; break; }
+								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m, out var mAmbiguous) && m is not null)
+								{ candidateUoms = mAmbiguous is { Count: > 1 } ? mAmbiguous : new List<ItemsUom> { m }; break; }
 							}
-							if (candidateUomId == 0) continue;
+							if (candidateUoms is null) continue;
 
-							var price = row.IsFreeItem ? 0m : await GetUnitPriceAsync(candidateUomId, firstRow.InvoiceDate);
-							options.Add(new ItemCandidateOption(candidateItem.SubdItemId, candidateItem.SubdItemCode, candidateItem.ItemName, candidateUomId, candidateUomName, price));
+							foreach (var cu in candidateUoms)
+							{
+								var price = row.IsFreeItem ? 0m : await GetUnitPriceAsync(cu.ItemsUomId, firstRow.InvoiceDate);
+								options.Add(new ItemCandidateOption(candidateItem.SubdItemId, candidateItem.SubdItemCode, candidateItem.ItemName, cu.ItemsUomId, cu.UomName, price));
+							}
 						}
 
 						if (options.Count > 1)
 						{
-							preparedInvoice.ItemChoices.Add(new PendingItemChoice
+							var choice = new PendingItemChoice
 							{
-								LineItemId = row.RowNumber,
-								SkuCode = row.SkuCode,
-								Candidates = options,
-								SelectedSubdItemId = row.ResolvedSubdItemId
-							});
-							skuChoiceAdded = true;
+								Kind = ChoiceKind.Sku,
+								Key = BuildChoiceKey(row, includeUom: false),
+								Label = BuildChoiceLabel(row),
+								Message = row.AmbiguousItemWarning ?? $"'{BuildChoiceLabel(row)}' matched {options.Count} records.",
+								LineItemId = row.LineId,
+								Candidates = options
+							};
+							choice.SetDefault(
+								options.FirstOrDefault(o => o.SubdItemId == row.ResolvedSubdItemId && o.ItemsUomId == row.ResolvedItemsUomId)
+								?? options.FirstOrDefault(o => o.SubdItemId == row.ResolvedSubdItemId)
+								?? options[0]);
+							preparedInvoice.ItemChoices.Add(choice);
 						}
-					}
-
-					if (skuChoiceAdded &&
-						!string.IsNullOrWhiteSpace(row.AmbiguousItemWarning) &&
-						reportedItemWarnings.Add(row.AmbiguousItemWarning))
-					{
-						preparedInvoice.Warnings.Add(row.AmbiguousItemWarning);
 					}
 
 					if (!string.IsNullOrWhiteSpace(row.UomFallbackWarning) && reportedItemWarnings.Add(row.UomFallbackWarning))
@@ -403,7 +422,7 @@ public sealed class ImportSalesInvoiceService
 						preparedInvoice.Warnings.Add(row.UomFallbackWarning);
 					}
 					if (row.UomReviewCandidateIds is { Count: > 0 } &&
-						!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.RowNumber))
+						!preparedInvoice.ItemChoices.Any(c => c.LineItemId == row.LineId))
 					{
 						var options = new List<ItemCandidateOption>();
 						foreach (var uomId in row.UomReviewCandidateIds)
@@ -414,20 +433,19 @@ public sealed class ImportSalesInvoiceService
 							options.Add(new ItemCandidateOption(subdItem.SubdItemId, subdItem.SubdItemCode, subdItem.ItemName,
 								candidateUom.ItemsUomId, candidateUom.UomName, price));
 						}
-
 						if (options.Count > 0)
 						{
-							var msg = $"UOM '{row.UOM}' has multiple possible matches for SKU '{row.SkuCode}' — review under Warnings.";
-							if (reportedItemWarnings.Add(msg))
-								preparedInvoice.Warnings.Add(msg);
-
-							preparedInvoice.ItemChoices.Add(new PendingItemChoice
+							var uomChoice = new PendingItemChoice
 							{
-								LineItemId = row.RowNumber,
-								SkuCode = row.SkuCode,
-								Candidates = options,
-								SelectedSubdItemId = row.ResolvedSubdItemId
-							});
+								Kind = ChoiceKind.Uom,
+								Key = BuildChoiceKey(row, includeUom: true),
+								Label = $"{BuildChoiceLabel(row)} ({row.UOM})",
+								Message = $"UOM '{row.UOM}' has multiple possible matches for '{BuildChoiceLabel(row)}'.",
+								LineItemId = row.LineId,
+								Candidates = options
+							};
+							uomChoice.SetDefault(options.FirstOrDefault(o => o.ItemsUomId == row.ResolvedItemsUomId) ?? options[0]);
+							preparedInvoice.ItemChoices.Add(uomChoice);
 						}
 					}
 
@@ -443,14 +461,15 @@ public sealed class ImportSalesInvoiceService
 
 					items.Add((new InputItemModel
 					{
-						LineItemId = row.RowNumber,
+						LineItemId = row.LineId,
 						ItemCode = subdItem.SubdItemCode,
 						ItemName = subdItem.ItemName,
 						SubdItemId = subdItem.SubdItemId,
 						ItemsUomId = uom.ItemsUomId,
 						UomName = uom.UomName,
 						Quantity = absoluteQuantity,
-						Amount = unitPrice * absoluteQuantity
+						Amount = unitPrice * absoluteQuantity,
+						SourceRowNumber = row.RowNumber
 					}, row.IsFreeItem));
 				}
 				if (items.Count == 0)
@@ -471,6 +490,13 @@ public sealed class ImportSalesInvoiceService
 				var validationErrors = await SalesInvoiceValidation.ValidateHeaderAsync(
 					preparedInvoice.Invoice!,
 					() => _salesInvoiceService.InvoiceNumberExistsAsync(preparedInvoice.Invoice!.InvoiceNumber, preparedInvoice.Invoice!.OrderType, preparedInvoice.Invoice!.SubdistributorId, preparedInvoice.Invoice!.CustomerId, preparedInvoice.Invoice!.SalesManName, 0, cancellationToken));
+
+				if (validationErrors.Count > 0 && preparedInvoice.CustomerChoice is { } pendingCustomer)
+				{
+					pendingCustomer.ValidationMessage = string.Join(" ", validationErrors.Values);
+					result.PreparedInvoices.Add(preparedInvoice);
+					continue;
+				}
 
 				if (validationErrors.Count > 0)
 				{
@@ -505,7 +531,16 @@ public sealed class ImportSalesInvoiceService
 
 		return result;
 	}
-	
+	public async Task<string?> ValidateInvoiceHeaderAsync(PreparedInvoice prepared, CancellationToken cancellationToken = default)
+	{
+		var invoice = prepared.Invoice;
+		var errors = await SalesInvoiceValidation.ValidateHeaderAsync(
+			invoice,
+			() => _salesInvoiceService.InvoiceNumberExistsAsync(
+				invoice.InvoiceNumber, invoice.OrderType, invoice.SubdistributorId,
+				invoice.CustomerId, invoice.SalesManName, 0, cancellationToken));
+		return errors.Count > 0 ? string.Join(" ", errors.Values) : null;
+	}
 	private static List<ErroredRowInfo> FindBlockingRows(
 		IReadOnlyList<ErroredRowInfo> erroredRows, string invoiceCode, ImportedInvoiceRow groupFirstRow)
 	{
@@ -549,8 +584,7 @@ public sealed class ImportSalesInvoiceService
 		if (rows.Count <= 5) return $"rows {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
 		return $"rows {string.Join(", ", rows.Take(5))} and {rows.Count - 5} more";
 	}
-	public static List<InputItemModel> BuildAggregatedItems(
-		List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
+	public static List<InputItemModel> BuildAggregatedItems(List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
 	{
 		var aggregated = rawItems
 			.GroupBy(e => new { e.Item.SubdItemId, e.Item.ItemsUomId, e.Item.ItemCode, e.Item.ItemName, e.Item.UomName, e.IsFreeItem })
@@ -563,7 +597,9 @@ public sealed class ImportSalesInvoiceService
 				ItemsUomId = g.Key.ItemsUomId,
 				UomName = g.Key.UomName,
 				Quantity = g.Sum(e => e.Item.Quantity),
-				Amount = g.Sum(e => e.Item.Amount)
+				Amount = g.Sum(e => e.Item.Amount),
+				SourceRowNumber = g.Min(e => e.Item.SourceRowNumber),
+				LineItemIds = g.Select(e => e.Item.LineItemId).Distinct().OrderBy(id => id).ToList()
 			})
 			.ToList();
 
@@ -573,6 +609,28 @@ public sealed class ImportSalesInvoiceService
 		return aggregated;
 	}
 
+	public static string? TryMergeInvoices(PreparedInvoice target, PreparedInvoice source)
+	{
+		if (ReferenceEquals(target, source)) return null;
+
+		if (target.Invoice is null || source.Invoice is null)
+			return $"Invoice '{source.InvoiceNumber}' cannot be combined with its other rows because one copy is incomplete.";
+		if (target.IsSaved || source.IsSaved)
+			return $"Invoice '{source.InvoiceNumber}' is already saved.";
+		if (target.Issues.Count > 0 || source.Issues.Count > 0)
+			return $"Invoice '{source.InvoiceNumber}' appears in several rows and one of them has errors. Fix the file and re-upload.";
+		if (target.Invoice.InvoiceDate != source.Invoice.InvoiceDate)
+			return $"Invoice '{source.InvoiceNumber}' has different invoice dates across its rows. Fix the file and re-upload.";
+
+		target.RawItems.AddRange(source.RawItems);
+		target.Items = BuildAggregatedItems(target.RawItems, target.Invoice.OrderType);
+		target.ItemChoices.AddRange(source.ItemChoices);
+		foreach (var w in source.Warnings)
+			if (!target.Warnings.Contains(w)) target.Warnings.Add(w);
+
+		target.Selected = false;
+		return null;
+	}
 	public async Task<ImportSalesInvoiceResult> CommitPreparedInvoicesAsync(IEnumerable<PreparedInvoice> preparedInvoices, int currentUserId, CancellationToken cancellationToken = default)
 	{
 		var result = new ImportSalesInvoiceResult();
@@ -584,7 +642,8 @@ public sealed class ImportSalesInvoiceService
 
 		void FailInvoice(PreparedInvoice p, string msg)
 		{
-			var row = p.Items.FirstOrDefault()?.LineItemId ?? 0;
+			var firstItem = p.Items.FirstOrDefault();
+			var row = firstItem?.SourceRowNumber ?? firstItem?.LineItemId ?? 0;
 			p.Issues.Add(new ImportSalesInvoiceIssue(row, p.InvoiceNumber, msg, string.Empty, string.Empty));
 			result.AddError(row, p.InvoiceNumber, msg);
 			p.IsSaved = false;
@@ -595,6 +654,12 @@ public sealed class ImportSalesInvoiceService
 		{
 			if (prepared is null || !prepared.Selected)
 				continue;
+
+			if (!prepared.IsReadyToCommit)
+			{
+				prepared.Selected = false;
+				continue;
+			}
 
 			if (prepared.Issues != null && prepared.Issues.Count > 0)
 			{
@@ -679,6 +744,8 @@ public sealed class ImportSalesInvoiceService
 			? invoiceDateRule.OptionsJson
 			: null;
 
+		var nextLineId = 0;
+
 		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
 		{
 			var row = worksheet.Row(rowNumber);
@@ -699,7 +766,7 @@ public sealed class ImportSalesInvoiceService
 			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
 			var freeItemsRaw = ReadValue(row, headers, columnRules, "FreeItems");
 			var isFreeItem = string.Equals(freeItemsRaw, "Yes", StringComparison.OrdinalIgnoreCase)
-              || InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
+			  || InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
 
 			// ── Skip completely empty rows ───────────────────────────────────────
 			if (string.IsNullOrWhiteSpace(invoiceCode) &&
@@ -747,28 +814,41 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			//-------Validate required fields------------
-			// Invoice code is required
 			if (string.IsNullOrWhiteSpace(invoiceCode))
 				AddRowError("Invoice code is required.", "InvoiceCode");
-			// Invoice date is required and must be a valid date
 			if (IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])))
 				AddRowError("Invoice date is required.", "InvoiceDate");
 			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate, invoiceDateFormat))
 				AddRowError("Invoice date is invalid.", "InvoiceDate");
 
 			//-------Validate customer-----------------
-			if (!InvoiceDataValidator.TryResolveCustomer(
-					customerCode, customerName,
-					province, city, customerType, addressLine,
-					customerByCode, allCustomers,
-					out var resolvedCustomer, out var customerSuggestions))
+			List<int>? customerCandidateIds = null;
+			if (!InvoiceDataValidator.TryResolveCustomer(customerCode, customerName, province, city, customerType, addressLine,
+					customerByCode, allCustomers, out var resolvedCustomer, out var customerSuggestions, out var customerAmbiguous))
 			{
-				if (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName))
+				if (customerAmbiguous is { Count: > 1 })
+				{
+					customerCandidateIds = customerAmbiguous.Select(c => c.CustomerId).OrderBy(id => id).ToList();
+					resolvedCustomer = customerAmbiguous.OrderBy(c => c.CustomerId).First();
+				}
+				else if (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName))
 					AddRowError("Customer code or name is required.", "CustomerCode");
 				else
 				{
 					var label = BuildCustomerDisplayValue(customerCode, customerName);
 					var colName = string.IsNullOrWhiteSpace(customerName) ? "CustomerCode" : "CustomerName";
+					// if (customerSuggestions is { Count: > 0 })
+					// {
+					// var warningmsg = "Customer have multiple possible matches. Please review the suggestions.";
+					// var suggestionList = string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)));
+					// var warningtype = colName;
+					// preparedInvoice.Warnings.Add(warningtype, warningmsg, suggestionList);
+					// }
+					// else 
+					// {
+					// var message = $"Customer '{label}' was not found."
+					// AddRowError(message, colName, customerSuggestions?.Count);
+					// }
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
 						: $"Customer '{label}' was not found.";
@@ -790,7 +870,7 @@ public sealed class ImportSalesInvoiceService
 				{
 					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
 					orderTypeInvalid = true;
-				}			
+				}
 			}
 			else if (netAmountValue.HasValue)
 			{
@@ -816,7 +896,7 @@ public sealed class ImportSalesInvoiceService
 				else if (!string.IsNullOrWhiteSpace(skuCode) && !string.IsNullOrWhiteSpace(itemName))
 				{
 					var label = BuildCustomerDisplayValue(skuCode, itemName);
-					var colName = string.IsNullOrWhiteSpace(itemName) ? "skuCode" : "itemName";
+					var colName = "SkuCode";
 					var message = itemSuggestions is { Count: > 0 }
 						? $"SKU '{label}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU '{label}' was not found.";
@@ -857,39 +937,42 @@ public sealed class ImportSalesInvoiceService
 						: (emittedRows.FirstOrDefault()?.OrderType ?? string.Empty);
 
 				var code = invoiceCode.Trim();
-				var customerKey = customerResolved
+				var customerKey = customerResolved && customerCandidateIds is null
 					? resolvedCustomer!.CustomerId.ToString(CultureInfo.InvariantCulture)
 					: string.Empty;
-				var orderKey = finalOrderType.Trim().ToUpperInvariant();
+				var groupCustomerPart = customerCandidateIds is { Count: > 1 }
+					? BuildCustomerCandidatePart(customerCandidateIds)
+					: customerKey; var orderKey = finalOrderType.Trim().ToUpperInvariant();
 				var salesKey = (salesManName ?? string.Empty).Trim().ToUpperInvariant();
 
 				result.ErroredRows.Add(new ErroredRowInfo(
 					rowNumber, code, customerKey, orderKey, salesKey, headerProblem is not null, headerProblem));
 
-				// Same key the invoice group gets in PrepareFromExcelAsync, so the error lands on that invoice's card.
 				if (headerProblem is null && orderKey.Length > 0)
 				{
-					var groupKey = string.Join("|", code.ToUpperInvariant(), customerKey, orderKey, salesKey);
+					var groupKey = string.Join("|", code.ToUpperInvariant(), groupCustomerPart, orderKey, salesKey);
 					for (var i = issueStart; i < result.Issues.Count; i++)
 						result.Issues[i] = result.Issues[i] with { GroupKey = groupKey };
 				}
 			}
 
-			(int UomId, List<Data.ItemsUom>? Ambiguous) ResolveUomWithMatches(string uomString)
+			(int UomId, List<Data.ItemsUom>? Ambiguous, Data.SubdItem? MatchedItem) ResolveUomWithMatches(string uomString)
 			{
-				if (resolvedItem is null)
-					return (0, null);
+				if (resolvedItem is null) return (0, null, null);
 
-				foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
-				{
-					if (InvoiceDataValidator.TryResolveUom(
-							resolvedItem.SubdItemId, synonym, uomLookup, out var matched, out var ambiguous) && matched is not null)
-					{
-						return (matched.ItemsUomId, ambiguous);
-					}
-				}
+				var pool = new List<Data.SubdItem> { resolvedItem };
+				if (ambiguousCandidates is { Count: > 1 })
+					pool.AddRange(ambiguousCandidates
+						.Where(c => c.SubdItemId != resolvedItem.SubdItemId)
+						.OrderBy(c => c.SubdItemId));
 
-				return (0, null);
+				foreach (var candidate in pool)
+					foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
+						if (InvoiceDataValidator.TryResolveUom(candidate.SubdItemId, synonym, uomLookup, out var matched, out var ambiguous)
+							&& matched is not null)
+							return (matched.ItemsUomId, ambiguous, candidate);
+
+				return (0, null, null);
 			}
 
 			if (!useSplitQuantities)
@@ -930,7 +1013,8 @@ public sealed class ImportSalesInvoiceService
 					if (string.IsNullOrWhiteSpace(normalizedOrderType))
 						normalizedOrderType = resolvedQty < 0 ? "Credit" : "Invoice";
 
-					var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(resolvedUom);
+					var (resolvedUomId, uomAmbiguousMatches, matchedItem) = ResolveUomWithMatches(resolvedUom);
+					var rowItem = matchedItem ?? resolvedItem;
 					var finalUomName = resolvedUom;
 					string? uomFallbackWarning = null;
 					List<int>? uomReviewCandidateIds = null;
@@ -980,14 +1064,15 @@ public sealed class ImportSalesInvoiceService
 							ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
 							ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
 							ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-							ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
-							ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
+							ResolvedSubdItemId: rowItem?.SubdItemId ?? 0,
+							ResolvedSubdItemCode: rowItem?.SubdItemCode ?? string.Empty,
 							ResolvedItemsUomId: resolvedUomId,
 							IsFreeItem: isFreeItem,
 							AmbiguousItemWarning: itemWarning,
-							AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
+							SkuCandidateIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
 							UomFallbackWarning: uomFallbackWarning,
-							UomReviewCandidateIds: uomReviewCandidateIds));
+							UomReviewCandidateIds: uomReviewCandidateIds,
+							CustomerCandidateIds: customerCandidateIds));
 					}
 				}
 			}
@@ -1015,9 +1100,9 @@ public sealed class ImportSalesInvoiceService
 						? (qty < 0 ? "Credit" : "Invoice")
 						: normalizedOrderType;
 
-					// Normalize the UOM label and resolve its ID via synonyms
 					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
-					var (resolvedUomId, uomAmbiguousMatches) = ResolveUomWithMatches(normalizedUomName);
+					var (resolvedUomId, uomAmbiguousMatches, matchedItem) = ResolveUomWithMatches(normalizedUomName);
+					var rowItem = matchedItem ?? resolvedItem;
 					var finalUomName = normalizedUomName;
 					List<int>? uomReviewCandidateIds = null;
 
@@ -1063,14 +1148,15 @@ public sealed class ImportSalesInvoiceService
 						ResolvedCustomerId: resolvedCustomer?.CustomerId ?? 0,
 						ResolvedCustomerCode: resolvedCustomer?.CustomerCode ?? string.Empty,
 						ResolvedCustomerName: resolvedCustomer?.CustomerName ?? string.Empty,
-						ResolvedSubdItemId: resolvedItem?.SubdItemId ?? 0,
-						ResolvedSubdItemCode: resolvedItem?.SubdItemCode ?? string.Empty,
+						ResolvedSubdItemId: rowItem?.SubdItemId ?? 0,
+						ResolvedSubdItemCode: rowItem?.SubdItemCode ?? string.Empty,
 						ResolvedItemsUomId: resolvedUomId,
 						IsFreeItem: isFreeItem,
 						AmbiguousItemWarning: itemWarning,
-						AmbiguousSubdItemIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
+						SkuCandidateIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
 						UomFallbackWarning: null,
-						UomReviewCandidateIds: uomReviewCandidateIds));
+						UomReviewCandidateIds: uomReviewCandidateIds,
+						CustomerCandidateIds: customerCandidateIds));
 				}
 
 				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
@@ -1092,7 +1178,8 @@ public sealed class ImportSalesInvoiceService
 				continue;
 			}
 
-			rows.AddRange(emittedRows);
+			foreach (var e in emittedRows)
+				rows.Add(e with { LineId = ++nextLineId });
 		}
 
 		return rows;
@@ -1139,7 +1226,7 @@ public sealed class ImportSalesInvoiceService
 
 		if (ImportRules.TryApply(raw, rule.RuleType, rule.OptionsJson, out var applied, out _))
 			return applied;
-		
+
 		return rule.RuleType == ColumnRuleTypes.ValueMap ? string.Empty : raw;
 	}
 
@@ -1459,5 +1546,30 @@ public sealed class ImportSalesInvoiceService
 
 		return result;
 	}
+
+	private static string BuildChoiceKey(ImportedInvoiceRow row, bool includeUom)
+	{
+		var basis = !string.IsNullOrWhiteSpace(row.SkuCode) ? row.SkuCode : row.ItemName;
+		var key = Normalize(basis ?? string.Empty);
+		return includeUom ? $"{key}||{Normalize(row.UOM)}" : key;
+	}
+	private static string BuildCustomerCandidatePart(IEnumerable<int> ids) =>
+		"?" + string.Join(",", ids.OrderBy(i => i));
+
+	private static string BuildCustomerGroupPart(ImportedInvoiceRow row)
+	{
+		if (row.CustomerCandidateIds is { Count: > 1 } ids)
+			return BuildCustomerCandidatePart(ids);
+
+		return row.ResolvedCustomerId > 0
+			? row.ResolvedCustomerId.ToString(CultureInfo.InvariantCulture)
+			: (row.ResolvedCustomerCode ?? row.CustomerCode ?? row.CustomerName ?? string.Empty).Trim().ToUpperInvariant();
+	}
+
+	private static string BuildCustomerAddress(Data.Customer c) =>
+		string.Join(", ", new[] { c.AddressLine, c.City, c.Province, c.ZipCode?.ToString() }
+			.Where(s => !string.IsNullOrWhiteSpace(s)));
+	private static string BuildChoiceLabel(ImportedInvoiceRow row) =>
+		!string.IsNullOrWhiteSpace(row.SkuCode) ? row.SkuCode : row.ItemName;
 
 }

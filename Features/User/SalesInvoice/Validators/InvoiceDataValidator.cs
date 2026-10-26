@@ -62,20 +62,17 @@ public sealed class InvoiceDataValidator
 
         return (true, string.Empty);
     }
-
-    public static bool TryResolveCustomer(
-        string customerCode,
-        string customerName,
-        string? province,
-        string? cityMunicipality,
-        string? customerType,
-        string? address,
-        IReadOnlyDictionary<string, Data.Customer> customerByCode,
-        IEnumerable<Data.Customer> allCustomers,
-        out Data.Customer? customer,
-        out List<Data.Customer>? suggestions)
+    public static bool TryResolveCustomer(string customerCode, string customerName, string? province, string? cityMunicipality,
+        string? customerType, string? address, IReadOnlyDictionary<string, Data.Customer> customerByCode, IEnumerable<Data.Customer> allCustomers,
+        out Data.Customer? customer, out List<Data.Customer>? suggestions)
+        => TryResolveCustomer(customerCode, customerName, province, cityMunicipality, customerType, address, customerByCode, allCustomers,
+        out customer, out suggestions, out _);
+    public static bool TryResolveCustomer(string customerCode, string customerName, string? province, string? cityMunicipality, string? customerType,
+        string? address, IReadOnlyDictionary<string, Data.Customer> customerByCode, IEnumerable<Data.Customer> allCustomers,
+        out Data.Customer? customer, out List<Data.Customer>? suggestions, out List<Data.Customer>? ambiguousCandidates)
     {
         suggestions = null;
+        ambiguousCandidates = null;
         var allCustomersList = allCustomers.ToList();
         var candidates = new List<Data.Customer>();
 
@@ -144,7 +141,7 @@ public sealed class InvoiceDataValidator
         // STEP 2: Try raw name match first (strip code prefix only, keep everything else)
         if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(customerName))
         {
-            var rawName = StripCodePrefix(customerName);
+            var rawName = StripCodePrefix(customerName); // extracts "10798 - TONDO" → "TONDO"
 
             candidates = allCustomersList
                 .Where(c => StripCodePrefix(c.CustomerName ?? string.Empty)
@@ -203,39 +200,39 @@ public sealed class InvoiceDataValidator
         {
             var (strippedName, locationHint) = ExtractCustomerNameParts(customerName);
 
-        candidates = allCustomersList
-            .Where(c =>
-            {
-                var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
-                return dbStripped == strippedName;
-            })
-            .ToList();
-
-        if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedStripped))
-        {
-            customer = collapsedStripped;
-            return true;
-        }
-
-        // Use parenthetical hint e.g. (TONDO) to break ties
-        if (candidates.Count > 1 && !string.IsNullOrWhiteSpace(locationHint))
-        {
-            var hintFiltered = candidates
+            candidates = allCustomersList
                 .Where(c =>
-                    Normalize(c.City ?? string.Empty).Contains(locationHint) ||
-                    Normalize(c.Province ?? string.Empty).Contains(locationHint) ||
-                    Normalize(c.AddressLine ?? string.Empty).Contains(locationHint))
+                {
+                    var (dbStripped, _) = ExtractCustomerNameParts(c.CustomerName ?? string.Empty);
+                    return dbStripped == strippedName;
+                })
                 .ToList();
 
-            if (TryCollapseToSingleLogicalCustomer(hintFiltered, out var collapsedHint))
+            if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedStripped))
             {
-                customer = collapsedHint;
+                customer = collapsedStripped;
                 return true;
             }
 
-            if (hintFiltered.Count > 1)
-                candidates = hintFiltered;
-        }
+            // Use parenthetical hint e.g. (TONDO) to break ties
+            if (candidates.Count > 1 && !string.IsNullOrWhiteSpace(locationHint))
+            {
+                var hintFiltered = candidates
+                    .Where(c =>
+                        Normalize(c.City ?? string.Empty).Contains(locationHint) ||
+                        Normalize(c.Province ?? string.Empty).Contains(locationHint) ||
+                        Normalize(c.AddressLine ?? string.Empty).Contains(locationHint))
+                    .ToList();
+
+                if (TryCollapseToSingleLogicalCustomer(hintFiltered, out var collapsedHint))
+                {
+                    customer = collapsedHint;
+                    return true;
+                }
+
+                if (hintFiltered.Count > 1)
+                    candidates = hintFiltered;
+            }
 
             // STEP 2.6: Compact fallback — strips all spaces
             // handles CHICO'S STORE → "chicosstore" matching CHICO S STORE → "chicosstore"
@@ -347,6 +344,13 @@ public sealed class InvoiceDataValidator
 
         customer = null!;
         suggestions = candidates.Count > 0 ? candidates : null;
+        var distinct = candidates
+            .GroupBy(c => ((c.CustomerCode ?? string.Empty).Trim().ToLowerInvariant(),
+                           (c.CustomerName ?? string.Empty).Trim().ToLowerInvariant(),
+                           c.SubDistributorId))
+            .Select(g => g.OrderBy(c => c.CustomerId).First())
+            .ToList();
+        ambiguousCandidates = distinct.Count > 1 ? distinct : null;
         return false;
     }
     public static bool ResolveOrderType(
@@ -421,8 +425,8 @@ public sealed class InvoiceDataValidator
             string.Equals(normalized, "VS1", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(normalized, "Sales", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(normalized, "Sales Receipt", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "TDI-Claims", StringComparison.OrdinalIgnoreCase) ||   
-            string.Equals(normalized, "TDI Claims", StringComparison.OrdinalIgnoreCase))    
+            string.Equals(normalized, "TDI-Claims", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "TDI Claims", StringComparison.OrdinalIgnoreCase))
         {
             normalizedOrderType = "Invoice";
             return true;
@@ -529,12 +533,14 @@ public sealed class InvoiceDataValidator
 
                     if (narrowed.Count > 1)
                     {
-                        item = null;
-                        suggestions = narrowed;
-                        return false;
+                        item = narrowed.OrderBy(i => i.SubdItemId).First();
+                        ambiguousCandidates = narrowed;
+                        warning = $"Item '{itemName.Trim()}' matched {narrowed.Count} records with the same code and name; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
+                        return true;
                     }
 
                     item = matchesByExtractedCode.OrderBy(i => i.SubdItemId).First();
+                    ambiguousCandidates = matchesByExtractedCode;
                     var candidateNames = string.Join(" / ", matchesByExtractedCode.Select(i => i.ItemName));
                     warning = $"Extracted code '{extractedCode}' matched multiple items ({candidateNames}); used '{item.ItemName}' by default.";
                     return true;
@@ -586,7 +592,7 @@ public sealed class InvoiceDataValidator
         reviewCandidates = null;
         return false;
     }
-    
+
     public static bool IsMissingUomValue(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -644,12 +650,12 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
-        public static bool TryResolveUom(
-        int subdItemId,
-        string? unitOfMeasure,
-        ILookup<(int subdItemId, string UomName), Data.ItemsUom> uomLookup,
-        out Data.ItemsUom? uom,
-        out List<Data.ItemsUom>? ambiguousMatches)
+    public static bool TryResolveUom(
+    int subdItemId,
+    string? unitOfMeasure,
+    ILookup<(int subdItemId, string UomName), Data.ItemsUom> uomLookup,
+    out Data.ItemsUom? uom,
+    out List<Data.ItemsUom>? ambiguousMatches)
     {
         uom = null;
         ambiguousMatches = null;
@@ -699,7 +705,7 @@ public sealed class InvoiceDataValidator
 
         return false;
     }
-   
+
     public static bool TryResolveQuantity(
         int? quantity,
         string? unitOfMeasure,
@@ -790,7 +796,7 @@ public sealed class InvoiceDataValidator
 
         if (distinctCustomerKeys > 1)
             return "Customer values must be the same for all rows in the same invoice.";
-        
+
         var salesmen = rows
             .Select(r => r.SalesManName?.Trim())
             .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -804,7 +810,7 @@ public sealed class InvoiceDataValidator
 
     public static IEnumerable<string> GetUomSynonyms(string value)
     {
-        value = UomParenRegex.Replace(value ?? string.Empty, string.Empty).Trim(); 
+        value = UomParenRegex.Replace(value ?? string.Empty, string.Empty).Trim();
         var normalized = Normalize(value);
 
         switch (normalized)
@@ -966,7 +972,7 @@ public sealed class InvoiceDataValidator
         // Strip everything except letters and digits (no spaces either)
         return Regex.Replace(cleaned.ToLowerInvariant(), @"[^a-z0-9]", string.Empty);
     }
-    private static string StripCodePrefix(string value)   
+    private static string StripCodePrefix(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
         var dashIndex = value.IndexOf(" - ");

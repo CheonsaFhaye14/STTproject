@@ -10,5 +10,7 @@ namespace STTproject.Models
         public int Quantity { get; set; }
         public decimal Amount { get; set; }
         public int LineItemId { get; set; }
+        public int? SourceRowNumber { get; set; }
+        public List<int>? LineItemIds { get; set; } = new();
     }
 }
