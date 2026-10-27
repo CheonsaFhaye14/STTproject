@@ -411,7 +411,7 @@
                                                     <div>
                                                         <span class="cust-meta-label">Stock UOM</span>
                                                         <strong>@(string.IsNullOrWhiteSpace(row.StockUomName) ? "—" :
-                                                                                                                                                                                                                                                                                        row.StockUomName)</strong>
+                                                                                                                                                                                                                                                                                                                                                    row.StockUomName)</strong>
                                                         </div>
                                                         @if (!string.IsNullOrWhiteSpace(row.PPG))
                                                         {
@@ -550,7 +550,7 @@
                                                                 <span class="ch">@row.Principal</span>
                                                             }
                                                             <span class="ch">@(groupRows.Count == 1 ? $"Row {row?.RowNumber}" :
-                                                                                                                                                                                                                                                                                                            $"{groupRows.Count} rows")</span>
+                                                                                                                                                                                                                                                                                                                                                                            $"{groupRows.Count} rows")</span>
                                                             </div>
                                                         </div>
                                                     </div>
