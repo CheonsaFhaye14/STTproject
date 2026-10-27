@@ -260,7 +260,7 @@
                                                                 @foreach (var c in custs)
                                                                 {
                                                                     <option value="@c.Key">@c.Label &mdash; @c.InvoiceCount invoice@(c.InvoiceCount == 1 ? "" :
-                                                                                                                                                                                "s")</option>
+                                                                                                                                                                                                                                                        "s")</option>
                                                                     }
                                                                 </select>
                                                                 @if (!string.IsNullOrEmpty(selectedCustomerFilter))
@@ -308,6 +308,9 @@
                                                                     </button>
                                                                 </div>
                                                             </div>
+                                                            <label class="bulk-select-after">
+                                                                <input type="checkbox" @bind="selectAfterConfirm" /> Select invoices that become ready
+                                                            </label>
                                                         }
                                                         @if (!ReadOnly && !string.IsNullOrEmpty(selectedCustomerFilter))
                                                         {
@@ -424,448 +427,453 @@
                                             }
                                             @if (cardFilter != InvoiceCardFilter.ErrorOnly)
                                             {
-                                                <Virtualize Items="successCards" Context="card" ItemSize="72">
+                                                <Virtualize Items="successCards" Context="card" ItemSize="110">
                                                     @{
+                                                        var prep = card.Prepared;
                                                         var isExpanded = expandedCards.Contains(card.CardKey);
                                                         var isWarn = HasWarningOnly(card);
+                                                        var isSaved = prep?.IsSaved == true;
+                                                        var canSelect = !ReadOnly && !isSaved && IsReady(card);
+                                                        var pending = prep == null ? 0 : PendingDecisionCount(prep);
+                                                        var hasChoices = prep != null && (prep.CustomerChoice != null || prep.ItemChoices.Count > 0);
                                                     }
-                                                    <div class="icard">
+                                                    <div class="icard @(isWarn ? "is-warn" : "is-ok")">
+                                                
+                                                        @* ── Header: checkbox (only when selectable) · icon · number + chips · badge · chevron ── *@
                                                         <div class="ich @(isWarn ? "ich-warn" : "ich-ok") @(isExpanded ? "open" : "")"
                                                              @onclick="() => ToggleExpand(card.CardKey)">
                                                             <div class="ich-left">
+                                                                @if (canSelect)
+                                                                {
+                                                                    <span class="cb-wrap" @onclick:stopPropagation="true">
+                                                                        <input type="checkbox" class="cb" id="chk-@card.CardKey" checked="@prep!.Selected"
+                                                                               @onchange="(e) => OnSelectChanged(card, e.Value)"
+                                                                               aria-label="Select invoice @card.InvoiceNumber" />
+                                                                    </span>
+                                                                }
                                                                 <div class="iicon @(isWarn ? "iicon-warn" : "iicon-ok")">
                                                                     <i class="ti @(isWarn ? "ti-file-alert" : "ti-file-check")" aria-hidden="true"></i>
                                                                 </div>
-                                                                <div>
-                                                                    <div class="inv-num @(isWarn ? "inv-warn" : "inv-ok")">@card.InvoiceNumber</div>
-                                                                    @if (card.Prepared?.Invoice != null)
+                                                                <div class="ich-title">
+                                                                    <div class="inv-num">@card.InvoiceNumber</div>
+                                                                    @if (prep?.Invoice != null)
                                                                     {
-                                                                        <div class="inv-sub @(isWarn ? "inv-sub-warn" : "inv-sub-ok")">
-                                                                            <span>@card.Prepared.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
-                                                                            <span class="sep">·</span>
-                                                                            <span>@card.Prepared.Invoice.CustomerCode -
-                                                                                @card.Prepared.Invoice.CustomerName</span>
-                                                                                <span class="sep">·</span>
-                                                                                <span>@(card.Prepared.Items?.Count ?? 0) item@(card.Prepared.Items?.Count == 1 ?
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      "" : "s")</span>
-                                                                                    @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.SalesManName))
-                                                                                    {
-                                                                                        <span class="sep">·</span>
-                                                                                        <span>@card.Prepared.Invoice.SalesManName</span>
-                                                                                    }
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div class="ich-right">
-                                                                        @if (card.Prepared?.IsSaved == true)
-                                                                        {
-                                                                            <span class="badge badge-saved">
-                                                                                <i class="ti ti-circle-check" aria-hidden="true"></i>
-                                                                                Saved
-                                                                            </span>
-                                                                        }
-                                                                        else if (isWarn)
-                                                                        {
-                                                                            <span class="badge badge-needs-review">@PendingDecisionCount(card.Prepared!) to
-                                                                                review</span>
-                                                                            }
-                                                                        else if (card.Prepared != null)
+                                                                        <div class="chips">
+                                                                            <span class="ch">@prep.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
+                                                                            <span class="ch">@prep.Invoice.CustomerCode - @prep.Invoice.CustomerName</span>
+                                                                            <span class="ch">@(prep.Items?.Count ?? 0) item@(prep.Items?.Count == 1 ? "" : "s")</span>
+                                                                            @if (!string.IsNullOrWhiteSpace(prep.Invoice.SalesManName))
                                                                             {
-                                                                                <span class="badge badge-ready">Ready</span>
-                                                                                @if (!ReadOnly)
-                                                                                {
-                                                                                    <div class="chk" @onclick:stopPropagation="true">
-                                                                                        <input type="checkbox" checked="@card.Prepared.Selected"
-                                                                                               @onchange="(e) => OnSelectChanged(card, e.Value)" id="chk-@card.CardKey" />
-                                                                                        <label for="chk-@card.CardKey">Select</label>
-                                                                                    </div>
-                                                                                }
-                                                                            }
-                                                                            <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    @if (isExpanded && card.Prepared != null)
-                                                                    {
-                                                                        <div class="icb">
-                                                                            @if (card.Prepared.CustomerChoice != null || card.Prepared.ItemChoices.Count > 0)
-                                                                            {
-                                                                                <div class="decision-block">
-                                                                                    @if (card.Prepared.CustomerChoice is { } cust)
-                                                                                    {
-                                                                                        <div class="item-choice-card @(cust.IsConfirmed ? "confirmed" : "")"
-                                                                                             title="@(cust.ValidationMessage ?? cust.Message)">
-                                                                                            <i class="ti @(cust.IsConfirmed ? "ti-check" : "ti-alert-triangle") item-choice-icon"
-                                                                                               aria-hidden="true"></i>
-                                                                                            <select class="item-choice-select"
-                                                                                                    @key="@($"cust-{card.CardKey}-{customerSelectNonce}")"
-                                                                                                    value="@cust.SelectedCustomerId" disabled="@ReadOnly"
-                                                                                                    @onchange="(e) => OnCustomerChoiceChanged(card, e.Value)">
-                                                                                                @foreach (var cand in cust.Candidates)
-                                                                                                {
-                                                                                                    <option value="@cand.CustomerId">@CustomerOptionLabel(cand)</option>
-                                                                                                }
-                                                                                            </select>
-                                                                                            @if (cust.IsConfirmed)
-                                                                                            {
-                                                                                                <span class="badge badge-confirmed item-choice-badge"><i class="ti ti-check"
-                                                                                                                                                             aria-hidden="true"></i></span>
-                                                                                                }else if (!ReadOnly)
-                                                                                                {
-                                                                                                    <button type="button" class="btn-done-reviewing-sm" title="Confirm this customer"
-                                                                                                            disabled="@(!cust.CanConfirm)" @onclick="() => ConfirmCustomerChoice(card)">
-                                                                                                        <i class="ti ti-check" aria-hidden="true"></i>
-                                                                                                    </button>
-                                                                                                }
-                                                                                            </div>
-                                                                                        }
-                                                                                        @foreach (var choice in card.Prepared.ItemChoices)
-                                                                                        {
-                                                                                            <div class="item-choice-card @(choice.IsConfirmed ? "confirmed" : "")"
-                                                                                                 title="@choice.Message">
-                                                                                                <i class="ti @(choice.IsConfirmed ? "ti-check" : "ti-alert-triangle") item-choice-icon"
-                                                                                                   aria-hidden="true"></i>
-                                                                                                <select class="item-choice-select"
-                                                                                                        @key="@($"item-{card.CardKey}-{choice.LineItemId}-{choice.SelectedItemsUomId}")"
-                                                                                                        value="@choice.SelectedItemsUomId" disabled="@ReadOnly"
-                                                                                                        @onchange="(e) => OnItemChoiceChanged(card, choice, e.Value)">
-                                                                                                    @foreach (var candidate in choice.Candidates)
-                                                                                                    {
-                                                                                                        <option value="@candidate.ItemsUomId">
-                                                                                                            @candidate.SubdItemCode - @candidate.ItemName (@candidate.UomName @@
-                                                                                                            ₱@candidate.UnitPrice.ToString("N2"))
-                                                                                                        </option>
-                                                                                                    }
-                                                                                                </select>
-                                                                                                @if (choice.IsConfirmed)
-                                                                                                {
-                                                                                                    <span class="badge badge-confirmed item-choice-badge"><i class="ti ti-check"
-                                                                                                                                                                 aria-hidden="true"></i></span>
-                                                                                                    }
-                else if (!ReadOnly)
-                                                                                                    {
-                                                                                                        <button type="button" class="btn-done-reviewing-sm" title="Confirm this choice"
-                                                                                                                @onclick="() => ConfirmChoice(card, choice)">
-                                                                                                            <i class="ti ti-check" aria-hidden="true"></i>
-                                                                                                        </button>
-                                                                                                    }
-                                                                                                </div>
-                                                                                            }
-                                                                                        </div>
-                                                                                    }
-                                                                                    @if (card.Prepared.Invoice != null)
-                                                                                    {
-                                                                                        <div class="cust-meta">
-                                                                                            <div>
-                                                                                                <span class="cust-meta-label">Customer:</span>
-                                                                                                <strong>@card.Prepared.Invoice.CustomerCode -
-                                                                                                    @card.Prepared.Invoice.CustomerName</strong>
-                                                                                                </div>
-                                                                                                @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerType))
-                                                                                                {
-                                                                                                    <div>
-                                                                                                        <span class="cust-meta-label">Customer Type:</span>
-                                                                                                        <strong>@card.Prepared.Invoice.CustomerType</strong>
-                                                                                                    </div>
-                                                                                                }
-                                                                                                @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.CustomerAddress))
-                                                                                                {
-                                                                                                    <div>
-                                                                                                        <span class="cust-meta-label">Address:</span>
-                                                                                                        <strong>@card.Prepared.Invoice.CustomerAddress</strong>
-                                                                                                    </div>
-                                                                                                }
-                                                                                                <div>
-                                                                                                    <span class="cust-meta-label">Order type:</span>
-                                                                                                    <strong>@card.Prepared.Invoice.OrderType</strong>
-                                                                                                </div>
-                                                                                                @if (!string.IsNullOrWhiteSpace(card.Prepared.Invoice.SalesManName))
-                                                                                                {
-                                                                                                    <div>
-                                                                                                        <span class="cust-meta-label">Salesman</span>
-                                                                                                        <strong>@card.Prepared.Invoice.SalesManName</strong>
-                                                                                                    </div>
-                                                                                                }
-                                                                                            </div>
-                                                                                        }
-
-                                                                                        @if (card.Prepared.CustomerChoice != null || card.Prepared.ItemChoices.Count > 0 ||
-                                    card.Prepared.Warnings.Count > 0)
-                                                                                        {
-                                                                                            <div class="warn-block">
-                                                                                                @if (card.Prepared.CustomerChoice is { } custMsg)
-                                                                                                {
-                                                                                                    <div class="warn-msg @(custMsg.IsConfirmed ? "resolved" : "")">
-                                                                                                        <i class="ti @(custMsg.IsConfirmed ? "ti-check" : "ti-alert-triangle")"
-                                                                                                           aria-hidden="true"></i> @custMsg.Message
-                                                                                                    </div>
-                                                                                                    @if (!string.IsNullOrEmpty(custMsg.ValidationMessage))
-                                                                                                    {
-                                                                                                        <div class="warn-msg"><i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                                                                            @custMsg.ValidationMessage</div>
-                                                                                                        }
-                                                                                                    }
-                                                                                                    @foreach (var ch in card.Prepared.ItemChoices)
-                                                                                                    {
-                                                                                                        <div class="warn-msg @(ch.IsConfirmed ? "resolved" : "")">
-                                                                                                            <i class="ti @(ch.IsConfirmed ? "ti-check" : "ti-alert-triangle")"
-                                                                                                               aria-hidden="true"></i> @ch.Message
-                                                                                                        </div>
-                                                                                                    }
-                                                                                                    @foreach (var w in card.Prepared.Warnings)
-                                                                                                    {
-                                                                                                        <div class="warn-msg resolved">
-                                                                                                            <i class="ti ti-info-circle" aria-hidden="true"></i> @w
-                                                                                                        </div>
-                                                                                                    }
-                                                                                                </div>
-                                                                                            }
-
-                                                                                            @if (card.Prepared.Items != null && card.Prepared.Items.Count > 0)
-                                                                                            {
-                                                                                                <div class="itbl-wrap">
-                                                                                                    <table class="itbl">
-                                                                                                        <thead>
-                                                                                                            <tr>
-                                                                                                                <th>Row</th>
-                                                                                                                <th>SKU</th>
-                                                                                                                <th>Item Name</th>
-                                                                                                                <th class="r">UOM</th>
-                                                                                                                <th class="r">Qty</th>
-                                                                                                                <th class="r">Amount</th>
-                                                                                                            </tr>
-                                                                                                        </thead>
-                                                                                                        <tbody>
-                                                                                                            @foreach (var it in card.Prepared.Items)
-                                                                                                            {
-                                                                                                                var rowChoices = card.Prepared.ItemChoices
-                                                                                                                    .Where(ch => it.LineItemIds != null && it.LineItemIds.Contains(ch.LineItemId))
-                                                                                                                    .ToList();
-                                                                                                                var isConflictRow = rowChoices.Count > 0;
-                                                                                                                var isConflictConfirmed = isConflictRow && rowChoices.All(ch => ch.IsConfirmed);
-                                                                                                                <tr
-                                                                                                                    class="@(isConflictRow ? (isConflictConfirmed ? "itbl-conflict-row confirmed" : "itbl-conflict-row") : "")">
-                                                                                                                    <td class="mono">@(it.SourceRowNumber ?? it.LineItemId)</td>
-                                                                                                                    <td class="mono">@it.ItemCode</td>
-                                                                                                                    <td>@it.ItemName</td>
-                                                                                                                    <td class="r">@it.UomName</td>
-                                                                                                                    <td class="r">@it.Quantity</td>
-                                                                                                                    <td class="r">₱@it.Amount.ToString("N2")</td>
-                                                                                                                </tr>
-                                                                                                            }
-                                                                                                        </tbody>
-                                                                                                        <tfoot>
-                                                                                                            <tr class="itbl-total-row">
-                                                                                                                <td colspan="5" class="r"><strong>Total</strong></td>
-                                                                                                                <td class="r"><strong>₱@card.Prepared.Items.Sum(i =>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        i.Amount).ToString("N2")</strong></td>
-                                                                                                                </tr>
-                                                                                                            </tfoot>
-                                                                                                        </table>
-                                                                                                    </div>
-                                                                                                }
-                                                                                            </div>
-                                                                                        }
-                                                                                    </div>
-                                                                                </Virtualize>
-                                                                            }
-
-                                                                            @if (cardFilter != InvoiceCardFilter.SuccessOnly)
-                                                                            {
-                                                                                @if (!string.IsNullOrWhiteSpace(selectedErrorFilter) && UsesItemGrouping(selectedErrorFilter))
-                                                                                {
-                                                                                    var itemGroups = ApplyGroupSearch(GetItemGroupedCards(selectedErrorFilter));
-                                                                                    @* Error cards (item-grouped) *@
-                                                                                    <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
-                                                                                        @{
-                                                                                            var isExpanded = expandedCards.Contains(grp.Title);
-                                                                                        }
-                                                                                        <div class="icard">
-                                                                                            <div class="ich ich-er @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(grp.Title)">
-                                                                                                <div class="ich-left">
-                                                                                                    <div class="iicon iicon-er">
-                                                                                                        <i class="ti ti-file-alert" aria-hidden="true"></i>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                        <div class="inv-num inv-er">@grp.Title</div>
-                                                                                                        @if (!string.IsNullOrWhiteSpace(grp.Subtitle))
-                                                                                                        {
-                                                                                                            <div class="inv-sub inv-sub-er">@grp.Subtitle</div>
-                                                                                                        }
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                                <div class="ich-right">
-                                                                                                    <span class="badge badge-err">
-                                                                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                                                                        @(grp.Occurrences.Count == 1 ? "1 row" : $"{grp.Occurrences.Count} rows")
-                                                                                                    </span>
-                                                                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            @if (isExpanded)
-                                                                                            {
-                                                                                                <div class="icb-err-rows">
-                                                                                                    <div class="err-msg-card">
-                                                                                                        <div class="err-msg-hdr">
-                                                                                                            <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
-                                                                                                            <div>
-                                                                                                                <div class="err-msg-text">@grp.Message</div>
-                                                                                                                <div class="err-rows-pill">
-                                                                                                                    <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                                                                    @FormatRowList(grp.Occurrences)
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            }
-                                                                                        </div>
-                                                                                    </Virtualize>
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    <Virtualize Items="errorCards" Context="card" ItemSize="72">
-                                                                                        @{
-                                                                                            var grouped = GetGroupedIssues(card, selectedErrorFilter);
-                                                                                            var isExpanded = expandedCards.Contains(card.CardKey);
-                                                                                            var isHold = IsHoldOnly(card);
-                                                                                        }
-                                                                                        <div class="icard">
-                                                                                            <div class="ich @(isHold ? "ich-warn" : "ich-er") @(isExpanded ? "open" : "")"
-                                                                                                 @onclick="() => ToggleExpand(card.CardKey)">
-                                                                                                <div class="ich-left">
-                                                                                                    <div class="iicon @(isHold ? "iicon-warn" : "iicon-er")">
-                                                                                                        <i class="ti @(isHold ? "ti-player-pause" : "ti-file-alert")"
-                                                                                                           aria-hidden="true"></i>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                        <div class="inv-num @(isHold ? "inv-warn" : "inv-er")">@card.InvoiceNumber</div>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                                <div class="ich-right">
-                                                                                                    @if (isHold)
-                                                                                                    {
-                                                                                                        <span class="badge badge-needs-review">
-                                                                                                            <i class="ti ti-player-pause" aria-hidden="true"></i>
-                                                                                                            On hold
-                                                                                                        </span>
-                                                                                                    }
-                                                                                                    else
-                                                                                                    {
-                                                                                                        <span class="badge badge-err">
-                                                                                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                                                                            @GetErrorBadgeText(card)
-                                                                                                        </span>
-                                                                                                    }
-                                                                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
-                                                                                                </div>
-                                                                                            </div>
-
-                                                                                            @* On-hold notes are always shown, so users don't have to click to find out why. *@
-                                                                                            @if ((isExpanded || isHold) && grouped.Any())
-                                                                                            {
-                                                                                                <div class="icb-err-rows">
-                                                                                                    @foreach (var grp in grouped)
-                                                                                                    {
-                                                                                                        <div class="err-msg-card">
-                                                                                                            <div class="err-msg-hdr">
-                                                                                                                <i class="ti @(isHold ? "ti-info-circle" : "ti-alert-circle") err-msg-icon"
-                                                                                                                   aria-hidden="true"></i>
-                                                                                                                <div>
-                                                                                                                    <div class="err-msg-text">@grp.Message</div>
-                                                                                                                    @if (grp.Rows.Count > 0)
-                                                                                                                    {
-                                                                                                                        <div class="err-rows-pill">
-                                                                                                                            <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                                                                            @FormatRowList(grp.Rows)
-                                                                                                                        </div>
-                                                                                                                    }
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    }
-                                                                                                </div>
-                                                                                            }
-                                                                                        </div>
-                                                                                    </Virtualize>
-                                                                                }
+                                                                                <span class="ch">@prep.Invoice.SalesManName</span>
                                                                             }
                                                                         </div>
                                                                     }
-                                                                }
+                                                                </div>
                                                             </div>
-
-                                                            @* ── Modal footer ── *@
-                                                            <div class="modal-footer-ent">
-                                                                @if (!ReadOnly && ImportResult != null && ImportResult.PreparedInvoices != null &&
-                                                            ImportResult.PreparedInvoices.Count > 0)
+                                                            <div class="ich-right">
+                                                                @if (isSaved)
                                                                 {
-                                                                    <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
-                                                                        <i class="ti ti-send" aria-hidden="true"></i>
-                                                                        Commit selected (@GetSelectedInvoiceCount())
-                                                                    </button>
+                                                                    <span class="badge badge-saved">
+                                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                                        Saved
+                                                                    </span>
                                                                 }
-                                                                <button type="button" class="btn-close-modal" @onclick="OnClose">Close</button>
+                                                                else if (isWarn)
+                                                                {
+                                                                    <span class="badge badge-needs-review">
+                                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                        Decision required@(pending > 1 ? $" ({pending})" : "")
+                                                                    </span>
+                                                                }
+                                                                else if (prep != null)
+                                                                {
+                                                                    <span class="badge badge-ready">
+                                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                                        Ready
+                                                                    </span>
+                                                                }
+                                                                <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
                                                             </div>
-
                                                         </div>
+                                                
+                                                        @* ── Decision strip: always visible while a decision is pending; shown when expanded otherwise ── *@
+                                                        @if (prep != null && hasChoices && (isWarn || isExpanded))
+                                                        {
+                                                            <div class="strip @(isWarn ? "" : "strip-done")">
+                                                                @if (prep.CustomerChoice is { } cust)
+                                                                {
+                                                                    <div class="strip-row @(cust.IsConfirmed ? "done" : "")">
+                                                                        <div class="strip-msg">
+                                                                            <i class="ti @(cust.IsConfirmed ? "ti-check" : "ti-alert-triangle")" aria-hidden="true"></i>
+                                                                            <span>@cust.Message</span>
+                                                                        </div>
+                                                                        <div class="strip-ctl">
+                                                                            <select class="strip-select" aria-label="Customer"
+                                                                                    @key="@($"cust-{card.CardKey}-{customerSelectNonce}")"
+                                                                                    value="@cust.SelectedCustomerId" disabled="@ReadOnly"
+                                                                                    @onchange="(e) => OnCustomerChoiceChanged(card, e.Value)">
+                                                                                @foreach (var cand in cust.Candidates)
+                                                                                {
+                                                                                    <option value="@cand.CustomerId">@CustomerOptionLabel(cand)</option>
+                                                                                }
+                                                                            </select>
+                                                                            @if (cust.IsConfirmed)
+                                                                            {
+                                                                                <span class="badge badge-confirmed"><i class="ti ti-check" aria-hidden="true"></i></span>
+                                                                            }
+                                                                            else if (!ReadOnly)
+                                                                            {
+                                                                                <button type="button" class="btn-confirm" disabled="@(!cust.CanConfirm)"
+                                                                                        @onclick="() => ConfirmCustomerChoice(card)">
+                                                                                    <i class="ti ti-check" aria-hidden="true"></i> Confirm
+                                                                                </button>
+                                                                            }
+                                                                        </div>
+                                                                        @if (!string.IsNullOrEmpty(cust.ValidationMessage))
+                                                                        {
+                                                                            <div class="strip-err">
+                                                                                <i class="ti ti-alert-circle" aria-hidden="true"></i> @cust.ValidationMessage
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                                @foreach (var choice in prep.ItemChoices)
+                                                                {
+                                                                    <div class="strip-row @(choice.IsConfirmed ? "done" : "")">
+                                                                        <div class="strip-msg">
+                                                                            <i class="ti @(choice.IsConfirmed ? "ti-check" : "ti-alert-triangle")" aria-hidden="true"></i>
+                                                                            <span>@choice.Message</span>
+                                                                        </div>
+                                                                        <div class="strip-ctl">
+                                                                            <select class="strip-select" aria-label="Choose one"
+                                                                                    @key="@($"item-{card.CardKey}-{choice.LineItemId}-{choice.SelectedItemsUomId}")"
+                                                                                    value="@choice.SelectedItemsUomId" disabled="@ReadOnly"
+                                                                                    @onchange="(e) => OnItemChoiceChanged(card, choice, e.Value)">
+                                                                                @foreach (var candidate in choice.Candidates)
+                                                                                {
+                                                                                    <option value="@candidate.ItemsUomId">
+                                                                                        @candidate.SubdItemCode - @candidate.ItemName (@candidate.UomName @@ ₱@candidate.UnitPrice.ToString("N2"))
+                                                                                    </option>
+                                                                                }
+                                                                            </select>
+                                                                            @if (choice.IsConfirmed)
+                                                                            {
+                                                                                <span class="badge badge-confirmed"><i class="ti ti-check" aria-hidden="true"></i></span>
+                                                                            }
+                                                                            else if (!ReadOnly)
+                                                                            {
+                                                                                <button type="button" class="btn-confirm" @onclick="() => ConfirmChoice(card, choice)">
+                                                                                    <i class="ti ti-check" aria-hidden="true"></i> Confirm
+                                                                                </button>
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                
+                                                        @* ── Informational notes (resolved / no action needed) ── *@
+                                                        @if (prep != null)
+                                                        {
+                                                            foreach (var note in prep.Warnings)
+                                                            {
+                                                                <div class="nb">
+                                                                    <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                                                    <span>@note</span>
+                                                                </div>
+                                                            }
+                                                        }
+                                                
+                                                        @* ── Expanded body: facts grid + items table ── *@
+                                                        @if (isExpanded && prep != null)
+                                                        {
+                                                            <div class="icb">
+                                                                @if (prep.Invoice != null)
+                                                                {
+                                                                    <div class="cust-meta">
+                                                                        <div>
+                                                                            <span class="cust-meta-label">Customer</span>
+                                                                            <strong>@prep.Invoice.CustomerCode - @prep.Invoice.CustomerName</strong>
+                                                                        </div>
+                                                                        @if (!string.IsNullOrWhiteSpace(prep.Invoice.CustomerType))
+                                                                        {
+                                                                            <div>
+                                                                                <span class="cust-meta-label">Customer type</span>
+                                                                                <strong>@prep.Invoice.CustomerType</strong>
+                                                                            </div>
+                                                                        }
+                                                                        @if (!string.IsNullOrWhiteSpace(prep.Invoice.CustomerAddress))
+                                                                        {
+                                                                            <div>
+                                                                                <span class="cust-meta-label">Address</span>
+                                                                                <strong>@prep.Invoice.CustomerAddress</strong>
+                                                                            </div>
+                                                                        }
+                                                                        <div>
+                                                                            <span class="cust-meta-label">Order type</span>
+                                                                            <strong>@prep.Invoice.OrderType</strong>
+                                                                        </div>
+                                                                        @if (!string.IsNullOrWhiteSpace(prep.Invoice.SalesManName))
+                                                                        {
+                                                                            <div>
+                                                                                <span class="cust-meta-label">Salesman</span>
+                                                                                <strong>@prep.Invoice.SalesManName</strong>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                
+                                                                @if (prep.Items != null && prep.Items.Count > 0)
+                                                                {
+                                                                    <div class="itbl-wrap">
+                                                                        <table class="itbl">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th>Row</th>
+                                                                                    <th>SKU</th>
+                                                                                    <th>Item name</th>
+                                                                                    <th class="r">UOM</th>
+                                                                                    <th class="r">Qty</th>
+                                                                                    <th class="r">Amount</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                @foreach (var it in prep.Items)
+                                                                                {
+                                                                                    var rowChoices = prep.ItemChoices
+                                                                                        .Where(ch => it.LineItemIds != null && it.LineItemIds.Contains(ch.LineItemId))
+                                                                                        .ToList();
+                                                                                    var isConflictRow = rowChoices.Count > 0;
+                                                                                    var isConflictConfirmed = isConflictRow && rowChoices.All(ch => ch.IsConfirmed);
+                                                                                    <tr class="@(isConflictRow ? (isConflictConfirmed ? "itbl-conflict-row confirmed" : "itbl-conflict-row") : "")">
+                                                                                        <td class="mono">@(it.SourceRowNumber ?? it.LineItemId)</td>
+                                                                                        <td class="mono">@it.ItemCode</td>
+                                                                                        <td>
+                                                                                            @it.ItemName
+                                                                                            @if (isConflictRow)
+                                                                                            {
+                                                                                                <span class="tag @(isConflictConfirmed ? "tag-ok" : "tag-warn")">@(isConflictConfirmed ? "Matched" : "Needs decision")</span>
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td class="r">@it.UomName</td>
+                                                                                        <td class="r">@it.Quantity</td>
+                                                                                        <td class="r">₱@it.Amount.ToString("N2")</td>
+                                                                                    </tr>
+                                                                                }
+                                                                            </tbody>
+                                                                            <tfoot>
+                                                                                <tr class="itbl-total-row">
+                                                                                    <td colspan="5" class="r"><strong>Total</strong></td>
+                                                                                    <td class="r"><strong>₱@prep.Items.Sum(i => i.Amount).ToString("N2")</strong></td>
+                                                                                </tr>
+                                                                            </tfoot>
+                                                                        </table>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                
+                                                        @* ── Footer: what selection means for this card ── *@
+                                                        <div class="ft @(CardFooterGood(card) ? "ft-ok" : "")">@CardFooterText(card)</div>
                                                     </div>
-                                                }
+                                                </Virtualize>
+                                            }
 
-                                                @if (showDownloadModal)
+                                            @if (cardFilter != InvoiceCardFilter.SuccessOnly)
+                                            {
+                                                @if (!string.IsNullOrWhiteSpace(selectedErrorFilter) && UsesItemGrouping(selectedErrorFilter))
                                                 {
-                                                    var downloadTypes = GetDistinctErrorMessages();
-                                                    var previewCount = BuildReportEntries(downloadScopeAll ? null : downloadErrorType)
-                                                        .Select(e => e.RowNumber).Distinct().Count();
-                                                    <div class="modal-overlay" style="z-index:1100;">
-                                                        <div class="modal-box" style="max-width:460px;">
-                                                            <div class="modal-header-ent">
-                                                                <div class="mh-left">
-                                                                    <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
-                                                                    <div>
-                                                                        <div class="mh-title">Download error report</div>
-                                                                        <div class="mh-sub">Includes every original column from your file</div>
+                                                    var itemGroups = ApplyGroupSearch(GetItemGroupedCards(selectedErrorFilter));
+                                                    @* Error cards (item-grouped) *@
+                                                    <Virtualize Items="itemGroups" Context="grp" ItemSize="72">
+                                                        @{
+                                                            var isExpanded = expandedCards.Contains(grp.Title);
+                                                        }
+                                                        <div class="icard is-er">
+                                                            <div class="ich ich-er @(isExpanded ? "open" : "")" @onclick="() => ToggleExpand(grp.Title)">
+                                                                <div class="ich-left">
+                                                                    <div class="iicon iicon-er">
+                                                                        <i class="ti ti-file-alert" aria-hidden="true"></i>
+                                                                    </div>
+                                                                    <div class="ich-title">
+                                                                        <div class="inv-num">@grp.Title</div>
+                                                                        @if (!string.IsNullOrWhiteSpace(grp.Subtitle))
+                                                                        {
+                                                                            <div class="chips"><span class="ch">@grp.Subtitle</span></div>
+                                                                        }
                                                                     </div>
                                                                 </div>
-                                                                <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
-                                                                    <i class="ti ti-x" aria-hidden="true"></i>
-                                                                </button>
+                                                                <div class="ich-right">
+                                                                    <span class="badge badge-err">
+                                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                        @(grp.Occurrences.Count == 1 ? "1 row" : $"{grp.Occurrences.Count} rows")
+                                                                    </span>
+                                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                                                </div>
                                                             </div>
-                                                            <div class="modal-body-ent">
-                                                                <label style="display:block;margin-bottom:8px;">
-                                                                    <input type="radio" name="dl-scope" checked="@downloadScopeAll"
-                                                                           @onchange="() => downloadScopeAll = true" />
-                                                                    All errors
-                                                                </label>
-                                                                <label style="display:block;margin-bottom:8px;">
-                                                                    <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
-                                                                           @onchange="() => downloadScopeAll = false" />
-                                                                    Only a specific error
-                                                                </label>
-                                                                @if (!downloadScopeAll)
-                                                                {
-                                                                    <select value="@downloadErrorType" @onchange="e => downloadErrorType = e.Value?.ToString()">
-                                                                        <option value="">-- select error --</option>
-                                                                        @foreach (var t in downloadTypes)
-                                                                        {
-                                                                            <option value="@t.Message">@t.Message (@t.Count)</option>
-                                                                        }
-                                                                    </select>
-                                                                }
-                                                                <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
-                                                            </div>
-                                                            <div class="modal-footer-ent">
-                                                                <button type="button" class="btn-commit"
-                                                                        disabled="@(!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))" @onclick="ConfirmDownload">
-                                                                    <i class="ti ti-download" aria-hidden="true"></i> Download
-                                                                </button>
-                                                                <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
-                                                            </div>
+                                                            @if (isExpanded)
+                                                            {
+                                                                <div class="icb-err-rows">
+                                                                    <div class="err-msg-card">
+                                                                        <div class="err-msg-hdr">
+                                                                            <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
+                                                                            <div>
+                                                                                <div class="err-msg-text">@grp.Message</div>
+                                                                                <div class="err-rows-pill">
+                                                                                    <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                                    @FormatRowList(grp.Occurrences)
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                            <div class="ft ft-er">Can't be selected or committed</div>
                                                         </div>
-                                                    </div>
+                                                    </Virtualize>
+ 
                                                 }
+                                                else
+                                                {
+                                                    <Virtualize Items="errorCards" Context="card" ItemSize="72">
+                                                        @{
+                                                            var grouped = GetGroupedIssues(card, selectedErrorFilter);
+                                                            var isExpanded = expandedCards.Contains(card.CardKey);
+                                                            var isHold = IsHoldOnly(card);
+                                                        }
+                                                        <div class="icard @(isHold ? "is-warn" : "is-er")">
+                                                            <div class="ich @(isHold ? "ich-warn" : "ich-er") @(isExpanded ? "open" : "")"
+                                                                 @onclick="() => ToggleExpand(card.CardKey)">
+                                                                <div class="ich-left">
+                                                                    <div class="iicon @(isHold ? "iicon-warn" : "iicon-er")">
+                                                                        <i class="ti @(isHold ? "ti-player-pause" : "ti-file-alert")" aria-hidden="true"></i>
+                                                                    </div>
+                                                                    <div class="ich-title">
+                                                                        <div class="inv-num">@card.InvoiceNumber</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="ich-right">
+                                                                    @if (isHold)
+                                                                    {
+                                                                        <span class="badge badge-needs-review">
+                                                                            <i class="ti ti-player-pause" aria-hidden="true"></i>
+                                                                            On hold
+                                                                        </span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge badge-err">
+                                                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                            @GetErrorBadgeText(card)
+                                                                        </span>
+                                                                    }
+                                                                    <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
+                                                                </div>
+                                                            </div>
+                                                                                    
+                                                            @* On-hold notes are always shown, so users don't have to click to find out why. *@
+                                                            @if ((isExpanded || isHold) && grouped.Any())
+                                                            {
+                                                                <div class="icb-err-rows">
+                                                                    @foreach (var issueGroup in grouped)
+                                                                    {
+                                                                        <div class="err-msg-card">
+                                                                            <div class="err-msg-hdr">
+                                                                                <i class="ti @(isHold ? "ti-info-circle" : "ti-alert-circle") err-msg-icon" aria-hidden="true"></i>
+                                                                                <div>
+                                                                                    <div class="err-msg-text">@issueGroup.Message</div>
+                                                                                    @if (issueGroup.Rows.Count > 0)
+                                                                                    {
+                                                                                        <div class="err-rows-pill">
+                                                                                            <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
+                                                                                            @FormatRowList(issueGroup.Rows)
+                                                                                        </div>
+                                                                                    }
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                            <div class="ft ft-er">Can't be selected or committed</div>
+                                                        </div>
+                                                    </Virtualize>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            @* ── Modal footer ── *@
+                            <div class="modal-footer-ent">
+                                @if (!ReadOnly && ImportResult != null && ImportResult.PreparedInvoices != null &&
+                            ImportResult.PreparedInvoices.Count > 0)
+                                {
+                                    <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
+                                        <i class="ti ti-send" aria-hidden="true"></i>
+                                        Commit selected (@GetSelectedInvoiceCount())
+                                    </button>
+                                }
+                                <button type="button" class="btn-close-modal" @onclick="OnClose">Close</button>
+                            </div>
+
+                        </div>
+                    </div>
+                }
+
+                @if (showDownloadModal)
+                {
+                    var downloadTypes = GetDistinctErrorMessages();
+                    var previewCount = BuildReportEntries(downloadScopeAll ? null : downloadErrorType)
+                        .Select(e => e.RowNumber).Distinct().Count();
+                    <div class="modal-overlay" style="z-index:1100;">
+                        <div class="modal-box" style="max-width:460px;">
+                            <div class="modal-header-ent">
+                                <div class="mh-left">
+                                    <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
+                                    <div>
+                                        <div class="mh-title">Download error report</div>
+                                        <div class="mh-sub">Includes every original column from your file</div>
+                                    </div>
+                                </div>
+                                <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
+                                    <i class="ti ti-x" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="modal-body-ent">
+                                <label style="display:block;margin-bottom:8px;">
+                                    <input type="radio" name="dl-scope" checked="@downloadScopeAll"
+                                           @onchange="() => downloadScopeAll = true" />
+                                    All errors
+                                </label>
+                                <label style="display:block;margin-bottom:8px;">
+                                    <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
+                                           @onchange="() => downloadScopeAll = false" />
+                                    Only a specific error
+                                </label>
+                                @if (!downloadScopeAll)
+                                {
+                                    <select value="@downloadErrorType" @onchange="e => downloadErrorType = e.Value?.ToString()">
+                                        <option value="">-- select error --</option>
+                                        @foreach (var t in downloadTypes)
+                                        {
+                                            <option value="@t.Message">@t.Message (@t.Count)</option>
+                                        }
+                                    </select>
+                                }
+                                <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
+                            </div>
+                            <div class="modal-footer-ent">
+                                <button type="button" class="btn-commit"
+                                        disabled="@(!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))" @onclick="ConfirmDownload">
+                                    <i class="ti ti-download" aria-hidden="true"></i> Download
+                                </button>
+                                <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                }
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit selected invoices"
               Message="@($"Commit {GetSelectedInvoiceCount()} selected invoice(s)?")" OnYes="ConfirmCommit" OnNo="CancelCommit"
@@ -2021,4 +2029,15 @@ null;
         }
         InvalidateCaches();
     }
+    private string CardFooterText(InvoiceCardViewModel c)
+    {
+        if (c.Prepared?.IsSaved == true) return "Saved";
+        if (ReadOnly) return "Preview only. Can't be selected or committed";
+        if (HasWarningOnly(c)) return "Can't be selected until every decision is confirmed";
+        if (IsReady(c)) return "Ready to select and commit";
+        return "Can't be selected or committed";
+    }
+ 
+    private bool CardFooterGood(InvoiceCardViewModel c) =>
+        !ReadOnly && (c.Prepared?.IsSaved == true || IsReady(c));
 }

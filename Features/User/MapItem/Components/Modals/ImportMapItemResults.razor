@@ -294,369 +294,490 @@
                         <div class="import-results">
                             @if (groupFilter != GroupFilter.ErrorOnly)
                             {
-                                <Virtualize Items="displayCards" Context="card" ItemSize="72">
+                                <Virtualize Items="displayCards" Context="card" ItemSize="110">
                                     @{
-                                        var groupRows = card.Group.Rows;
+                                        var grp = card.Group;
+                                        var groupRows = grp.Rows;
                                         var first = card.First;
-                                        var displayName = first == null
-                                        ? "[Orphan]"
-                                        : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                  {first.CompanyItemName}");
                                         var groupKey = card.Key;
-                                        var isWarn = card.IsWarningOnly;
                                         var isExpanded = expandedGroups.Contains(groupKey);
+                                        var isSaved = grp.IsSaved;
+                                        var isWarn = card.IsWarningOnly;
+                                        var decisionPending = isWarn && !isSaved && !card.CanSelect;
+ 
+                                        var stockWarnings = card.Warnings.Where(IsStockUomWarning).ToList();
+                                        var otherWarnings = card.Warnings.Where(w => !IsStockUomWarning(w) &&
+                                                    !IsPriceWarningText(w)).ToList();
+                                        var hasPriceCheck = groupRows.Any(r => r.HasPricePrompt);
+                                        var priceRows = groupRows.Where(r => r.HasPricePrompt).OrderBy(r => r.RowNumber).ToList();
+                                        var showStockBlock = !isSaved
+                                            && (grp.RequiresStockUom || grp.HasStockUom || !string.IsNullOrWhiteSpace(grp.FileStockUom));
+                                        var showStockStrip = showStockBlock && stockWarnings.Count > 0;
+                                        var pendingUom = PendingStockUom(grp);
+                                        var pendingDiffers = !string.Equals(pendingUom, grp.StockUomName,
+                                                    StringComparison.OrdinalIgnoreCase);
+                                        var showConfirm = !string.IsNullOrWhiteSpace(pendingUom) && (stockWarnings.Count > 0 ||
+                                                    pendingDiffers);
+                                        var confirmTitle = stockWarnings.Count > 0 ? "Confirm" : "Apply";
                                     }
-
-                                    <div class="icard">
+                                    <div class="icard @(isWarn ? "is-warn" : "is-ok")">
+ 
+                                        @* ── Header: checkbox (only when selectable) · icon · title + chips · badge · chevron ── *@
                                         <div class="ich @(isWarn ? "ich-warn" : "ich-ok") @(isExpanded ? "open" : "")"
                                              @onclick="() => ToggleExpand(groupKey)">
                                             <div class="ich-left">
+                                                @if (card.CanSelect)
+                                                {
+                                                    <span class="cb-wrap" @onclick:stopPropagation="true">
+                                                        <input type="checkbox" class="cb" id="chk-@groupKey" checked="@grp.Selected"
+                                                               @onchange="(e) => ToggleGroupSelectionLocal(grp, e.Value)"
+                                                               aria-label="Select item" />
+                                                    </span>
+                                                }
                                                 <div class="iicon @(isWarn ? "iicon-warn" : "iicon-ok")">
                                                     <i class="ti ti-package" aria-hidden="true"></i>
                                                 </div>
-                                                <div>
-                                                    <div class="inv-num @(isWarn ? "inv-warn" : "inv-ok")">@displayName</div>
+                                                <div class="ich-title">
+                                                    <div class="inv-num">
+                                                        @if (first == null)
+                                                        {
+                                                            <text>[Orphan]</text>
+                                                        }
+                                                        else if (string.IsNullOrWhiteSpace(first.CompanyItemCode))
+                                                        {
+                                                            <text>[Blank Item]</text>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="inv-code">@first.CompanyItemCode</span>
+                                                            @first.CompanyItemName
+                                                        }
+                                                    </div>
                                                     @if (first != null)
                                                     {
-                                                        <div class="inv-sub @(isWarn ? "inv-sub-warn" : "inv-sub-ok")">
-                                                            <span>@first.Principal</span>
-                                                            <span class="sep">·</span>
-                                                            <span>@first.SubdItemCode - @first.SubdItemName</span>
+                                                        <div class="chips">
+                                                            <span class="ch">@first.Principal</span>
+                                                            <span class="ch">@first.SubdItemCode - @first.SubdItemName</span>
                                                             @if (HasMultipleSubdistributors())
                                                             {
-                                                                <span class="sep">·</span>
-                                                                <span>@first.SubDistributorCode</span>
+                                                                <span class="ch">@first.SubDistributorCode</span>
                                                             }
-                                                            <span class="sep">·</span>
-                                                            <span>@groupRows.Count uom@(groupRows.Count == 1 ? "" : "s")</span>
+                                                            <span class="ch">@groupRows.Count UOM@(groupRows.Count == 1 ? "" : "s")</span>
                                                         </div>
                                                     }
                                                 </div>
                                             </div>
                                             <div class="ich-right">
-                                                @if (card.Group.IsSaved)
+                                                @if (isSaved)
                                                 {
                                                     <span class="badge badge-saved">
                                                         <i class="ti ti-circle-check" aria-hidden="true"></i>
                                                         Saved
                                                     </span>
                                                 }
+                                                else if (decisionPending)
+                                                {
+                                                    <span class="badge badge-needs-review">
+                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                        Decision required
+                                                    </span>
+                                                }
+                                                else if (isWarn)
+                                                {
+                                                    <span class="badge badge-info">
+                                                        <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                                        Warning
+                                                    </span>
+                                                }
                                                 else
                                                 {
-                                                    @if (isWarn)
-                                                    {
-                                                        <span class="badge badge-needs-review">
-                                                            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                            Warning
-                                                        </span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-ready">
-                                                            <i class="ti ti-check" aria-hidden="true"></i>
-                                                            Ready
-                                                        </span>
-                                                    }
-                                                    <div class="chk" @onclick:stopPropagation="true">
-                                                        <input type="checkbox" checked="@card.Group.Selected" disabled="@(!card.CanSelect)"
-                                                               @onchange="(e) => ToggleGroupSelectionLocal(card.Group, e.Value)"
-                                                               id="chk-@groupKey" />
-                                                        <label for="chk-@groupKey">Select</label>
-                                                    </div>
+                                                    <span class="badge badge-ready">
+                                                        <i class="ti ti-circle-check" aria-hidden="true"></i>
+                                                        Ready
+                                                    </span>
                                                 }
                                                 <i class="ti ti-chevron-down chev @(isExpanded ? "open" : "")" aria-hidden="true"></i>
                                             </div>
                                         </div>
-
-                                        @if (isExpanded && first != null)
+ 
+                                        @* ── Decision strip: stock UOM warning, always visible until resolved ── *@
+                                        @if (showStockStrip)
                                         {
-                                            var stockWarnings = card.Warnings.Where(IsStockUomWarning).ToList();
-                                            var otherWarnings = card.Warnings.Where(w => !IsStockUomWarning(w) &&
-                                                    !IsPriceWarningText(w)).ToList();
-                                            var hasPriceCheck = groupRows.Any(r => r.HasPricePrompt);
-
-                                            <div class="icb">
-                                                @foreach (var w in otherWarnings)
-                                                {
-                                                    <div class="warn-msg">
+                                            <div class="strip">
+                                                <div class="strip-row">
+                                                    <div class="strip-msg">
                                                         <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                        <span>@w</span>
+                                                        <span>@string.Join(" ", stockWarnings)</span>
                                                     </div>
-                                                }
-                                                @if (!card.Group.IsSaved && (card.Group.RequiresStockUom || card.Group.HasStockUom || !string.IsNullOrWhiteSpace(card.Group.FileStockUom)))
-                                                {
-                                                    var fileUom = card.Group.FileStockUom;
-                                                    var suggestedUom = card.Group.SuggestedStockUom;
-                                                    var pendingUom = PendingStockUom(card.Group);
-                                                    var pendingDiffers = !string.Equals(pendingUom, card.Group.StockUomName,
-                                                                StringComparison.OrdinalIgnoreCase);
-                                                    var showConfirm = !string.IsNullOrWhiteSpace(pendingUom) && (stockWarnings.Count > 0 ||
-                                                                pendingDiffers);
-                                                    var confirmTitle = stockWarnings.Count > 0 ? "Confirm" : "Apply";
-
-                                                    <div class="stk-box @(stockWarnings.Count > 0 ? "is-warn" : "")">
-                                                        @if (stockWarnings.Count > 0)
+                                                    <div class="strip-ctl strip-ctl-compact">
+                                                        <div class="stk-select">
+                                                            <Select TItem="string" Placeholder="Choose the stock UOM…"
+                                                                    Items="grp.StockUomOptions" ValueSelector="x => x" TextSelector="x => x"
+                                                                    SelectedValue="@pendingUom"
+                                                                    SelectedValueChanged="v => OnStockUomPicked(grp, v)" />
+                                                        </div>
+                                                        @if (showConfirm)
                                                         {
-                                                            <div class="stk-head">
-                                                                <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                                @StockWarningTitle(stockWarnings[0])
-                                                            </div>
-                                                            @foreach (var w in stockWarnings)
-                                                            {
-                                                                <div class="stk-text">@w</div>
-                                                            }
+                                                            <Button Title="@confirmTitle" OnClick="() => ConfirmStockUom(grp)" />
                                                         }
-                                                        <div class="stk-line">
-                                                            <span><span class="stk-l">From
-                                                                file</span><strong>@(string.IsNullOrWhiteSpace(fileUom) ? "Not provided" :
-                                                                                                                                                                                                                                                                                                                                                                                                                                            fileUom)</strong></span>
-                                                                <span><span
-                                                                    class="stk-l">Suggested</span><strong>@(string.IsNullOrWhiteSpace(suggestedUom)
-                                                                                                                    ? "None" : suggestedUom)</strong></span>
-                                                                    <span><span class="stk-l">Using now</span><strong>@(card.Group.StockUomName ?? "Not set")</strong></span>
-                                                                    @if (card.Group.ApplicableStockPrice.HasValue)
-                                                                    {
-                                                                        <span><span class="stk-l">Company
-                                                                            price@(string.IsNullOrWhiteSpace(card.Group.PriceListLabel) ? "" : $" ({card.Group.PriceListLabel})")</span><strong>@card.Group.ApplicableStockPrice.Value.ToString("N2")</strong></span>
-                                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        
+                                            @if (!isExpanded)
+                                            {
+                                                <div class="facts-line">
+                                                    <span>From file<b>@(string.IsNullOrWhiteSpace(grp.FileStockUom) ? "Not provided" :
+                                                                                                                                                    grp.FileStockUom)</b></span>
+                                                        <span>Suggested<b>@(string.IsNullOrWhiteSpace(grp.SuggestedStockUom) ? "None" :
+                                                                                                                                                            grp.SuggestedStockUom)</b></span>
+                                                            @if (grp.ApplicableStockPrice.HasValue)
+                                                            {
+                                                                <span>Company price<b>@grp.ApplicableStockPrice.Value.ToString("N2")</b></span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                                @* ── Notes under the header ── *@
+                                                @if (!isExpanded && !isSaved && grp.PendingPriceDecisions > 0)
+                                                {
+                                                    <div class="strip">
+                                                        @foreach (var pr in priceRows)
+                                                        {
+                                                            @if (pr.PriceChoice == PriceChoice.Undecided)
+                                                            {
+                                                                <div class="strip-row">
+                                                                    <div class="strip-msg">
+                                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                        <span>
+                                                                            <strong>@pr.UomName</strong> imported price differs from the suggested price
+                                                                            <span class="dl">@PriceDeltaText(pr)</span>
+                                                                        </span>
                                                                     </div>
-                                                                    <div class="stk-row">
-                                                                        <div class="stk-select">
-                                                                            <Select TItem="string" Label="Stock UOM" Placeholder="Choose the stock UOM…"
-                                                                                    Items="card.Group.StockUomOptions" ValueSelector="x => x"
-                                                                                    TextSelector="x => x" SelectedValue="@pendingUom"
-                                                                                    SelectedValueChanged="v => OnStockUomPicked(card.Group, v)"
-                                                                                    AddOptionalText="true" OptionalText="@StockUomHint(card.Group)" />
-                                                                        </div>
-                                                                        @if (showConfirm)
-                                                                        {
-                                                                            <Button Title="@confirmTitle" OnClick="() => ConfirmStockUom(card.Group)" />
-                                                                        }
+                                                                    <div class="seg">
+                                                                        <button type="button" class="seg-btn"
+                                                                                @onclick="() => OnPriceDecided(grp, pr, PriceChoice.Imported)">
+                                                                            Imported @pr.ImportedPrice?.ToString("N2")
+                                                                        </button>
+                                                                        <button type="button" class="seg-btn"
+                                                                                @onclick="() => OnPriceDecided(grp, pr, PriceChoice.Suggested)">
+                                                                            Suggested @pr.SuggestedPrice?.ToString("N2")
+                                                                        </button>
                                                                     </div>
                                                                 </div>
                                                             }
-
-                                                            <div class="uom-head">
-                                                                <span>UOM details</span>
-                                                                <span class="rp-muted">@groupRows.Count unit@(groupRows.Count == 1 ? "" : "s")</span>
-                                                            </div>
-                                                            <div class="itbl-wrap">
-                                                                <table class="itbl">
-                                                                    <thead>
-                                                                        <tr>
-                                                                            <th class="c-row">Row</th>
-                                                                            <th>UOM</th>
-                                                                            <th class="r">Conversion</th>
-                                                                            <th class="r">Price</th>
-                                                                            @if (hasPriceCheck)
-                                                                            {
-                                                                                <th class="pc-col">Price check</th>
-                                                                            }
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        @foreach (var row in groupRows.OrderBy(r => r.RowNumber))
-                                                                        {
-                                                                            <tr>
-                                                                                <td class="mono">@row.RowNumber</td>
-                                                                                <td>
-                                                                                    @row.UomName
-                                                                                    @if (row.IsStockUom)
-                                                                                    {
-                                                                                        <span class="stock-pill">Stock</span>
-                                                                                    }
-                                                                                </td>
-                                                                                <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
-                                                                                <td class="r">@row.Price?.ToString("N2")</td>
-                                                                                @if (hasPriceCheck)
-                                                                                {
-                                                                                    <td>
-                                                                                        @if (row.HasPricePrompt)
-                                                                                        {
-                                                                                            @if (row.PriceChoice == PriceChoice.Undecided)
-                                                                                            {
-                                                                                                <div>Imported <strong>@row.ImportedPrice?.ToString("N2")</strong> ·
-                                                                                                    Suggested <strong>@row.SuggestedPrice?.ToString("N2")</strong></div>
-                                                                                                    <div class="pc-actions">
-                                                                                                        <Button Title="Use imported"
-                                                                                                                OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Imported)" />
-                                                                                                        <Button Title="Use suggested"
-                                                                                                                OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Suggested)" />
-                                                                                                    </div>
-                                                                                                }
-                                    else
-                                                                                                {
-                                                                                                    <div class="pc-done">
-                                                                                                        <span>
-                                                                                                            @if (row.PriceChoice == PriceChoice.Imported)
-                                                                                                            {
-                                                                                                                <text>Using imported
-                                                                                                                    <strong>@row.ImportedPrice?.ToString("N2")</strong> (manual
-                                                                                                                    price)</text>
-                                                                                                                }
-                                                else
-                                                                                                                {
-                                                                                                                    <text>Using suggested
-                                                                                                                        <strong>@row.SuggestedPrice?.ToString("N2")</strong>
-                                                                                                                        (imported was @row.ImportedPrice?.ToString("N2"))</text>
-                                                                                                                    }
-                                                                                                                </span>
-                                                                                                                @if (!card.Group.IsSaved)
-                                                                                                                {
-                                                                                                                    <Button Title="Change"
-                                                                                                                            OnClick="() => OnPriceDecided(card.Group, row, PriceChoice.Undecided)" />
-                                                                                                                }
-                                                                                                            </div>
-                                                                                                        }
-                                                                                                    }
-                                                                                                </td>
-                                                                                            }
-                                                                                        </tr>
-                                                                                    }
-                                                                                </tbody>
-                                                                            </table>
+                                                            else
+                                                            {
+                                                                <div class="strip-row done">
+                                                                    <div class="strip-msg">
+                                                                        <i class="ti ti-check" aria-hidden="true"></i>
+                                                                        <span>
+                                                                            <strong>@pr.UomName</strong>
+                                                                            using @(pr.PriceChoice == PriceChoice.Imported ? "imported" : "suggested")
+                                                                            <strong>@((pr.PriceChoice == PriceChoice.Imported ? pr.ImportedPrice :
+                                                                                                                                                                                                                                                                                                                                                                                                                                    pr.SuggestedPrice)?.ToString("N2"))</strong>
+                                                                            </span>
                                                                         </div>
+                                                                        <button type="button" class="lnk"
+                                                                                @onclick="() => OnPriceDecided(grp, pr, PriceChoice.Undecided)">Change</button>
                                                                     </div>
                                                                 }
-                                                            </div>
-                                                        </Virtualize>
-                                                    }
-                else
-                                                    {
-                                                        <Virtualize Items="displayCards" Context="card" ItemSize="72">
-                                                            @{
-                                                                var first = card.First;
-                                                                var displayName = first == null
-                                                                ? "[Orphan]"
-                                                                : (string.IsNullOrWhiteSpace(first.CompanyItemCode) ? "[Blank Item]" : $"{first.CompanyItemCode} -                    {first.CompanyItemName}");
-                                                                var groupErrorCount = GetGroupErrorRowCount(card.Group);
-                                                                var grouped = GetGroupedIssues(card);
                                                             }
-
-                                                            <div class="icard">
-                                                                <div class="ich ich-er">
-                                                                    <div class="ich-left">
-                                                                        <div class="iicon iicon-er">
-                                                                            <i class="ti ti-package-off" aria-hidden="true"></i>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div class="inv-num inv-er">@displayName</div>
-                                                                            @if (first != null)
-                                                                            {
-                                                                                <div class="inv-sub inv-sub-er">
-                                                                                    <span>@first.SubDistributorCode - @first.SubDistributorName</span>
+                                                        </div>
+                                                    }
+                                                    @foreach (var note in otherWarnings)
+                                                    {
+                                                        <div class="nb">
+                                                            <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                                            <span>@note</span>
+                                                        </div>
+                                                    }
+ 
+                                                    @* ── Expanded body: stock UOM facts + UOM table ── *@
+                                                    @if (isExpanded && first != null)
+                                                    {
+                                                        <div class="icb">
+                                                            @if (showStockBlock)
+                                                            {
+                                                                var fileUom = grp.FileStockUom;
+                                                                var suggestedUom = grp.SuggestedStockUom;
+ 
+                                                                <div class="stk-box">
+                                                                    <div class="stk-line">
+                                                                        <span>
+                                                                            <span class="stk-l">From file</span>
+                                                                            <strong>@(string.IsNullOrWhiteSpace(fileUom) ? "Not provided" :
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                fileUom)</strong>
+                                                                            </span>
+                                                                            <span>
+                                                                                <span class="stk-l">Suggested</span>
+                                                                                <strong>@(string.IsNullOrWhiteSpace(suggestedUom) ? "None" :
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                suggestedUom)</strong>
+                                                                                </span>
+                                                                                <span>
+                                                                                    <span class="stk-l">Using now</span>
+                                                                                    <strong>@(grp.StockUomName ?? "Not set")</strong>
+                                                                                </span>
+                                                                                @if (grp.ApplicableStockPrice.HasValue)
+                                                                                {
+                                                                                    <span>
+                                                                                        <span class="stk-l">Company price@(string.IsNullOrWhiteSpace(grp.PriceListLabel)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ? "" : $" ({grp.PriceListLabel})")</span>
+                                                                                            <strong>@grp.ApplicableStockPrice.Value.ToString("N2")</strong>
+                                                                                        </span>
+                                                                                    }
                                                                                 </div>
-                                                                            }
-                                                                        </div>
-                                                                    </div>
-                                                                    <span class="badge badge-err">
-                                                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                                                        @((groupErrorCount == 1) ? "1 error" : $"{groupErrorCount} errors")
-                                                                    </span>
-                                                                </div>
-
-                                                                @if (grouped.Any())
-                                                                {
-                                                                    <div class="icb-err-rows">
-                                                                        @foreach (var issueGroup in grouped)
-                                                                        {
-                                                                            <div class="err-msg-card">
-                                                                                <div class="err-msg-hdr">
-                                                                                    <i class="ti ti-alert-circle err-msg-icon" aria-hidden="true"></i>
-                                                                                    <div>
-                                                                                        <div class="err-msg-text">@issueGroup.Message</div>
-                                                                                        @if (issueGroup.RowNumbers.Any())
+ 
+                                                                                @* When there is no warning, the picker lives here instead of in the strip. *@
+                                                                                @if (!showStockStrip)
+                                                                                {
+                                                                                    <div class="stk-row">
+                                                                                        <div class="stk-select">
+                                                                                            <Select TItem="string" Label="Stock UOM" Placeholder="Choose the stock UOM…"
+                                                                                                    Items="grp.StockUomOptions" ValueSelector="x => x" TextSelector="x => x"
+                                                                                                    SelectedValue="@pendingUom"
+                                                                                                    SelectedValueChanged="v => OnStockUomPicked(grp, v)" AddOptionalText="true"
+                                                                                                    OptionalText="@StockUomHint(grp)" />
+                                                                                        </div>
+                                                                                        @if (showConfirm)
                                                                                         {
-                                                                                            <div class="err-rows-pill">
-                                                                                                <i class="ti ti-row-insert-bottom" aria-hidden="true"></i>
-                                                                                                Row: @string.Join(" & ", issueGroup.RowNumbers)
-                                                                                            </div>
+                                                                                            <Button Title="@confirmTitle" OnClick="() => ConfirmStockUom(grp)" />
                                                                                         }
                                                                                     </div>
+                                                                                }
+                                                                            </div>
+                                                                        }
+ 
+                                                                        <div class="uom-head">
+                                                                            <span>UOM details</span>
+                                                                            <span class="rp-muted">@groupRows.Count unit@(groupRows.Count == 1 ? "" : "s")</span>
+                                                                        </div>
+                                                                        <div class="itbl-wrap">
+                                                                            <table class="itbl">
+                                                                                <thead>
+                                                                                    <tr>
+                                                                                        <th class="c-row">Row</th>
+                                                                                        <th>UOM</th>
+                                                                                        <th class="r">Conversion</th>
+                                                                                        <th class="r">Price</th>
+                                                                                        @if (hasPriceCheck)
+                                                                                        {
+                                                                                            <th class="pc-col">Price check</th>
+                                                                                        }
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                    @foreach (var row in groupRows.OrderBy(r => r.RowNumber))
+                                                                                    {
+                                                                                        <tr>
+                                                                                            <td class="mono">@row.RowNumber</td>
+                                                                                            <td>
+                                                                                                @row.UomName
+                                                                                                @if (row.IsStockUom)
+                                                                                                {
+                                                                                                    <span class="stock-pill">Stock</span>
+                                                                                                }
+                                                                                            </td>
+                                                                                            <td class="r">@(row.Conversion?.ToString("0") ?? "Not Set")</td>
+                                                                                            <td class="r">@row.Price?.ToString("N2")</td>
+                                                                                            @if (hasPriceCheck)
+                                                                                            {
+                                                                                                <td>
+                                                                                                    @if (row.HasPricePrompt)
+                                                                                                    {
+                                                                                                        @if (row.PriceChoice == PriceChoice.Undecided)
+                                                                                                        {
+                                                                                                            <div class="pp">
+                                                                                                                <button type="button" class="pill"
+                                                                                                                        @onclick="() => OnPriceDecided(grp, row, PriceChoice.Imported)">
+                                                                                                                    Imported @row.ImportedPrice?.ToString("N2")
+                                                                                                                </button>
+                                                                                                                <button type="button" class="pill"
+                                                                                                                        @onclick="() => OnPriceDecided(grp, row, PriceChoice.Suggested)">
+                                                                                                                    Suggested @row.SuggestedPrice?.ToString("N2")
+                                                                                                                </button>
+                                                                                                                <span class="dl">@PriceDeltaText(row)</span>
+                                                                                                            </div>
+                                                                                                        }
+                                                                                                        else
+                                                                                                        {
+                                                                                                            <div class="pp">
+                                                                                                                <span>
+                                                                                                                    @if (row.PriceChoice == PriceChoice.Imported)
+                                                                                                                    {
+                                                                                                                        <text>Using imported
+                                                                                                                            <strong>@row.ImportedPrice?.ToString("N2")</strong> (manual
+                                                                                                                            price)</text>
+                                                                                                                        }
+                                                                                                                else
+                                                                                                                        {
+                                                                                                                            <text>Using suggested
+                                                                                                                                <strong>@row.SuggestedPrice?.ToString("N2")</strong>
+                                                                                                                                (imported was @row.ImportedPrice?.ToString("N2"))</text>
+                                                                                                                            }
+                                                                                                                        </span>
+                                                                                                                        @if (!isSaved)
+                                                                                                                        {
+                                                                                                                            <button type="button" class="lnk"
+                                                                                                                                    @onclick="() => OnPriceDecided(grp, row, PriceChoice.Undecided)">Change</button>
+                                                                                                                        }
+                                                                                                                    </div>
+                                                                                                                }
+                                                                                                            }
+                                                                                                        </td>
+                                                                                                    }
+                                                                                                                                                                            
+                                                                                                </tr>
+                                                                                            }
+                                                                                        </tbody>
+                                                                                    </table>
                                                                                 </div>
                                                                             </div>
                                                                         }
+ 
+                                                                        @* ── Footer: what selection means for this card ── *@
+                                                                        <div class="ft @(CardFooterGood(card) ? "ft-ok" : "")">@CardFooterText(card)</div>
                                                                     </div>
-                                                                }
-                                                            </div>
-                                                        </Virtualize>
+                                                                </Virtualize>
+                                                            }
+                                                            else
+                                                            {
+                                                                <Virtualize Items="displayCards" Context="card" ItemSize="72">
+                                                                    @{
+                                                                        var first = card.First;
+                                                                        var groupErrorCount = GetGroupErrorRowCount(card.Group);
+                                                                        var grouped = GetGroupedIssues(card);
+                                                                    }
+                                                                    <div class="icard is-er">
+                                                                        <div class="ich ich-er">
+                                                                            <div class="ich-left">
+                                                                                <div class="iicon iicon-er">
+                                                                                    <i class="ti ti-package-off" aria-hidden="true"></i>
+                                                                                </div>
+                                                                                <div class="ich-title">
+                                                                                    <div class="inv-num">
+                                                                                        @if (first == null)
+                                                                                        {
+                                                                                            <text>[Orphan]</text>
+                                                                                        }
+                                                                                        else if (string.IsNullOrWhiteSpace(first.CompanyItemCode))
+                                                                                        {
+                                                                                            <text>[Blank Item]</text>
+                                                                                        }
+                                                                                        else
+                                                                                        {
+                                                                                            <span class="inv-code">@first.CompanyItemCode</span>
+                                                                                            @first.CompanyItemName
+                                                                                        }
+                                                                                    </div>
+                                                                                    @if (first != null)
+                                                                                    {
+                                                                                        <div class="chips">
+                                                                                            <span class="ch">@first.SubDistributorCode - @first.SubDistributorName</span>
+                                                                                        </div>
+                                                                                    }
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="ich-right">
+                                                                                <span class="badge badge-err">
+                                                                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                                                                    @((groupErrorCount == 1) ? "1 error" : $"{groupErrorCount} errors")
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                    
+                                                                        @foreach (var issueGroup in grouped)
+                                                                        {
+                                                                            <div class="em">
+                                                                                <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                                                                                <span class="em-text">@issueGroup.Message</span>
+                                                                                @if (issueGroup.RowNumbers.Any())
+                                                                                {
+                                                                                    <span class="em-rows">Row @string.Join(" & ", issueGroup.RowNumbers)</span>
+                                                                                }
+                                                                            </div>
+                                                                        }
+                                                                        <div class="ft ft-er">Can't be selected or committed</div>
+                                                                    </div>
+                                                                </Virtualize>
+                                                            }
+                                                        </div>
                                                     }
+                                                }
+                                            </div>
+
+                                            @* ── Modal footer ── *@
+                                            <div class="modal-footer-ent">
+                                                @if (ImportResult != null && GetSelectedCardCount() > 0)
+                                                {
+                                                    <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
+                                                        <i class="ti ti-send" aria-hidden="true"></i>
+                                                        Commit mapped items (@GetSelectedCardCount())
+                                                    </button>
+                                                }
+                                                <button type="button" class="btn-close-modal" @onclick="HandleClose">Close</button>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                }
+
+                                @* ── Error report pop-up: all errors, or one error type, with a row count preview ── *@
+                                @if (showDownloadModal)
+                                {
+                                    var downloadTypes = GetDistinctErrorMessages();
+                                    var previewCount = (!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))
+                                    ? 0
+                                    : BuildReportRows(downloadScopeAll ? null : downloadErrorType).Count;
+                                    <div class="modal-overlay" style="z-index:1100;">
+                                        <div class="modal-box" style="max-width:460px;">
+                                            <div class="modal-header-ent">
+                                                <div class="mh-left">
+                                                    <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
+                                                    <div>
+                                                        <div class="mh-title">Download error report</div>
+                                                        <div class="mh-sub">Includes every original column from your file</div>
+                                                    </div>
                                                 </div>
-                                            }
-                                        }
-                                    </div>
-
-                                    @* ── Modal footer ── *@
-                                    <div class="modal-footer-ent">
-                                        @if (ImportResult != null && GetSelectedCardCount() > 0)
-                                        {
-                                            <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
-                                                <i class="ti ti-send" aria-hidden="true"></i>
-                                                Commit mapped items (@GetSelectedCardCount())
-                                            </button>
-                                        }
-                                        <button type="button" class="btn-close-modal" @onclick="HandleClose">Close</button>
-                                    </div>
-
-                                </div>
-                            </div>
-                        }
-
-                        @* ── Error report pop-up: all errors, or one error type, with a row count preview ── *@
-                        @if (showDownloadModal)
-                        {
-                            var downloadTypes = GetDistinctErrorMessages();
-                            var previewCount = (!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))
-                            ? 0
-                            : BuildReportRows(downloadScopeAll ? null : downloadErrorType).Count;
-                            <div class="modal-overlay" style="z-index:1100;">
-                                <div class="modal-box" style="max-width:460px;">
-                                    <div class="modal-header-ent">
-                                        <div class="mh-left">
-                                            <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
-                                            <div>
-                                                <div class="mh-title">Download error report</div>
-                                                <div class="mh-sub">Includes every original column from your file</div>
+                                                <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
+                                                    <i class="ti ti-x" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body-ent">
+                                                <label style="display:block;margin-bottom:8px;">
+                                                    <input type="radio" name="dl-scope" checked="@downloadScopeAll"
+                                                           @onchange="() => downloadScopeAll = true" />
+                                                    All errors
+                                                </label>
+                                                <label style="display:block;margin-bottom:8px;">
+                                                    <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
+                                                           @onchange="() => downloadScopeAll = false" />
+                                                    Only a specific error
+                                                </label>
+                                                @if (!downloadScopeAll)
+                                                {
+                                                    <select style="width:100%;" value="@downloadErrorType"
+                                                            @onchange="e => downloadErrorType = e.Value?.ToString()">
+                                                        <option value="">-- select error --</option>
+                                                        @foreach (var t in downloadTypes)
+                                                        {
+                                                            <option value="@t.Message">@t.Message (@t.Count)</option>
+                                                        }
+                                                    </select>
+                                                }
+                                                <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
+                                            </div>
+                                            <div class="modal-footer-ent">
+                                                <button type="button" class="btn-commit"
+                                                        disabled="@((!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType)) || previewCount == 0)"
+                                                        @onclick="ConfirmDownload">
+                                                    <i class="ti ti-download" aria-hidden="true"></i> Download
+                                                </button>
+                                                <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
                                             </div>
                                         </div>
-                                        <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
-                                            <i class="ti ti-x" aria-hidden="true"></i>
-                                        </button>
                                     </div>
-                                    <div class="modal-body-ent">
-                                        <label style="display:block;margin-bottom:8px;">
-                                            <input type="radio" name="dl-scope" checked="@downloadScopeAll"
-                                                   @onchange="() => downloadScopeAll = true" />
-                                            All errors
-                                        </label>
-                                        <label style="display:block;margin-bottom:8px;">
-                                            <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
-                                                   @onchange="() => downloadScopeAll = false" />
-                                            Only a specific error
-                                        </label>
-                                        @if (!downloadScopeAll)
-                                        {
-                                            <select style="width:100%;" value="@downloadErrorType"
-                                                    @onchange="e => downloadErrorType = e.Value?.ToString()">
-                                                <option value="">-- select error --</option>
-                                                @foreach (var t in downloadTypes)
-                                                {
-                                                    <option value="@t.Message">@t.Message (@t.Count)</option>
-                                                }
-                                            </select>
-                                        }
-                                        <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
-                                    </div>
-                                    <div class="modal-footer-ent">
-                                        <button type="button" class="btn-commit"
-                                                disabled="@((!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType)) || previewCount == 0)"
-                                                @onclick="ConfirmDownload">
-                                            <i class="ti ti-download" aria-hidden="true"></i> Download
-                                        </button>
-                                        <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                        }
+                                }
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit Selected Items" Message="@CommitConfirmMessage()"
               OnYes="ConfirmCommit" OnNo="CancelCommit" CloseOnOverlayClick="true" />
@@ -1571,5 +1692,25 @@
         showDownloadModal = false;
         if (OnDownloadErrorReport.HasDelegate && rows.Count > 0)
             await OnDownloadErrorReport.InvokeAsync(rows);
+    }
+    private static string CardFooterText(GroupCardViewModel c)
+    {
+        if (c.Group.IsSaved) return "Saved";
+        if (c.HasErrors) return "Can't be selected or committed";
+        if (!c.CanSelect) return "Can't be selected until every decision is confirmed";
+        if (c.IsWarningOnly) return "Selectable. Selecting won't change its tab";
+        return "Ready to select and commit";
+    }
+ 
+    private static bool CardFooterGood(GroupCardViewModel c) =>
+        c.Group.IsSaved || c.CanSelect;
+    private static string PriceDeltaText(ImportMapItemRowResult row)
+    {
+        if (!row.ImportedPrice.HasValue || !row.SuggestedPrice.HasValue || row.SuggestedPrice.Value == 0)
+            return string.Empty;
+    
+        var pct = Math.Round((row.ImportedPrice.Value - row.SuggestedPrice.Value) / row.SuggestedPrice.Value * 100, 1);
+        var sign = pct > 0 ? "+" : pct < 0 ? "\u2212" : string.Empty;
+        return $"{sign}{Math.Abs(pct):0.#}%";
     }
 }
