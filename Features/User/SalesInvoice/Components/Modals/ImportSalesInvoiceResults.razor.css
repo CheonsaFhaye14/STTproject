@@ -595,6 +595,14 @@
     flex-wrap: wrap;
     min-width: 0;
 }
+
+::deep .strip-ctl button{
+    padding: 0 12px;
+    white-space: nowrap;
+    height: 30px;
+    min-height: 30px;
+    font-size: 12px;
+}
  
 ::deep .strip-select {
     width: 280px;
@@ -607,6 +615,7 @@
     border: 0.5px solid #DDD6C4;
     border-radius: 8px;
 }
+
  
 ::deep .strip-select:focus {
     outline: none;
