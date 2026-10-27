@@ -448,7 +448,7 @@
 
 /* ── Result cards ── */
 ::deep .import-results .icard {
-    border: 1px solid #EBE7DC;
+    border: 2px solid #cfcabf;
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 0.5rem;

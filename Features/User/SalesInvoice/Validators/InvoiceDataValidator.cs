@@ -494,8 +494,8 @@ public sealed class InvoiceDataValidator
                     ambiguousCandidates = effectiveCandidates;
 
                     warning = narrowedByName
-                        ? $"SKU '{skuCode}' matched {effectiveCandidates.Count} records with the same code and name; used '{item.ItemName}' by default. Review under Warnings to pick a different one."
-                        : $"SKU '{skuCode}' matched {effectiveCandidates.Count} different products under the same code; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
+                        ? $"SKU '{skuCode}' matched {effectiveCandidates.Count} records with the same code and name. Pick the right one."
+                        : $"SKU '{skuCode}' matched {effectiveCandidates.Count} different products under the same code. Pick the right one.";
                 }
 
                 return true;
@@ -535,14 +535,14 @@ public sealed class InvoiceDataValidator
                     {
                         item = narrowed.OrderBy(i => i.SubdItemId).First();
                         ambiguousCandidates = narrowed;
-                        warning = $"Item '{itemName.Trim()}' matched {narrowed.Count} records with the same code and name; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
+                        warning = $"Item '{itemName.Trim()}' matched {narrowed.Count} records with the same code and name. Pick the right one.";
                         return true;
                     }
 
                     item = matchesByExtractedCode.OrderBy(i => i.SubdItemId).First();
                     ambiguousCandidates = matchesByExtractedCode;
                     var candidateNames = string.Join(" / ", matchesByExtractedCode.Select(i => i.ItemName));
-                    warning = $"Extracted code '{extractedCode}' matched multiple items ({candidateNames}); used '{item.ItemName}' by default.";
+                    warning = $"Extracted code '{extractedCode}' matched multiple items. Pick the right one.";
                     return true;
                 }
             }
@@ -1058,7 +1058,7 @@ public sealed class InvoiceDataValidator
         var candidates = exact.Count > 1 ? exact : matches;
         item = candidates.OrderBy(i => i.SubdItemId).First();
         ambiguousCandidates = candidates;
-        warning = $"Item name '{rawName.Trim()}' matched {candidates.Count} records; used '{item.ItemName}' by default. Review under Warnings to pick the correct one.";
+        warning = $"Item name '{rawName.Trim()}' matched {candidates.Count} records. Pick the right one.";
         return true;
     }
     private static readonly Regex UomParenRegex =

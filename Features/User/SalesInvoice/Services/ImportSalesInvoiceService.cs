@@ -837,18 +837,6 @@ public sealed class ImportSalesInvoiceService
 				{
 					var label = BuildCustomerDisplayValue(customerCode, customerName);
 					var colName = string.IsNullOrWhiteSpace(customerName) ? "CustomerCode" : "CustomerName";
-					// if (customerSuggestions is { Count: > 0 })
-					// {
-					// var warningmsg = "Customer have multiple possible matches. Please review the suggestions.";
-					// var suggestionList = string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)));
-					// var warningtype = colName;
-					// preparedInvoice.Warnings.Add(warningtype, warningmsg, suggestionList);
-					// }
-					// else 
-					// {
-					// var message = $"Customer '{label}' was not found."
-					// AddRowError(message, colName, customerSuggestions?.Count);
-					// }
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
 						: $"Customer '{label}' was not found.";
