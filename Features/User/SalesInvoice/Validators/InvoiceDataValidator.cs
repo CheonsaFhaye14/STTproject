@@ -849,10 +849,12 @@ public sealed class InvoiceDataValidator
             case "pck":
             case "packs":
             case "pk":
+            case "pks":
                 yield return "pack";
                 yield return "packs";
                 yield return "pck";
                 yield return "pk";
+                yield return "pks";
                 yield break;
             case "ib":
             case "inbox":
