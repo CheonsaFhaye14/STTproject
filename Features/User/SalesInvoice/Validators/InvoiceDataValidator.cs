@@ -859,9 +859,11 @@ public sealed class InvoiceDataValidator
             case "ib":
             case "inbox":
             case "innerbox":
+            case "bx":
                 yield return "innerbox";
                 yield return "inbox";
                 yield return "ib";
+                yield return "bx";
                 yield break;
             case "tie":
             case "ties":
