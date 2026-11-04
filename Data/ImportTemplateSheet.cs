@@ -25,8 +25,6 @@ public partial class ImportTemplateSheet
 
     public int HeaderRowCount { get; set; }
 
-    public virtual ICollection<ImportFileSheet> ImportFileSheets { get; set; } = new List<ImportFileSheet>();
-
     public virtual ImportTemplate ImportTemplate { get; set; } = null!;
 
     public virtual ICollection<ImportTemplateColumn> ImportTemplateColumns { get; set; } = new List<ImportTemplateColumn>();

@@ -1,130 +1,228 @@
-@foreach (var c in Columns)
-{
-    var testing = _testing.Contains(c.RowKey);
-    <div class="col-card" @key="c.RowKey">
+<div class="it-cols">
 
-        <div class="row g-2 align-items-end">
-            <div class="col-md-5">
-                <Input TValue="string" Label="Header in the file" Placeholder="Invoice No." @bind-Value="c.HeaderText" />
-            </div>
-            <div class="col-md-5">
-                <AutoComplete TItem="FieldOption" Label="System field" Placeholder="Choose a field…"
-                            Items="_fields" ValueSelector="f => f.Key" TextSelector="f => f.Display"
-                            SelectedValue="@c.FieldKey" SelectedValueChanged="v => OnFieldChanged(c, v)" />
-            </div>
-            <div class="col-md-2 d-flex justify-content-end align-items-center gap-2">
-                @if (!string.IsNullOrEmpty(c.FieldKey))
-                {
-                    <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-flask" Tooltip="Test this column"
-                            OnClick="() => ToggleTest(c)" Active="@testing" />
-                }
-                <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
-                        Tooltip="Remove this column" OnClick="() => RemoveColumn(c)" />
-            </div>
-        </div>
+    <div class="it-cols-list">
+        <div class="it-cols-list-inner">
+            <div class="it-cols-head">
+                <span>@Columns.Count @(Columns.Count == 1 ? "column" : "columns") · @(Columns.Count(x => x.IsRequired))
+                    required</span>
+                    <Button Variant="ButtonVariant.Secondary" Title="+ Add column" OnClick="AddColumn" />
+                </div>
 
-        @if (!string.IsNullOrEmpty(c.FieldKey))
-        {
-            @if (Choices(c) is { } choices)
-            {
-                <div class="it-strip mt-2">
-                    <label class="form-label">What the file says → what it means</label>
-                    @{ var map = GetMap(c); }
-                    @for (var i = 0; i < map.Count; i++)
+                <div class="it-cols-rows">
+                    @foreach (var col in Columns.ToList())
                     {
-                        var idx = i;
-                        <div class="row g-2 align-items-end mb-1" @key="idx">
-                            <div class="col-md-5">
-                                <input value="@map[idx].From" placeholder="Free" @onchange="e => SetFrom(c, idx, e.Value?.ToString())" />
-                            </div>
-                            <div class="col-auto pb-2">→</div>
-                            <div class="col-md-4">
-                                <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
-                                        ValueSelector="r => r.Value" TextSelector="r => r.Text"
-                                        SelectedValue="@map[idx].To" SelectedValueChanged="v => SetTo(c, idx, v)" />
-                            </div>
-                            <div class="col-auto">
+                        var warn = Warnings(col);
+                        <button type="button" class="it-col-row @(IsSelected(col) ? "active" : "")" @key="col.RowKey"
+                                @onclick="() => Select(col)">
+                            <span class="it-col-main">
+                                <span class="it-col-title">@ColumnTitle(col)</span>
+                                <span class="it-col-sub">@ColumnSub(col)</span>
+                            </span>
+                            @if (warn.Count > 0)
+                            {
+                                <span class="it-dot" title="@warn[0]"></span>
+                            }
+                            <span class="it-badge @(col.IsRequired ? "" : "it-badge--opt")">@(col.IsRequired ? "Required" :
+                                                                                                            "Optional")</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="it-cols-detail">
+                @if (Selected is { } c)
+                {
+                    var testing = _testing.Contains(c.RowKey);
+                    <div class="it-edit" @key="c.RowKey">
+
+                        <div class="it-cols-detail-head">
+                            <span class="it-col-edit-title">Edit column</span>
+                            <span class="d-flex gap-2">
+                                @if (!string.IsNullOrEmpty(c.FieldKey))
+                                {
+                                    <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-flask"
+                                            Tooltip="Test this column's rule" OnClick="() => ToggleTest(c)" Active="@testing" />
+                                }
                                 <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
-                                        Tooltip="Remove" OnClick="() => RemoveMapRow(c, idx)" />
+                                        Tooltip="@(c.Aliases.Count > 0 ? "Remove this column and its aliases" : "Remove this column")"
+                                        OnClick="() => RemoveColumn(c)" />
+                            </span>
+                        </div>
+
+                        <div class="it-field">
+                            <label class="form-label">Header in the file</label>
+                            @{
+                                var tags = ShowTags(c) ? Tags(c) : new List<HeaderTag>();
+                                var editing = EditIndex(c);
+                            }
+                            @if (tags.Count > 0)
+                            {
+                                <div class="it-tags">
+                                    @foreach (var t in tags)
+                                    {
+                                        var tag = t;
+                                        <span class="it-tag @(editing == tag.Index ? "active" : "")" @key="tag.Index"
+                                              @onclick="() => SelectTag(c, tag.Index)">
+                                            @tag.Text
+                                            <button type="button" class="it-tag-x" title="Remove this header"
+                                                    @onclick="() => RemoveTag(c, tag.Index)" @onclick:stopPropagation="true">×</button>
+                                        </span>
+                                    }
+                                </div>
+                            }
+                            <div class="it-header-entry">
+                                <input value="@EntryText(c)"
+                                       placeholder="@(tags.Count == 0 ? "Invoice No." : "Enter another header…")"
+                                       @oninput="e => OnEntryInput(c, e.Value?.ToString())" @onkeydown="e => OnEntryKey(c, e)"
+                                       @onchange="() => OnEntryBlur(c)" />
+                                <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-plus"
+                                        Tooltip="@(!ShowTags(c) ? "Add another header" : editing is null ? "Add this header" : "Done editing")"
+                                        Disabled="@(!CanCommit(c))" OnClick="() => CommitEntry(c)" />
                             </div>
+                            <div class="form-text">The first header is the main one. The others are aliases, read with the same
+                                rule. A
+                                file should contain only one of them. Click a header to edit it.</div>
+                            </div>
+
+                            <div class="it-row">
+                                <div class="it-field">
+                                    <AutoComplete TItem="FieldOption" Label="System field" Placeholder="Choose a field…" Items="_fields"
+                                                  ValueSelector="f => f.Key" TextSelector="f => f.Display" SelectedValue="@c.FieldKey"
+                                                  SelectedValueChanged="v => OnFieldChanged(c, v)" />
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(c.FieldKey) && Choices(c) is null)
+                                {
+                                    <div class="it-field">
+                                        @if (IsDate(c))
+                                        {
+                                            <Select TItem="RuleOption" Label="Date format in the file" Placeholder="Detect automatically"
+                                                    Items="DateChoices" ValueSelector="r => r.Value" TextSelector="r => r.Text"
+                                                    SelectedValue="@DateDropdownValue(c)" SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
+                                        }
+                                        else
+                                        {
+                                            <Select TItem="RuleOption" Label="How to read it" Placeholder="Use as is" Items="RuleOptions"
+                                                    ValueSelector="r => r.Value" TextSelector="r => r.Text" SelectedValue="@RuleValue(c)"
+                                                    SelectedValueChanged="v => OnRuleChanged(c, v)" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            @foreach (var w in Warnings(c))
+                            {
+                                <div class="it-note it-note--warn">@w</div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(c.FieldKey))
+                            {
+                                @if (Choices(c) is { } choices)
+                                {
+                                    <div class="it-strip">
+                                        <label class="form-label">What the file says → what it means</label>
+                                        @{
+                                            var map = GetMap(c);
+                                        }
+                                        @for (var i = 0; i < map.Count; i++)
+                                        {
+                                            var idx = i;
+                                            <div class="row g-2 align-items-end mb-1" @key="idx">
+                                                <div class="col-md-5">
+                                                    <input value="@map[idx].From" placeholder="Free"
+                                                           @onchange="e => SetFrom(c, idx, e.Value?.ToString())" />
+                                                </div>
+                                                <div class="col-auto pb-2">→</div>
+                                                <div class="col-md-4">
+                                                    <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
+                                                            ValueSelector="r => r.Value" TextSelector="r => r.Text" SelectedValue="@map[idx].To"
+                                                            SelectedValueChanged="v => SetTo(c, idx, v)" />
+                                                </div>
+                                                <div class="col-auto">
+                                                    <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash" Tooltip="Remove"
+                                                            OnClick="() => RemoveMapRow(c, idx)" />
+                                                </div>
+                                            </div>
+                                        }
+                                        <div class="row g-2 align-items-end mb-2">
+                                            <div class="col-md-5 pb-2"><em>Anything else</em></div>
+                                            <div class="col-auto pb-2">→</div>
+                                            <div class="col-md-4">
+                                                <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
+                                                        ValueSelector="r => r.Value" TextSelector="r => r.Text" SelectedValue="@Otherwise(c)"
+                                                        SelectedValueChanged="v => SetOtherwise(c, v)" />
+                                            </div>
+                                        </div>
+                                        <Button Variant="ButtonVariant.Secondary" Title="+ Add value" OnClick="() => AddMapRow(c)" />
+                                        <div class="form-text">@ImportFieldRegistry.GetField(ImportType, c.FieldKey)?.Note</div>
+                                    </div>
+                                }
+                                else if (IsDate(c) && DatePatternMode(c))
+                                {
+                                    <div class="it-field">
+                                        <Input TValue="string" Label="Pattern"
+                                               Placeholder="Put the date part in ( ), e.g. (\d{1,2}/\d{1,2}/\d{4})"
+                                               Value="@DateOptions.Parse(c.OptionsJson).Pattern" ValueChanged="v => OnDatePatternChanged(c, v)" />
+                                    </div>
+                                    <div class="it-field">
+                                        <Input TValue="string" Label="Date format of that part"
+                                               Placeholder="e.g. dd/MM/yyyy (leave blank to detect)" AddOptionalText="true"
+                                               OptionalText="(Use | to allow several formats.)" Value="@DateOptions.Parse(c.OptionsJson).Format"
+                                               ValueChanged="v => OnDateFormatTextChanged(c, v)" />
+                                    </div>
+                                }
+                                else if (c.RuleType == ColumnRuleTypes.Regex)
+                                {
+                                    <div class="it-field">
+                                        <Input TValue="string" Label="Pattern" Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
+                                               @bind-Value="c.OptionsJson" />
+                                    </div>
+                                }
+
+                                <div class="it-field">
+                                    <label class="it-option" for="req-@c.RowKey">
+                                        <span>Required</span>
+                                        <input type="checkbox" id="req-@c.RowKey" checked="@c.IsRequired"
+                                               @onchange="e => SetRequired(c, e.Value is true)" />
+                                    </label>
+                                    <div class="form-text">
+                                        Required: the import stops with an error if this header isn't in the file.
+                                        Optional: the field is left empty. This doesn't decide whether a blank value is accepted.
+                                    </div>
+                                </div>
+
+                                @if (testing)
+                                {
+                                    <div class="it-strip">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-6">
+                                                <Input TValue="string" Label="Example from the file" Placeholder="00123 - ABC STORE"
+                                                       Value="@GetSample(c)" ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label">Result</label>
+                                                @if (string.IsNullOrWhiteSpace(GetSample(c)))
+                                                {
+                                                    <div class="result-box text-muted">Type an example to see the result</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="result-box">@PreviewText(c)</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
                         </div>
                     }
-                    <div class="row g-2 align-items-end mb-2">
-                        <div class="col-md-5 pb-2"><em>Anything else</em></div>
-                        <div class="col-auto pb-2">→</div>
-                        <div class="col-md-4">
-                            <Select TItem="RuleOption" Placeholder="Choose…" Items="ChoiceOptions(choices)"
-                                    ValueSelector="r => r.Value" TextSelector="r => r.Text"
-                                    SelectedValue="@Otherwise(c)" SelectedValueChanged="v => SetOtherwise(c, v)" />
-                        </div>
-                    </div>
-                    <Button Variant="ButtonVariant.Secondary" Title="+ Add value" OnClick="() => AddMapRow(c)" />
-                    <div class="form-text">@ImportFieldRegistry.GetField(ImportType, c.FieldKey)?.Note</div>
+        else
+                    {
+                        <div class="it-hint">Add a column to start mapping.</div>
+                    }
                 </div>
-            }
-            else
-            {
-                <div class="row g-2 mt-1">
-                    <div class="col-md-6">
-                        @if (IsDate(c))
-                        {
-                            <Select TItem="RuleOption" Label="Date format in the file" Placeholder="Detect automatically"
-                                    Items="DateFormats" ValueSelector="r => r.Value" TextSelector="r => r.Text"
-                                    SelectedValue="@(c.OptionsJson ?? string.Empty)"
-                                    SelectedValueChanged="v => OnDateFormatChanged(c, v)" />
-                        }
-                        else
-                        {
-                            <Select TItem="RuleOption" Label="How to read it" Placeholder="Use as is"
-                                    Items="RuleOptions" ValueSelector="r => r.Value" TextSelector="r => r.Text"
-                                    SelectedValue="@RuleValue(c)" SelectedValueChanged="v => OnRuleChanged(c, v)" />
-                        }
-                    </div>
-                </div>
-
-                @if (c.RuleType == ColumnRuleTypes.Regex)
-                {
-                    <div class="row g-2 mt-1">
-                        <div class="col-md-12">
-                            <Input TValue="string" Label="Pattern" Placeholder="Put the part to keep in ( ), e.g. ^(\w+)-"
-                                   @bind-Value="c.OptionsJson" />
-                        </div>
-                    </div>
-                }
-            }
-
-            <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="req-@c.RowKey" @bind="c.IsRequired" />
-                <label class="form-check-label" for="req-@c.RowKey">Required</label>
             </div>
-
-            @if (testing)
-            {
-                <div class="it-strip mt-2">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-6">
-                            <Input TValue="string" Label="Example from the file" Placeholder="00123 - ABC STORE"
-                                   Value="@GetSample(c)" ValueChanged="v => _samples[c.RowKey] = v ?? string.Empty" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Result</label>
-                            @if (string.IsNullOrWhiteSpace(GetSample(c)))
-                            {
-                                <div class="result-box text-muted">Type an example to see the result</div>
-                            }
-                            else
-                            {
-                                <div class="result-box">@PreviewText(c)</div>
-                            }
-                        </div>
-                    </div>
-                </div>
-            }
-        }
-    </div>
-}
-
-<Button Variant="ButtonVariant.Secondary" Title="+ Add column" OnClick="AddColumn" />
 
 @code {
     [Parameter, EditorRequired] public string ImportType { get; set; } = string.Empty;
@@ -141,7 +239,7 @@
         new("StripLeadingCode", "Remove the code at the start (00123 - ABC → ABC)"),
         new("StripParenthetical", "Remove text in (parentheses)"),
         new("ExtractBracketed", "Keep only the text in [brackets]"),
-        new("StripMarkers", "Remove * at the start and - at the end (*ABC STORE - → ABC STORE)"), 
+        new("StripMarkers", "Remove * at the start and - at the end (*ABC STORE - → ABC STORE)"),
         new(ColumnRuleTypes.Regex, "Custom pattern (advanced)")
     };
 
@@ -169,6 +267,33 @@
     {
         if (!_testing.Remove(c.RowKey)) _testing.Add(c.RowKey);
     }
+
+    // ── Column list: one column is open in the editor at a time ──────────
+    private Guid _selected;
+
+    private ImportTemplateColumnEditDto? Selected =>
+        Columns.FirstOrDefault(c => c.RowKey == _selected) ?? Columns.FirstOrDefault();
+
+    private bool IsSelected(ImportTemplateColumnEditDto c) => ReferenceEquals(c, Selected);
+
+    private void Select(ImportTemplateColumnEditDto c)
+    {
+        _selected = c.RowKey;
+        // A column with no aliases goes back to showing its header as plain text, unless an alias is half typed.
+        _expanded.RemoveWhere(k => !_aliasDrafts.TryGetValue(k, out var d) || string.IsNullOrWhiteSpace(d));
+    }
+
+    private string ColumnTitle(ImportTemplateColumnEditDto c) =>
+        string.IsNullOrWhiteSpace(c.FieldKey) ? "Not mapped yet" : FieldName(c.FieldKey);
+
+    private static string ColumnSub(ImportTemplateColumnEditDto c)
+    {
+        var header = string.IsNullOrWhiteSpace(c.HeaderText) ? "No header yet" : c.HeaderText;
+        return c.Aliases.Count == 0
+            ? header
+            : $"{header} · {c.Aliases.Count} alias{(c.Aliases.Count == 1 ? "" : "es")}";
+    }
+
     private ImportFieldType TypeOf(string? key) =>
         ImportFieldRegistry.GetField(ImportType, key)?.Type ?? ImportFieldType.Text;
 
@@ -179,6 +304,12 @@
 
     private async Task OnFieldChanged(ImportTemplateColumnEditDto c, string? value)
     {
+        ApplyField(c, value);
+        await NotifyChanged();
+    }
+
+    private void ApplyField(ImportTemplateColumnEditDto c, string? value)
+    {
         var oldType = TypeOf(c.FieldKey);
         c.FieldKey = string.IsNullOrWhiteSpace(value) ? null : value;
 
@@ -188,7 +319,6 @@
             c.RuleType = hasChoices ? ColumnRuleTypes.ValueMap : ColumnRuleTypes.Direct;
             c.OptionsJson = null;
         }
-        await NotifyChanged();
     }
 
     private Task NotifyChanged() => OnChanged.InvokeAsync();
@@ -202,11 +332,41 @@
         if (c.RuleType != ColumnRuleTypes.Regex) c.OptionsJson = null;
     }
 
-    private static void OnDateFormatChanged(ImportTemplateColumnEditDto c, string? value)
+    private const string DatePatternValue = "__pattern";
+
+    private static readonly List<RuleOption> DateChoices =
+        DateFormats.Append(new RuleOption(DatePatternValue, "Custom pattern (advanced)")).ToList();
+
+    // Pattern mode stays on while the pattern box is still empty, so picking it from the dropdown shows the box.
+    private readonly HashSet<Guid> _datePatternMode = new();
+
+    private bool DatePatternMode(ImportTemplateColumnEditDto c) =>
+        _datePatternMode.Contains(c.RowKey) || !string.IsNullOrWhiteSpace(DateOptions.Parse(c.OptionsJson).Pattern);
+
+    private string DateDropdownValue(ImportTemplateColumnEditDto c)
+    {
+        if (DatePatternMode(c)) return DatePatternValue;
+        var format = DateOptions.Parse(c.OptionsJson).Format?.Trim() ?? string.Empty;
+        return DateFormats.Any(f => f.Value == format) ? format : string.Empty;
+    }
+
+    private void OnDateFormatChanged(ImportTemplateColumnEditDto c, string? value)
     {
         c.RuleType = ColumnRuleTypes.Direct;
-        c.OptionsJson = string.IsNullOrWhiteSpace(value) ? null : value;
+        if (value == DatePatternValue)
+        {
+            _datePatternMode.Add(c.RowKey); // keep whatever format is already stored
+            return;
+        }
+        _datePatternMode.Remove(c.RowKey);
+        c.OptionsJson = string.IsNullOrWhiteSpace(value) ? null : value; // a preset has no pattern
     }
+
+    private static void OnDateFormatTextChanged(ImportTemplateColumnEditDto c, string? value) =>
+        c.OptionsJson = DateOptions.ToOptionsJson(value, DateOptions.Parse(c.OptionsJson).Pattern);
+
+    private static void OnDatePatternChanged(ImportTemplateColumnEditDto c, string? value) =>
+        c.OptionsJson = DateOptions.ToOptionsJson(DateOptions.Parse(c.OptionsJson).Format, value);
 
     private static List<RuleOption> ChoiceOptions(IReadOnlyList<string> choices) =>
         choices.Select(x => new RuleOption(x, x)).ToList();
@@ -239,15 +399,215 @@
 
     private async Task AddColumn()
     {
-        Columns.Add(new ImportTemplateColumnEditDto());
+        // Most headers are needed, so a new column starts as Required. Switch it off for the few that are optional.
+        var added = new ImportTemplateColumnEditDto { IsRequired = true };
+        Columns.Add(added);
+        _selected = added.RowKey;
         await NotifyChanged();
     }
 
     private async Task RemoveColumn(ImportTemplateColumnEditDto c)
     {
+        var at = Columns.IndexOf(c);
         Columns.Remove(c);
+        _aliasDrafts.Remove(c.RowKey);
+        _editing.Remove(c.RowKey);
+        _testing.Remove(c.RowKey);
+        _expanded.Remove(c.RowKey);
+        _selected = Columns.Count > 0 ? Columns[Math.Min(Math.Max(at, 0), Columns.Count - 1)].RowKey : Guid.Empty;
         await NotifyChanged();
     }
+
+    // ── Headers: one tag per header, one input ───────────────────────────
+    // Tags are the main header (Index -1) followed by the aliases (Index 0..n). Clicking a tag puts its text in the
+    // input, where it is edited in place. With nothing selected the input adds a new alias. While a column has no
+    // main header yet, the input is the main header.
+    private sealed record HeaderTag(int Index, string Text);
+
+    private const int PrimaryIndex = -1;
+
+    private readonly Dictionary<Guid, int> _editing = new(); // column -> tag being edited (absent = adding)
+    private readonly Dictionary<Guid, string> _aliasDrafts = new(); // column -> text typed for a new alias
+
+    private static List<HeaderTag> Tags(ImportTemplateColumnEditDto c)
+    {
+        var list = new List<HeaderTag>();
+        if (!string.IsNullOrWhiteSpace(c.HeaderText)) list.Add(new HeaderTag(PrimaryIndex, c.HeaderText));
+        for (var i = 0; i < c.Aliases.Count; i++)
+            list.Add(new HeaderTag(i, c.Aliases[i].AliasText));
+        return list;
+    }
+
+    // Columns whose header was turned into a tag by clicking + (needed only while the column has no aliases yet).
+    private readonly HashSet<Guid> _expanded = new();
+
+    // With no aliases the header is plain text in the input. Tags appear once there is an alias, or after + is clicked.
+    private bool ShowTags(ImportTemplateColumnEditDto c) => c.Aliases.Count > 0 || _expanded.Contains(c.RowKey);
+
+    // The tag being edited. Plain text mode edits the main header itself. Otherwise null: the input adds a new alias.
+    private int? EditIndex(ImportTemplateColumnEditDto c)
+    {
+        if (_editing.TryGetValue(c.RowKey, out var i)) return i;
+        return ShowTags(c) ? null : PrimaryIndex;
+    }
+
+    // Leaving the input finishes editing an existing tag, but never adds or clears a header still being typed.
+    private Task OnEntryBlur(ImportTemplateColumnEditDto c)
+    {
+        if (!ShowTags(c))
+        {
+            c.HeaderText = c.HeaderText.Trim(); // plain text mode: just tidy it, don't turn it into a tag
+            return NotifyChanged();
+        }
+        return EditIndex(c) is null ? Task.CompletedTask : CommitEntry(c);
+    }
+
+    private string EntryText(ImportTemplateColumnEditDto c) => EditIndex(c) switch
+    {
+        PrimaryIndex => c.HeaderText,
+        int i when i >= 0 && i < c.Aliases.Count => c.Aliases[i].AliasText,
+        _ => _aliasDrafts.TryGetValue(c.RowKey, out var d) ? d : string.Empty
+    };
+
+    // Typing goes straight into the model for a tag being edited, so nothing typed is lost on save.
+    private void OnEntryInput(ImportTemplateColumnEditDto c, string? text)
+    {
+        text ??= string.Empty;
+        switch (EditIndex(c))
+        {
+            case PrimaryIndex: c.HeaderText = text; break;
+            case int i when i >= 0 && i < c.Aliases.Count: c.Aliases[i].AliasText = text; break;
+            default: _aliasDrafts[c.RowKey] = text; break;
+        }
+    }
+
+    private bool CanCommit(ImportTemplateColumnEditDto c)
+    {
+        if (!ShowTags(c)) return !string.IsNullOrWhiteSpace(c.HeaderText);
+        if (EditIndex(c) is not null) return true;
+        var text = _aliasDrafts.TryGetValue(c.RowKey, out var d) ? d.Trim() : string.Empty;
+        return text.Length > 0 && !HeaderInUse(text);
+    }
+
+    // Any header (main or alias) on this sheet, compared the way the file is matched.
+    private bool HeaderInUse(string text)
+    {
+        var key = Norm(text);
+        return key.Length > 0 && Columns.SelectMany(TemplateSheetResolver.HeaderTexts).Any(h => Norm(h) == key);
+    }
+
+    private void SelectTag(ImportTemplateColumnEditDto c, int index)
+    {
+        if (_editing.TryGetValue(c.RowKey, out var cur) && cur == index) _editing.Remove(c.RowKey);
+        else _editing[c.RowKey] = index;
+    }
+
+    private async Task OnEntryKey(ImportTemplateColumnEditDto c, Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CommitEntry(c);
+    }
+
+    private async Task CommitEntry(ImportTemplateColumnEditDto c)
+    {
+        var editing = EditIndex(c);
+
+        if (editing == PrimaryIndex)
+        {
+            var plain = !ShowTags(c);
+            c.HeaderText = c.HeaderText.Trim();
+            if (c.HeaderText.Length == 0) return; // still empty: stay in main-header mode
+            _editing.Remove(c.RowKey);
+            if (plain) _expanded.Add(c.RowKey); // first +: the header becomes a tag and the input is ready for an alias
+        }
+        else if (editing is int i && i >= 0 && i < c.Aliases.Count)
+        {
+            c.Aliases[i].AliasText = c.Aliases[i].AliasText.Trim();
+            if (c.Aliases[i].AliasText.Length == 0) RemoveAliasAt(c, i);
+            _editing.Remove(c.RowKey);
+        }
+        else
+        {
+            if (!CanCommit(c)) return;
+            var text = _aliasDrafts[c.RowKey].Trim();
+            if (string.IsNullOrWhiteSpace(c.HeaderText))
+                c.HeaderText = text; // no main header yet: the first one added becomes it
+            else
+                c.Aliases.Add(new ImportTemplateAliasEditDto
+                {
+                    AliasText = text,
+                    SortOrder = c.Aliases.Count + 1
+                });
+            _aliasDrafts[c.RowKey] = string.Empty;
+        }
+
+        await NotifyChanged();
+    }
+
+    private async Task RemoveTag(ImportTemplateColumnEditDto c, int index)
+    {
+        if (index == PrimaryIndex)
+        {
+            // The next alias, if any, becomes the main header.
+            if (c.Aliases.Count > 0)
+            {
+                c.HeaderText = c.Aliases[0].AliasText;
+                RemoveAliasAt(c, 0);
+            }
+            else c.HeaderText = string.Empty;
+        }
+        else if (index >= 0 && index < c.Aliases.Count)
+            RemoveAliasAt(c, index);
+
+        _editing.Remove(c.RowKey);
+        if (c.Aliases.Count == 0) _expanded.Remove(c.RowKey);
+        await NotifyChanged();
+    }
+
+    private static void RemoveAliasAt(ImportTemplateColumnEditDto c, int index)
+    {
+        c.Aliases.RemoveAt(index);
+        for (var i = 0; i < c.Aliases.Count; i++) c.Aliases[i].SortOrder = i + 1;
+    }
+
+    private async Task SetRequired(ImportTemplateColumnEditDto c, bool value)
+    {
+        c.IsRequired = value;
+        await NotifyChanged();
+    }
+
+    private static string Norm(string? value) =>
+        STTproject.Features.Admin.ImportTemplate.Services.TemplateSheetResolver.Norm(value);
+
+    private string FieldName(string? key) =>
+        ImportFieldRegistry.GetField(ImportType, key)?.Display ?? key ?? string.Empty;
+
+    // Same rules the validator enforces on save, shown early. One field per column, one field per header.
+    private List<string> Warnings(ImportTemplateColumnEditDto c)
+    {
+        var list = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(c.FieldKey)
+            && Columns.Any(o => !ReferenceEquals(o, c)
+                && string.Equals(o.FieldKey, c.FieldKey, StringComparison.OrdinalIgnoreCase)))
+            list.Add($"{FieldName(c.FieldKey)} is already mapped by another column. Add its header here as an alias instead.");
+
+        foreach (var text in TemplateSheetResolver.HeaderTexts(c).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var key = Norm(text);
+            var other = Columns.FirstOrDefault(o => !ReferenceEquals(o, c)
+                && TemplateSheetResolver.HeaderTexts(o).Any(h => Norm(h) == key));
+            if (other is not null)
+                list.Add(string.Equals(other.FieldKey, c.FieldKey, StringComparison.OrdinalIgnoreCase)
+                    ? $"\"{text}\" is listed more than once for this field."
+                    : $"\"{text}\" is already used for {FieldName(other.FieldKey)}. A header can feed only one field.");
+        }
+
+        var repeated = TemplateSheetResolver.HeaderTexts(c).GroupBy(Norm).Any(g => g.Key.Length > 0 && g.Count() > 1);
+        if (repeated) list.Add("This column lists the same header more than once.");
+
+        return list.Distinct().Take(2).ToList();
+    }
+
     private const string Else = "*";
 
     // the editable rows (without the "anything else" entry)

@@ -1,10 +1,82 @@
 using STTproject.Features.Admin.ImportTemplate.DTOs;
-using STTproject.Features.Admin.ImportTemplate.Services; 
+using STTproject.Features.Admin.ImportTemplate.Services;
 namespace STTproject.Features.Admin.ImportTemplate.Validators;
 
 public static class ImportTemplateValidator
 {
+    /// <summary>
+    /// Rejects scope combinations the import type doesn't allow. Several active templates may share a
+    /// scope; this only checks that the scope itself is valid for the type.
+    /// </summary>
+    public static List<string> ValidateScope(string importType, int? subDistributorId, string? principal)
+    {
+        var def = ImportFieldRegistry.Get(importType);
+        if (def is null) return new() { $"Unknown import type '{importType}'." };
+
+        var hasPrincipal = !string.IsNullOrWhiteSpace(principal);
+
+        if (subDistributorId is not null && hasPrincipal)
+            return new() { "A template applies to a subdistributor or a principal, not both." };
+        if (def.Scope == ImportScope.Principal && subDistributorId is not null)
+            return new() { $"{def.Display} templates are set by principal, not by subdistributor." };
+        if (def.Scope == ImportScope.Subd && hasPrincipal)
+            return new() { $"{def.Display} templates are set by subdistributor, not by principal." };
+
+        return new();
+    }
+
+    /// <summary>
+    /// Required field groups one sheet doesn't cover on its own. The importer (WorkbookReader.Plan) reads every
+    /// matched sheet independently and refuses any that can't supply all required fields, so groups are NOT
+    /// pooled across sheets. An Ignore sheet is never read, so it has nothing to cover.
+    /// </summary>
+    public static List<string> MissingRequiredGroups(ImportTemplateSheetEditDto sheet, string importType)
+    {
+        if (sheet.SheetMatchMode == SheetMatchModes.Ignore) return new();
+
+        var mapped = sheet.Columns
+            .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
+            .Select(c => c.FieldKey!);
+
+        return ImportFieldRegistry.MissingRequired(importType, mapped);
+    }
+
+    /// <summary>Everything a save requires: the structure of each sheet, plus whole-template required-group coverage.</summary>
     public static List<string> Validate(ImportTemplateEditDto dto)
+    {
+        var errors = ValidateStructure(dto);
+        if (dto.Sheets.Count > 0) errors.AddRange(RequiredGroupErrors(dto));
+        return errors;
+    }
+
+    /// <summary>
+    /// Per-sheet required-group errors. Optional sheets count too: when such a sheet is present in a file the
+    /// importer reads it like any other, so it must be complete on its own.
+    /// </summary>
+    public static List<string> RequiredGroupErrors(ImportTemplateEditDto dto)
+    {
+        var read = dto.Sheets.Where(s => s.SheetMatchMode != SheetMatchModes.Ignore).ToList();
+        var several = read.Count > 1;
+        var errors = new List<string>();
+
+        foreach (var s in read)
+        {
+            var who = string.IsNullOrWhiteSpace(s.SheetLabel) ? "A sheet" : $"Sheet \"{s.SheetLabel}\"";
+            foreach (var m in MissingRequiredGroups(s, dto.ImportType))
+                errors.Add(several ? $"{who}: {m}" : m);
+        }
+
+        if (several && errors.Count > 0)
+            errors.Add("Each sheet is read on its own, so every sheet that isn't ignored must map all required fields. " +
+                       "Combining fields across sheets isn't supported yet. Set a sheet to Ignore if it shouldn't be read.");
+        return errors;
+    }
+
+    /// <summary>
+    /// Problems that make a template unusable or unreadable, but not an incomplete one. The Template Tester runs
+    /// this much, so an admin can try a half-built template against a real file. Saving needs <see cref="Validate"/>.
+    /// </summary>
+    public static List<string> ValidateStructure(ImportTemplateEditDto dto)
     {
         var errors = new List<string>();
 
@@ -66,6 +138,19 @@ public static class ImportTemplateValidator
             }
 
             ValidateColumns(s, who, dto.ImportType, errors);
+
+            if (s.SheetMatchMode == SheetMatchModes.Headers)
+            {
+                var distinctFields = s.Columns
+                    .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey) && TemplateSheetResolver.HeaderTexts(c).Any())
+                    .Select(c => c.FieldKey!.Trim().ToLowerInvariant())
+                    .Distinct()
+                    .Count();
+
+                if (distinctFields < TemplateSheetResolver.MinHeaderFields)
+                    errors.Add($"{who}: finding a sheet by its headers needs columns for at least " +
+                               $"{TemplateSheetResolver.MinHeaderFields} different fields, so it can tell sheets apart.");
+            }
         }
 
         return errors;
@@ -79,6 +164,13 @@ public static class ImportTemplateValidator
             return;
         }
 
+        // One mapping per field on a sheet (the database enforces this too: UX_ITC_Sheet_Field). Other headers
+        // for the same field are aliases of that one mapping, not extra mappings.
+        var seenFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Normalized header (primary or alias, any column) -> the column and field that own it.
+        var headerOwner = new Dictionary<string, (ImportTemplateColumnEditDto Column, string? Field)>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var c in sheet.Columns)
         {
             var col = string.IsNullOrWhiteSpace(c.HeaderText) ? "A column" : $"Column \"{c.HeaderText}\"";
@@ -91,6 +183,38 @@ public static class ImportTemplateValidator
 
             if (string.IsNullOrWhiteSpace(c.FieldKey))
                 errors.Add($"{who}, {col}: choose a system field.");
+            else if (!seenFields.Add(c.FieldKey))
+            {
+                var fieldName = ImportFieldRegistry.GetField(importType, c.FieldKey)?.Display ?? c.FieldKey;
+                errors.Add($"{who}, {col}: {fieldName} is already mapped by another column on this sheet. " +
+                           "Add this header as an alias of that column instead.");
+            }
+
+            // Many headers (primary + aliases) may feed one field, but one header feeds only one field, and
+            // each header text appears once on the sheet. Checked together, normalized the way the file is matched.
+            foreach (var text in TemplateSheetResolver.HeaderTexts(c))
+            {
+                var norm = TemplateSheetResolver.Norm(text);
+                if (norm.Length == 0) continue;
+
+                if (!headerOwner.TryGetValue(norm, out var owner))
+                {
+                    headerOwner[norm] = (c, c.FieldKey);
+                    continue;
+                }
+
+                var otherField = !string.IsNullOrWhiteSpace(owner.Field)
+                    && !string.IsNullOrWhiteSpace(c.FieldKey)
+                    && !string.Equals(owner.Field, c.FieldKey, StringComparison.OrdinalIgnoreCase);
+
+                if (otherField)
+                {
+                    var ownerName = ImportFieldRegistry.GetField(importType, owner.Field)?.Display ?? owner.Field;
+                    errors.Add($"{who}, {col}: \"{text}\" is already used for {ownerName}. A header can feed only one field.");
+                }
+                else
+                    errors.Add($"{who}, {col}: \"{text}\" is listed more than once for the same field, so its rule would be ambiguous.");
+            }
 
             if (!ColumnRuleTypes.All.Contains(c.RuleType))
                 errors.Add($"{who}, {col}: unknown rule.");
@@ -121,6 +245,14 @@ public static class ImportTemplateValidator
                             errors.Add($"{who}, {col}: choose what \"{name}\" means.");
                     }
                 }
+            }
+
+            if (ImportFieldRegistry.GetField(importType, c.FieldKey)?.Type == ImportFieldType.Date
+                && !string.IsNullOrWhiteSpace(c.OptionsJson))
+            {
+                var dateProblem = DateOptions.Parse(c.OptionsJson).Validate();
+                if (dateProblem is not null)
+                    errors.Add($"{who}, {col}: {dateProblem}");
             }
         }
     }

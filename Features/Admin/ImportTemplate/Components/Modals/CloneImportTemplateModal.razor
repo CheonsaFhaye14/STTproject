@@ -1,35 +1,36 @@
-<Modal ShowModal="true" Width="500px" IconType="ModalIconType.Clone" MaxWidth="100%" MaxHeight="88vh" Subtitle="Clone an existing import template" Title="Clone template" OnClose="OnCancel">
+<Modal ShowModal="true" Width="500px" IconType="ModalIconType.Clone" MaxWidth="100%" MaxHeight="88vh"
+       Subtitle="Clone an existing import template" Title="Clone template" OnClose="OnCancel">
     <ChildContent>
+        @if (Errors.Count > 0)
+        {
+            <div class="alert alert-danger py-2 small mb-2">
+                <ul class="mb-0 ps-3">
+                    @foreach (var e in Errors)
+                    {
+                        <li>@e</li>
+                    }
+                </ul>
+            </div>
+        }
         @if (_scope == ImportScope.Principal)
         {
-            <AutoComplete Label="Copy to principal"
-                          Placeholder="Search for a principal…"
-                          Items="Principals"
-                          ShowAllOnOpen="true"
-                          SelectedValue="@_dto.TargetPrincipal"
+            <AutoComplete Label="Copy to principal" Placeholder="Search for a principal…" Items="Principals"
+                          ShowAllOnOpen="true" SelectedValue="@_dto.TargetPrincipal"
                           SelectedValueChanged="v => _dto.TargetPrincipal = v" />
         }
         else
         {
-            <AutoComplete Label="Copy to subdistributor"
-                          Placeholder="Search for a subdistributor…"
-                          Items="Subds"
-                          ShowAllOnOpen="true"
-                          ValueSelector="s => s.SubDistributorId.ToString()"
-                          TextSelector="s => s.Display"
+            <AutoComplete Label="Copy to subdistributor" Placeholder="Search for a subdistributor…" Items="Subds"
+                          ShowAllOnOpen="true" ValueSelector="s => s.SubDistributorId.ToString()" TextSelector="s => s.Display"
                           SelectedValue="@_dto.TargetSubDistributorId?.ToString()"
                           SelectedValueChanged="v => _dto.TargetSubDistributorId = string.IsNullOrWhiteSpace(v) ? null : int.Parse(v)" />
         }
-            <Input Label="New template name"
-                Placeholder="Enter a name for the new template"
-                AddOptionalText="true" 
-                @bind-Value="_dto.TemplateName"/>
+        <Input Label="New template name" Placeholder="Enter a name for the new template" AddOptionalText="true"
+               @bind-Value="_dto.TemplateName" />
     </ChildContent>
     <FooterContent>
         <Button Title="Cancel" OnClick="OnCancel" Variant="ButtonVariant.Secondary" />
-        <Button Title="Clone"
-                OnClick="() => OnConfirm.InvokeAsync(_dto)"
-                Disabled="@IsSaving"
+        <Button Title="Clone" OnClick="() => OnConfirm.InvokeAsync(_dto)" Disabled="@IsSaving"
                 Variant="ButtonVariant.Primary" />
     </FooterContent>
 </Modal>

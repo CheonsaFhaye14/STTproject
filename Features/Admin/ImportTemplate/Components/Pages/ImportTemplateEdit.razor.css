@@ -154,3 +154,228 @@
 
 /* ── Remove-sheet control, right end of the tab bar ── */
 .it-form ::deep .it-tabs-end { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 4px; }
+
+/* ── Sheet tab: required fields still missing ── */
+.it-form ::deep .it-dot {
+    display: inline-block; width: 8px; height: 8px; margin-left: 6px;
+    border-radius: 50%; background: #b42318; vertical-align: middle;
+}
+
+/* ── Header conflicts under a column row ── */
+.it-form ::deep .it-note { font-size: 12px; margin-top: 6px; padding: 4px 10px; border-radius: 8px; }
+.it-form ::deep .it-note--warn { color: #7c1d1d; background: #f6d7da; }
+
+/* ── Header tags: one per header that means the field ── */
+.it-form ::deep .it-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.it-form ::deep .it-tag {
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 10px;
+    font-size: 12px; color: var(--it-text); background: var(--it-input-bg);
+    border: 1px solid var(--it-input-line); border-radius: 999px; cursor: pointer;
+}
+.it-form ::deep .it-tag:hover { border-color: var(--it-accent); }
+.it-form ::deep .it-tag.active { background: var(--it-accent-soft); border-color: var(--it-accent); font-weight: 600; }
+.it-form ::deep .it-tag-flag { font-size: 10px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--it-muted); }
+.it-form ::deep .it-tag-x {
+    width: 18px; height: 18px; padding: 0; line-height: 1; font-size: 14px;
+    color: var(--it-muted); background: none; border: 0; border-radius: 50%; cursor: pointer;
+}
+.it-form ::deep .it-tag-x:hover { color: #7c1d1d; background: #f6d7da; }
+.it-form ::deep .it-header-entry { display: flex; align-items: center; gap: 8px; }
+.it-form ::deep .it-settings-for { font-size: 12px; color: var(--it-label-text); margin: 8px 0 4px; }
+
+/* ── Sheet settings bar: summary chips + edit button ── */
+.it-form ::deep .it-sheetbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 6px 8px 6px 12px; margin-bottom: 12px;
+    background: var(--it-col); border: 1px solid var(--it-line); border-radius: 10px;
+}
+.it-form ::deep .it-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.it-form ::deep .it-sum-chip {
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+    font-size: 12px; font-weight: 600; color: var(--it-text);
+    background: var(--it-input-bg); border: 1px solid var(--it-line); border-radius: 999px;
+}
+.it-form ::deep .it-sum-chip i { font-size: 13px; font-weight: 400; color: var(--it-muted); }
+.it-form ::deep .it-sum-chip.warn { color: #7c1d1d; background: #f6d7da; border-color: #d9a3aa; }
+.it-form ::deep .it-sum-chip.warn i { color: #7c1d1d; }
+
+/* ── Sheet details: grouped panel, steps and the locked columns placeholder ── */
+.it-form ::deep .it-steps {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-size: 12px; color: var(--it-label-text);
+}
+.it-form ::deep .it-step-n {
+    width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; background: var(--it-head); border: 1px solid var(--it-line); border-radius: 50%;
+}
+.it-form ::deep .it-step-n.on { background: var(--it-accent-soft); border-color: var(--it-accent); color: var(--it-text); }
+.it-form ::deep .it-step-on { color: var(--it-text); font-weight: 600; }
+
+.it-form ::deep .it-setup { margin-bottom: 12px; background: var(--it-col); border: 1px solid var(--it-line); border-radius: 10px; overflow: hidden; }
+.it-form ::deep .it-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.it-form ::deep .it-group { padding: 12px 14px 2px; min-width: 0; }
+.it-form ::deep .it-group + .it-group { border-left: 1px solid var(--it-line); }
+.it-form ::deep .it-group-title { font-size: 12px; font-weight: 600; color: var(--it-text); margin-bottom: 8px; }
+.it-form ::deep .it-group .it-row > .it-field { flex: 1 1 140px; }
+.it-form ::deep .it-group .it-row > .it-field.it-sm { flex: 0 0 110px; }
+.it-form ::deep .it-setup-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 14px; font-size: 12px; color: var(--it-label-text);
+    background: var(--it-strip); border-top: 1px solid var(--it-line);
+}
+.it-form ::deep .it-locked {
+    padding: 28px 16px; text-align: center; font-size: 12px; color: var(--it-label-text);
+    background: var(--it-strip); border: 1px dashed var(--it-line-hover); border-radius: 10px;
+}
+.it-form ::deep .it-locked i { margin-right: 6px; }
+
+@media (max-width: 768px) {
+    .it-form ::deep .it-group + .it-group { border-left: 0; border-top: 1px solid var(--it-line); }
+}
+
+/* ── Columns: fixed-size panel. The list scrolls, the editor is sized to fit. ── */
+.it-form ::deep .it-cols {
+    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-rows: minmax(480px, auto); /* fixed height; only grows if the editor ever needs more */
+    background: var(--it-col); border: 1px solid var(--it-line); border-radius: 10px; overflow: hidden;
+}
+/* The list fills the panel without adding to its height, so a long list scrolls instead of stretching the editor. */
+.it-form ::deep .it-cols-list { position: relative; min-width: 0; border-right: 1px solid var(--it-line); }
+.it-form ::deep .it-cols-list-inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.it-form ::deep .it-cols-head {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px; font-size: 12px; color: var(--it-label-text); border-bottom: 1px solid var(--it-line);
+}
+.it-form ::deep .it-cols-rows {
+    flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.it-form ::deep .it-col-row {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+    font: inherit; text-align: left; color: var(--it-text);
+    background: var(--it-input-bg); border: 1px solid var(--it-line); border-radius: 8px; cursor: pointer;
+}
+.it-form ::deep .it-col-row:hover { border-color: var(--it-accent); }
+.it-form ::deep .it-col-row.active { background: var(--it-accent-soft); border-color: var(--it-accent); }
+.it-form ::deep .it-col-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.it-form ::deep .it-col-title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.it-form ::deep .it-col-sub {
+    font-size: 12px; line-height: 1.3; color: var(--it-label-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.it-form ::deep .it-col-row .it-dot { margin-left: 0; flex-shrink: 0; }
+.it-form ::deep .it-badge {
+    flex-shrink: 0; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    color: #7c1d1d; background: #f6d7da;
+}
+.it-form ::deep .it-badge--opt { color: var(--it-label-text); background: var(--it-head); }
+
+/* Editor: one even gap between blocks, no stacked margins. */
+.it-form ::deep .it-cols-detail { min-width: 0; padding: 12px 16px; }
+.it-form ::deep .it-edit { display: flex; flex-direction: column; gap: 10px; }
+.it-form ::deep .it-edit .it-field { margin-bottom: 0; }
+.it-form ::deep .it-edit .it-note { margin-top: 0; }
+/* Required: a switch row, same style as the other option switches */
+.it-form ::deep .it-edit .it-option {
+    padding: 8px 12px; background: var(--it-input-bg);
+    border: 1px solid var(--it-line); border-radius: 10px;
+}
+.it-form ::deep .it-edit .it-option:hover { border-color: var(--it-accent); }
+.it-form ::deep .it-cols-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.it-form ::deep .it-col-edit-title { font-size: 13px; font-weight: 600; color: var(--it-text); }
+
+@media (max-width: 768px) {
+    .it-form ::deep .it-cols { grid-template-columns: 1fr; grid-template-rows: 260px auto; }
+    .it-form ::deep .it-cols-list { border-right: 0; border-bottom: 1px solid var(--it-line); }
+}
+
+/* ═══ Try it with a file ═══
+   Same tokens, tabs, chips and pills as Sheets and columns. */
+.it-form {
+    --it-ok: #2F7D4F;
+    --it-warn: #B7791F;
+    --it-warn-bg: #FBF3DC;
+    --it-bad: #B42318;
+    --it-bad-bg: #F6D7DA;
+}
+.it-form ::deep .it-dot--warn { background: var(--it-warn); }
+.it-form ::deep .tt-cnt { margin-left: 4px; font-size: 12px; font-weight: 400; color: var(--it-muted); }
+.it-form ::deep .tt-tab-off { margin-left: 6px; font-size: 14px; color: var(--it-muted); }
+.it-form ::deep .tt-tab-off-bad { color: var(--it-bad); }
+
+/* Cards (file bar, import check) */
+.it-form ::deep .tt-card { background: var(--it-col); border: 1px solid var(--it-line); border-radius: 10px; overflow: hidden; }
+.it-form ::deep .tt-locked { opacity: .75; }
+.it-form ::deep .tt-head, .it-form ::deep .tt-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.it-form ::deep .tt-bar-name { min-width: 0; flex: 1; }
+.it-form ::deep .tt-bar-icon { font-size: 22px; color: var(--it-accent); }
+
+/* Status banner: verdict on one line, details open below */
+.it-form ::deep .tt-status { background: var(--it-col); border: 1px solid var(--it-line); border-left: 4px solid var(--it-muted); border-radius: 10px; overflow: hidden; }
+.it-form ::deep .tt-status.tt-ok { border-left-color: var(--it-ok); }
+.it-form ::deep .tt-status.tt-warn { border-left-color: var(--it-warn); }
+.it-form ::deep .tt-status.tt-bad { border-left-color: var(--it-bad); }
+.it-form ::deep .tt-status-top {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; width: 100%;
+    padding: 10px 14px; background: none; border: 0; text-align: left; color: var(--it-text); font: inherit; font-size: 13px;
+}
+.it-form ::deep .tt-status-top:enabled { cursor: pointer; }
+.it-form ::deep .tt-status.tt-warn .tt-status-top { background: var(--it-warn-bg); }
+.it-form ::deep .tt-status.tt-bad .tt-status-top { background: var(--it-bad-bg); }
+.it-form ::deep .tt-verdict-icon { font-size: 20px; }
+.it-form ::deep .tt-ok .tt-verdict-icon { color: var(--it-ok); }
+.it-form ::deep .tt-warn .tt-verdict-icon { color: var(--it-warn); }
+.it-form ::deep .tt-bad .tt-verdict-icon { color: var(--it-bad); }
+.it-form ::deep .tt-facts { flex: 1; font-size: 12px; color: var(--it-label-text); }
+.it-form ::deep .tt-chev { transition: transform .2s; color: var(--it-muted); }
+.it-form ::deep .tt-open .tt-chev { transform: rotate(180deg); }
+.it-form ::deep .tt-detail { border-top: 1px solid var(--it-line); }
+.it-form ::deep .tt-detail > * + * { border-top: 1px solid var(--it-line); }
+.it-form ::deep .tt-group { padding: 10px 14px; font-size: 13px; color: var(--it-text); }
+.it-form ::deep .tt-group-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.it-form ::deep .tt-group-text { min-width: 0; flex: 1 1 320px; }
+.it-form ::deep .tt-group-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.it-form ::deep .tt-go { cursor: pointer; }
+.it-form ::deep .tt-go:hover { border-color: var(--it-accent); background: var(--it-accent-soft); }
+.it-form ::deep .tt-issue { padding: 10px 14px; cursor: pointer; font-size: 13px; }
+.it-form ::deep .tt-issue:hover { background: var(--it-card); }
+.it-form ::deep .tt-fix { display: flex; gap: 8px; font-size: 12px; color: var(--it-muted); margin-top: 4px; }
+.it-form ::deep .tt-fix i { font-size: 15px; margin-top: 1px; color: var(--it-accent); }
+
+/* Original / Processed: reuses .it-seg-btn, so "active" looks like the scope pills */
+.it-form ::deep .tt-seg { margin: 0; flex-shrink: 0; }
+
+/* Blocked sheet, empty sheet */
+.it-form ::deep .tt-banner { display: flex; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; background: var(--it-bad-bg); color: #7c1d1d; }
+.it-form ::deep .tt-empty { border: 1.5px dashed var(--it-line); border-radius: 10px; padding: 22px 16px; text-align: center; background: var(--it-col); }
+.it-form ::deep .tt-empty-icon { font-size: 26px; color: var(--it-bad); }
+.it-form ::deep .tt-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 8px; border: 1px solid var(--it-line); border-radius: 8px; }
+
+/* Preview table: light header band, row lines only, long text cut with a tooltip */
+.it-form ::deep .tt-scroll { overflow: auto; max-height: 420px; border: 1px solid var(--it-line); border-radius: 10px; background: var(--it-input-bg); }
+.it-form ::deep .tt-table { width: 100%; margin: 0; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.it-form ::deep .tt-table th {
+    position: sticky; top: 0; z-index: 1; padding: 8px 12px; vertical-align: bottom; white-space: nowrap; text-align: left;
+    font-size: 12px; font-weight: 600; color: var(--it-text); background: var(--it-head); border-bottom: 1px solid var(--it-line);
+}
+.it-form ::deep .tt-table th small { display: block; margin-top: 1px; font-size: 11px; font-weight: 400; color: var(--it-muted); font-family: var(--bs-font-monospace, monospace); }
+.it-form ::deep .tt-table td {
+    padding: 7px 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--it-text); border-bottom: 1px solid var(--it-line);
+}
+.it-form ::deep .tt-table tbody tr:last-child td { border-bottom: 0; }
+.it-form ::deep .tt-table tbody tr:hover td { background: var(--it-col); }
+.it-form ::deep .tt-table td.tt-row { width: 44px; color: var(--it-muted); }
+.it-form ::deep .tt-table th.tt-off { background: var(--it-col); color: var(--it-muted); }
+.it-form ::deep .tt-table th.tt-x, .it-form ::deep .tt-table td.tt-x-cell { background: var(--it-bad-bg); color: #7c1d1d; }
+.it-form ::deep .tt-table th.tt-x small { color: inherit; }
+.it-form ::deep .tt-table td.tt-na { background: var(--it-col); color: var(--it-muted); }
+.it-form ::deep .tt-table td.tt-dash { color: var(--it-muted); opacity: .6; }
+.it-form ::deep .tt-table td.tt-changed { box-shadow: inset 2px 0 0 var(--it-accent); }
+.it-form ::deep .tt-table tr.tt-bad-row td { background: var(--it-warn-bg); }
+.it-form ::deep .tt-table tr.tt-bad-row td:first-child { box-shadow: inset 3px 0 0 var(--it-warn); }
+.it-form ::deep .tt-table tr.tt-hl td { outline: 2px solid var(--it-accent); outline-offset: -2px; }
+.it-form ::deep .tt-alias {
+    margin-left: 4px; padding: 2px 4px; font-size: 10px; font-weight: 400; line-height: 1; vertical-align: 1px;
+    color: var(--it-accent); background: var(--it-input-bg); border: 1px solid var(--it-accent); border-radius: 4px;
+}

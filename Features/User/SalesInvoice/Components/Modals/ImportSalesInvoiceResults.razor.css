@@ -119,7 +119,6 @@
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
-    overflow-x: auto;
     gap: 12px;
 }
  
@@ -152,6 +151,98 @@
 ::deep .sc-val.sc-warn { color: #6B5410; }
 ::deep .sc-val.sc-er { color: #791F1F; }
  
+/* ── Total rows card as a sheet-breakdown toggle ── */
+::deep button.sc-click {
+    appearance: none;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+::deep button.sc-click:hover,
+::deep button.sc-click[aria-expanded="true"] {
+    border-color: #C9A227;
+}
+
+::deep .sc-label .chev {
+    font-size: 10px;
+    margin-left: 2px;
+}
+
+::deep .sc-sub {
+    font-size: 10px;
+    color: #9C968A;
+    white-space: nowrap;
+}
+
+::deep .sc-wrap {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+}
+
+::deep .sc-wrap > .sc {
+    width: 100%;
+}
+
+::deep .sc-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+}
+
+::deep .sc-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 8;
+    min-width: 240px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #C9A227;
+    border-radius: 9px;
+    padding: 0.5rem 0.8rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+::deep .sb-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: #9C968A;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+}
+
+::deep .sb-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: #1B1B1F;
+    padding: 2px 0;
+}
+
+::deep .sb-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+::deep .sb-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+::deep .sb-total {
+    margin-top: 3px;
+    padding-top: 4px;
+    border-top: 0.5px solid #EBE7DC;
+    font-weight: 600;
+}
+
 /* ── Success banner ── */
 ::deep .success-banner {
     display: flex;
@@ -502,6 +593,16 @@
     user-select: text;
 }
  
+::deep .ch-sheet {
+    background: #FBF6E4;
+    color: #6B5410;
+    border-color: #E8D48A;
+}
+
+::deep .ch-sheet i {
+    font-size: 11px;
+}
+
 ::deep .cb-wrap {
     display: flex;
     align-items: center;
@@ -1089,4 +1190,161 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+/* ── Import failed: worksheet cards ── */
+::deep .global-alert-sub {
+    font-size: 12px;
+    color: #791F1F;
+}
+
+::deep .sheet-fail-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #5F5E5A;
+    margin: 0.75rem 0 0.4rem;
+}
+
+::deep .sheet-fail-card {
+    background: #fff;
+    border: 0.5px solid #E24B4A;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.6rem;
+}
+
+::deep .sfc-toggle {
+    display: block;
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+::deep .sfc-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+::deep .sfc-summary {
+    display: block;
+    font-size: 12px;
+    color: #5F5E5A;
+    margin-top: 0.3rem;
+}
+
+::deep .sfc-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2C2C2A;
+}
+
+::deep .sfc-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #A32D2D;
+    background: #FCEBEB;
+    border-radius: 999px;
+    padding: 1px 8px;
+}
+
+::deep .sfc-meta {
+    font-size: 11px;
+    color: #888780;
+    margin-left: auto;
+}
+
+::deep .fix-text {
+    font-size: 12.5px;
+    color: #5F5E5A;
+}
+
+::deep .sfc-section {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #888780;
+    margin: 0.4rem 0 0.25rem;
+}
+
+::deep .sfc-field {
+    padding: 0.35rem 0;
+    border-top: 0.5px solid #F0EEE6;
+}
+
+::deep .sfc-field-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #2C2C2A;
+}
+
+::deep .sfc-line {
+    font-size: 12px;
+    color: #5F5E5A;
+}
+
+::deep .sfc-key {
+    color: #888780;
+}
+
+::deep .sfc-extra {
+    margin-top: 0.4rem;
+}
+
+::deep .sfc-other {
+    margin-top: 0.25rem;
+}
+
+/* ── Import failed: how to fix ── */
+::deep .fix-box {
+    background: #F7F5EE;
+    border: 0.5px solid #D9D5C6;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+}
+
+::deep .fix-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+::deep .fix-steps {
+    font-size: 12.5px;
+    margin: 0 0 0.4rem 1.1rem;
+    padding: 0;
+}
+
+::deep .fix-note {
+    font-size: 11px;
+    color: #888780;
+}
+
+/* Sheets that gave no rows */
+::deep .sheet-note {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 8px 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #6B5410;
+    background: #FBF6E4;
+    border: 1px solid #E8D48A;
+    border-radius: 10px;
+}
+
+::deep .sheet-note i {
+    font-size: 15px;
+    margin-top: 1px;
+}
+
+::deep .sb-count.sb-zero {
+    color: #9C968A;
 }

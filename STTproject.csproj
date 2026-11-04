@@ -7,9 +7,13 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Remove="Shared\Layout\AdminSideBar.razor" />
-  </ItemGroup>
+<ItemGroup>
+  <Content Remove="Shared\Layout\AdminSideBar.razor" />
+  <Compile Remove="STTproject.Tests\**" />
+  <Content Remove="STTproject.Tests\**" />
+  <EmbeddedResource Remove="STTproject.Tests\**" />
+  <None Remove="STTproject.Tests\**" />
+</ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />

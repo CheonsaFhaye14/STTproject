@@ -5,17 +5,13 @@
 @inject IUserContextService UserContext
 @inject IJSRuntime JS
 
-<LoadingOverlay Show="isPreparing"
-                Title="Checking your file…"
-                Subtitle="Validating headers, rows, and data. This may take a moment."
-                IconClass="fa-solid fa-file-arrow-up" />
+<LoadingOverlay Show="isPreparing" Title="Checking your file…"
+                Subtitle="Validating headers, rows, and data. This may take a moment." IconClass="fa-solid fa-file-arrow-up" />
 
 @if (Show && !showResults)
 {
-    <Modal ShowModal="Show"
-           Title="Import Sales Invoices"
-           Subtitle="Import invoice rows from an Excel file for this sub-distributor."
-           IconType="ModalIconType.Upload"
+    <Modal ShowModal="Show" Title="Import Sales Invoices"
+           Subtitle="Import invoice rows from an Excel file for this sub-distributor." IconType="ModalIconType.Upload"
            Details="Excel should contain: Invoice Code, Invoice Date, Customer, SKU/Item, UOM, Quantity (required)."
            OnClose="HandleClose">
         <ChildContent>
@@ -27,21 +23,15 @@
         </ChildContent>
         <FooterContent>
             <Button Title="Cancel" OnClick="HandleClose" Variant="ButtonVariant.Secondary" />
-            <Button Title="Check File"
-                    OnClick="OnPrepare"
-                    Disabled="@(selectedFile == null || isPreparing || SubDistributorId <= 0)"
-                    Icon="fa-solid fa-check"
+            <Button Title="Check File" OnClick="OnPrepare"
+                    Disabled="@(selectedFile == null || isPreparing || SubDistributorId <= 0)" Icon="fa-solid fa-check"
                     Variant="ButtonVariant.Primary" />
         </FooterContent>
     </Modal>
 }
 
-<ImportSalesInvoiceResults Show="showResults"
-                           ImportResult="importResult"
-                           OnCommit="HandleCommitAsync"
-                           OnClose="CloseResults"
-                           OnDownloadErrorReport="HandleDownloadErrorReport" />
-
+<ImportSalesInvoiceResults Show="showResults" ImportResult="importResult" OnCommit="HandleCommitAsync"
+                           OnClose="CloseResults" OnDownloadErrorReport="HandleDownloadErrorReport" IsAdmin="false" />
 @code {
     [Parameter] public bool Show { get; set; }
     [Parameter] public int SubDistributorId { get; set; }

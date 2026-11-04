@@ -31,6 +31,10 @@ public partial class User
 
     public virtual ICollection<Customer> CustomerUpdatedByNavigations { get; set; } = new List<Customer>();
 
+    public virtual ICollection<ImportBatch> ImportBatches { get; set; } = new List<ImportBatch>();
+
+    public virtual ICollection<ImportError> ImportErrors { get; set; } = new List<ImportError>();
+
     public virtual ICollection<ItemsUom> ItemsUomCreatedByNavigations { get; set; } = new List<ItemsUom>();
 
     public virtual ICollection<ItemsUom> ItemsUomUpdatedByNavigations { get; set; } = new List<ItemsUom>();
@@ -48,4 +52,8 @@ public partial class User
     public virtual ICollection<SubdItem> SubdItemCreatedByNavigations { get; set; } = new List<SubdItem>();
 
     public virtual ICollection<SubdItem> SubdItemUpdatedByNavigations { get; set; } = new List<SubdItem>();
+
+    public virtual ICollection<TestCustomer> TestCustomerCreatedByNavigations { get; set; } = new List<TestCustomer>();
+
+    public virtual ICollection<TestCustomer> TestCustomerUpdatedByNavigations { get; set; } = new List<TestCustomer>();
 }

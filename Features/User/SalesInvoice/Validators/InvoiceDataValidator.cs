@@ -1,3 +1,4 @@
+using STTproject.Features.Admin.ImportTemplate.Services;
 using STTproject.Features.User.SalesInvoice.DTOs;
 using System.Text.RegularExpressions;
 using System.Globalization;
@@ -7,60 +8,16 @@ namespace STTproject.Features.User.SalesInvoice.Services;
 
 public sealed class InvoiceDataValidator
 {
+    /// <summary>
+    /// The registry is the one definition of what a Sales Invoice template must map, so this only asks it.
+    /// </summary>
     public static (bool IsValid, string ErrorMessage) ValidateRequiredHeaders(
         IReadOnlyDictionary<string, int> headers)
     {
-        var missing = new List<string>();
-
-        if (!headers.ContainsKey("InvoiceCode"))
-            missing.Add("InvoiceCode");
-
-        if (!headers.ContainsKey("InvoiceDate"))
-            missing.Add("InvoiceDate");
-
-        if (!headers.ContainsKey("SalesManName"))
-            missing.Add("SalesManName");
-
-        if (!headers.ContainsKey("CustomerCode") &&
-            !headers.ContainsKey("CustomerName"))
-        {
-            missing.Add("(CustomerCode OR CustomerName)");
-        }
-
-        if (!headers.ContainsKey("SkuCode") &&
-            !headers.ContainsKey("ItemName"))
-        {
-            missing.Add("(SkuCode OR ItemName)");
-        }
-
-        var hasSplitQuantities =
-            headers.ContainsKey("CaseQuantity") ||
-            headers.ContainsKey("PieceQuantity") ||
-            headers.ContainsKey("DozenQuantity") ||
-            headers.ContainsKey("InBoxQuantity");
-
-        var hasSimpleQuantity = headers.ContainsKey("Quantity");
-        var hasUom = headers.ContainsKey("UnitOfMeasure");
-
-        if (!hasSplitQuantities && !hasSimpleQuantity)
-        {
-            missing.Add("(CaseQuantity OR PieceQuantity OR DozenQuantity OR InBoxQuantity OR Quantity)");
-        }
-
-        if (!hasSplitQuantities && hasSimpleQuantity && !hasUom)
-        {
-            missing.Add("UOM (required when using Quantity)");
-        }
-
-        if (missing.Count > 0)
-        {
-            return (
-                false,
-                $"Missing required column(s): {string.Join(", ", missing)}."
-            );
-        }
-
-        return (true, string.Empty);
+        var missing = ImportFieldRegistry.MissingRequired("SalesInvoice", headers.Keys);
+        return missing.Count == 0
+            ? (true, string.Empty)
+            : (false, WorkbookReader.MissingColumnsMessage(missing));
     }
     public static bool TryResolveCustomer(string customerCode, string customerName, string? province, string? cityMunicipality,
         string? customerType, string? address, IReadOnlyDictionary<string, Data.Customer> customerByCode, IEnumerable<Data.Customer> allCustomers,
@@ -1068,6 +1025,3 @@ public sealed class InvoiceDataValidator
     private static readonly Regex UomParenRegex =
         new(@"\s*\(.*?\)\s*$", RegexOptions.Compiled);
 }
-
-
-

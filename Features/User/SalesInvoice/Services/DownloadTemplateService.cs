@@ -1,6 +1,7 @@
 ﻿using ClosedXML.Excel;
 using Microsoft.JSInterop;
 using STTproject.Features.User.SalesInvoice.DTOs;
+using STTproject.Models;
 
 namespace STTproject.Features.User.SalesInvoice.Services
 {
@@ -339,14 +340,39 @@ namespace STTproject.Features.User.SalesInvoice.Services
         {
             var list = (entries ?? result.Issues
                     .Where(i => i.RowNumber > 0)
-                    .Select(i => new ErrorReportEntry(i.RowNumber, string.Empty, i.Message)))
+                    .Select(i => new ErrorReportEntry(i.RowNumber, string.Empty, i.Message, i.SheetIndex)))
                 .ToList();
 
             using var workbook = new XLWorkbook();
-            var sheet = workbook.Worksheets.Add("Errors");
 
-            var hasRaw = result.RawSheetHeaders.Count > 0;
-            var headers = hasRaw ? result.RawSheetHeaders : result.OriginalHeaders;
+            // One output sheet per source worksheet, so each keeps its own columns. A single-sheet file gets
+            // the same lone "Errors" sheet as before.
+            var bySheet = list.GroupBy(e => e.SheetIndex).OrderBy(g => g.Key).ToList();
+            if (bySheet.Count <= 1)
+            {
+                WriteErrorSheet(workbook.Worksheets.Add("Errors"), result, bySheet.FirstOrDefault()?.Key ?? 0, list);
+            }
+            else
+            {
+                var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var group in bySheet)
+                {
+                    var name = result.Sheets.TryGetValue(group.Key, out var sourceSheet) ? sourceSheet.Name : $"Sheet {group.Key}";
+                    WriteErrorSheet(workbook.Worksheets.Add(UniqueSheetName(name, usedNames)), result, group.Key, group.ToList());
+                }
+            }
+
+            using var ms = new MemoryStream();
+            workbook.SaveAs(ms);
+            return ms.ToArray();
+        }
+
+        private static void WriteErrorSheet(
+            IXLWorksheet sheet, ImportSalesInvoiceResult result, int sheetIndex, List<ErrorReportEntry> list)
+        {
+            result.Sheets.TryGetValue(sheetIndex, out var source);
+            var hasRaw = source is { RawHeaders.Count: > 0 };
+            var headers = hasRaw ? source!.RawHeaders : result.OriginalHeaders;
 
             for (int i = 0; i < headers.Count; i++)
                 sheet.Cell(1, i + 1).Value = string.IsNullOrWhiteSpace(headers[i]) ? $"Column {i + 1}" : headers[i];
@@ -367,12 +393,13 @@ namespace STTproject.Features.User.SalesInvoice.Services
             int excelRow = 2;
             foreach (var group in list.GroupBy(e => e.RowNumber).OrderBy(g => g.Key))
             {
-                if (hasRaw && result.RawSheetRowsByRow.TryGetValue(group.Key, out var cells))
+                var key = new SourceRowKey(sheetIndex, group.Key);
+                if (hasRaw && source!.RawRows.TryGetValue(group.Key, out var cells))
                 {
                     for (int i = 0; i < headers.Count && i < cells.Length; i++)
                         sheet.Cell(excelRow, i + 1).Value = cells[i];
                 }
-                else if (result.RawValuesByRow.TryGetValue(group.Key, out var raw))
+                else if (result.RawValuesByRow.TryGetValue(key, out var raw))
                 {
                     for (int i = 0; i < headers.Count; i++)
                         sheet.Cell(excelRow, i + 1).Value = raw.TryGetValue(headers[i], out var v) ? v ?? string.Empty : string.Empty;
@@ -390,10 +417,23 @@ namespace STTproject.Features.User.SalesInvoice.Services
             }
 
             sheet.Columns().AdjustToContents(1, 60);
+        }
 
-            using var ms = new MemoryStream();
-            workbook.SaveAs(ms);
-            return ms.ToArray();
+        // Excel sheet names: at most 31 characters, none of [ ] : * ? / \, and unique ignoring case.
+        private static string UniqueSheetName(string wanted, HashSet<string> used)
+        {
+            var forbidden = new[] { '[', ']', ':', '*', '?', '/', '\\' };
+            var clean = new string(wanted.Where(ch => !forbidden.Contains(ch)).ToArray()).Trim();
+            if (clean.Length == 0) clean = "Sheet";
+            if (clean.Length > 31) clean = clean[..31];
+
+            var name = clean;
+            for (var n = 2; !used.Add(name); n++)
+            {
+                var suffix = $" ({n})";
+                name = clean[..Math.Min(clean.Length, 31 - suffix.Length)] + suffix;
+            }
+            return name;
         }
     }
 }

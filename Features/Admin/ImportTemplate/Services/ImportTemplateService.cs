@@ -5,6 +5,7 @@ using STTproject.Features.Admin.ImportTemplate.Validators;
 using TemplateEntity = STTproject.Data.ImportTemplate;
 using SheetEntity = STTproject.Data.ImportTemplateSheet;
 using ColumnEntity = STTproject.Data.ImportTemplateColumn;
+using AliasEntity = STTproject.Data.ImportTemplateColumnAlias;
 
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
@@ -55,9 +56,6 @@ public sealed class ImportTemplateService : IImportTemplateService
             "Columns" => asc
                 ? q.OrderBy(t => t.ImportTemplateColumns.Count)
                 : q.OrderByDescending(t => t.ImportTemplateColumns.Count),
-            "UsesGlobal" => asc
-                ? q.OrderBy(t => t.AllowGlobalFallback)
-                : q.OrderByDescending(t => t.AllowGlobalFallback),
             "Version" => asc
                 ? q.OrderBy(t => t.Version)
                 : q.OrderByDescending(t => t.Version),
@@ -73,7 +71,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         };
 
         return await ordered
-            .ThenByDescending(t => t.IsActive)         
+            .ThenByDescending(t => t.IsActive)
             .ThenBy(t => t.TemplateName)
             .Select(t => new ImportTemplateListItemDto
             {
@@ -86,7 +84,6 @@ public sealed class ImportTemplateService : IImportTemplateService
                 Principal = t.Principal,
                 Version = t.Version,
                 IsActive = t.IsActive,
-                AllowGlobalFallback = t.AllowGlobalFallback,
                 SheetCount = t.ImportTemplateSheets.Count,
                 ColumnCount = t.ImportTemplateColumns.Count,
                 LastChangedDate = t.UpdatedDate ?? t.CreatedDate
@@ -103,6 +100,7 @@ public sealed class ImportTemplateService : IImportTemplateService
             .AsSplitQuery()
             .Include(x => x.ImportTemplateSheets)
                 .ThenInclude(s => s.ImportTemplateColumns)
+                    .ThenInclude(c => c.ImportTemplateColumnAliases)
             .FirstOrDefaultAsync(x => x.ImportTemplateId == importTemplateId, ct);
 
         if (t is null) return null;
@@ -114,7 +112,6 @@ public sealed class ImportTemplateService : IImportTemplateService
             TemplateName = t.TemplateName,
             SubDistributorId = t.SubDistributorId,
             Principal = t.Principal,
-            AllowGlobalFallback = t.AllowGlobalFallback,
             IsActive = t.IsActive,
             Version = t.Version,
             Sheets = t.ImportTemplateSheets
@@ -136,6 +133,14 @@ public sealed class ImportTemplateService : IImportTemplateService
                         {
                             ImportTemplateColumnId = c.ImportTemplateColumnId,
                             HeaderText = c.HeaderText,
+                            Aliases = c.ImportTemplateColumnAliases
+                                .OrderBy(a => a.SortOrder).ThenBy(a => a.ImportTemplateColumnAliasId)
+                                .Select(a => new ImportTemplateAliasEditDto
+                                {
+                                    ImportTemplateColumnAliasId = a.ImportTemplateColumnAliasId,
+                                    AliasText = a.AliasText,
+                                    SortOrder = a.SortOrder
+                                }).ToList(),
                             FieldKey = c.FieldKey,
                             RuleType = c.RuleType,
                             OptionsJson = c.OptionsJson,
@@ -161,16 +166,21 @@ public sealed class ImportTemplateService : IImportTemplateService
 
         await using var ctx = await _factory.CreateDbContextAsync(ct);
 
+        var scopeErrors = ImportTemplateValidator.ValidateScope(dto.ImportType, dto.SubDistributorId, dto.Principal);
+        if (scopeErrors.Count > 0)
+            return ImportTemplateSaveResult.Fail(scopeErrors.ToArray());
+
         var scopeError = await CheckSubdExistsAsync(ctx, dto.SubDistributorId, ct);
         if (scopeError is not null)
             return ImportTemplateSaveResult.Fail(scopeError);
 
-        if (dto.IsActive)
-        {
-            var conflict = await FindActiveConflictAsync(ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, dto.ImportTemplateId, ct);
-            if (conflict is not null)
-                return ImportTemplateSaveResult.Fail(ConflictMessage(conflict));
-        }
+        // Several active templates may share a scope; they only need different names so they can be told apart.
+        var templateName = await ResolveTemplateNameAsync(
+            ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, dto.TemplateName, dto.ImportTemplateId, ct);
+
+        if (dto.IsActive && await HasActiveNameConflictAsync(
+                ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, templateName, dto.ImportTemplateId, ct))
+            return ImportTemplateSaveResult.Fail(NameConflictMessage(templateName));
 
         await using var tx = await ctx.Database.BeginTransactionAsync(ct);
         try
@@ -193,6 +203,7 @@ public sealed class ImportTemplateService : IImportTemplateService
                     .AsSplitQuery()
                     .Include(t => t.ImportTemplateSheets)
                         .ThenInclude(s => s.ImportTemplateColumns)
+                            .ThenInclude(c => c.ImportTemplateColumnAliases)
                     .FirstOrDefaultAsync(t => t.ImportTemplateId == dto.ImportTemplateId, ct);
 
                 if (existing is null)
@@ -211,12 +222,9 @@ public sealed class ImportTemplateService : IImportTemplateService
             }
 
             entity.ImportType = dto.ImportType;
-            entity.TemplateName = string.IsNullOrWhiteSpace(dto.TemplateName)
-                ? await BuildTemplateNameAsync(ctx, dto.ImportType, dto.SubDistributorId, dto.Principal, ct)
-                : dto.TemplateName.Trim();            
+            entity.TemplateName = templateName;
             entity.SubDistributorId = dto.SubDistributorId;
             entity.Principal = dto.Principal;
-            entity.AllowGlobalFallback = dto.AllowGlobalFallback;
             entity.IsActive = dto.IsActive;
 
             UpsertSheets(ctx, entity, dto);
@@ -251,37 +259,35 @@ public sealed class ImportTemplateService : IImportTemplateService
             .AsSplitQuery()
             .Include(t => t.ImportTemplateSheets)
                 .ThenInclude(s => s.ImportTemplateColumns)
+                    .ThenInclude(c => c.ImportTemplateColumnAliases)
             .FirstOrDefaultAsync(t => t.ImportTemplateId == dto.SourceTemplateId, ct);
 
         if (source is null)
             return ImportTemplateSaveResult.Fail("The template to clone no longer exists.");
 
-        var def = ImportFieldRegistry.Get(source.ImportType);
-        if (def is not null)
-        {
-            if (def.Scope == ImportScope.Principal && dto.TargetSubDistributorId is not null)
-                return ImportTemplateSaveResult.Fail("Company Item templates are set by principal, not by subdistributor.");
-            if (def.Scope == ImportScope.Subd && targetPrincipal is not null)
-                return ImportTemplateSaveResult.Fail($"{def.Display} templates are set by subdistributor, not by principal.");
-        }
+        var scopeErrors = ImportTemplateValidator.ValidateScope(source.ImportType, dto.TargetSubDistributorId, targetPrincipal);
+        if (scopeErrors.Count > 0)
+            return ImportTemplateSaveResult.Fail(scopeErrors.ToArray());
 
         var scopeError = await CheckSubdExistsAsync(ctx, dto.TargetSubDistributorId, ct);
         if (scopeError is not null)
             return ImportTemplateSaveResult.Fail(scopeError);
 
-        var conflict = await FindActiveConflictAsync(ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, 0, ct);
-        if (conflict is not null)
-            return ImportTemplateSaveResult.Fail(ConflictMessage(conflict));
+        // Cloning into a scope that already has templates is allowed; the copy just needs its own name.
+        var copyName = await ResolveTemplateNameAsync(
+            ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, dto.TemplateName, 0, ct);
+
+        if (await HasActiveNameConflictAsync(ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, copyName, 0, ct))
+            return ImportTemplateSaveResult.Fail(NameConflictMessage(copyName));
 
         try
         {
             var copy = new TemplateEntity
             {
                 ImportType = source.ImportType,
-                TemplateName = dto.TemplateName ?? await BuildTemplateNameAsync(ctx, source.ImportType, dto.TargetSubDistributorId, targetPrincipal, ct),
+                TemplateName = copyName,
                 SubDistributorId = dto.TargetSubDistributorId,
                 Principal = targetPrincipal,
-                AllowGlobalFallback = source.AllowGlobalFallback,
                 Version = 1,
                 IsActive = true,
                 CreatedDate = DateTime.UtcNow,
@@ -314,6 +320,9 @@ public sealed class ImportTemplateService : IImportTemplateService
                         IsRequired = c.IsRequired,
                         SortOrder = c.SortOrder
                     };
+
+                    foreach (var a in c.ImportTemplateColumnAliases.OrderBy(a => a.SortOrder))
+                        colCopy.ImportTemplateColumnAliases.Add(new AliasEntity { AliasText = a.AliasText, SortOrder = a.SortOrder });
 
                     // A column belongs to both its template and its sheet.
                     copy.ImportTemplateColumns.Add(colCopy);
@@ -350,16 +359,14 @@ public sealed class ImportTemplateService : IImportTemplateService
         if (t.IsActive == isActive)
             return ImportTemplateSaveResult.Ok(t.ImportTemplateId);
 
-        if (isActive)
-        {
-            var conflict = await FindActiveConflictAsync(ctx, t.ImportType, t.SubDistributorId, t.Principal, t.ImportTemplateId, ct);
-            if (conflict is not null)
-                return ImportTemplateSaveResult.Fail(ConflictMessage(conflict));
-        }
+        if (isActive && await HasActiveNameConflictAsync(
+                ctx, t.ImportType, t.SubDistributorId, t.Principal, t.TemplateName, t.ImportTemplateId, ct))
+            return ImportTemplateSaveResult.Fail(NameConflictMessage(t.TemplateName));
 
         try
         {
             t.IsActive = isActive;
+            t.Version++;                     // an edit session opened before this change must fail its version check
             t.UpdatedDate = DateTime.UtcNow;
             t.UpdatedBy = userId;
             await ctx.SaveChangesAsync(ct);
@@ -418,7 +425,7 @@ public sealed class ImportTemplateService : IImportTemplateService
             s.SheetMatchValue = string.IsNullOrWhiteSpace(s.SheetMatchValue) ? null : s.SheetMatchValue.Trim();
             s.HeaderRowCount = Math.Clamp(s.HeaderRowCount, 1, 5);
             // Clear values the chosen mode doesn't use, so stale text can't linger.
-            if (s.SheetMatchMode is SheetMatchModes.Any or SheetMatchModes.Ignore) s.SheetMatchValue = null;
+            if (s.SheetMatchMode is SheetMatchModes.Any or SheetMatchModes.Headers or SheetMatchModes.Ignore) s.SheetMatchValue = null;
             if (s.HeaderRowMode != HeaderRowModes.Fixed) s.HeaderRowNumber = null;
             if (s.SheetMatchMode == SheetMatchModes.Ignore) s.Columns.Clear();
 
@@ -428,6 +435,12 @@ public sealed class ImportTemplateService : IImportTemplateService
                 c.FieldKey = string.IsNullOrWhiteSpace(c.FieldKey) ? null : c.FieldKey.Trim();
                 c.OptionsJson = string.IsNullOrWhiteSpace(c.OptionsJson) ? null : c.OptionsJson.Trim();
                 if (string.IsNullOrWhiteSpace(c.RuleType)) c.RuleType = ColumnRuleTypes.Direct;
+
+                // Aliases: trimmed, blanks dropped, kept in the order given. Repeats are left for the validator to report.
+                c.Aliases ??= new();
+                foreach (var a in c.Aliases) a.AliasText = a.AliasText?.Trim() ?? string.Empty;
+                c.Aliases.RemoveAll(a => a.AliasText.Length == 0);
+                for (var i = 0; i < c.Aliases.Count; i++) c.Aliases[i].SortOrder = i + 1;
             }
         }
     }
@@ -441,6 +454,8 @@ public sealed class ImportTemplateService : IImportTemplateService
         {
             if (!keepSheetIds.Contains(sheet.ImportTemplateSheetId))
             {
+                foreach (var c in sheet.ImportTemplateColumns)
+                    ctx.ImportTemplateColumnAliases.RemoveRange(c.ImportTemplateColumnAliases.ToList());
                 ctx.ImportTemplateColumns.RemoveRange(sheet.ImportTemplateColumns.ToList());
                 ctx.ImportTemplateSheets.Remove(sheet);
                 continue;
@@ -451,8 +466,12 @@ public sealed class ImportTemplateService : IImportTemplateService
                 .Columns.Where(c => c.ImportTemplateColumnId != 0)
                 .Select(c => c.ImportTemplateColumnId).ToHashSet();
 
-            ctx.ImportTemplateColumns.RemoveRange(sheet.ImportTemplateColumns
-                .Where(c => !keepColumnIds.Contains(c.ImportTemplateColumnId)).ToList());
+            // Aliases go with their parent column, whether or not the database cascades.
+            var removedColumns = sheet.ImportTemplateColumns
+                .Where(c => !keepColumnIds.Contains(c.ImportTemplateColumnId)).ToList();
+            foreach (var c in removedColumns)
+                ctx.ImportTemplateColumnAliases.RemoveRange(c.ImportTemplateColumnAliases.ToList());
+            ctx.ImportTemplateColumns.RemoveRange(removedColumns);
         }
     }
 
@@ -503,7 +522,41 @@ public sealed class ImportTemplateService : IImportTemplateService
                 col.OptionsJson = cd.OptionsJson;
                 col.IsRequired = cd.IsRequired;
                 col.SortOrder = ci + 1;
+
+                SyncAliases(ctx, col, cd.Aliases);
             }
+        }
+    }
+
+    /// <summary>
+    /// Makes the column's alias rows match the DTO: existing rows keep their ids, new ones are added,
+    /// rows no longer listed are deleted. The cleaning rule is not stored per alias; it belongs to the parent.
+    /// </summary>
+    private static void SyncAliases(EntrielContext ctx, ColumnEntity col, List<ImportTemplateAliasEditDto> wanted)
+    {
+        var keepIds = wanted.Where(a => a.ImportTemplateColumnAliasId != 0)
+            .Select(a => a.ImportTemplateColumnAliasId).ToHashSet();
+
+        var gone = col.ImportTemplateColumnAliases
+            .Where(a => a.ImportTemplateColumnAliasId != 0 && !keepIds.Contains(a.ImportTemplateColumnAliasId))
+            .ToList();
+        if (gone.Count > 0) ctx.ImportTemplateColumnAliases.RemoveRange(gone);
+
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var ad = wanted[i];
+            var alias = ad.ImportTemplateColumnAliasId == 0
+                ? null
+                : col.ImportTemplateColumnAliases.FirstOrDefault(a => a.ImportTemplateColumnAliasId == ad.ImportTemplateColumnAliasId);
+
+            if (alias is null)
+            {
+                alias = new AliasEntity();
+                col.ImportTemplateColumnAliases.Add(alias);
+            }
+
+            alias.AliasText = ad.AliasText;
+            alias.SortOrder = i + 1;
         }
     }
 
@@ -544,52 +597,115 @@ public sealed class ImportTemplateService : IImportTemplateService
         return exists ? null : "The selected subdistributor was not found or is inactive.";
     }
 
-    private static Task<string?> FindActiveConflictAsync(
-        EntrielContext ctx, string importType, int? subDistributorId, string? principal, int excludeId, CancellationToken ct)
+    /// <summary>
+    /// Two active templates in the same scope can't share a name. Scope alone is no longer a conflict.
+    /// </summary>
+    private static Task<bool> HasActiveNameConflictAsync(
+        EntrielContext ctx, string importType, int? subDistributorId, string? principal,
+        string templateName, int excludeId, CancellationToken ct)
     {
         return ctx.ImportTemplates
             .AsNoTracking()
-            .Where(t => t.IsActive
-                        && t.ImportType == importType
+            .AnyAsync(t => t.IsActive
+                           && t.ImportType == importType
+                           && t.SubDistributorId == subDistributorId
+                           && t.Principal == principal
+                           && t.TemplateName == templateName
+                           && t.ImportTemplateId != excludeId, ct);
+    }
+
+    /// <summary>
+    /// A typed name is used as is (the conflict check handles clashes). A blank name gets a generated
+    /// one, with " (2)", " (3)" ... added so it never repeats a template already in this scope.
+    /// </summary>
+    private static async Task<string> ResolveTemplateNameAsync(
+        EntrielContext ctx, string importType, int? subDistributorId, string? principal,
+        string? requested, int excludeId, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(requested))
+            return requested.Trim();
+
+        var baseName = await BuildTemplateNameAsync(ctx, importType, subDistributorId, principal, ct);
+
+        var taken = await ctx.ImportTemplates
+            .AsNoTracking()
+            .Where(t => t.ImportType == importType
                         && t.SubDistributorId == subDistributorId
                         && t.Principal == principal
                         && t.ImportTemplateId != excludeId)
             .Select(t => t.TemplateName)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+        var used = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
+
+        if (!used.Contains(baseName)) return baseName;
+
+        for (var n = 2; ; n++)
+        {
+            var suffix = $" ({n})";
+            var stem = baseName.Length + suffix.Length <= 150 ? baseName : baseName[..(150 - suffix.Length)];
+            var candidate = stem + suffix;
+            if (!used.Contains(candidate)) return candidate;
+        }
     }
-    public async Task<ImportTemplateEditDto?> ResolveForImportAsync(string importType, int? subDistributorId, CancellationToken ct = default)
+
+    public async Task<IReadOnlyList<ImportTemplateEditDto>> GetCandidatesForImportAsync(
+        string importType, int? subDistributorId, string? principal, CancellationToken ct = default)
     {
+        var def = ImportFieldRegistry.Get(importType);
+        if (def is null) return Array.Empty<ImportTemplateEditDto>();
+
+        var principalKey = string.IsNullOrWhiteSpace(principal) ? null : principal.Trim();
+
         await using var ctx = await _factory.CreateDbContextAsync(ct);
 
-        var candidates = await ctx.ImportTemplates.AsNoTracking()
-            .Where(t => t.IsActive && t.ImportType == importType && t.Principal == null
-                        && (t.SubDistributorId == subDistributorId || t.SubDistributorId == null))
-            .Select(t => new { t.ImportTemplateId, t.SubDistributorId })
+        var q = ctx.ImportTemplates.AsNoTracking()
+            .Where(t => t.IsActive && t.ImportType == importType);
+
+        // Only the scope this import type uses counts, plus the global default.
+        if (def.Scope == ImportScope.Principal)
+        {
+            q = principalKey is null
+                ? q.Where(t => t.SubDistributorId == null && t.Principal == null)
+                : q.Where(t => t.SubDistributorId == null && (t.Principal == null || t.Principal == principalKey));
+        }
+        else
+        {
+            q = subDistributorId is null
+                ? q.Where(t => t.Principal == null && t.SubDistributorId == null)
+                : q.Where(t => t.Principal == null && (t.SubDistributorId == null || t.SubDistributorId == subDistributorId));
+        }
+
+        var ids = await q
+            .OrderBy(t => t.SubDistributorId == null && t.Principal == null ? 1 : 0)   // scope-specific first
+            .ThenBy(t => t.TemplateName)
+            .ThenBy(t => t.ImportTemplateId)
+            .Select(t => t.ImportTemplateId)
             .ToListAsync(ct);
 
-        var specificId = candidates.FirstOrDefault(c => c.SubDistributorId != null)?.ImportTemplateId;
-        var globalId = candidates.FirstOrDefault(c => c.SubDistributorId == null)?.ImportTemplateId;
-
-        var specific = specificId is int s ? await GetAsync(s, ct) : null;
-        var global = globalId is int g ? await GetAsync(g, ct) : null;
-
-        if (specific is null) return global;
-        if (global is null || !specific.AllowGlobalFallback) return specific;
-
-        // "Also use the global default": add global columns for fields the specific template doesn't map.
-        // Assumes one readable sheet on each side.
-        var target = specific.Sheets.FirstOrDefault(sh => sh.SheetMatchMode != SheetMatchModes.Ignore);
-        var source = global.Sheets.FirstOrDefault(sh => sh.SheetMatchMode != SheetMatchModes.Ignore);
-        if (target is null || source is null) return specific;
-
-        var mapped = specific.Sheets.SelectMany(sh => sh.Columns).Select(c => c.FieldKey)
-            .Where(k => !string.IsNullOrWhiteSpace(k)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var c in source.Columns.Where(c => !string.IsNullOrWhiteSpace(c.FieldKey) && !mapped.Contains(c.FieldKey!)))
-            target.Columns.Add(c);
-
-        return specific;
+        var result = new List<ImportTemplateEditDto>(ids.Count);
+        foreach (var id in ids)
+        {
+            var dto = await GetAsync(id, ct);
+            if (dto is not null) result.Add(dto);
+        }
+        return result;
     }
-    private static string ConflictMessage(string existingName) =>
-        $"An active template \"{existingName}\" already exists for this scope. Deactivate it first.";
+
+    public async Task<ImportTemplateEditDto?> ResolveForImportAsync(string importType, int? subDistributorId, CancellationToken ct = default)
+    {
+        var candidates = await GetCandidatesForImportAsync(importType, subDistributorId, null, ct);
+
+        var scoped = candidates.Where(c => !c.IsGlobalDefault).ToList();
+        var globals = candidates.Where(c => c.IsGlobalDefault).ToList();
+
+        if (scoped.Count > 1)
+            throw new TemplateSelectionRequiredException(importType, scoped.Select(c => c.TemplateName).ToList());
+        if (scoped.Count == 1) return scoped[0];
+
+        if (globals.Count > 1)
+            throw new TemplateSelectionRequiredException(importType, globals.Select(c => c.TemplateName).ToList());
+        return globals.FirstOrDefault();
+    }
+    private static string NameConflictMessage(string name) =>
+        $"An active template named \"{name}\" already exists for this scope. Use a different name.";
 }

@@ -7,8 +7,11 @@ public static class SheetMatchModes
     public const string Exact = "Exact";
     public const string Contains = "Contains";
     public const string Position = "Position";
+
+    /// <summary>Find the sheet by its column headers, whatever the sheet is called.</summary>
+    public const string Headers = "Headers";
     public const string Ignore = "Ignore";
-    public static readonly string[] All = { Any, Exact, Contains, Position, Ignore };
+    public static readonly string[] All = { Any, Exact, Contains, Position, Headers, Ignore };
 }
 
 public static class HeaderRowModes
@@ -59,7 +62,6 @@ public sealed class ImportTemplateListItemDto
 
     public int Version { get; set; }
     public bool IsActive { get; set; }
-    public bool AllowGlobalFallback { get; set; }
     public int SheetCount { get; set; }
     public int ColumnCount { get; set; }
     public DateTime? LastChangedDate { get; set; }
@@ -72,7 +74,13 @@ public sealed class ImportTemplateListItemDto
         : SubDistributorId is not null ? $"{SubdCode} - {SubdName}"
         : Principal!;
 }
-
+public sealed class ImportTemplateAliasEditDto
+{
+    public int ImportTemplateColumnAliasId { get; set; }   // 0 = new
+    public Guid RowKey { get; set; } = Guid.NewGuid();
+    public string AliasText { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+}
 /// <summary>The template being created or edited, with its sheets.</summary>
 public sealed class ImportTemplateEditDto
 {
@@ -86,13 +94,16 @@ public sealed class ImportTemplateEditDto
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
 
-    public bool AllowGlobalFallback { get; set; } = false;
     public bool IsActive { get; set; } = true;
 
     /// <summary>Loaded from the database; the service uses it to bump the version on save.</summary>
     public int Version { get; set; } = 1;
 
     public List<ImportTemplateSheetEditDto> Sheets { get; set; } = new();
+
+    /// <summary>True when no subd and no principal is set. Computed from the two fields above, so it isn't serialized into drafts.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsGlobalDefault => SubDistributorId is null && string.IsNullOrWhiteSpace(Principal);
 }
 
 /// <summary>How to find one sheet in the workbook, where its header is, and which columns it holds.</summary>
@@ -150,6 +161,13 @@ public sealed class ImportTemplateColumnEditDto
 
     public bool IsRequired { get; set; }
     public int SortOrder { get; set; }
+    public List<ImportTemplateAliasEditDto> Aliases { get; set; } = new();
+
+    /// <summary>Every header that means this field: the main one first, then the aliases. Blanks left out.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IEnumerable<string> HeaderTexts =>
+        new[] { HeaderText }.Concat(Aliases.Select(a => a.AliasText))
+            .Where(h => !string.IsNullOrWhiteSpace(h));
 }
 
 /// <summary>Input for the "clone template" modal.</summary>
@@ -206,7 +224,7 @@ public sealed class ImportTemplateFilterDto
     public string? ImportType { get; set; }
     public int? SubDistributorId { get; set; }
     public string? Principal { get; set; }
-    public bool? IsActive { get; set; }                       
+    public bool? IsActive { get; set; }
     public string? SearchText { get; set; }
     public string SortColumn { get; set; } = "LastChanged";
     public bool SortAscending { get; set; } = true;

@@ -7,7 +7,7 @@
 @inject IImportTemplateService TemplateService
 @inject STTproject.Services.IUserContextService UserContextService
 @inject NavigationManager Nav
-  <link href="css/import-templates.css" rel="stylesheet" />
+<link href="css/import-templates.css" rel="stylesheet" />
 <div class="mb-3">
     <a href="/admin/import-templates" class="small">← Back to templates</a>
     <h3 class="mb-0">@(IsNew ? "New import template" : "Edit import template")</h3>
@@ -28,7 +28,10 @@ else
         <div class="alert alert-danger">
             <strong>Please fix the following:</strong>
             <ul class="mb-0 ps-3">
-                @foreach (var e in _errors) { <li>@e</li> }
+                @foreach (var e in _errors)
+                {
+                    <li>@e</li>
+                }
             </ul>
         </div>
     }
@@ -42,20 +45,17 @@ else
             </span>
         </div>
     }
-<div class="it-form">
-    <TemplateInfo Model="_model"
-                  Subds="_subds"
-                  Principals="_principals"
-                  IsNew="IsNew"
-                  @bind-IsGlobal="_isGlobal"
-                  OnChanged="Refresh" />
+    <div class="it-form">
+        <TemplateInfo Model="_model" Subds="_subds" Principals="_principals" IsNew="IsNew" @bind-IsGlobal="_isGlobal"
+                      OnChanged="Refresh" />
 
-    <SheetColumnsInfo Model="_model" IsGlobal="_isGlobal" />
+        <SheetColumnsInfo Model="_model" />
 
-    <TemplateTester Model="_model" Subds="_subds" />
-</div>
+        <TemplateTester Model="_model" Subds="_subds" />
+    </div>
     <div class="d-flex justify-content-end gap-2">
-        <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving" Title="@(_saving ? "Saving..." : "Save the template")"></Button>
+        <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving"
+                Title="@(_saving ? "Saving..." : "Save the template")"></Button>
         <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
     </div>
 }
@@ -92,7 +92,7 @@ else
         if (_model is not null)
         {
             _isGlobal = _model.SubDistributorId is null && string.IsNullOrWhiteSpace(_model.Principal);
-            _lastJson = Snapshot();         
+            _lastJson = Snapshot();
         }
 
         _loading = false;
@@ -110,7 +110,7 @@ else
         }
     };
 
-    private void Refresh() { }               
+    private void Refresh() { }
 
     private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_model);
 
@@ -142,7 +142,7 @@ else
 
         if (result.Success)
         {
-            _timer?.Dispose();              
+            _timer?.Dispose();
             await Drafts.ClearAsync(Id);
             Nav.NavigateTo("/admin/import-templates");
         }
@@ -182,7 +182,7 @@ else
         _model = _pendingDraft!.Model;
         _isGlobal = _pendingDraft.IsGlobal;
         _pendingDraft = null;
-        _lastJson = Snapshot();             
+        _lastJson = Snapshot();
     }
 
     private async Task DiscardDraft()

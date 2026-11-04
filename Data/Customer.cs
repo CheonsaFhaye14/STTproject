@@ -39,6 +39,8 @@ public partial class Customer
 
     public virtual User? CreatedByNavigation { get; set; }
 
+    public virtual ICollection<CustomerMapping> CustomerMappings { get; set; } = new List<CustomerMapping>();
+
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 
     public virtual SubDistributor SubDistributor { get; set; } = null!;

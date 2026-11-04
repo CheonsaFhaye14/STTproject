@@ -23,9 +23,9 @@ public partial class ImportTemplateColumn
 
     public string RuleType { get; set; } = null!;
 
-    public virtual ICollection<ImportFileColumnMapping> ImportFileColumnMappings { get; set; } = new List<ImportFileColumnMapping>();
-
     public virtual ImportTemplate ImportTemplate { get; set; } = null!;
+
+    public virtual ICollection<ImportTemplateColumnAlias> ImportTemplateColumnAliases { get; set; } = new List<ImportTemplateColumnAlias>();
 
     public virtual ImportTemplateSheet ImportTemplateSheet { get; set; } = null!;
 }

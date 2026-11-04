@@ -15,8 +15,6 @@ public partial class ImportTemplate
 
     public string TemplateName { get; set; } = null!;
 
-    public bool AllowGlobalFallback { get; set; }
-
     public int Version { get; set; }
 
     public bool IsActive { get; set; }
@@ -28,8 +26,6 @@ public partial class ImportTemplate
     public int? CreatedBy { get; set; }
 
     public int? UpdatedBy { get; set; }
-
-    public virtual ICollection<ImportFile> ImportFiles { get; set; } = new List<ImportFile>();
 
     public virtual ICollection<ImportTemplateColumn> ImportTemplateColumns { get; set; } = new List<ImportTemplateColumn>();
 

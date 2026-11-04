@@ -1,0 +1,68 @@
+@using STTproject.Features.Admin.ImportTemplate.Services
+
+<div class="sheet-fail-card">
+    <button type="button" class="sfc-toggle" aria-expanded="@expanded" @onclick="() => expanded = !expanded">
+        <span class="sfc-head">
+            <span class="sfc-name">@Shortfall.SheetName</span>
+            <span class="sfc-badge">@Shortfall.MissingFields.Count missing</span>
+            <span class="sfc-meta">
+                @(Shortfall.HeaderRow is int row ? $"Header row: {row}" : "Header row not found")
+            </span>
+            <i class="ti ti-chevron-down chev @(expanded ? "open" : "")" aria-hidden="true"></i>
+        </span>
+        @if (!expanded && Shortfall.MissingFields.Count > 0)
+        {
+            <span class="sfc-summary">@string.Join(" · ", Shortfall.MissingFields.Select(f => f.Label))</span>
+        }
+    </button>
+
+    @if (expanded)
+    {
+        @if (Shortfall.MissingFields.Count > 0)
+        {
+            <div class="sfc-section">Missing required fields</div>
+            @foreach (var field in Shortfall.MissingFields)
+            {
+                <div class="sfc-field">
+                    <div class="sfc-field-name">@field.Label</div>
+                    @if (field.Reason == MissingFieldReason.NotMapped)
+                    {
+                        <div class="sfc-line">The template doesn't map this field for this sheet.</div>
+                    }
+                    else if (field.ExpectedHeaders.Count > 0)
+                    {
+                        <div class="sfc-line"><span class="sfc-key">Expected header:</span> @string.Join(" / ", field.ExpectedHeaders)
+                        </div>
+                    }
+                    @if (field.MappedOnSheets.Count > 0)
+                    {
+                        <div class="sfc-line"><span class="sfc-key">Mapped on:</span> @string.Join(", ", field.MappedOnSheets)</div>
+                    }
+                </div>
+            }
+        }
+
+        @foreach (var message in Shortfall.OtherMessages)
+        {
+            <div class="sfc-line sfc-extra">@message</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SheetShortfall Shortfall { get; set; } = default!;
+
+    /// <summary>Start open. The results page opens it only when there is a single affected sheet.</summary>
+    [Parameter] public bool InitiallyExpanded { get; set; }
+
+    private bool expanded;
+    private bool initialised;
+
+    protected override void OnParametersSet()
+    {
+        // Only the first render decides; later re-renders must not undo what the person opened or closed.
+        if (initialised) return;
+        expanded = InitiallyExpanded;
+        initialised = true;
+    }
+}

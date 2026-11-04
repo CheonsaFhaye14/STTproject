@@ -26,9 +26,8 @@
 
             @* Search *@
             <div class="clt-filter-group">
-                <Input @key="@($"search-{filterResetKey}")" TValue="string" Label="Search"
-                    Placeholder="Search..."
-                    Value="@SearchTerm" ValueChanged="OnSearchChanged" />
+                <Input @key="@($"search-{filterResetKey}")" TValue="string" Label="Search" Placeholder="Search..."
+                       Value="@SearchTerm" ValueChanged="OnSearchChanged" />
             </div>
 
             @* Status *@
@@ -36,21 +35,18 @@
                 <label class="clt-filter-label">Status</label>
                 <div class="clt-radio-group">
                     <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
-                        <input type="radio" name="status" value=""
-                            @onchange="() => OnStatusChanged(string.Empty)"
-                            checked="@(SelectedStatus == "")" />
-                      <span>All</span>
+                        <input type="radio" name="status" value="" @onchange="() => OnStatusChanged(string.Empty)"
+                               checked="@(SelectedStatus == "")" />
+                        <span>All</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "active" ? "selected" : "")">
-                        <input type="radio" name="status" value="active"
-                            @onchange='() => OnStatusChanged("active")'
-                            checked="@(SelectedStatus == "active")" />
+                        <input type="radio" name="status" value="active" @onchange='() => OnStatusChanged("active")'
+                               checked="@(SelectedStatus == "active")" />
                         <span>Active</span>
                     </label>
                     <label class="clt-radio-option @(SelectedStatus == "inactive" ? "selected" : "")">
-                        <input type="radio" name="status" value="inactive"
-                            @onchange='() => OnStatusChanged("inactive")'
-                            checked="@(SelectedStatus == "inactive")" />
+                        <input type="radio" name="status" value="inactive" @onchange='() => OnStatusChanged("inactive")'
+                               checked="@(SelectedStatus == "inactive")" />
                         <span>Inactive</span>
                     </label>
                 </div>
@@ -58,40 +54,25 @@
 
             @* Import type *@
             <div class="clt-filter-group">
-                <Select @key="@($"type-{filterResetKey}")"
-                        Label="Import type"
-                        Placeholder="All types"
-                        TItem="FilterOption"
-                        Items="ImportTypeOptions"
-                        ValueSelector="x => x.Value"
-                        TextSelector="x => x.Text"
-                        SelectedValue="@(_filter.ImportType ?? string.Empty)"
+                <Select @key="@($"type-{filterResetKey}")" Label="Import type" Placeholder="All types"
+                        TItem="FilterOption" Items="ImportTypeOptions" ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text" SelectedValue="@(_filter.ImportType ?? string.Empty)"
                         SelectedValueChanged="OnImportTypeSelected" />
             </div>
 
             @* Subdistributor *@
             <div class="clt-filter-group">
-                <AutoComplete @key="@($"subd-{filterResetKey}")"
-                              Label="Subdistributor"
-                              TItem="SubDistributorOptionDto"
-                              Items="_subds"
-                              ValueSelector="x => x.SubDistributorId.ToString()"
-                              TextSelector="x => x.Display ?? string.Empty"
-                              Placeholder="All subdistributors"
-                              SelectedValue="@(_filter.SubDistributorId?.ToString())"
-                              SelectedItemChanged="OnSubdSelected" />
+                <AutoComplete @key="@($"subd-{filterResetKey}")" Label="Subdistributor" TItem="SubDistributorOptionDto"
+                              Items="_subds" ValueSelector="x => x.SubDistributorId.ToString()"
+                              TextSelector="x => x.Display ?? string.Empty" Placeholder="All subdistributors"
+                              SelectedValue="@(_filter.SubDistributorId?.ToString())" SelectedItemChanged="OnSubdSelected" />
             </div>
 
             @* Principal *@
             <div class="clt-filter-group">
-                <Select @key="@($"principal-{filterResetKey}")"
-                        Label="Principal"
-                        Placeholder="All principals"
-                        TItem="FilterOption"
-                        Items="PrincipalOptions"
-                        ValueSelector="x => x.Value"
-                        TextSelector="x => x.Text"
-                        SelectedValue="@(_filter.Principal ?? string.Empty)"
+                <Select @key="@($"principal-{filterResetKey}")" Label="Principal" Placeholder="All principals"
+                        TItem="FilterOption" Items="PrincipalOptions" ValueSelector="x => x.Value"
+                        TextSelector="x => x.Text" SelectedValue="@(_filter.Principal ?? string.Empty)"
                         SelectedValueChanged="OnPrincipalSelected" />
             </div>
 
@@ -104,7 +85,8 @@
         <main class="clt-main">
             @if (!string.IsNullOrEmpty(_message))
             {
-                <p class="@(_messageIsError ? "" : "clt-muted")" style="@(_messageIsError ? "color:#b91c1c" : "")">@_message</p>
+                <p class="@(_messageIsError ? "" : "clt-muted")" style="@(_messageIsError ? "color:#b91c1c" : "")">@_message
+                </p>
             }
 
             <div class="clt-table-card">
@@ -112,103 +94,111 @@
                     <table class="clt-table">
                         <thead>
                             <tr>
-                                <th @onclick='() => SortBy("ImportType")' style="cursor:pointer">Import type @SortIndicator("ImportType")</th>
-                                <th @onclick='() => SortBy("AppliesTo")' style="cursor:pointer">Applies to @SortIndicator("AppliesTo")</th>
-                                <th @onclick='() => SortBy("Columns")' style="cursor:pointer">Columns @SortIndicator("Columns")</th>
-                                <th @onclick='() => SortBy("UsesGlobal")' style="cursor:pointer">Uses global too @SortIndicator("UsesGlobal")</th>
-                                <th @onclick='() => SortBy("Version")' style="cursor:pointer">Version @SortIndicator("Version")</th>
-                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status @SortIndicator("Status")</th>
-                                <th @onclick='() => SortBy("LastChanged")' style="cursor:pointer">Last changed @SortIndicator("LastChanged")</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (isLoading)
-                            {
-                                <tr><td colspan="8" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
-                            }
-                            else if (_items.Count == 0)
-                            {
-                                <tr>
-                                    <td colspan="8" class="clt-empty">
-                                        <div class="clt-empty-inner">
-                                            <p>@(HasActiveFilters ? "No templates match your filters" : "No templates found")</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var t in _items)
-                                {
-                                    <tr @key="t.ImportTemplateId" class="@(!t.IsActive ? "clt-row-inactive" : "")">
-                                        <td class="clt-name">@(ImportFieldRegistry.Get(t.ImportType)?.Display ?? t.ImportType)</td>
-                                        <td>
-                                            @t.ScopeLabel
-                                            @if (t.IsGlobalDefault)
-                                            {
-                                                <span class="clt-type-badge">default</span>
-                                            }
-                                        </td>
-                                        <td class="clt-muted">@t.ColumnCount</td>
-                                        <td class="clt-muted">@(t.IsGlobalDefault ? "—" : (t.AllowGlobalFallback ? "Yes" : "No"))</td>
-                                        <td class="clt-muted">@t.Version</td>
-                                        <td>
-                                            @if (t.IsActive)
-                                            {
-                                                <span class="clt-status clt-status-active">Active</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="clt-status clt-status-inactive">Inactive</span>
-                                            }
-                                        </td>
-                                        <td class="clt-muted">
-                                            @(t.LastChangedDate?.ToLocalTime().ToString("MMM d, yyyy hh:mm tt") ?? "—")
-                                        </td>
-                                        <td>
-                                            <div class="clt-actions">
-                                                <button class="clt-btn-edit" @onclick="() => Edit(t.ImportTemplateId)">Edit</button>
-                                                <button class="clt-btn-edit" @onclick="() => OpenClone(t)">Clone</button>
-                                                @if (t.IsActive)
+                                <th @onclick='() => SortBy("ImportType")' style="cursor:pointer">Import type
+                                    @SortIndicator("ImportType")</th>
+                                    <th @onclick='() => SortBy("AppliesTo")' style="cursor:pointer">Applies to
+                                        @SortIndicator("AppliesTo")</th>
+                                        <th @onclick='() => SortBy("Columns")' style="cursor:pointer">Columns
+                                            @SortIndicator("Columns")</th>
+                                            <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status
+                                                @SortIndicator("Status")</th>
+                                                <th @onclick='() => SortBy("LastChanged")' style="cursor:pointer">Last changed
+                                                    @SortIndicator("LastChanged")</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (isLoading)
                                                 {
-                                                    <button class="clt-btn-toggle clt-btn-deactivate"
-                                                            @onclick="() => ToggleActiveAsync(t)">
-                                                        Deactivate
-                                                    </button>
+                                                    <tr>
+                                                        <td colspan="7" class="clt-empty">
+                                                            <div class="clt-empty-inner">
+                                                                <p>Loading…</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                                else if (_items.Count == 0)
+                                                {
+                                                    <tr>
+                                                        <td colspan="7" class="clt-empty">
+                                                            <div class="clt-empty-inner">
+                                                                <p>@(HasActiveFilters ? "No templates match your filters" : "No templates found")</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
                                                 }
                                                 else
                                                 {
-                                                    <button class="clt-btn-toggle clt-btn-activate"
-                                                            @onclick="() => ToggleActiveAsync(t)">
-                                                        Activate
-                                                    </button>
+                                                    @foreach (var t in _items)
+                                                    {
+                                                        <tr @key="t.ImportTemplateId" class="@(!t.IsActive ? "clt-row-inactive" : "")">
+                                                            <td class="clt-name">@(ImportFieldRegistry.Get(t.ImportType)?.Display ?? t.ImportType)
+                                                            </td>
+                                                            <td>
+                                                                @t.ScopeLabel
+                                                                @if (t.IsGlobalDefault)
+                                                                {
+                                                                    <span class="clt-type-badge">default</span>
+                                                                }
+                                                            </td>
+                                                            <td class="clt-muted">@t.ColumnCount</td>
+                                                            <td>
+                                                                @if (t.IsActive)
+                                                                {
+                                                                    <span class="clt-status clt-status-active">Active</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="clt-status clt-status-inactive">Inactive</span>
+                                                                }
+                                                            </td>
+                                                            <td class="clt-muted">
+                                                                @(t.LastChangedDate?.ToLocalTime().ToString("MMM d, yyyy hh:mm tt") ?? "—")
+                                                            </td>
+                                                            <td>
+                                                                <div class="clt-actions">
+                                                                    <button class="clt-btn-edit"
+                                                                            @onclick="() => Edit(t.ImportTemplateId)">Edit</button>
+                                                                    <button class="clt-btn-edit" @onclick="() => OpenClone(t)">Clone</button>
+                                                                    @if (t.IsActive)
+                                                                    {
+                                                                        <button class="clt-btn-toggle clt-btn-deactivate"
+                                                                                @onclick="() => ToggleActiveAsync(t)">
+                                                                            Deactivate
+                                                                        </button>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <button class="clt-btn-toggle clt-btn-activate"
+                                                                                @onclick="() => ToggleActiveAsync(t)">
+                                                                            Activate
+                                                                        </button>
+                                                                    }
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    }
                                                 }
-                                            </div>
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
 
-            <div class="clt-footer">
-                <span class="clt-footer-count">
-                    Showing @_items.Count template@(_items.Count == 1 ? "" : "s")
-                </span>
-            </div>
-        </main>
-    </div>
+                                <div class="clt-footer">
+                                    <span class="clt-footer-count">
+                                        Showing @_items.Count template@(_items.Count == 1 ? "" : "s")
+                                    </span>
+                                </div>
+                            </main>
+                        </div>
 
-    @if (_cloneSource is not null)
-    {
-        <CloneImportTemplateModal Source="_cloneSource" Subds="_subds" Principals="_principals"
-                                  Errors="_cloneErrors" IsSaving="_cloning"
-                                  OnConfirm="ConfirmCloneAsync" OnCancel="CloseClone" />
-    }
-</div>
+                        @if (_cloneSource is not null)
+                        {
+                            <CloneImportTemplateModal Source="_cloneSource" Subds="_subds" Principals="_principals" Errors="_cloneErrors"
+                                                      IsSaving="_cloning" OnConfirm="ConfirmCloneAsync" OnCancel="CloseClone" />
+                        }
+                    </div>
 
 @code {
     [Parameter] public EventCallback OnLoaded { get; set; }

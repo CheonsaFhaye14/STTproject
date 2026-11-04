@@ -110,7 +110,16 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		template ??= await _templates.ResolveForImportAsync("SalesInvoice", subDistributorId, cancellationToken);
+		try
+		{
+			template ??= await _templates.ResolveForImportAsync("SalesInvoice", subDistributorId, cancellationToken);
+		}
+		catch (TemplateSelectionRequiredException ex)
+		{
+			// More than one template could apply and nothing has chosen one. Never guess: stop with a clear message.
+			result.AddError(0, string.Empty, ex.Message);
+			return result;
+		}
 		if (template is null)
 		{
 			result.AddError(0, string.Empty,
@@ -118,40 +127,32 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		// The template decides which sheet, which header row and which columns.
+		// The template decides which sheets, which header rows and which columns.
 		using var workbook = new XLWorkbook(excelStream);
 
-		var templateErrors = new List<string>();
-		var resolved = TemplateSheetResolver.Resolve(template, workbook, templateErrors.Add);
-		if (resolved is null || templateErrors.Count > 0)
+		var resolvedWorkbook = WorkbookResolver.Resolve(template, workbook);
+		var plan = WorkbookReader.Plan(resolvedWorkbook, template.ImportType, maxRows);
+		result.FileWarnings.AddRange(plan.Warnings);
+
+		// Everything the sheets that did resolve can tell the results page, even if the workbook can't be read as a whole.
+		result.OriginalHeaders = plan.Sheets
+			.SelectMany(sheet => sheet.Columns!.Headers.OrderBy(kvp => kvp.Value).Select(kvp => kvp.Key))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		foreach (var sheet in plan.Sheets)
 		{
-			foreach (var error in templateErrors)
-				result.AddError(0, string.Empty, error);
-			return result;
+			result.GetOrAddSheet(sheet.Inspection.SheetIndex, sheet.Inspection.Name).RawHeaders = Enumerable.Range(1, sheet.Inspection.LastCol)
+				.Select(c => sheet.Inspection.HeaderText(sheet.HeaderRow!.Value, sheet.HeaderRowCount, c))
+				.ToList();
 		}
 
-		var worksheet = resolved.Worksheet;
-		var headerRowNumber = resolved.HeaderRow;
-		var dataStartMinusOne = resolved.FirstDataRow - 1;
-		var headers = resolved.Headers;
-		var columnRules = resolved.Columns;
-
-		result.OriginalHeaders = headers
-			.OrderBy(kvp => kvp.Value)
-			.Select(kvp => kvp.Key)
-			.ToList();
-
-		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
-		var headerRowCount = resolved.FirstDataRow - resolved.HeaderRow;
-		result.RawSheetHeaders = Enumerable.Range(1, sheetLastColumn)
-			.Select(c => TemplateSheetResolver.HeaderText(worksheet, headerRowNumber, headerRowCount, c))
-			.ToList();
-
-		// Validate required headers and stop processing if critical headers are missing, since that will cause a large number of downstream errors.
-		var (isValid, errorMessage) = InvoiceDataValidator.ValidateRequiredHeaders(headers);
-		if (!isValid)
+		// Stop here when the workbook can't be read: a missing sheet or column would otherwise cause a flood of row errors.
+		if (plan.Rows is null)
 		{
-			result.AddError(0, string.Empty, errorMessage);
+			foreach (var error in plan.Errors)
+				result.AddError(0, string.Empty, error);
+			result.SheetShortfalls.AddRange(plan.SheetShortfalls);
 			return result;
 		}
 
@@ -180,14 +181,13 @@ public sealed class ImportSalesInvoiceService
 		var customerById = customers.ToDictionary(customer => customer.CustomerId);
 		var itemsUomById = uoms.ToDictionary(uom => uom.ItemsUomId);
 
-		// Pre-scan the sheet once to know which conversions each item actually uses,
+		// Pre-scan every sheet once to know which conversions each item actually uses,
 		// so the fallback in ReadRows can restrict itself to a confirmed match instead of a guess.
 		var knownConversionsBySubdItem = BuildKnownConversionsBySubdItem(
-			worksheet, headers, subdItemsBySkuGroup, subdItems, uomLookup, dataStartMinusOne, columnRules, maxRows);
+			plan.Rows, subdItemsBySkuGroup, subdItems, uomLookup);
 
 		var parsedRows = ReadRows(
-			worksheet,
-			headers,
+			plan.Rows,
 			result,
 			customerByCode,
 			customerByName,
@@ -196,10 +196,7 @@ public sealed class ImportSalesInvoiceService
 			uomsBySubdItemId,
 			knownConversionsBySubdItem,
 			customers,
-			subdItems,
-			dataStartMinusOne,
-			columnRules,
-			maxRows);
+			subdItems);
 
 		result.Rows.AddRange(parsedRows);
 
@@ -238,14 +235,16 @@ public sealed class ImportSalesInvoiceService
 				var blockingRows = FindBlockingRows(result.ErroredRows, invoiceNumber, invoiceRows[0]);
 				if (blockingRows.Count > 0)
 				{
+					var holdFirst = blockingRows.OrderBy(b => b.SheetIndex).ThenBy(b => b.RowNumber).First();
 					var holdIssue = new ImportSalesInvoiceIssue(
-						blockingRows.Min(b => b.RowNumber),
+						holdFirst.RowNumber,
 						invoiceNumber,
-						BuildHoldMessage(blockingRows),
+						BuildHoldMessage(blockingRows, result),
 						string.Empty,
 						string.Empty,
 						GroupKey: invoiceGroup.Key,
-						IsHoldNote: true);
+						IsHoldNote: true,
+						SheetIndex: holdFirst.SheetIndex);
 
 					preparedInvoice.Issues.Add(holdIssue);
 					result.AddIssue(holdIssue);
@@ -255,13 +254,14 @@ public sealed class ImportSalesInvoiceService
 				var groupConsistencyError = InvoiceDataValidator.ValidateGroupConsistency(invoiceRows);
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
-					result.AddError(invoiceRows[0].RowNumber, invoiceNumber, groupConsistencyError);
+					result.AddError(invoiceRows[0].Source, invoiceNumber, groupConsistencyError);
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						invoiceRows[0].RowNumber,
 						invoiceNumber,
 						groupConsistencyError,
 						string.Empty,
-						BuildCustomerDisplayValue(invoiceRows[0].CustomerCode, invoiceRows[0].CustomerName)));
+						BuildCustomerDisplayValue(invoiceRows[0].CustomerCode, invoiceRows[0].CustomerName),
+						SheetIndex: invoiceRows[0].SheetIndex));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -272,14 +272,15 @@ public sealed class ImportSalesInvoiceService
 				if (firstRow.ResolvedCustomerId == 0 || !customerById.TryGetValue(firstRow.ResolvedCustomerId, out var customer))
 				{
 					var msg = $"Customer '{firstRowCustomerValue}' could not be resolved.";
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "CustomerCode");
+					result.AddError(firstRow.Source, invoiceNumber, msg, "CustomerCode");
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						firstRow.RowNumber,
 						invoiceNumber,
 						msg,
 						string.Empty,
 						firstRowCustomerValue,
-						"CustomerCode"));
+						"CustomerCode",
+						SheetIndex: firstRow.SheetIndex));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -287,14 +288,15 @@ public sealed class ImportSalesInvoiceService
 				if (!InvoiceDataValidator.ResolveOrderType(firstRow.OrderType, null, firstRow.Quantity, out var orderType))
 				{
 					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg, "OrderType");
+					result.AddError(firstRow.Source, invoiceNumber, msg, "OrderType");
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						firstRow.RowNumber,
 						invoiceNumber,
 						msg,
 						string.Empty,
 						firstRowCustomerValue,
-						"OrderType"));
+						"OrderType",
+						SheetIndex: firstRow.SheetIndex));
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -358,8 +360,8 @@ public sealed class ImportSalesInvoiceService
 						if (reportedMissingSkus.Add(itemKey))
 						{
 							var msg = $"SKU '{itemKey}' was not found.";
-							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "SkuCode"));
-							result.AddError(row.RowNumber, invoiceNumber, msg, "SkuCode");
+							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "SkuCode", SheetIndex: row.SheetIndex));
+							result.AddError(row.Source, invoiceNumber, msg, "SkuCode");
 						}
 						items.Clear();
 						break;
@@ -369,8 +371,8 @@ public sealed class ImportSalesInvoiceService
 					{
 						var itemNameSuffix = !string.IsNullOrWhiteSpace(subdItem.ItemName) ? $" ({subdItem.ItemName})" : string.Empty;
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'{itemNameSuffix}.";
-						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "UOM"));
-						result.AddError(row.RowNumber, invoiceNumber, msg, "UOM");
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "UOM", SheetIndex: row.SheetIndex));
+						result.AddError(row.Source, invoiceNumber, msg, "UOM");
 						items.Clear();
 						break;
 					}
@@ -469,7 +471,9 @@ public sealed class ImportSalesInvoiceService
 						UomName = uom.UomName,
 						Quantity = absoluteQuantity,
 						Amount = unitPrice * absoluteQuantity,
-						SourceRowNumber = row.RowNumber
+						SourceRowNumber = row.RowNumber,
+						SourceSheetIndex = row.SheetIndex,
+						SourceRows = new List<SourceRowKey> { row.Source }
 					}, row.IsFreeItem));
 				}
 				if (items.Count == 0)
@@ -478,8 +482,8 @@ public sealed class ImportSalesInvoiceService
 					{
 						var msg = $"Invoice '{invoiceNumber}' has no valid item lines to import.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
-							firstRow.RowNumber, invoiceNumber, msg, string.Empty, firstRowCustomerValue));
-						result.AddError(firstRow.RowNumber, invoiceNumber, msg);
+							firstRow.RowNumber, invoiceNumber, msg, string.Empty, firstRowCustomerValue, SheetIndex: firstRow.SheetIndex));
+						result.AddError(firstRow.Source, invoiceNumber, msg);
 					}
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
@@ -506,8 +510,9 @@ public sealed class ImportSalesInvoiceService
 						invoiceNumber,
 						msg,
 						string.Empty,
-						string.Empty));
-					result.AddError(firstRow.RowNumber, invoiceNumber, msg);
+						string.Empty,
+						SheetIndex: firstRow.SheetIndex));
+					result.AddError(firstRow.Source, invoiceNumber, msg);
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -518,13 +523,14 @@ public sealed class ImportSalesInvoiceService
 			{
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
 				_logger.LogError(ex, "Failed to prepare sales invoice {InvoiceNumber} from row {RowNumber}: {Message}", invoiceNumber, invoiceRows[0].RowNumber, baseMsg);
-				result.AddError(invoiceRows[0].RowNumber, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}");
+				result.AddError(invoiceRows[0].Source, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}");
 				preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 					invoiceRows[0].RowNumber,
 					invoiceNumber,
 					$"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}",
 					string.Empty,
-					string.Empty));
+					string.Empty,
+					SheetIndex: invoiceRows[0].SheetIndex));
 				result.PreparedInvoices.Add(preparedInvoice);
 			}
 		}
@@ -555,15 +561,16 @@ public sealed class ImportSalesInvoiceService
 				|| ((e.CustomerKey.Length == 0 || e.CustomerKey == customerKey)
 					&& (e.OrderType.Length == 0 || e.OrderType == orderKey)
 					&& (e.SalesMan.Length == 0 || e.SalesMan == salesKey)))
-			.OrderBy(e => e.RowNumber)
+			.OrderBy(e => e.SheetIndex)
+			.ThenBy(e => e.RowNumber)
 			.ToList();
 	}
 
-	private static string BuildHoldMessage(List<ErroredRowInfo> blockers)
+	private static string BuildHoldMessage(List<ErroredRowInfo> blockers, ImportSalesInvoiceResult result)
 	{
-		var rowNumbers = blockers.Select(b => b.RowNumber).Distinct().ToList();
-		var plural = rowNumbers.Count > 1;
-		var rows = FormatRowsText(rowNumbers);
+		var sources = blockers.Select(b => b.Source).Distinct().ToList();
+		var plural = sources.Count > 1;
+		var rows = result.FormatRows(sources);
 		var unresolved = blockers.Where(b => b.HeaderUnresolved).ToList();
 
 		string what;
@@ -577,13 +584,13 @@ public sealed class ImportSalesInvoiceService
 		return $"On hold: {rows} {what}. Fix {(plural ? "those rows" : "that row")} and this invoice will import.";
 	}
 
-	private static string FormatRowsText(IEnumerable<int> rowNumbers)
+	/// <summary>The sheet all the rows are on, or null when they span several sheets (never the lowest of them).</summary>
+	private static int? SingleSheetOrNull(IEnumerable<SourceRowKey> rows)
 	{
-		var rows = rowNumbers.Distinct().OrderBy(r => r).ToList();
-		if (rows.Count == 1) return $"row {rows[0]}";
-		if (rows.Count <= 5) return $"rows {string.Join(", ", rows.Take(rows.Count - 1))} & {rows[^1]}";
-		return $"rows {string.Join(", ", rows.Take(5))} and {rows.Count - 5} more";
+		var sheets = rows.Select(r => r.SheetIndex).Distinct().Take(2).ToList();
+		return sheets.Count == 1 ? sheets[0] : null;
 	}
+
 	public static List<InputItemModel> BuildAggregatedItems(List<(InputItemModel Item, bool IsFreeItem)> rawItems, string? orderType)
 	{
 		var aggregated = rawItems
@@ -599,6 +606,8 @@ public sealed class ImportSalesInvoiceService
 				Quantity = g.Sum(e => e.Item.Quantity),
 				Amount = g.Sum(e => e.Item.Amount),
 				SourceRowNumber = g.Min(e => e.Item.SourceRowNumber),
+				SourceSheetIndex = SingleSheetOrNull(g.SelectMany(e => e.Item.SourceRows)),
+				SourceRows = g.SelectMany(e => e.Item.SourceRows).Distinct().OrderBy(k => k.SheetIndex).ThenBy(k => k.RowNumber).ToList(),
 				LineItemIds = g.Select(e => e.Item.LineItemId).Distinct().OrderBy(id => id).ToList()
 			})
 			.ToList();
@@ -643,9 +652,10 @@ public sealed class ImportSalesInvoiceService
 		void FailInvoice(PreparedInvoice p, string msg)
 		{
 			var firstItem = p.Items.FirstOrDefault();
-			var row = firstItem?.SourceRowNumber ?? firstItem?.LineItemId ?? 0;
-			p.Issues.Add(new ImportSalesInvoiceIssue(row, p.InvoiceNumber, msg, string.Empty, string.Empty));
-			result.AddError(row, p.InvoiceNumber, msg);
+			// A source row, or the file as a whole when the item has none. LineItemId is not a row number.
+			var source = firstItem?.SourceRows.FirstOrDefault() ?? default;
+			p.Issues.Add(new ImportSalesInvoiceIssue(source.RowNumber, p.InvoiceNumber, msg, string.Empty, string.Empty, SheetIndex: source.SheetIndex));
+			result.AddError(source, p.InvoiceNumber, msg);
 			p.IsSaved = false;
 			p.SaveErrorMessage = msg;
 		}
@@ -702,8 +712,7 @@ public sealed class ImportSalesInvoiceService
 
 
 	private static List<ImportedInvoiceRow> ReadRows(
-		IXLWorksheet worksheet,
-		IReadOnlyDictionary<string, int> headers,
+		WorkbookRows source,
 		ImportSalesInvoiceResult result,
 		IReadOnlyDictionary<string, Data.Customer> customerByCode,
 		IReadOnlyDictionary<string, Data.Customer> customerByName,
@@ -712,59 +721,59 @@ public sealed class ImportSalesInvoiceService
 		ILookup<int, ItemsUom> uomsBySubdItemId,
 		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem,
 		IEnumerable<Data.Customer> allCustomers,
-		IEnumerable<SubdItem> allSubdItems,
-		int headerRowNumber,
-		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> columnRules,
-		int maxRows)
+		IEnumerable<SubdItem> allSubdItems)
 	{
 		// Reads and validates rows from the worksheet starting after the header row, returning a list of parsed invoice rows along with any issues found.
 		var rows = new List<ImportedInvoiceRow>();
-		var lastRow = LastRowFor(worksheet, headerRowNumber, maxRows);
-		var sheetLastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 
-		// Optional columns. Text columns are read through ReadValue, which returns "" when a column isn't mapped.
-		var hasCustomerTypeColumn = headers.ContainsKey("CustomerType");
-		var hasAddressLineColumn = headers.ContainsKey("AddressLine");
-		var hasCityMunicipalityColumn = headers.ContainsKey("CityMunicipality");
-		var hasProvinceColumn = headers.ContainsKey("Province");
-		var hasItemNameColumn = headers.ContainsKey("ItemName");
-
-		// Quantity columns
-		var hasQuantityColumn = headers.TryGetValue("Quantity", out var quantityColumn);
-		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
-		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
-		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
-		var hasInBoxQuantityColumn = headers.TryGetValue("InBoxQuantity", out var inBoxQuantityColumn);
-		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
-
-		var hasNetAmountColumn = headers.TryGetValue("NetAmount", out var netAmountColumn);
-
-		// If the admin picked a text format for the invoice date, use exactly that.
-		var invoiceDateFormat = columnRules.TryGetValue("InvoiceDate", out var invoiceDateRule)
-			? invoiceDateRule.OptionsJson
-			: null;
-
+		// One line-id counter for the whole workbook, so line ids stay unique across sheets.
 		var nextLineId = 0;
 
-		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
+		foreach (var logicalRow in source.Rows())
 		{
-			var row = worksheet.Row(rowNumber);
+			var row = logicalRow.Row;
+			var rowNumber = logicalRow.RowNumber;
+
+			// Source identity: the worksheet's position in the original workbook (1-based, hidden sheets counted).
+			var sheetIndex = logicalRow.SheetIndex;
+			var sheetResult = result.GetOrAddSheet(sheetIndex, logicalRow.Sheet.Inspection.Name);
+			var sheetLastColumn = logicalRow.Sheet.Inspection.LastCol;
+
+			// Optional columns. Text columns are read through ReadValue, which returns "" when a column isn't mapped.
+			var hasCustomerTypeColumn = logicalRow.Has("CustomerType");
+			var hasAddressLineColumn = logicalRow.Has("AddressLine");
+			var hasCityMunicipalityColumn = logicalRow.Has("CityMunicipality");
+			var hasProvinceColumn = logicalRow.Has("Province");
+			var hasItemNameColumn = logicalRow.Has("ItemName");
+
+			// Quantity columns
+			var hasQuantityColumn = logicalRow.Has("Quantity");
+			var hasCaseQuantityColumn = logicalRow.Has("CaseQuantity");
+			var hasDozenQuantityColumn = logicalRow.Has("DozenQuantity");
+			var hasPieceQuantityColumn = logicalRow.Has("PieceQuantity");
+			var hasInBoxQuantityColumn = logicalRow.Has("InBoxQuantity");
+			var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
+
+			var hasNetAmountColumn = logicalRow.Has("NetAmount");
+
+			// If the admin picked a text format for the invoice date, use exactly that.
+			var invoiceDateFormat = logicalRow.Rule("InvoiceDate")?.OptionsJson;
 
 			// ── Read raw cell values (with the template's "how to read it" rule applied) ──
-			var invoiceCode = ReadValue(row, headers, columnRules, "InvoiceCode");
-			var customerCode = ReadValue(row, headers, columnRules, "CustomerCode");
-			var customerName = ReadValue(row, headers, columnRules, "CustomerName");
-			var customerType = hasCustomerTypeColumn ? ReadValue(row, headers, columnRules, "CustomerType") : null;
-			var province = hasProvinceColumn ? ReadValue(row, headers, columnRules, "Province") : null;
-			var city = hasCityMunicipalityColumn ? ReadValue(row, headers, columnRules, "CityMunicipality") : null;
-			var addressLine = hasAddressLineColumn ? ReadValue(row, headers, columnRules, "AddressLine") : null;
-			var orderType = ReadValue(row, headers, columnRules, "OrderType");
-			var skuCode = ReadValue(row, headers, columnRules, "SkuCode");
-			var itemName = ReadValue(row, headers, columnRules, "ItemName");
-			var uom = ReadValue(row, headers, columnRules, "UnitOfMeasure");
-			var salesManName = ReadValue(row, headers, columnRules, "SalesManName");
-			var netAmountCell = hasNetAmountColumn ? row.Cell(netAmountColumn) : null;
-			var freeItemsRaw = ReadValue(row, headers, columnRules, "FreeItems");
+			var invoiceCode = ReadValue(logicalRow, "InvoiceCode");
+			var customerCode = ReadValue(logicalRow, "CustomerCode");
+			var customerName = ReadValue(logicalRow, "CustomerName");
+			var customerType = hasCustomerTypeColumn ? ReadValue(logicalRow, "CustomerType") : null;
+			var province = hasProvinceColumn ? ReadValue(logicalRow, "Province") : null;
+			var city = hasCityMunicipalityColumn ? ReadValue(logicalRow, "CityMunicipality") : null;
+			var addressLine = hasAddressLineColumn ? ReadValue(logicalRow, "AddressLine") : null;
+			var orderType = ReadValue(logicalRow, "OrderType");
+			var skuCode = ReadValue(logicalRow, "SkuCode");
+			var itemName = ReadValue(logicalRow, "ItemName");
+			var uom = ReadValue(logicalRow, "UnitOfMeasure");
+			var salesManName = ReadValue(logicalRow, "SalesManName");
+			var netAmountCell = logicalRow.Cell("NetAmount");
+			var freeItemsRaw = ReadValue(logicalRow, "FreeItems");
 			var isFreeItem = string.Equals(freeItemsRaw, "Yes", StringComparison.OrdinalIgnoreCase)
 			  || InvoiceDataValidator.IsFreeItemValue(freeItemsRaw);
 
@@ -776,12 +785,12 @@ public sealed class ImportSalesInvoiceService
 				string.IsNullOrWhiteSpace(skuCode) &&
 				string.IsNullOrWhiteSpace(itemName) &&
 				string.IsNullOrWhiteSpace(uom) &&
-				IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])) &&
-				(!hasQuantityColumn || IsCellEffectivelyEmpty(row.Cell(quantityColumn))) &&
-				(!hasCaseQuantityColumn || IsCellEffectivelyEmpty(row.Cell(caseQuantityColumn))) &&
-				(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(row.Cell(dozenQuantityColumn))) &&
-				(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(row.Cell(pieceQuantityColumn))) &&
-				(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(row.Cell(inBoxQuantityColumn))) &&
+				IsMissingOrEmpty(logicalRow.Cell("InvoiceDate")) &&
+				(!hasQuantityColumn || IsCellEffectivelyEmpty(logicalRow.Cell("Quantity")!)) &&
+				(!hasCaseQuantityColumn || IsCellEffectivelyEmpty(logicalRow.Cell("CaseQuantity")!)) &&
+				(!hasDozenQuantityColumn || IsCellEffectivelyEmpty(logicalRow.Cell("DozenQuantity")!)) &&
+				(!hasPieceQuantityColumn || IsCellEffectivelyEmpty(logicalRow.Cell("PieceQuantity")!)) &&
+				(!hasInBoxQuantityColumn || IsCellEffectivelyEmpty(logicalRow.Cell("InBoxQuantity")!)) &&
 				(netAmountCell is null || IsAmountCellEffectivelyEmptyForRowSkip(netAmountCell)))
 			{
 				continue;
@@ -791,16 +800,16 @@ public sealed class ImportSalesInvoiceService
 			var issueStart = result.Issues.Count;
 
 			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-			foreach (var kvp in headers)
+			foreach (var field in logicalRow.FieldKeys)
 			{
-				rawValues[kvp.Key] = GetString(row, kvp.Value);
+				rawValues[field] = GetString(logicalRow.Cell(field)!);
 			}
-			result.RawValuesByRow[rowNumber] = rawValues;
+			result.RawValuesByRow[new SourceRowKey(sheetIndex, rowNumber)] = rawValues;
 
 			var sheetCells = new string[sheetLastColumn];
 			for (int c = 1; c <= sheetLastColumn; c++)
 				sheetCells[c - 1] = GetString(row, c);
-			result.RawSheetRowsByRow[rowNumber] = sheetCells;
+			sheetResult.RawRows[rowNumber] = sheetCells;
 
 			DateOnly invoiceDate = default;
 			var emittedRows = new List<ImportedInvoiceRow>();
@@ -809,16 +818,16 @@ public sealed class ImportSalesInvoiceService
 
 			void AddRowError(string message, string? columnName = null, int? suggestionCount = null)
 			{
-				result.AddError(rowNumber, invoiceCode, message, columnName, suggestionCount);
+				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode, message, columnName, suggestionCount);
 				rowHasErrors = true;
 			}
 
 			//-------Validate required fields------------
 			if (string.IsNullOrWhiteSpace(invoiceCode))
 				AddRowError("Invoice code is required.", "InvoiceCode");
-			if (IsCellEffectivelyEmpty(row.Cell(headers["InvoiceDate"])))
+			if (IsMissingOrEmpty(logicalRow.Cell("InvoiceDate")))
 				AddRowError("Invoice date is required.", "InvoiceDate");
-			else if (!TryGetDateOnly(row.Cell(headers["InvoiceDate"]), out invoiceDate, invoiceDateFormat))
+			else if (!TryGetDateOnly(logicalRow.Cell("InvoiceDate")!, out invoiceDate, invoiceDateFormat))
 				AddRowError("Invoice date is invalid.", "InvoiceDate");
 
 			//-------Validate customer-----------------
@@ -934,7 +943,7 @@ public sealed class ImportSalesInvoiceService
 				var salesKey = (salesManName ?? string.Empty).Trim().ToUpperInvariant();
 
 				result.ErroredRows.Add(new ErroredRowInfo(
-					rowNumber, code, customerKey, orderKey, salesKey, headerProblem is not null, headerProblem));
+					rowNumber, code, customerKey, orderKey, salesKey, headerProblem is not null, headerProblem, sheetIndex));
 
 				if (headerProblem is null && orderKey.Length > 0)
 				{
@@ -965,7 +974,7 @@ public sealed class ImportSalesInvoiceService
 
 			if (!useSplitQuantities)
 			{
-				var quantityCell = hasQuantityColumn ? row.Cell(quantityColumn) : null;
+				var quantityCell = logicalRow.Cell("Quantity");
 				var quantityIsEmpty = quantityCell is null || IsCellEffectivelyEmpty(quantityCell);
 
 				int? rawQuantity = null;
@@ -1035,6 +1044,7 @@ public sealed class ImportSalesInvoiceService
 					{
 						emittedRows.Add(new ImportedInvoiceRow(
 							RowNumber: rowNumber,
+							SheetIndex: sheetIndex,
 							InvoiceCode: invoiceCode,
 							InvoiceDate: invoiceDate,
 							CustomerCode: customerCode,
@@ -1066,16 +1076,17 @@ public sealed class ImportSalesInvoiceService
 			}
 			else
 			{
-				void TryEmitSplitRow(bool hasColumn, int columnIndex, string uomLabel, string errorField)
+				void TryEmitSplitRow(string field, string uomLabel, string errorField)
 				{
-					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex)))
+					var cell = logicalRow.Cell(field);
+					if (cell is null || IsCellEffectivelyEmpty(cell))
 						return;
 
-					var rawValue = row.Cell(columnIndex).GetString().Trim();
+					var rawValue = cell.GetString().Trim();
 					if (InvoiceDataValidator.IsMissingUomValue(rawValue))
 						return;
 
-					if (!TryGetInt(row.Cell(columnIndex), out var qty))
+					if (!TryGetInt(cell, out var qty))
 					{
 						AddRowError($"{errorField} must be a whole number.", errorField);
 						return;
@@ -1119,6 +1130,7 @@ public sealed class ImportSalesInvoiceService
 
 					emittedRows.Add(new ImportedInvoiceRow(
 						RowNumber: rowNumber,
+						SheetIndex: sheetIndex,
 						InvoiceCode: invoiceCode,
 						InvoiceDate: invoiceDate,
 						CustomerCode: customerCode,
@@ -1147,10 +1159,10 @@ public sealed class ImportSalesInvoiceService
 						CustomerCandidateIds: customerCandidateIds));
 				}
 
-				TryEmitSplitRow(hasCaseQuantityColumn, caseQuantityColumn, "case", "CaseQuantity");
-				TryEmitSplitRow(hasDozenQuantityColumn, dozenQuantityColumn, "dozen", "DozenQuantity");
-				TryEmitSplitRow(hasPieceQuantityColumn, pieceQuantityColumn, "piece", "PieceQuantity");
-				TryEmitSplitRow(hasInBoxQuantityColumn, inBoxQuantityColumn, "inbox", "InBoxQuantity");
+				TryEmitSplitRow("CaseQuantity", "case", "CaseQuantity");
+				TryEmitSplitRow("DozenQuantity", "dozen", "DozenQuantity");
+				TryEmitSplitRow("PieceQuantity", "piece", "PieceQuantity");
+				TryEmitSplitRow("InBoxQuantity", "inbox", "InBoxQuantity");
 
 				if (emittedRows.Count == 0 && !rowHasErrors)
 				{
@@ -1191,39 +1203,31 @@ public sealed class ImportSalesInvoiceService
 		return cell.IsEmpty();
 	}
 
-	private static string GetString(IXLRow row, int columnNumber)
+	private static string GetString(IXLRow row, int columnNumber) => GetString(row.Cell(columnNumber));
+
+	private static string GetString(IXLCell cell)
 	{
-		var cell = row.Cell(columnNumber);
 		if (cell.HasFormula)
 			return cell.CachedValue.ToString()?.Trim() ?? string.Empty;
 		return cell.GetString().Trim();
 	}
 
-	// Reads a text cell and applies the column's "how to read it" rule from the template.
-	private static string ReadValue(
-		IXLRow row,
-		IReadOnlyDictionary<string, int> headers,
-		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> rules,
-		string key)
+	// Reads a text field and applies the column's "how to read it" rule from the template.
+	private static string ReadValue(LogicalRow row, string field)
 	{
-		if (!headers.TryGetValue(key, out var column)) return string.Empty;
+		var cell = row.Cell(field);
+		if (cell is null) return string.Empty;
 
-		var raw = GetString(row, column);
+		var raw = GetString(cell);
 		if (raw.Length == 0) return raw;
-		if (!rules.TryGetValue(key, out var rule) || rule.RuleType == ColumnRuleTypes.Direct) return raw;
+
+		var rule = row.Rule(field);
+		if (rule is null || rule.RuleType == ColumnRuleTypes.Direct) return raw;
 
 		if (ImportRules.TryApply(raw, rule.RuleType, rule.OptionsJson, out var applied, out _))
 			return applied;
 
 		return rule.RuleType == ColumnRuleTypes.ValueMap ? string.Empty : raw;
-	}
-
-	// Last data row to read: the end of the sheet, or maxRows after the header, whichever comes first.
-	private static int LastRowFor(IXLWorksheet worksheet, int headerRowNumber, int maxRows)
-	{
-		var used = worksheet.LastRowUsed()?.RowNumber() ?? 1;
-		var limit = maxRows >= int.MaxValue - headerRowNumber ? int.MaxValue : headerRowNumber + maxRows;
-		return Math.Min(used, limit);
 	}
 
 	private static bool TryGetInt(IXLCell cell, out int value)
@@ -1449,6 +1453,9 @@ public sealed class ImportSalesInvoiceService
 		return lookup;
 	}
 
+	// A field that isn't mapped on this row counts as empty.
+	private static bool IsMissingOrEmpty(IXLCell? cell) => cell is null || IsCellEffectivelyEmpty(cell);
+
 	private static bool IsCellEffectivelyEmpty(IXLCell cell)
 	{
 		if (cell.HasFormula)
@@ -1457,23 +1464,12 @@ public sealed class ImportSalesInvoiceService
 	}
 
 	private static Dictionary<int, HashSet<int>> BuildKnownConversionsBySubdItem(
-		IXLWorksheet worksheet,
-		IReadOnlyDictionary<string, int> headers,
+		WorkbookRows source,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IEnumerable<SubdItem> allSubdItems,
-		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
-		int headerRowNumber,
-		IReadOnlyDictionary<string, ImportTemplateColumnEditDto> columnRules,
-		int maxRows)
+		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup)
 	{
 		var result = new Dictionary<int, HashSet<int>>();
-		var lastRow = LastRowFor(worksheet, headerRowNumber, maxRows);
-
-		var hasCaseQuantityColumn = headers.TryGetValue("CaseQuantity", out var caseQuantityColumn);
-		var hasDozenQuantityColumn = headers.TryGetValue("DozenQuantity", out var dozenQuantityColumn);
-		var hasPieceQuantityColumn = headers.TryGetValue("PieceQuantity", out var pieceQuantityColumn);
-		var hasInBoxQuantityColumn = headers.TryGetValue("InBoxQuantity", out var inBoxQuantityColumn);
-		var useSplitQuantities = hasCaseQuantityColumn || hasDozenQuantityColumn || hasPieceQuantityColumn || hasInBoxQuantityColumn;
 
 		void Record(int subdItemId, int conversion)
 		{
@@ -1495,40 +1491,44 @@ public sealed class ImportSalesInvoiceService
 			return null;
 		}
 
-		for (int rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
+		// Every sheet, under the same shared row budget the real read uses.
+		foreach (var logicalRow in source.Rows())
 		{
-			var row = worksheet.Row(rowNumber);
-			if (row.CellsUsed().All(c => c.IsEmpty())) continue;
+			if (logicalRow.Row.CellsUsed().All(c => c.IsEmpty())) continue;
 
-			var skuCode = ReadValue(row, headers, columnRules, "SkuCode");
-			var itemName = ReadValue(row, headers, columnRules, "ItemName");
+			var skuCode = ReadValue(logicalRow, "SkuCode");
+			var itemName = ReadValue(logicalRow, "ItemName");
 
 			if (!InvoiceDataValidator.TryResolveItem(
 					skuCode, itemName, subdItemsBySkuGroup, allSubdItems,
 					out var resolvedItem, out _, out _, out _) || resolvedItem is null)
 				continue;
 
+			var useSplitQuantities = logicalRow.Has("CaseQuantity") || logicalRow.Has("DozenQuantity")
+				|| logicalRow.Has("PieceQuantity") || logicalRow.Has("InBoxQuantity");
+
 			if (!useSplitQuantities)
 			{
-				var uom = ReadValue(row, headers, columnRules, "UnitOfMeasure");
+				var uom = ReadValue(logicalRow, "UnitOfMeasure");
 				if (string.IsNullOrWhiteSpace(uom)) continue;
 				var conversion = TryMatchConversion(resolvedItem, uom);
 				if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);
 			}
 			else
 			{
-				void CheckSplit(bool hasColumn, int columnIndex, string uomLabel)
+				void CheckSplit(string field, string uomLabel)
 				{
-					if (!hasColumn || IsCellEffectivelyEmpty(row.Cell(columnIndex))) return;
+					var cell = logicalRow.Cell(field);
+					if (cell is null || IsCellEffectivelyEmpty(cell)) return;
 					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
 					var conversion = TryMatchConversion(resolvedItem, normalizedUomName);
 					if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);
 				}
 
-				CheckSplit(hasCaseQuantityColumn, caseQuantityColumn, "case");
-				CheckSplit(hasDozenQuantityColumn, dozenQuantityColumn, "dozen");
-				CheckSplit(hasPieceQuantityColumn, pieceQuantityColumn, "piece");
-				CheckSplit(hasInBoxQuantityColumn, inBoxQuantityColumn, "inbox");
+				CheckSplit("CaseQuantity", "case");
+				CheckSplit("DozenQuantity", "dozen");
+				CheckSplit("PieceQuantity", "piece");
+				CheckSplit("InBoxQuantity", "inbox");
 			}
 		}
 

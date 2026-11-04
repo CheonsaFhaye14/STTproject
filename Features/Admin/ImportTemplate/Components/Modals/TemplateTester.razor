@@ -1,175 +1,371 @@
 @using System.IO
+@using ClosedXML.Excel
 @using Microsoft.AspNetCore.Components.Forms
 @using STTproject.Features.User.SalesInvoice.DTOs
+@using STTproject.Features.User.SalesInvoice.Components.Modals
 @inject IImportTemplateTestService Tester
 @inject STTproject.Features.User.SalesInvoice.Services.ImportSalesInvoiceService Importer
 @inject STTproject.Services.IUserContextService UserContext
-@using STTproject.Features.User.SalesInvoice.Components.Modals
 
-<FormSection Icon="ti ti-flask" Title="Try it with a file"
-             Summary="Check the template against a real Excel or CSV file"
+<FormSection Icon="ti ti-flask" Title="Try it with a file" Summary="Check the template against a real Excel or CSV file"
              IsExpanded="false">
-        <div class="form-text mb-2">
-            Nothing is imported or saved. This uses the template exactly as it is on screen right now.
+
+    @* ── 1. File: big dropzone first, compact bar once a file is chosen ── *@
+    @if (_bytes is null)
+    {
+        <FileInput InputId="template-test-file" Title="Choose an Excel or CSV file to test"
+                   Subtitle="@(_busy ? $"Reading {_fileName}…" : "Click to browse or drop a file here. Nothing is imported or saved.")"
+                   Accept=".xlsx,.csv" OnFileSelected="OnFile" />
+        <div class="form-text mt-2">
+            After you choose a file, you'll see which sheets and columns were found, and which rows have problems.
+        </div>
+    }
+    else
+    {
+        <div class="tt-card">
+            <div class="tt-bar">
+                <i class="ti ti-file-spreadsheet tt-bar-icon"></i>
+                <div class="tt-bar-name">
+                    <div class="fw-medium text-truncate">@_fileName</div>
+                    <div class="small text-muted">@FileSizeText · first @MaxRows rows of each sheet are checked</div>
+                </div>
+                <Button Variant="ButtonVariant.Secondary" Title="Replace file" OnClick="ReplaceFile" />
+                <Button Variant="ButtonVariant.Secondary" Title="Test again" OnClick="Run" />
+            </div>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger mt-3 mb-0">@_error</div>
+    }
+
+    @if (_result is not null)
+    {
+        var r = _result;
+        var blocking = r.Issues.Where(i => i.IsBlocking).ToList();
+        var review = r.Issues.Where(i => !i.IsBlocking).ToList();
+        var (vCls, vIcon, vTitle, vSub) = VerdictInfo(r);
+        var isBlocked = r.Verdict == TestVerdict.Blocked;
+
+        @* ── 2. Status: one slim banner. Opens to show what to review. ── *@
+        var groups = OptionalGroups(r);
+        var others = review.Where(i => i.Kind != IssueKind.OptionalColumns).ToList();
+        var canOpen = blocking.Count > 0 || others.Count > 0 || groups.Count > 0 || r.Warnings.Count > 0;
+        <div class="tt-status @vCls mt-3">
+            <button type="button" class="tt-status-top @(_open && canOpen ? "tt-open" : "")" disabled="@(!canOpen)"
+                    aria-expanded="@(_open && canOpen)" @onclick="() => _open = !_open">
+                <i class="ti @vIcon tt-verdict-icon"></i>
+                <strong>@vTitle</strong>
+                <span class="tt-facts">@r.SheetsFound of @r.SheetsExpected sheets · @r.RowsChecked rows · @r.BlockingCount blocking @(r.BlockingCount == 1 ? "error" : "errors") · @r.ReviewCount to review</span>
+                @if (canOpen)
+                {
+                    <i class="ti ti-chevron-down tt-chev"></i>
+                }
+            </button>
+
+            @if (_open && canOpen)
+            {
+                <div class="tt-detail">
+                    @foreach (var issue in blocking)
+                    {
+                        @IssueRow(issue)
+                    }
+
+                    @if (r.Warnings.Count > 0)
+                    {
+                        <div class="tt-group">
+                            <div class="fw-medium">Not ready to save yet, but you can still test it</div>
+                            <ul class="small text-muted mb-0 ps-3 mt-1">
+                                @foreach (var w in r.Warnings)
+                                {
+                                    <li>@w</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    @foreach (var issue in others)
+                    {
+                        @IssueRow(issue)
+                    }
+
+                    @foreach (var g in groups)
+                    {
+                        <div class="tt-group tt-group-row">
+                            <div class="tt-group-text"><b>@JoinLabels(g.Sheets):</b> @g.Fields not found. These fields will be left empty.</div>
+                            <div class="tt-group-actions">
+                                @foreach (var lbl in g.Sheets)
+                                {
+                                    <button type="button" class="it-sum-chip tt-go" @onclick="() => Select(lbl)">View @lbl <i class="ti ti-arrow-right"></i></button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
         </div>
 
-        <FileInput InputId="template-test-file"
-                   Title="Choose an Excel or CSV file to test"
-                   Subtitle="@(_fileName ?? "Only the first rows are read")"
-                   Accept=".xlsx,.csv"
-                   OnFileSelected="OnFile" />
-
-        @if (_busy)
+        @* ── 3. Sheets: one tab each, the broken one opens first ── *@
+        @if (r.Sheets.Count > 0)
         {
-            <div class="text-muted mt-3">Reading the file…</div>
-        }
-
-        @if (_error is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_error</div>
-        }
-
-        @if (_bytes is not null && !_busy)
-        {
-            <div class="mt-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="Run">
-                    Test again with the same file
-                </button>
-            </div>
-
-            @if (Model.ImportType == "SalesInvoice")
-            {
-                <hr />
-                <h6>What would be imported</h6>
-                <div class="form-text mb-2">
-                    Runs the real import check: customer, SKU and UOM lookups, invoice grouping, prices and
-                    duplicates. Reads the first @MaxRows rows. Nothing is saved.
+            var s = Current;
+            <div class="mt-3">
+                <div class="it-tabs" role="tablist">
+                    @foreach (var t in r.Sheets)
+                    {
+                        <button type="button" role="tab" class="it-tab @(t.Label == _cur ? "active" : "")" @onclick="() => Select(t.Label)">
+                            @t.Label
+                            @if (t.Status == TestSheetStatus.NotFound)
+                            {
+                                <i class="ti ti-file-off tt-tab-off @(t.IsRequired ? "tt-tab-off-bad" : "")" title="Not in the file"></i>
+                            }
+                            else
+                            {
+                                <span class="tt-cnt">@t.Rows.Count</span>
+                                @if (t.Status == TestSheetStatus.Blocked)
+                                {
+                                    <span class="it-dot" title="Blocked"></span>
+                                }
+                                else if (t.Status == TestSheetStatus.NeedsLook)
+                                {
+                                    <span class="it-dot it-dot--warn" title="Something to review"></span>
+                                }
+                            }
+                        </button>
+                    }
                 </div>
 
-                @if (IsCsv)
+                @if (s is not null)
                 {
-                    <div class="alert alert-light border small">
-                        This check needs an .xlsx file. The import itself doesn't read CSV.
+                    <div class="pt-3">
+                        @if (s.Status == TestSheetStatus.NotFound)
+                        {
+                            <div class="tt-empty">
+                                <i class="ti ti-file-off tt-empty-icon"></i>
+                                <div class="fw-medium">Nothing to preview</div>
+                                <div class="small text-muted">@(s.IsRequired ? "This sheet is required, but it isn't in the file." : "This sheet is optional, so it would be skipped.")</div>
+                            </div>
+                            <div class="fw-medium mt-3 mb-2">Sheets in this file</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var fs in r.FileSheets)
+                                {
+                                    <div class="tt-chip">
+                                        <b>@fs.Name</b>
+                                        <span class="text-muted">@(fs.IsHidden ? "hidden, never matched" : fs.UsedBy is null ? "not used" : $"used by {fs.UsedBy}")</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            @* One summary line. The mapping itself is in the table headers below. *@
+                            var matchedCount = s.Fields.Count(x => x.State == FieldState.Found);
+                            var aliasCount = s.Fields.Count(x => x.State == FieldState.Found && x.IsAlias);
+                            var problemFields = s.Fields.Where(x => x.State is FieldState.RequiredMissing or FieldState.Ambiguous).ToList();
+                            <div class="it-sheetbar">
+                                <div class="it-chips">
+                                    <span class="it-sum-chip"><i class="ti ti-columns"></i>@matchedCount of @s.Fields.Count columns matched</span>
+                                    @if (s.HeaderRow is not null)
+                                    {
+                                        <span class="it-sum-chip"><i class="ti ti-list-numbers"></i>Headers on row @s.HeaderRow</span>
+                                    }
+                                    @if (aliasCount > 0)
+                                    {
+                                        <span class="it-sum-chip" title="The file used an alias instead of the main header"><i class="ti ti-replace"></i>@aliasCount by alias</span>
+                                    }
+                                    @foreach (var pf in problemFields)
+                                    {
+                                        <span class="it-sum-chip warn" title="@MapTitle(pf)"><i class="ti ti-alert-circle"></i>@pf.Display @(pf.State == FieldState.Ambiguous ? "ambiguous" : "missing")</span>
+                                    }
+                                </div>
+                                @if (s.Rows.Count > 0)
+                                {
+                                    <div class="it-seg tt-seg" title="Original is the file as is. Processed is after the template's cleaning rules.">
+                                        <button type="button" class="it-seg-btn @(!_processed ? "active" : "")" aria-pressed="@(!_processed ? "true" : "false")" @onclick="() => _processed = false">Original</button>
+                                        <button type="button" class="it-seg-btn @(_processed ? "active" : "")" aria-pressed="@(_processed ? "true" : "false")" @onclick="() => _processed = true">Processed</button>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (s.Status == TestSheetStatus.Blocked)
+                            {
+                                <div class="tt-banner mt-3">
+                                    <i class="ti ti-alert-circle"></i>
+                                    <span>This preview is incomplete. @BlockedWhy(s) Only what could be read is shown.</span>
+                                </div>
+                            }
+
+                            @if (s.Rows.Count > 0)
+                            {
+                                var rows = _showAll ? s.Rows : s.Rows.Where((x, i) => i < PreviewRows || x.Messages.Count > 0).ToList();
+                                var showProblems = rows.Any(x => x.Messages.Count > 0);
+
+                                <div class="tt-scroll mt-2">
+                                    <table class="tt-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Row</th>
+                                                @foreach (var f in s.Fields)
+                                                {
+                                                    @if (f.State == FieldState.Found)
+                                                    {
+                                                        <th>
+                                                            @f.Display
+                                                            @if (f.IsAlias)
+                                                            {
+                                                                <span class="tt-alias">alias</span>
+                                                            }
+                                                            <small>← @f.FoundHeader</small>
+                                                        </th>
+                                                    }
+                                                    else if (f.State == FieldState.RequiredMissing)
+                                                    {
+                                                        <th class="tt-x" title="@MapTitle(f)">@f.Display<small>not found</small></th>
+                                                    }
+                                                    else if (f.State == FieldState.OptionalMissing)
+                                                    {
+                                                        <th class="tt-off" title="@MapTitle(f)">@f.Display<small>not in file</small></th>
+                                                    }
+                                                    else if (f.State == FieldState.Ambiguous)
+                                                    {
+                                                        @foreach (var src in f.Sources)
+                                                        {
+                                                            <th class="tt-x" title="@MapTitle(f)">@f.Display<small>@src.Header (column @src.Letter)</small></th>
+                                                        }
+                                                    }
+                                                }
+                                                @if (showProblems)
+                                                {
+                                                    <th>Problems</th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var row in rows)
+                                            {
+                                                <tr class="@(row.Messages.Count > 0 ? "tt-bad-row" : "") @(row.RowNumber == _hlRow ? "tt-hl" : "")">
+                                                    <td class="tt-row">@row.RowNumber</td>
+                                                    @foreach (var f in s.Fields)
+                                                    {
+                                                        @if (f.State == FieldState.Found)
+                                                        {
+                                                            var shown = _processed ? row.Values.GetValueOrDefault(f.FieldKey, "") : row.Original.GetValueOrDefault(f.FieldKey, "");
+                                                            var changed = _processed && shown != row.Original.GetValueOrDefault(f.FieldKey, "");
+                                                            <td title="@shown" class="@(row.BadFields.Contains(f.FieldKey) ? "text-danger fw-medium" : changed ? "tt-changed" : string.IsNullOrEmpty(shown) ? "tt-dash" : "")">@(string.IsNullOrEmpty(shown) ? "—" : shown)</td>
+                                                        }
+                                                        else if (f.State == FieldState.RequiredMissing)
+                                                        {
+                                                            <td class="tt-na">Not read</td>
+                                                        }
+                                                        else if (f.State == FieldState.OptionalMissing)
+                                                        {
+                                                            <td class="tt-dash">—</td>
+                                                        }
+                                                        else if (f.State == FieldState.Ambiguous)
+                                                        {
+                                                            @foreach (var src in f.Sources)
+                                                            {
+                                                                <td class="tt-x-cell">@row.AmbiguousRaw.GetValueOrDefault(src.ColumnIndex, "")</td>
+                                                            }
+                                                        }
+                                                    }
+                                                    @if (showProblems)
+                                                    {
+                                                        <td class="small">@string.Join("; ", row.Messages)</td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="d-flex align-items-center mt-2">
+                                    <span class="small text-muted">
+                                        @RowsText(rows.Count, s.Rows.Count)
+                                    </span>
+                                    @if (s.Rows.Count > PreviewRows)
+                                    {
+                                        <span class="ms-auto">
+                                            <Button Variant="ButtonVariant.Secondary" Title="@(_showAll ? $"Show {PreviewRows}" : $"Show all {s.Rows.Count}")" OnClick="() => _showAll = !_showAll" />
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        }
                     </div>
                 }
-                else
-                {
-                    @if (Model.SubDistributorId is null)
-                    {
-                        <div class="mb-2" style="max-width:360px;">
-                            <label class="form-label">Check against subdistributor</label>
-                            <select class="form-select" @bind="_testSubdId">
-                                <option value="0">Choose…</option>
-                                @foreach (var s in Subds)
-                                {
-                                    <option value="@s.SubDistributorId">@s.Display</option>
-                                }
-                            </select>
-                        </div>
-                    }
-
-                    <button type="button" class="btn btn-primary btn-sm"
-                            disabled="@(_checking || SubdForCheck <= 0)" @onclick="CheckImportAsync">
-                        @(_checking ? "Checking…" : "Check what would be imported")
-                    </button>
-                }
-            }
+            </div>
         }
 
-        @if (_result is not null)
+        @if (r.Notes.Count > 0)
         {
-            @if (_result.Errors.Count > 0)
-            {
-                <div class="alert alert-warning mt-3 mb-0">
-                    <strong>Fix the template first:</strong>
-                    <ul class="mb-0 ps-3">
-                        @foreach (var e in _result.Errors) { <li>@e</li> }
-                    </ul>
-                </div>
-            }
-
-            @foreach (var sheet in _result.Sheets)
-            {
-                var shown = sheet.Columns.Where(c => c.ColumnIndex is not null).ToList();
-                var badRows = sheet.Rows.Count(r => r.Messages.Count > 0);
-
-                <div class="mt-4">
-                    <h6 class="mb-1">
-                        @sheet.Label
-                        @if (sheet.ExcelSheetName is not null)
-                        {
-                            <span class="text-muted fw-normal">
-                                → “@sheet.ExcelSheetName”, headers on row @sheet.HeaderRow
-                            </span>
-                        }
-                    </h6>
-
-                    @foreach (var p in sheet.Problems)
-                    {
-                        <div class="alert alert-danger py-2 small mb-2">@p</div>
-                    }
-
-                    @if (sheet.Columns.Count > 0)
-                    {
-                        <div class="mb-2">
-                            @foreach (var c in sheet.Columns)
-                            {
-                                var found = c.ColumnIndex is not null;
-                                <span class="badge me-1 @(found ? "bg-success" : c.IsRequired ? "bg-danger" : "bg-secondary")">
-                                    @c.HeaderText @(found ? "" : "· not found")
-                                </span>
-                            }
-                        </div>
-                    }
-
-                    @if (sheet.Rows.Count > 0)
-                    {
-                        <div class="small mb-1 @(badRows > 0 ? "text-danger" : "text-success")">
-                            @(badRows == 0
-                                ? $"All {sheet.Rows.Count} rows look fine."
-                                : $"{badRows} of {sheet.Rows.Count} rows have problems.")
-                        </div>
-
-                        <div style="overflow-x:auto; max-height:420px; overflow-y:auto;">
-                            <table class="table table-sm table-bordered align-middle mb-0">
-                                <thead class="table-light" style="position:sticky; top:0;">
-                                    <tr>
-                                        <th>Row</th>
-                                        @foreach (var c in shown)
-                                        {
-                                            <th>@(ImportFieldRegistry.GetField(Model.ImportType, c.FieldKey)?.Display ?? c.FieldKey)</th>
-                                        }
-                                        <th>Problems</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var row in sheet.Rows)
-                                    {
-                                        <tr class="@(row.Messages.Count > 0 ? "table-warning" : "")">
-                                            <td class="text-muted">@row.RowNumber</td>
-                                            @foreach (var c in shown)
-                                            {
-                                                <td>@(row.Values.GetValueOrDefault(c.FieldKey!, ""))</td>
-                                            }
-                                            <td class="small">@string.Join("; ", row.Messages)</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
-            }
+            <ul class="small text-muted mt-2 mb-0 ps-3">
+                @foreach (var n in r.Notes)
+                {
+                    <li>@n</li>
+                }
+            </ul>
         }
+
+        @* ── 4. The real import check (Sales Invoice only). Locked while the template can't read the file. ── *@
+        @if (Model.ImportType == "SalesInvoice")
+        {
+            <div class="tt-card mt-3 @(isBlocked ? "tt-locked" : "")">
+                <div class="tt-head">
+                    <i class="ti @(isBlocked ? "ti-lock" : "ti-list-check") tt-bar-icon"></i>
+                    <div>
+                        <div class="fw-medium">What would be imported</div>
+                        <div class="small text-muted">
+                            @(isBlocked
+                                ? "Available after the blocking errors are fixed and the file is tested again."
+                                : $"Runs the real import check: customer, SKU and UOM lookups, invoice grouping, prices and duplicates. Reads the first {MaxRows} rows of each sheet. Nothing is saved.")
+                        </div>
+                    </div>
+                </div>
+
+                @if (!isBlocked)
+                {
+                    <div class="px-3 pb-3">
+                        @if (IsCsv)
+                        {
+                            <div class="alert alert-light border small mb-0">
+                                This check needs an .xlsx file. The import itself doesn't read CSV.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-end gap-2">
+                                @if (Model.SubDistributorId is null)
+                                {
+                                    <div style="max-width:320px; flex:1;">
+                                        <label class="form-label small mb-1">Check against subdistributor</label>
+                                        <select class="form-select" @bind="_testSubdId">
+                                            <option value="0">Choose…</option>
+                                            @foreach (var sd in Subds)
+                                            {
+                                                <option value="@sd.SubDistributorId">@sd.Display</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                <Button Variant="ButtonVariant.Secondary" Disabled="@(_checking || SubdForCheck <= 0)"
+                                        Title="@(_checking ? "Checking…" : "Run import check")" OnClick="CheckImportAsync" />
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
 </FormSection>
 
-<ImportSalesInvoiceResults Show="_showImport"
-                           ImportResult="_importResult"
-                           ReadOnly="true"
-                           OnClose="CloseImport" />
+<ImportSalesInvoiceResults Show="_showImport" ImportResult="_importResult" ReadOnly="true" OnClose="CloseImport"
+                           ExpectedSheets="ExpectedSheetNames" RowLimit="MaxRows" />
 
 @code {
     private const int MaxRows = 50;
+    private const int PreviewRows = 10;
     private const long MaxFileBytes = 20 * 1024 * 1024;
 
     [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
@@ -181,12 +377,29 @@
     private bool _busy;
     private TemplateTestResult? _result;
 
+    // What is on screen
+    private string _cur = "";
+    private bool _processed;
+    private bool _showAll;
+    private bool _open;
+    private int _hlRow;
+
     private int _testSubdId;
     private bool _checking, _showImport;
     private ImportSalesInvoiceResult? _importResult;
 
+    // The file's sheets this template reads, so the check can say which of them gave no rows.
+    private List<string> ExpectedSheetNames => _result?.Sheets
+        .Where(s => s.Status != TestSheetStatus.NotFound)
+        .Select(s => s.ExcelSheetName ?? s.Label)
+        .ToList() ?? new List<string>();
+
     private bool IsCsv => _fileName?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
     private int SubdForCheck => Model.SubDistributorId ?? _testSubdId;
+    private TemplateTestSheet? Current => _result?.Sheets.FirstOrDefault(s => s.Label == _cur);
+
+    private string FileSizeText => _bytes is null ? "" :
+        _bytes.Length >= 1024 * 1024 ? $"{_bytes.Length / 1024d / 1024d:0.#} MB" : $"{Math.Max(1, _bytes.Length / 1024)} KB";
 
     private async Task OnFile(IBrowserFile file)
     {
@@ -228,7 +441,42 @@
     {
         if (_bytes is null) return;
         _result = Tester.Test(Model, new MemoryStream(_bytes), _fileName ?? "", MaxRows);
+        _cur = PickSheet(_result);
+        _open = _result.Verdict == TestVerdict.Blocked;
+        _showAll = false;
+        _hlRow = 0;
     }
+
+    private void ReplaceFile()
+    {
+        _bytes = null;
+        _fileName = null;
+        _result = null;
+        _error = null;
+        _importResult = null;
+    }
+
+    private void Select(string label)
+    {
+        _cur = label;
+        _showAll = false;
+        _hlRow = 0;
+    }
+
+    private void Jump(TemplateTestIssue issue)
+    {
+        if (issue.SheetLabel is null || _result is null) return;
+        _cur = issue.SheetLabel;
+        _hlRow = issue.RowNumber ?? 0;
+        _showAll = false;
+    }
+
+    // The sheet to open first: the one that blocks, then a missing one, then one that needs a look.
+    private static string PickSheet(TemplateTestResult r) =>
+        (r.Sheets.FirstOrDefault(s => s.Status == TestSheetStatus.Blocked)
+         ?? r.Sheets.FirstOrDefault(s => s.Status == TestSheetStatus.NotFound && s.IsRequired)
+         ?? r.Sheets.FirstOrDefault(s => s.Status == TestSheetStatus.NeedsLook)
+         ?? r.Sheets.FirstOrDefault())?.Label ?? "";
 
     private async Task CheckImportAsync()
     {
@@ -238,9 +486,9 @@
         StateHasChanged();
         try
         {
-            using var ms = new MemoryStream(_bytes);
+            using var ms = TrimToPreview();
             _importResult = await Importer.PrepareFromExcelAsync(
-                ms, SubdForCheck, UserContext.UserId ?? 0, Model, MaxRows);
+                ms, SubdForCheck, UserContext.UserId ?? 0, Model, int.MaxValue);
         }
         catch (Exception ex)
         {
@@ -255,4 +503,126 @@
     }
 
     private void CloseImport() => _showImport = false;
+
+    // A copy of the file with only the first MaxRows data rows of each sheet the template reads, so a big file
+    // (80,000 rows, say) still previews quickly and every sheet gets the same share.
+    private MemoryStream TrimToPreview()
+    {
+        using var wb = new XLWorkbook(new MemoryStream(_bytes!));
+        foreach (var t in _result?.Sheets ?? new List<TemplateTestSheet>())
+        {
+            if (t.Status == TestSheetStatus.NotFound || t.ExcelSheetName is null) continue;
+            if (!wb.Worksheets.TryGetWorksheet(t.ExcelSheetName, out var ws)) continue;
+
+            var headerRows = Model.Sheets.FirstOrDefault(m => m.SheetLabel == t.Label)?.HeaderRowCount ?? 1;
+            var keepUntil = (t.HeaderRow ?? 1) + Math.Max(1, headerRows) - 1 + MaxRows;
+            var last = ws.LastRowUsed()?.RowNumber() ?? 0;
+            if (last > keepUntil) ws.Rows(keepUntil + 1, last).Delete();
+        }
+
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+        return ms;
+    }
+
+    // ── wording and styling helpers ──────────────────────────────────────
+
+    private static (string Cls, string Icon, string Title, string Sub) VerdictInfo(TemplateTestResult r) => r.Verdict switch
+    {
+        TestVerdict.Blocked => ("tt-bad", "ti-circle-x", "This file can't be imported with this template",
+            $"{r.BlockingCount} {(r.BlockingCount == 1 ? "problem needs" : "problems need")} fixing first. Nothing was imported or saved."),
+        TestVerdict.NeedsLook => ("tt-warn", "ti-alert-triangle", "Template can read this file",
+            r.ReviewCount > 0
+                ? $"{r.ReviewCount} small {(r.ReviewCount == 1 ? "thing" : "things")} to review. None of them stop an import."
+                : "The template is incomplete, but it can still read this file."),
+        _ => ("tt-ok", "ti-circle-check", "Template can read this file", "Nothing needs fixing.")
+    };
+
+    // Sheets whose optional columns are missing, grouped by the same list of fields so one note covers them all.
+    private static List<(List<string> Sheets, string Fields)> OptionalGroups(TemplateTestResult r) =>
+        r.Sheets
+            .Where(s => s.Status != TestSheetStatus.NotFound)
+            .Select(s => (s.Label, Fields: s.Fields.Where(f => f.State == FieldState.OptionalMissing).Select(f => f.Display).ToList()))
+            .Where(x => x.Fields.Count > 0)
+            .GroupBy(x => string.Join(", ", x.Fields))
+            .Select(g => (g.Select(x => x.Label).ToList(), g.Key))
+            .ToList();
+
+    private static string JoinLabels(List<string> labels) => labels.Count switch
+    {
+        1 => labels[0],
+        2 => $"{labels[0]} and {labels[1]}",
+        _ => $"{string.Join(", ", labels.Take(labels.Count - 1))} and {labels[^1]}"
+    };
+
+    private string RowsText(int shown, int total) =>
+        $"Showing {shown} of {total} checked rows" + (_processed ? " · blue edge = changed by a cleaning rule" : "");
+
+    private static string MapClass(TemplateTestField f) => f.State switch
+    {
+        FieldState.RequiredMissing or FieldState.Ambiguous => "tt-mr-req",
+        FieldState.OptionalMissing => "tt-mr-opt",
+        _ => ""
+    };
+
+    private static string MapHeader(TemplateTestField f) => f.State switch
+    {
+        FieldState.Found => $"← {f.FoundHeader}",
+        FieldState.Ambiguous => $"matches columns {string.Join(" and ", f.Sources.Select(c => c.Letter))}",
+        _ => "not found"
+    };
+
+    private static (string Cls, string Text) MapTag(TemplateTestField f) => f.State switch
+    {
+        FieldState.Found => f.IsAlias ? ("tt-tag-alias", "Alias") : ("", ""),
+        FieldState.RequiredMissing => ("tt-tag-req", "Required · missing"),
+        FieldState.Ambiguous => ("tt-tag-req", "Ambiguous · not read"),
+        _ => ("tt-tag-opt", "Optional · left empty")
+    };
+
+    // Hover text: what the template looked for.
+    private static string? MapTitle(TemplateTestField f) =>
+        f.State == FieldState.Found ? null : $"Looked for: {string.Join(", ", f.LookedFor.Select(h => $"\"{h}\""))}";
+
+    private static string FieldIcon(TemplateTestField f) => f.State switch
+    {
+        FieldState.Found => "ti-check text-success",
+        FieldState.OptionalMissing => "ti-minus",
+        _ => "ti-x"
+    };
+
+    private static string BlockedWhy(TemplateTestSheet s)
+    {
+        var parts = new List<string>();
+        var missing = s.Fields.Where(f => f.State == FieldState.RequiredMissing).Select(f => f.Display).ToList();
+        var ambiguous = s.Fields.Where(f => f.State == FieldState.Ambiguous).Select(f => f.Display).ToList();
+        if (missing.Count > 0) parts.Add($"{string.Join(", ", missing)} can't be read, so this sheet can't be imported.");
+        if (ambiguous.Count > 0) parts.Add($"{string.Join(", ", ambiguous)} matches more than one column, so it isn't read.");
+        return parts.Count == 0 ? "This sheet can't be imported as it is." : string.Join(" ", parts);
+    }
+
+    // One issue: kind chip, what happened, and where to fix it (the Excel file or the template).
+    private RenderFragment<TemplateTestIssue> IssueRow => i => @<div class="tt-issue" @onclick="() => Jump(i)">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge @(i.IsBlocking ? "bg-danger" : "bg-warning text-dark")">@i.KindLabel</span>
+            <span class="fw-medium">@i.Title</span>
+            @if (i.SheetLabel is not null)
+            {
+                <i class="ti ti-arrow-right ms-auto text-muted"></i>
+            }
+        </div>
+        @if (i.SheetLabel is not null || i.Detail is not null)
+        {
+            <div class="small text-muted mt-1">@(i.RowNumber is not null ? $"{i.SheetLabel} · row {i.RowNumber}" + (i.Detail is null ? "" : " · ") : "")@i.Detail</div>
+        }
+        @if (i.FixInFile is not null)
+        {
+            <div class="tt-fix"><i class="ti ti-file-spreadsheet"></i><span><b class="text-body">Fix in the Excel file:</b> @i.FixInFile</span></div>
+        }
+        @if (i.FixInTemplate is not null)
+        {
+            <div class="tt-fix"><i class="ti ti-template"></i><span><b class="text-body">Fix in the template:</b> @i.FixInTemplate</span></div>
+        }
+    </div>;
 }

@@ -3,8 +3,11 @@
     @if (Missing.Count > 0)
     {
         <div class="it-missing">
-            <span class="it-hint">Still to map:</span>
-            @foreach (var m in Missing) { <span class="it-chip">@ChipText(m)</span> }
+            <span class="it-hint">Still to map on this sheet:</span>
+            @foreach (var m in Missing)
+            {
+                <span class="it-chip">@ChipText(m)</span>
+            }
         </div>
     }
 
@@ -13,13 +16,20 @@
         {
             var idx = i;
             var tab = Model.Sheets[idx];
-            <button type="button" @key="tab.RowKey"
-                    class="it-tab @(idx == _active ? "active" : "")"
+            <button type="button" @key="tab.RowKey" class="it-tab @(idx == _active ? "active" : "")"
                     @onclick="() => SelectSheet(idx)">
                 @(string.IsNullOrWhiteSpace(tab.SheetLabel) ? $"Sheet {idx + 1}" : tab.SheetLabel)
                 @if (tab.SheetMatchMode == SheetMatchModes.Ignore)
                 {
                     <span class="badge bg-secondary ms-1">ignored</span>
+                }
+                @if (tab.SheetMatchMode != SheetMatchModes.Ignore && !tab.IsRequired)
+                {
+                    <span class="badge bg-light text-dark border ms-1">optional</span>
+                }
+                @if (SheetGaps(tab) > 0)
+                {
+                    <span class="it-dot" title="@SheetGaps(tab) required field(s) still to map on this sheet"></span>
                 }
             </button>
         }
@@ -28,136 +38,233 @@
         @if (Model.Sheets.Count > 1)
         {
             <div class="it-tabs-end">
-                <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
-                        Tooltip="Remove this sheet" OnClick="AskRemove" />
+                <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash" Tooltip="Remove this sheet"
+                        OnClick="AskRemove" />
             </div>
         }
 
     </div>
 
-   @if (Model.Sheets.Count > 0)
+    @if (Model.Sheets.Count > 0)
     {
         var s = Model.Sheets[_active];
+        var fresh = IsFresh(s);
+        var ignored = s.SheetMatchMode == SheetMatchModes.Ignore;
 
         <div @key="s.RowKey">
-            <div class="it-row">
-                <div class="it-field">
-                    <Input TValue="string"
-                        Label="Sheet label"
-                        Placeholder="e.g. Sales"
-                        AddOptionalText="true"
-                        @bind-Value="s.SheetLabel" 
-                        OptionalText="(Your own name for this sheet. It doesn't have to match Excel.)"/>
-                </div>
 
-                <div class="it-field">
-                <Select TItem="string"
-                        Label="How to find it in the file"
-                        ShowPlaceholder="false"
-                        Items="SheetMatchModes.All"
-                        ValueSelector="m => m"
-                        TextSelector="m => MatchModeLabel(m)"
-                        SelectedValue="@s.SheetMatchMode"
-                        SelectedValueChanged="v => MatchModeChanged(s, v)"
-                        AddOptionalText="@(!NeedsMatchValue(s))"
-                        OptionalText="@Hint(MatchModeHelp(s))" />
-                </div>
-
-                @if (NeedsMatchValue(s))
-                {
-                 <div class="it-field">
-                        <Input TValue="string"
-                            Label="@MatchValueLabel(s)"
-                            Placeholder="@MatchValuePlaceholder(s)"
-                            @bind-Value="s.SheetMatchValue" />
-                    </div>
-                }
-
-            </div>
-
-            @if (s.SheetMatchMode == SheetMatchModes.Ignore)
+            @if (fresh && !ignored)
             {
-                <div class="alert alert-light border small">
-                    This sheet is ignored during import, so it doesn't need any columns.
+                <div class="it-steps">
+                    <span class="it-step-n @(_showSettings ? "on" : "")">1</span>
+                    <span class="@(_showSettings ? "it-step-on" : "")">Sheet details</span>
+                    <i class="ti ti-chevron-right" aria-hidden="true"></i>
+                    <span class="it-step-n @(_showSettings ? "" : "on")">2</span>
+                    <span class="@(_showSettings ? "" : "it-step-on")">Columns</span>
                 </div>
             }
-            else
-            {
-                <div class="it-row">
-                <div class="it-field">
-                    <Select TItem="string"
-                            Label="Where are the headers?"
-                            ShowPlaceholder="false"
-                            Items="HeaderRowModes.All"
-                            ValueSelector="m => m"
-                            TextSelector="m => HeaderModeLabel(m)"
-                            SelectedValue="@s.HeaderRowMode"
-                            SelectedValueChanged="v => s.HeaderRowMode = v"
-                            AddOptionalText="true"
-                            OptionalText="@Hint(HeaderHelp(s))" />
-                </div>
 
-                    @if (s.HeaderRowMode == HeaderRowModes.Fixed)
-                    {
-                        <div class="it-field it-sm">
-                            <Input TValue="int?" Label="First header row" @bind-Value="s.HeaderRowNumber" />
+            @if (_showSettings)
+            {
+                <div class="it-setup">
+                    <div class="it-groups">
+                        <div class="it-group">
+                            <div class="it-group-title">Find the sheet</div>
+
+                            <div class="it-field">
+                                <Input TValue="string" Label="Sheet label" Placeholder="e.g. Sales" AddOptionalText="true"
+                                       @bind-Value="s.SheetLabel"
+                                       OptionalText="(Your own name for this sheet. It doesn't have to match Excel.)" />
+                            </div>
+
+                            <div class="it-row">
+                                <div class="it-field">
+                                    <Select TItem="string" Label="How to find it in the file" ShowPlaceholder="false"
+                                            Items="SheetMatchModes.All" ValueSelector="m => m" TextSelector="m => MatchModeLabel(m)"
+                                            SelectedValue="@s.SheetMatchMode" SelectedValueChanged="v => MatchModeChanged(s, v)"
+                                            AddOptionalText="@(!NeedsMatchValue(s))" OptionalText="@Hint(MatchModeHelp(s))" />
+                                </div>
+
+                                @if (NeedsMatchValue(s))
+                                {
+                                    <div class="it-field">
+                                        <Input TValue="string" Label="@MatchValueLabel(s)" Placeholder="@MatchValuePlaceholder(s)"
+                                               @bind-Value="s.SheetMatchValue" />
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @if (!ignored)
+                        {
+                            <div class="it-group">
+                                <div class="it-group-title">Read the sheet</div>
+
+                                <div class="it-field">
+                                    <Select TItem="string" Label="If this sheet is missing from the file" ShowPlaceholder="false"
+                                            Items="NeedOptions" ValueSelector="m => m" TextSelector="m => m"
+                                            SelectedValue="@(s.IsRequired ? NeedRequired : NeedOptional)"
+                                            SelectedValueChanged="v => s.IsRequired = v == NeedRequired" AddOptionalText="true"
+                                            OptionalText="@Hint("Required stops the import. Optional skips this sheet with a warning.")" />
+                                </div>
+
+                                <div class="it-row">
+                                    <div class="it-field">
+                                        <Select TItem="string" Label="Where are the headers?" ShowPlaceholder="false"
+                                                Items="HeaderRowModes.All" ValueSelector="m => m" TextSelector="m => HeaderModeLabel(m)"
+                                                SelectedValue="@s.HeaderRowMode" SelectedValueChanged="v => s.HeaderRowMode = v"
+                                                AddOptionalText="true" OptionalText="@Hint(HeaderHelp(s))" />
+                                    </div>
+
+                                    @if (s.HeaderRowMode == HeaderRowModes.Fixed)
+                                    {
+                                        <div class="it-field it-sm">
+                                            <Input TValue="int?" Label="First header row" @bind-Value="s.HeaderRowNumber" />
+                                        </div>
+                                    }
+
+                                    <div class="it-field it-sm">
+                                        <Input TValue="int" Label="Header rows" @bind-Value="s.HeaderRowCount" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="it-setup-foot">
+                        <span>
+                            @if (ReadSheetCount > 1)
+                            {
+                                <text>Each sheet is read on its own, so every sheet that isn't ignored needs all the required
+                                    fields.
+                                    Set a sheet to Ignore if it shouldn't be read.</text>
+                                }
+                            </span>
+                            <Button Variant="ButtonVariant.Secondary" Title="@(fresh && !ignored ? "Continue to columns" : "Done")"
+                                    OnClick="CloseSettings" />
+                        </div>
+                    </div>
+                }
+            else
+                {
+                    <div class="it-sheetbar">
+                        <div class="it-chips">
+                            @foreach (var chip in SettingsChips(s))
+                            {
+                                <span class="it-sum-chip @(chip.Warn ? "warn" : "")"><i class="ti @chip.Icon"
+                                                                                            aria-hidden="true"></i>@chip.Text</span>
+                                }
+                            </div>
+                            <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-pen" Tooltip="Edit sheet details"
+                                    OnClick="OpenSettings" />
                         </div>
                     }
 
-                    <div class="it-field it-sm">
-                        <Input TValue="int" Label="Header rows" @bind-Value="s.HeaderRowCount" />
-                    </div>
+                    @if (ignored)
+                    {
+                        <div class="alert alert-light border small">
+                            This sheet is ignored during import, so it doesn't need any columns.
+                        </div>
+                    }
+                    else if (_showSettings && fresh)
+                    {
+                        <div class="it-locked">
+                            <i class="ti ti-lock" aria-hidden="true"></i>
+                            Columns come next. Finish the sheet details to start mapping.
+                        </div>
+                    }
+                    else
+                    {
+                        <HeaderRowInfo ImportType="@Model.ImportType" Columns="s.Columns" OnChanged="Refresh" />
+                    }
                 </div>
-
-                <HeaderRowInfo ImportType="@Model.ImportType"
-                            Columns="s.Columns"
-                            OnChanged="Refresh" />
             }
-        </div>
-    }
-</FormSection>
-<ConfirmModal Show="_confirmRemove"
-              IconClass="fas fa-trash"
-              Title="Remove this sheet?"
-              Subtitle="@ActiveSheetName"
-              Message="Its columns go with it. The template isn't changed until you save."
-              YesLabel="Yes, remove"
-              NoLabel="Keep"
-              OnYes="RemoveActiveSheet"
-              OnNo="CancelRemove" />
+        </FormSection>
+<ConfirmModal Show="_confirmRemove" IconClass="fas fa-trash" Title="Remove this sheet?" Subtitle="@ActiveSheetName"
+              Message="Its columns go with it. The template isn't changed until you save." YesLabel="Yes, remove" NoLabel="Keep"
+              OnYes="RemoveActiveSheet" OnNo="CancelRemove" />
 @code {
     [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
 
-    /// <summary>Whether the template is a global default. Owned by the page.</summary>
-    [Parameter] public bool IsGlobal { get; set; } = true;
-
+    private const string NeedRequired = "Required";
+    private const string NeedOptional = "Optional";
+    private static readonly string[] NeedOptions = { NeedRequired, NeedOptional };
     private int _active;
+
+    // Sheet settings are open for a sheet with nothing mapped yet, and tucked into a one-line summary once it has columns.
+    private bool _showSettings;
+
+    protected override void OnInitialized()
+    {
+        _showSettings = Model.Sheets.Count > 0 && IsFresh(Model.Sheets[Math.Min(_active, Model.Sheets.Count - 1)]);
+    }
 
     protected override void OnParametersSet()
     {
         if (_active >= Model.Sheets.Count) _active = Math.Max(0, Model.Sheets.Count - 1);
     }
 
+    private static bool IsFresh(ImportTemplateSheetEditDto s) =>
+        s.Columns.All(c => string.IsNullOrWhiteSpace(c.HeaderText) && string.IsNullOrWhiteSpace(c.FieldKey));
+
+    private void OpenSettings() => _showSettings = true;
+    private void CloseSettings() => _showSettings = false;
+
+    private sealed record SheetChip(string Icon, string Text, bool Warn = false);
+
+    // Short chips that say what the hidden settings are.
+    private static List<SheetChip> SettingsChips(ImportTemplateSheetEditDto s)
+    {
+        if (s.SheetMatchMode == SheetMatchModes.Ignore)
+            return new() { new("ti-eye-off", "Ignored") };
+
+        var value = s.SheetMatchValue?.Trim() ?? string.Empty;
+        var find = s.SheetMatchMode switch
+        {
+            SheetMatchModes.Exact => value.Length > 0 ? new SheetChip("ti-search", $"Name: {value}") : new SheetChip("ti-search",
+"Name not set yet", true),
+            SheetMatchModes.Contains => value.Length > 0 ? new SheetChip("ti-search", $"Name contains: {value}") : new
+SheetChip("ti-search", "Name text not set yet", true),
+            SheetMatchModes.Position => value.Length > 0 ? new SheetChip("ti-search", $"Position {value}") : new
+SheetChip("ti-search", "Position not set yet", true),
+            SheetMatchModes.Headers => new SheetChip("ti-search", "Found by headers"),
+            _ => new SheetChip("ti-search", "Any sheet")
+        };
+
+        var chips = new List<SheetChip>
+        {
+            find,
+            new("ti-list-numbers", s.HeaderRowMode == HeaderRowModes.Fixed
+                ? $"Header row {s.HeaderRowNumber}"
+                : "Headers: automatic")
+        };
+
+        if (s.HeaderRowCount > 1)
+            chips.Add(new("ti-rows", $"{s.HeaderRowCount} header rows"));
+
+        chips.Add(s.IsRequired ? new("ti-lock", "Required") : new("ti-lock-open", "Optional"));
+        return chips;
+    }
+
     // Grid changes call this so the "still missing" alert above stays current.
     private void Refresh() { }
 
-    // Global templates, and templates that don't fall back to the global default,
-    // have to map every required field (same rule the validator uses).
-    private List<string> Missing
-    {
-        get
-        {
-            if (!(IsGlobal || !Model.AllowGlobalFallback)) return new();
+    // Same per-sheet rule the validator enforces on save: each sheet must cover the required groups on its own.
+    private List<string> Missing =>
+        _active >= 0 && _active < Model.Sheets.Count
+            ? STTproject.Features.Admin.ImportTemplate.Validators.ImportTemplateValidator
+                .MissingRequiredGroups(Model.Sheets[_active], Model.ImportType)
+            : new();
 
-            var mapped = Model.Sheets
-                .Where(s => s.SheetMatchMode != SheetMatchModes.Ignore)
-                .SelectMany(s => s.Columns)
-                .Where(c => !string.IsNullOrWhiteSpace(c.FieldKey))
-                .Select(c => c.FieldKey!);
+    private int SheetGaps(ImportTemplateSheetEditDto s) =>
+        STTproject.Features.Admin.ImportTemplate.Validators.ImportTemplateValidator
+            .MissingRequiredGroups(s, Model.ImportType).Count;
 
-            return ImportFieldRegistry.MissingRequired(Model.ImportType, mapped);
-        }
-    }
+    private int ReadSheetCount => Model.Sheets.Count(x => x.SheetMatchMode != SheetMatchModes.Ignore);
+
+    private int TotalGaps =>
+        STTproject.Features.Admin.ImportTemplate.Validators.ImportTemplateValidator.RequiredGroupErrors(Model).Count;
+
     private string ActiveSheetName =>
     _active >= 0 && _active < Model.Sheets.Count
         ? (string.IsNullOrWhiteSpace(Model.Sheets[_active].SheetLabel)
@@ -170,7 +277,7 @@
         get
         {
             var cols = Model.Sheets.Sum(s => s.Columns.Count);
-            var status = Missing.Count > 0 ? $"{Missing.Count} still to map" : "All required fields mapped";
+            var status = TotalGaps > 0 ? "required fields still to map" : "All required fields mapped";
             return $"{Model.Sheets.Count} sheet{(Model.Sheets.Count == 1 ? "" : "s")} · {cols} columns · {status}";
         }
     }
@@ -179,10 +286,11 @@
         Model.Sheets.Add(new ImportTemplateSheetEditDto
         {
             SheetLabel = $"Sheet {Model.Sheets.Count + 1}",
-            SheetMatchMode = SheetMatchModes.Contains,   // "Any" is only allowed for a single sheet
+            SheetMatchMode = SheetMatchModes.Contains, // "Any" is only allowed for a single sheet
             Columns = { new ImportTemplateColumnEditDto() }
         });
         _active = Model.Sheets.Count - 1;
+        _showSettings = true;
     }
 
     private void RemoveActiveSheet()
@@ -192,6 +300,7 @@
 
         Model.Sheets.RemoveAt(_active);
         _active = Math.Min(_active, Model.Sheets.Count - 1);
+        _showSettings = IsFresh(Model.Sheets[_active]);
     }
 
     private static void MatchModeChanged(ImportTemplateSheetEditDto s, string? value)
@@ -218,6 +327,7 @@
         SheetMatchModes.Exact => "Exact sheet name",
         SheetMatchModes.Contains => "Sheet name contains text",
         SheetMatchModes.Position => "Sheet position",
+        SheetMatchModes.Headers => "Sheet with these headers",
         SheetMatchModes.Ignore => "Ignore this sheet",
         _ => m
     };
@@ -241,6 +351,7 @@
     private static string MatchModeHelp(ImportTemplateSheetEditDto s) => s.SheetMatchMode switch
     {
         SheetMatchModes.Any => "Uses whatever the sheet is called. Only valid when the template has one sheet.",
+        SheetMatchModes.Headers => "Finds the sheet by the column headers below, whatever it's called. Needs at least two different fields.",
         SheetMatchModes.Ignore => "Matches nothing. Use it to skip sheets like Summary.",
         _ => ""
     };
@@ -266,5 +377,6 @@
     {
         _active = idx;
         _confirmRemove = false;
+        _showSettings = IsFresh(Model.Sheets[idx]);
     }
 }

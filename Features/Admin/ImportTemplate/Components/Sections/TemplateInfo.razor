@@ -1,25 +1,29 @@
 <FormSection Icon="ti ti-file-description" Title="Template information" Summary="@Summary">
-    <div class="it-field">
-        <Input TValue="string"
-            Label="Template name"
-            Placeholder="Ex: Sales Invoice - Starwide"
-            AddOptionalText="true"
-            Value="Model.TemplateName"
-            ValueChanged="OnTemplateNameChanged" />
-    </div>
-
+    @* Row 1: name and import type side by side *@
     <div class="row">
         <div class="col-md-6">
             <div class="it-field">
-                <Select Label="Import type"
-                        Items="ImportFieldRegistry.All"
-                        ValueSelector="d => d.Type"
-                        TextSelector="d => d.Display"
-                        SelectedValue="@Model.ImportType"
-                        SelectedValueChanged="ImportTypeChanged"
-                        Disabled="@(!IsNew)" />
+                <Input TValue="string" Label="Template name" Placeholder="Ex: Sales Invoice - Starwide"
+                       AddOptionalText="true" Value="Model.TemplateName" ValueChanged="OnTemplateNameChanged" />
             </div>
+        </div>
+        <div class="col-md-6">
+            <div class="it-field it-locked-wrap">
+                <Select Label="Import type" Items="ImportFieldRegistry.All" ValueSelector="d => d.Type"
+                        TextSelector="d => d.Display" SelectedValue="@Model.ImportType"
+                        SelectedValueChanged="ImportTypeChanged" Disabled="@(!IsNew)" />
+                @if (!IsNew)
+                {
+                    <i class="fa-solid fa-lock it-locked-icon"
+                       title="The import type can't be changed after the template is created"></i>
+                }
+            </div>
+        </div>
+    </div>
 
+    @* Row 2: who it applies to, and options *@
+    <div class="row">
+        <div class="col-md-6">
             <div class="it-field">
                 <label>Applies to</label>
                 <div class="it-seg">
@@ -35,22 +39,14 @@
                 {
                     @if (Scope == ImportScope.Principal)
                     {
-                        <AutoComplete TItem="string"
-                                      Placeholder="Search for a principal…"
-                                      Items="Principals"
-                                      ShowAllOnOpen="true"
-                                      SelectedValue="@Model.Principal"
-                                      SelectedValueChanged="OnPrincipalChanged" />
+                        <AutoComplete TItem="string" Placeholder="Search for a principal…" Items="Principals"
+                                      ShowAllOnOpen="true" SelectedValue="@Model.Principal" SelectedValueChanged="OnPrincipalChanged" />
                     }
                     else
                     {
-                        <AutoComplete TItem="SubDistributorOptionDto"
-                                      Placeholder="Search for a subdistributor…"
-                                      Items="Subds"
-                                      ShowAllOnOpen="true"
-                                      ValueSelector="s => s.SubDistributorId.ToString()"
-                                      TextSelector="s => s.Display"
-                                      SelectedValue="@Model.SubDistributorId?.ToString()"
+                        <AutoComplete TItem="SubDistributorOptionDto" Placeholder="Search for a subdistributor…" Items="Subds"
+                                      ShowAllOnOpen="true" ValueSelector="s => s.SubDistributorId.ToString()"
+                                      TextSelector="s => s.Display" SelectedValue="@Model.SubDistributorId?.ToString()"
                                       SelectedValueChanged="OnSubdChanged" />
                     }
                 }
@@ -67,15 +63,6 @@
         <div class="col-md-6">
             <div class="it-field">
                 <label>Options</label>
-
-                @if (!IsGlobal)
-                {
-                    <label class="it-option">
-                        <span>Also use the global default</span>
-                        <input type="checkbox" @bind="Model.AllowGlobalFallback" @bind:after="NotifyChanged" />
-                    </label>
-                }
-
                 <label class="it-option">
                     <span>Active</span>
                     <input type="checkbox" @bind="Model.IsActive" />
@@ -89,6 +76,39 @@
         </div>
     </div>
 </FormSection>
+
+<style>
+    .it-locked-wrap {
+        position: relative;
+    }
+
+    .it-locked-icon {
+        position: absolute;
+        right: 16px;
+        bottom: 14px;
+        color: #8a8f98;
+        pointer-events: none;
+    }
+
+    .it-active-switch {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding-left: 0;
+        min-height: 2.5rem;
+    }
+
+    .it-active-switch .form-check-input {
+        margin-left: 0;
+        width: 2.75rem;
+        height: 1.5rem;
+        cursor: pointer;
+    }
+
+    .it-active-switch .form-check-label {
+        cursor: pointer;
+    }
+</style>
 
 @code {
     [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;

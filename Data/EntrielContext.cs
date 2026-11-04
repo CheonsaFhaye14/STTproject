@@ -21,21 +21,21 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
+    public virtual DbSet<CustomerMapping> CustomerMappings { get; set; }
+
     public virtual DbSet<DeletedSalesInvoice> DeletedSalesInvoices { get; set; }
 
     public virtual DbSet<DeletedSalesInvoiceItem> DeletedSalesInvoiceItems { get; set; }
 
-    public virtual DbSet<ImportFile> ImportFiles { get; set; }
+    public virtual DbSet<ImportBatch> ImportBatches { get; set; }
 
-    public virtual DbSet<ImportFileColumnMapping> ImportFileColumnMappings { get; set; }
-
-    public virtual DbSet<ImportFileSheet> ImportFileSheets { get; set; }
-
-    public virtual DbSet<ImportRow> ImportRows { get; set; }
+    public virtual DbSet<ImportError> ImportErrors { get; set; }
 
     public virtual DbSet<ImportTemplate> ImportTemplates { get; set; }
 
     public virtual DbSet<ImportTemplateColumn> ImportTemplateColumns { get; set; }
+
+    public virtual DbSet<ImportTemplateColumnAlias> ImportTemplateColumnAliases { get; set; }
 
     public virtual DbSet<ImportTemplateSheet> ImportTemplateSheets { get; set; }
 
@@ -52,6 +52,8 @@ public partial class EntrielContext : DbContext
     public virtual DbSet<SubDistributor> SubDistributors { get; set; }
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
+
+    public virtual DbSet<TestCustomer> TestCustomers { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
 
@@ -176,6 +178,34 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_Customer_UpdatedBy");
         });
 
+        modelBuilder.Entity<CustomerMapping>(entity =>
+        {
+            entity.ToTable("CustomerMapping");
+
+            entity.HasIndex(e => new { e.SubDistributorId, e.SubdCustCode }, "UX_CustomerMapping_Subd_SourceCode").IsUnique();
+
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())", "DF_CustomerMapping_CreatedDate")
+                .HasColumnType("datetime");
+            entity.Property(e => e.SubdCustCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SubdCustName)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.Customer).WithMany(p => p.CustomerMappings)
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CustomerMapping_Customer");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.CustomerMappings)
+                .HasForeignKey(d => d.SubDistributorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CustomerMapping_SubDistributor");
+        });
+
         modelBuilder.Entity<DeletedSalesInvoice>(entity =>
         {
             entity.HasKey(e => e.DeletedSalesInvoiceId).HasName("PK__DeletedS__FAABA1B9C3C943E8");
@@ -210,96 +240,70 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK__DeletedSa__Delet__038683F8");
         });
 
-        modelBuilder.Entity<ImportFile>(entity =>
+        modelBuilder.Entity<ImportBatch>(entity =>
         {
-            entity.HasKey(e => e.ImportFileId).HasName("PK__ImportFi__D9EEC2444B08C390");
+            entity.ToTable("ImportBatch");
 
-            entity.HasIndex(e => e.Sha256, "IX_ImportFiles_Hash");
-
-            entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.UploadedDate }, "IX_ImportFiles_Lookup").IsDescending(false, false, true);
-
-            entity.HasIndex(e => e.Sha256, "IX_ImportFiles_Sha256");
-
-            entity.Property(e => e.ImportType)
-                .HasMaxLength(30)
+            entity.Property(e => e.ImportBatchId).ValueGeneratedNever();
+            entity.Property(e => e.BatchStatus)
+                .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.OriginalFileName).HasMaxLength(260);
-            entity.Property(e => e.Sha256)
-                .HasMaxLength(64)
-                .IsUnicode(false)
-                .IsFixedLength();
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .IsUnicode(false)
-                .HasDefaultValue("Prepared", "DF_ImportFiles_Status");
-            entity.Property(e => e.StoredPath).HasMaxLength(500);
-            entity.Property(e => e.UploadedDate).HasDefaultValueSql("(sysutcdatetime())", "DF_ImportFiles_Uploaded");
+            entity.Property(e => e.FileName).HasMaxLength(255);
+            entity.Property(e => e.ImportType).HasMaxLength(50);
+            entity.Property(e => e.Principal)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.UploadedAt).HasColumnType("datetime");
 
-            entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportFiles)
-                .HasForeignKey(d => d.ImportTemplateId)
-                .HasConstraintName("FK_ImportFiles_Template");
-
-            entity.HasOne(d => d.SubDistributor).WithMany(p => p.ImportFiles)
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.ImportBatches)
                 .HasForeignKey(d => d.SubDistributorId)
-                .HasConstraintName("FK_ImportFiles_SubDistributors");
-        });
+                .HasConstraintName("FK_ImportBatch_SubDistributor");
 
-        modelBuilder.Entity<ImportFileColumnMapping>(entity =>
-        {
-            entity.HasKey(e => new { e.ImportFileSheetId, e.ImportTemplateColumnId }).HasName("PK__ImportFi__BCC745FAB54F8CB4");
-
-            entity.Property(e => e.ActualHeader).HasMaxLength(200);
-
-            entity.HasOne(d => d.ImportFileSheet).WithMany(p => p.ImportFileColumnMappings)
-                .HasForeignKey(d => d.ImportFileSheetId)
-                .HasConstraintName("FK__ImportFil__Impor__68D28DBC");
-
-            entity.HasOne(d => d.ImportTemplateColumn).WithMany(p => p.ImportFileColumnMappings)
-                .HasForeignKey(d => d.ImportTemplateColumnId)
+            entity.HasOne(d => d.UploadedByNavigation).WithMany(p => p.ImportBatches)
+                .HasForeignKey(d => d.UploadedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__ImportFil__Impor__69C6B1F5");
+                .HasConstraintName("FK_ImportBatch_Users");
         });
 
-        modelBuilder.Entity<ImportFileSheet>(entity =>
+        modelBuilder.Entity<ImportError>(entity =>
         {
-            entity.HasKey(e => e.ImportFileSheetId).HasName("PK__ImportFi__33A9B61AE43CC37D");
+            entity.ToTable("ImportError");
 
-            entity.Property(e => e.SheetName).HasMaxLength(100);
-
-            entity.HasOne(d => d.ImportFile).WithMany(p => p.ImportFileSheets)
-                .HasForeignKey(d => d.ImportFileId)
-                .HasConstraintName("FK__ImportFil__Impor__6501FCD8");
-
-            entity.HasOne(d => d.ImportTemplateSheet).WithMany(p => p.ImportFileSheets)
-                .HasForeignKey(d => d.ImportTemplateSheetId)
-                .HasConstraintName("FK__ImportFil__Impor__65F62111");
-        });
-
-        modelBuilder.Entity<ImportRow>(entity =>
-        {
-            entity.HasKey(e => e.ImportRowId).HasName("PK__ImportRo__7A161D66E42E3B43");
-
-            entity.HasIndex(e => new { e.ImportFileSheetId, e.RowNumber }, "IX_ImportRows_Sheet");
-
-            entity.Property(e => e.IsSelected).HasDefaultValue(true);
+            entity.Property(e => e.ImportErrorId).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime");
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+            entity.Property(e => e.ErrorType)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.FieldName)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.ResolutionType)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.ResolvedAt).HasColumnType("datetime");
             entity.Property(e => e.Status)
-                .HasMaxLength(15)
+                .HasMaxLength(50)
                 .IsUnicode(false);
 
-            entity.HasOne(d => d.ImportFileSheet).WithMany(p => p.ImportRows)
-                .HasForeignKey(d => d.ImportFileSheetId)
-                .HasConstraintName("FK__ImportRow__Impor__6CA31EA0");
+            entity.HasOne(d => d.ImportBatch).WithMany(p => p.ImportErrors)
+                .HasForeignKey(d => d.ImportBatchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ImportError_ImportBatch");
+
+            entity.HasOne(d => d.ResolvedByNavigation).WithMany(p => p.ImportErrors)
+                .HasForeignKey(d => d.ResolvedBy)
+                .HasConstraintName("FK_ImportError_Users");
         });
 
         modelBuilder.Entity<ImportTemplate>(entity =>
         {
             entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2C6C1A2EB2");
 
-            entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.Principal }, "UX_ImportTemplates_ActiveScope")
+            entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.Principal, e.TemplateName }, "UX_ImportTemplates_ActiveName")
                 .IsUnique()
                 .HasFilter("([IsActive]=(1))");
 
-            entity.Property(e => e.AllowGlobalFallback).HasDefaultValue(true, "DF_ImportTemplates_Fallback");
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(sysutcdatetime())", "DF_ImportTemplates_Created");
             entity.Property(e => e.ImportType)
                 .HasMaxLength(30)
@@ -320,7 +324,11 @@ public partial class EntrielContext : DbContext
 
             entity.HasIndex(e => new { e.ImportTemplateId, e.SortOrder }, "IX_ImportTemplateColumns_Template");
 
-            entity.HasIndex(e => new { e.ImportTemplateId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
+            entity.HasIndex(e => new { e.ImportTemplateSheetId, e.FieldKey }, "UX_ITC_Sheet_Field")
+                .IsUnique()
+                .HasFilter("([FieldKey] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.ImportTemplateId, e.ImportTemplateSheetId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
 
             entity.Property(e => e.FieldKey)
                 .HasMaxLength(50)
@@ -339,6 +347,19 @@ public partial class EntrielContext : DbContext
                 .HasForeignKey(d => d.ImportTemplateSheetId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ITC_Sheet");
+        });
+
+        modelBuilder.Entity<ImportTemplateColumnAlias>(entity =>
+        {
+            entity.HasKey(e => e.ImportTemplateColumnAliasId).HasName("PK__ImportTe__5AC20B7E06B9E5CC");
+
+            entity.HasIndex(e => new { e.ImportTemplateColumnId, e.AliasText }, "UX_ITCA_Column_Alias").IsUnique();
+
+            entity.Property(e => e.AliasText).HasMaxLength(200);
+
+            entity.HasOne(d => d.ImportTemplateColumn).WithMany(p => p.ImportTemplateColumnAliases)
+                .HasForeignKey(d => d.ImportTemplateColumnId)
+                .HasConstraintName("FK_ITCA_Column");
         });
 
         modelBuilder.Entity<ImportTemplateSheet>(entity =>
@@ -583,6 +604,41 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.SubdItemUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
+        });
+
+        modelBuilder.Entity<TestCustomer>(entity =>
+        {
+            entity.HasKey(e => e.CustomerId).HasName("PK__TestCust__A4AE64D8C69B0AA2");
+
+            entity.ToTable("TestCustomer");
+
+            entity.HasIndex(e => new { e.CustomerCode, e.CustomerName }, "UQ_TestCustomer_Code_Name").IsUnique();
+
+            entity.Property(e => e.AddressLine).HasMaxLength(255);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CustomerCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerName)
+                .HasMaxLength(150)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerType)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Province).HasMaxLength(100);
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.TestCustomerCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("FK_TestCustomer_CreatedBy");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.TestCustomerUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_TestCustomer_UpdatedBy");
         });
 
         modelBuilder.Entity<User>(entity =>
