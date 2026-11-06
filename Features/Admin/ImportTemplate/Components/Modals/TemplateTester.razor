@@ -29,9 +29,17 @@
                     <div class="fw-medium text-truncate">@_fileName</div>
                     <div class="small text-muted">@FileSizeText · first @MaxRows rows of each sheet are checked</div>
                 </div>
-                <Button Variant="ButtonVariant.Secondary" Title="Replace file" OnClick="ReplaceFile" />
-                <Button Variant="ButtonVariant.Secondary" Title="Test again" OnClick="Run" />
+                <Button Variant="ButtonVariant.Secondary" Title="Replace file" Disabled="@_busy" OnClick="ReplaceFile" />
+                <Button Variant="ButtonVariant.Secondary" Title="@(_busy ? "Testing…" : "Test again")" Disabled="@_busy" OnClick="Run" />
             </div>
+        </div>
+    }
+
+    @if (_busy)
+    {
+        <div class="tt-loading mt-3" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>@(_bytes is null ? $"Reading {_fileName}…" : "Testing the template against the file…")</span>
         </div>
     }
 
@@ -424,7 +432,7 @@
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
             _bytes = ms.ToArray();
-            Run();
+            await Run();
         }
         catch (IOException)
         {
@@ -437,14 +445,36 @@
         }
     }
 
-    private void Run()
+    private async Task Run()
     {
         if (_bytes is null) return;
-        _result = Tester.Test(Model, new MemoryStream(_bytes), _fileName ?? "", MaxRows);
-        _cur = PickSheet(_result);
-        _open = _result.Verdict == TestVerdict.Blocked;
-        _showAll = false;
-        _hlRow = 0;
+
+        _error = null;
+        _result = null;
+        _busy = true;
+        StateHasChanged();
+        await Task.Yield();   // let the spinner paint before the heavy work starts
+
+        try
+        {
+            var bytes = _bytes;
+            var name = _fileName ?? "";
+            var result = await Task.Run(() => Tester.Test(Model, new MemoryStream(bytes), name, MaxRows));
+
+            _result = result;
+            _cur = PickSheet(result);
+            _open = result.Verdict == TestVerdict.Blocked;
+            _showAll = false;
+            _hlRow = 0;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't test this file: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private void ReplaceFile()
@@ -484,9 +514,10 @@
 
         _checking = true;
         StateHasChanged();
+        await Task.Yield();
         try
         {
-            using var ms = TrimToPreview();
+            using var ms = await Task.Run(TrimToPreview);
             _importResult = await Importer.PrepareFromExcelAsync(
                 ms, SubdForCheck, UserContext.UserId ?? 0, Model, int.MaxValue);
         }
@@ -508,20 +539,28 @@
     // (80,000 rows, say) still previews quickly and every sheet gets the same share.
     private MemoryStream TrimToPreview()
     {
-        using var wb = new XLWorkbook(new MemoryStream(_bytes!));
-        foreach (var t in _result?.Sheets ?? new List<TemplateTestSheet>())
-        {
-            if (t.Status == TestSheetStatus.NotFound || t.ExcelSheetName is null) continue;
-            if (!wb.Worksheets.TryGetWorksheet(t.ExcelSheetName, out var ws)) continue;
+        using var src = new XLWorkbook(new MemoryStream(_bytes!));
+        using var dst = new XLWorkbook();
 
-            var headerRows = Model.Sheets.FirstOrDefault(m => m.SheetLabel == t.Label)?.HeaderRowCount ?? 1;
-            var keepUntil = (t.HeaderRow ?? 1) + Math.Max(1, headerRows) - 1 + MaxRows;
-            var last = ws.LastRowUsed()?.RowNumber() ?? 0;
-            if (last > keepUntil) ws.Rows(keepUntil + 1, last).Delete();
+        foreach (var ws in src.Worksheets)
+        {
+            var copy = dst.Worksheets.Add(ws.Name);
+            copy.Visibility = ws.Visibility;
+
+            var t = _result?.Sheets.FirstOrDefault(x => x.ExcelSheetName == ws.Name);
+            var headerRows = Model.Sheets.FirstOrDefault(m => m.SheetLabel == t?.Label)?.HeaderRowCount ?? 1;
+            var keepUntil = t?.HeaderRow is int h
+                ? h + Math.Max(1, headerRows) - 1 + MaxRows
+                : 20 + MaxRows;   // unmatched sheets: just enough to keep matching stable
+
+            var lastRow = Math.Min(ws.LastRowUsed()?.RowNumber() ?? 0, keepUntil);
+            var lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            if (lastRow > 0 && lastCol > 0)
+                ws.Range(1, 1, lastRow, lastCol).CopyTo(copy.Cell(1, 1));
         }
 
         var ms = new MemoryStream();
-        wb.SaveAs(ms);
+        dst.SaveAs(ms);
         ms.Position = 0;
         return ms;
     }

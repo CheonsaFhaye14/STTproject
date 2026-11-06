@@ -1,0 +1,405 @@
+@page "/admin/import-errors/files/{ImportBatchId:int}"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IImportBatchDetailsService BatchData
+@inject IImportErrorDetailsService ErrorDetailsData
+
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+
+<LoadingOverlay Show="isLoading" Title="Loading file…" Subtitle="Please wait while we fetch the details."
+                IconClass="fa-solid fa-exclamation-triangle" />
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page ibd-page">
+
+        @if (batch is null)
+        {
+            <nav class="ibd-crumb" aria-label="Breadcrumb">
+                <button type="button" class="ibd-link" @onclick="Back">← Back to Import Errors</button>
+            </nav>
+            <div class="ibd-card ibd-empty">
+                <h1 class="clt-page-title">File not found</h1>
+                <p class="clt-page-sub">It may have been removed, or the link is wrong.</p>
+                <Button Title="← Back to Import Errors" Variant="ButtonVariant.Secondary" OnClick="Back" />
+            </div>
+        }
+        else
+        {
+            var baseErrors = BaseErrors;
+            var visible = VisibleErrors(baseErrors);
+
+            <nav class="ibd-crumb" aria-label="Breadcrumb">
+                <button type="button" class="ibd-link" @onclick="Back">← Back to Import Errors</button>
+            </nav>
+
+            <div class="ibd-head">
+                <div>
+                    <h1 class="clt-page-title">@batch.FileName</h1>
+                    <div class="ibd-meta">
+                        <span class="ibd-pill ibd-pill-batch">@batch.BatchStatus</span>
+                        <span>@MetaLine()</span>
+                    </div>
+                </div>
+                <div class="ibd-actions">
+                    <Button Title="Download original file" Variant="ButtonVariant.Secondary" OnClick="DownloadAsync"
+                            Disabled="busy" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="ibd-note ibd-note-@(messageIsError ? "warn" : "gold")" role="status">@message</div>
+            }
+
+            @* ---------- file information ---------- *@
+            <section class="ibd-card ibd-strip" aria-label="File information">
+                <div><span>Subdistributor</span><b>@(batch.SubDistributorName ?? "—")</b></div>
+                <div><span>Uploaded</span><b>@Date(batch.UploadedAtPht)</b></div>
+                <div><span>Uploaded by</span><b>@(batch.UploadedByName ?? "—")</b></div>
+                <div><span>Import type</span><b>@(string.IsNullOrWhiteSpace(batch.ImportType) ? "—" : batch.ImportType)</b>
+                </div>
+                <div><span>Occurrences</span><b>@batch.Occurrences</b></div>
+            </section>
+
+            <div class="clt-layout">
+
+                @* ---------- sidebar: counts + filters ---------- *@
+                <aside class="clt-sidebar">
+                    <div class="clt-sidebar-stats">
+                        <div class="clt-stat">
+                            <span class="clt-stat-label">Total</span>
+                            <span class="clt-stat-value">@baseErrors.Count</span>
+                        </div>
+                        <div class="clt-stat">
+                            <span class="clt-stat-label">Pending</span>
+                            <span class="clt-stat-value clt-stat-active">@CountOf(baseErrors,
+                                                                                                                            ImportErrorPresentation.Pending)</span>
+                            </div>
+                            <div class="clt-stat">
+                                <span class="clt-stat-label">Ignored</span>
+                                <span class="clt-stat-value clt-stat-inactive">@CountOf(baseErrors,
+                                                                                                                                        ImportErrorPresentation.Ignored)</span>
+                                </div>
+                                <div class="clt-stat">
+                                    <span class="clt-stat-label">Resolved</span>
+                                    <span class="clt-stat-value clt-stat-inactive">@CountOf(baseErrors,
+                                                                                                                                                    ImportErrorPresentation.Resolved)</span>
+                                    </div>
+                                </div>
+                                <div class="clt-divider"></div>
+
+                                @* Search *@
+                                <div class="clt-filter-group">
+                                    <Input TValue="string" Label="Search" Placeholder="Value or problem…" Value="@searchTerm"
+                                           ValueChanged="OnSearchChanged" />
+                                </div>
+
+                                @* Status *@
+                                <div class="clt-filter-group">
+                                    <label class="clt-filter-label">Status</label>
+                                    <div class="clt-radio-group">
+                                        @foreach (var o in StatusOptions)
+                                        {
+                                            var value = o.Value;
+                                            <label class="clt-radio-option @(selectedStatus == value ? "selected" : "")">
+                                                <input type="radio" name="batch-status" value="@value"
+                                                       @onchange="() => OnStatusChanged(value)" checked="@(selectedStatus == value)" />
+                                                <span>@o.Text</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* Problem *@
+                                <div class="clt-filter-group">
+                                    <AutoComplete @key="@($"type-{filterResetKey}")" Label="Problem" Placeholder="All problems"
+                                                  TItem="FilterOption" Items="ProblemOptions" ValueSelector="x => x.Value"
+                                                  TextSelector="x => x.Text" SelectedValue="@selectedType"
+                                                  SelectedValueChanged="OnTypeSelected" />
+                                </div>
+
+                                @if (HasActiveFilters)
+                                {
+                                    <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+                                }
+                            </aside>
+
+                            @* ---------- errors found in this file ---------- *@
+                            <main class="clt-main">
+                                <div class="clt-table-card">
+                                    <div class="clt-table-scroll ibd-table-scroll">
+                                        <table class="clt-table">
+                                            <thead>
+                                                <tr>
+                                                    <th @onclick='() => SortBy("Problem")' style="cursor:pointer">Problem
+                                                        @SortIndicator("Problem")</th>
+                                                        <th @onclick='() => SortBy("Value")' style="cursor:pointer">Value
+                                                            @SortIndicator("Value")</th>
+                                                            <th @onclick='() => SortBy("Occurrences")' style="cursor:pointer">In this file
+                                                                @SortIndicator("Occurrences")</th>
+                                                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status
+                                                                    @SortIndicator("Status")</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @if (visible.Count == 0)
+                                                                {
+                                                                    <tr>
+                                                                        <td colspan="5" class="clt-empty">
+                                                                            <div class="clt-empty-inner">
+                                                                                <p>@EmptyText()</p>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                                else
+                                                                {
+                                                                    @foreach (var e in visible)
+                                                                    {
+                                                                        var errorId = e.ImportErrorId;
+                                                                        <tr class="ibd-row" @onclick="() => OpenError(errorId)">
+                                                                            <td><span class="ibd-problem">@ImportErrorPresentation.Title(e.ErrorType)</span>
+                                                                            </td>
+                                                                            <td class="ibd-value" title="@e.Value">@e.Value</td>
+                                                                            <td>@e.Occurrences</td>
+                                                                            <td>
+                                                                                <span
+                                                                                class="ibd-pill @StatusClass(e.Status)">@ImportErrorPresentation.StatusText(e.Status)</span>
+                                                                            </td>
+                                                                            <td @onclick:stopPropagation="true">
+                                                                                <div class="clt-actions">
+                                                                                    @if (ImportErrorPresentation.IsPending(e.Status) &&
+                                                                        ImportErrorPresentation.CanFix(e.ErrorType))
+                                                                                    {
+                                                                                        <Button Title="Fix" Variant="ButtonVariant.Primary"
+                                                                                                OnClick="() => OpenError(errorId)" />
+                                                                                    }
+                                                                                    <Button Title="Details" Variant="ButtonVariant.Secondary"
+                                                                                            OnClick="() => OpenError(errorId)" />
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    }
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
+                                                <div class="clt-footer">
+                                                    <span class="clt-footer-count">@FooterText(visible.Count)</span>
+                                                </div>
+                                            </main>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+@code {
+    [Parameter] public int ImportBatchId { get; set; }
+
+    private record FilterOption(string Value, string Text);
+
+    private ImportBatchDetailsDto? batch;
+    private bool isLoading = true;
+    private bool busy;
+    private int loadedId = -1;
+
+    private string? message;
+    private bool messageIsError;
+
+    // list filters and sort (client side: the whole error list of one file is already loaded)
+    private string searchTerm = "";
+    private string selectedStatus = "";
+    private string selectedType = "";
+    private int filterResetKey;
+    private string sortColumn = ""; // empty = the order the service returned (pending first, most occurrences first)
+    private bool sortAscending;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(searchTerm) || !string.IsNullOrEmpty(selectedStatus) || !string.IsNullOrEmpty(selectedType);
+
+    private static readonly List<FilterOption> StatusOptions = new()
+    {
+        new("", "All"),
+        new(ImportErrorPresentation.Pending, "Pending"),
+        new(ImportErrorPresentation.Ignored, "Ignored"),
+        new(ImportErrorPresentation.Resolved, "Resolved"),
+    };
+
+    private List<FilterOption> ProblemOptions =>
+        batch is null
+            ? new List<FilterOption>()
+            : batch.Errors
+                .Select(e => e.ErrorType)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(t => new FilterOption(t, ImportErrorPresentation.Title(t)))
+                .OrderBy(o => o.Text)
+                .ToList();
+
+    private List<ImportBatchErrorDto> BaseErrors
+    {
+        get
+        {
+            if (batch is null) return new List<ImportBatchErrorDto>();
+
+            var q = batch.Errors.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(selectedType))
+                q = q.Where(e => string.Equals(e.ErrorType, selectedType, StringComparison.OrdinalIgnoreCase));
+
+            var s = searchTerm.Trim();
+            if (s.Length > 0)
+                q = q.Where(e => Contains(e.Value, s)
+                              || Contains(ImportErrorPresentation.Title(e.ErrorType), s)
+                              || Contains(e.ErrorType, s)
+                              || Contains(ImportErrorPresentation.FieldLabel(e.FieldName), s));
+
+            return q.ToList();
+        }
+    }
+
+    private List<ImportBatchErrorDto> VisibleErrors(List<ImportBatchErrorDto> baseErrors)
+    {
+        var q = baseErrors.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedStatus))
+            q = q.Where(e => ImportErrorPresentation.StatusKey(e.Status) == selectedStatus);
+
+        if (sortColumn.Length > 0)
+        {
+            Func<ImportBatchErrorDto, object> key = sortColumn switch
+            {
+                "Problem" => e => ImportErrorPresentation.Title(e.ErrorType),
+                "Value" => e => e.Value,
+                "Status" => e => e.Status,
+                _ => e => e.Occurrences
+            };
+            q = sortAscending ? q.OrderBy(key) : q.OrderByDescending(key);
+            q = ((IOrderedEnumerable<ImportBatchErrorDto>)q).ThenBy(e => e.ImportErrorId);
+        }
+
+        return q.ToList();
+    }
+
+    private static int CountOf(List<ImportBatchErrorDto> errors, string statusKey) =>
+        errors.Count(e => ImportErrorPresentation.StatusKey(e.Status) == statusKey);
+
+    private static bool Contains(string? text, string term) =>
+        text != null && text.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedId == ImportBatchId) return;
+        loadedId = ImportBatchId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            batch = await BatchData.GetAsync(ImportBatchId);
+            ResetFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import batch {ImportBatchId}: {ex.Message}");
+            batch = null;
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnSearchChanged(string? value) => searchTerm = value ?? string.Empty;
+    private void OnStatusChanged(string value) => selectedStatus = value;
+    private void OnTypeSelected(string? value) => selectedType = value ?? string.Empty;
+
+    private void ResetFilters()
+    {
+        searchTerm = "";
+        selectedStatus = "";
+        selectedType = "";
+        sortColumn = "";
+        sortAscending = false;
+    }
+
+    private void ClearFilters()
+    {
+        ResetFilters();
+        filterResetKey++; // re-creates the AutoComplete so it drops its selection
+    }
+
+    private void SortBy(string column)
+    {
+        if (sortColumn == column)
+            sortAscending = !sortAscending;
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (sortColumn != column) return string.Empty;
+        return sortAscending ? " ▲" : " ▼";
+    }
+
+    private void Back() => Nav.NavigateTo("/admin/import-errors");
+    private void OpenError(int importErrorId) => Nav.NavigateTo($"/admin/import-errors/{importErrorId}");
+
+    private async Task DownloadAsync()
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            var file = await ErrorDetailsData.GetOriginalFileAsync(ImportBatchId);
+            if (file is null)
+            {
+                messageIsError = true;
+                message = $"The original file for batch #{ImportBatchId} was not found. It may never have been saved, or it was cleaned up.";
+                return;
+            }
+            await JS.InvokeVoidAsync("downloadFileFromBytes", file.FileName, file.ContentType, Convert.ToBase64String(file.Bytes));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            messageIsError = true;
+            message = "The file could not be downloaded.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    // Text is built here (not inline in the markup) so the Razor parser never has to read quotes, colons or interpolations.
+    private static string Date(DateTime d) => d.ToString("MMM d, yyyy");
+
+    private string EmptyText() =>
+        batch is { Errors.Count: 0 } ? "No errors were recorded for this file" : "No records match your filters";
+
+    private string FooterText(int shown) =>
+        "Showing " + shown + " of " + (batch?.UniqueErrors ?? 0) + (batch?.UniqueErrors == 1 ? " error" : " errors");
+
+    private string MetaLine() =>
+        batch is null ? string.Empty : "Batch #" + batch.ImportBatchId + " · " + Date(batch.UploadedAtPht);
+
+    private static string StatusClass(string? status) => ImportErrorPresentation.StatusKey(status) switch
+    {
+        ImportErrorPresentation.Ignored => "ibd-pill-ignored",
+        ImportErrorPresentation.Resolved => "ibd-pill-resolved",
+        _ => "ibd-pill-pending"
+    };
+}

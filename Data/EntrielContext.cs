@@ -31,6 +31,8 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ImportError> ImportErrors { get; set; }
 
+    public virtual DbSet<ImportErrorBatch> ImportErrorBatches { get; set; }
+
     public virtual DbSet<ImportTemplate> ImportTemplates { get; set; }
 
     public virtual DbSet<ImportTemplateColumn> ImportTemplateColumns { get; set; }
@@ -269,6 +271,14 @@ public partial class EntrielContext : DbContext
         {
             entity.ToTable("ImportError");
 
+            entity.HasIndex(e => new { e.Fingerprint, e.Status }, "IX_ImportError_Fingerprint_Status").HasFilter("([Fingerprint] IS NOT NULL)");
+
+            entity.HasIndex(e => e.PreviousImportErrorId, "IX_ImportError_PreviousImportErrorId").HasFilter("([PreviousImportErrorId] IS NOT NULL)");
+
+            entity.HasIndex(e => e.Fingerprint, "UX_ImportError_Fingerprint_Open")
+                .IsUnique()
+                .HasFilter("([Fingerprint] IS NOT NULL AND [Status]<>'Resolved')");
+
             entity.Property(e => e.ImportErrorId).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
@@ -278,6 +288,10 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.FieldName)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+            entity.Property(e => e.Fingerprint)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.ResolutionType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -291,9 +305,36 @@ public partial class EntrielContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ImportError_ImportBatch");
 
+            entity.HasOne(d => d.PreviousImportError).WithMany(p => p.InversePreviousImportError)
+                .HasForeignKey(d => d.PreviousImportErrorId)
+                .HasConstraintName("FK_ImportError_PreviousImportError");
+
             entity.HasOne(d => d.ResolvedByNavigation).WithMany(p => p.ImportErrors)
                 .HasForeignKey(d => d.ResolvedBy)
                 .HasConstraintName("FK_ImportError_Users");
+        });
+
+        modelBuilder.Entity<ImportErrorBatch>(entity =>
+        {
+            entity.ToTable("ImportErrorBatch");
+
+            entity.HasIndex(e => e.ImportBatchId, "IX_ImportErrorBatch_ImportBatchId");
+
+            entity.HasIndex(e => new { e.ImportErrorId, e.ImportBatchId }, "UQ_ImportErrorBatch_Error_Batch").IsUnique();
+
+            entity.Property(e => e.FirstSeenAt).HasColumnType("datetime");
+            entity.Property(e => e.LastSeenAt).HasColumnType("datetime");
+            entity.Property(e => e.Occurrences).HasDefaultValue(1, "DF_ImportErrorBatch_Occurrences");
+
+            entity.HasOne(d => d.ImportBatch).WithMany(p => p.ImportErrorBatches)
+                .HasForeignKey(d => d.ImportBatchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ImportErrorBatch_ImportBatch");
+
+            entity.HasOne(d => d.ImportError).WithMany(p => p.ImportErrorBatches)
+                .HasForeignKey(d => d.ImportErrorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ImportErrorBatch_ImportError");
         });
 
         modelBuilder.Entity<ImportTemplate>(entity =>
@@ -323,10 +364,6 @@ public partial class EntrielContext : DbContext
             entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E090006E83F");
 
             entity.HasIndex(e => new { e.ImportTemplateId, e.SortOrder }, "IX_ImportTemplateColumns_Template");
-
-            entity.HasIndex(e => new { e.ImportTemplateSheetId, e.FieldKey }, "UX_ITC_Sheet_Field")
-                .IsUnique()
-                .HasFilter("([FieldKey] IS NOT NULL)");
 
             entity.HasIndex(e => new { e.ImportTemplateId, e.ImportTemplateSheetId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
 
@@ -662,6 +699,8 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
             entity.Property(e => e.Username).HasMaxLength(50);
         });
+        modelBuilder.HasSequence<int>("ImportBatchIdSequence");
+        modelBuilder.HasSequence<int>("ImportErrorIdSequence");
 
         OnModelCreatingPartial(modelBuilder);
     }

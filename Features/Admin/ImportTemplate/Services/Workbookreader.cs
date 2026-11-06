@@ -102,6 +102,15 @@ public sealed class WorkbookReadPlan
 
     public List<string> Warnings { get; } = new();
 
+    /// <summary>The same reasons as <see cref="Errors"/>, with a code and context. Always the same length and order.</summary>
+    public List<PlanError> ErrorDetails { get; } = new();
+
+    internal void AddError(PlanErrorKind kind, string message, int? sheetIndex = null, string? sheetName = null, object? detail = null)
+    {
+        Errors.Add(message);
+        ErrorDetails.Add(new PlanError(kind, message, sheetIndex, sheetName, detail));
+    }
+
     /// <summary>
     /// The same sheet-level shortfalls the <see cref="Errors"/> text describes, as data, for the results UI.
     /// Presentation only: <see cref="Errors"/> still carries every message.
@@ -153,11 +162,15 @@ public static class WorkbookReader
         plan.Warnings.AddRange(resolved.Warnings);
 
         plan.Errors.AddRange(resolved.Errors);
+        plan.ErrorDetails.AddRange(resolved.Match.ErrorDetails);
         foreach (var sheet in resolved.ProblemSheets.OrderBy(s => s.Inspection.SheetIndex))
+        {
             plan.Errors.AddRange(sheet.ProblemMessages);
+            plan.ErrorDetails.AddRange(sheet.ProblemErrors);
+        }
 
         if (plan.Errors.Count == 0 && resolved.Sheets.Count == 0)
-            plan.Errors.Add(NoReadableSheetMessage);
+            plan.AddError(PlanErrorKind.NoReadableSheet, NoReadableSheetMessage);
         if (plan.Errors.Count > 0) return plan;
 
         var def = ImportFieldRegistry.Get(importType);
@@ -166,9 +179,11 @@ public static class WorkbookReader
         var missing = ImportFieldRegistry.MissingRequired(importType, pooled);
         if (missing.Count > 0)
         {
-            plan.Errors.Add(def is null
-                ? MissingColumnsMessage(missing)
-                : DescribeWorkbookShortfall(def, readable, pooled, missing));
+            plan.AddError(PlanErrorKind.MissingRequiredHeaders,
+                def is null
+                    ? MissingColumnsMessage(missing)
+                    : DescribeWorkbookShortfall(def, readable, pooled, missing),
+                detail: new { Scope = "Workbook", SheetsRead = readable.Select(s => s.Inspection.Name).ToList(), Missing = missing });
             return plan;
         }
 
@@ -181,9 +196,14 @@ public static class WorkbookReader
             var message = def is null
                 ? $"Sheet \"{sheet.Inspection.Name}\" doesn't hold every required column on its own ({string.Join(" ", own)})."
                 : DescribeSheetShortfall(def, sheet, readable, own);
-            plan.Errors.Add(message);
-            if (def is not null)
-                plan.SheetShortfalls.Add(BuildSheetShortfall(def, sheet, readable, own, message));
+            var shortfall = def is null ? null : BuildSheetShortfall(def, sheet, readable, own, message);
+            object detail = shortfall is null
+                ? (object)new { Scope = "Sheet", Missing = own }
+                : new { Scope = "Sheet", shortfall.HeaderRow, shortfall.MissingFields };
+            plan.AddError(PlanErrorKind.MissingRequiredHeaders, message,
+                sheet.Inspection.SheetIndex, sheet.Inspection.Name, detail);
+            if (shortfall is not null)
+                plan.SheetShortfalls.Add(shortfall);
         }
         if (plan.Errors.Count > 0) return plan;
 

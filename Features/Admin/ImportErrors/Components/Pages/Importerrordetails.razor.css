@@ -1,0 +1,112 @@
+/* Import Error details page. Same warm palette as ImportErrors.razor.css and ExportModal.razor.css.
+   Page layout classes (clt-page, clt-page-header, ...) come from Table.css. */
+
+.ied-page { display: flex; flex-direction: column; gap: 12px; }
+
+.ied-crumb { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: #6F665E; }
+.ied-link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: #6F5326; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ied-link:focus-visible { outline: 2px solid #B08D57; outline-offset: 2px; }
+
+.ied-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 13px; color: #6F665E; }
+.ied-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; }
+.ied-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-left: auto; }
+
+.ied-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ied-pill::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; }
+.ied-pill-pending  { background: #F1E6D3; color: #6F5326; }
+.ied-pill-ignored  { background: #EAE7E3; color: #4F4943; }
+.ied-pill-resolved { background: #E0EEDF; color: #2B5530; }
+
+.ied-card { background: #fff; border: 1px solid #E6DFD6; border-radius: 12px; }
+.ied-empty { padding: 28px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+
+/* notes */
+.ied-note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.ied-note b { font-size: 14px; }
+.ied-note-ok   { background: #EEF5ED; border: 1px solid #CFE3CD; color: #2B4A30; }
+.ied-note-warn { background: #FBEDEA; border: 1px solid #E8C6BE; color: #8A3B2E; }
+.ied-note-gray { background: #F1EEEA; border: 1px solid #E1DCD5; color: #4F4943; }
+.ied-note-gold { background: #FAF3E6; border: 1px solid #E9D9B9; color: #5A4420; }
+
+/* summary strip */
+.ied-strip { display: flex; flex-wrap: wrap; }
+.ied-strip > div { flex: 1; min-width: 130px; padding: 8px 14px; border-left: 1px solid #EFE9E2; }
+.ied-strip > div:first-child { border-left: 0; }
+.ied-strip span { display: block; margin-bottom: 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #6F665E; }
+.ied-strip b { font-size: 14px; font-weight: 600; color: #2A2622; }
+.ied-mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+/* sections */
+.ied-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.ied-sec { padding: 10px 14px; min-width: 0; display: flex; flex-direction: column; }
+.ied-two .ied-sec { height: 250px; }
+.ied-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 4px; }
+.ied-scroll.ied-body { flex: 0 1 auto; max-height: 300px; }
+.ied-sec h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6F665E; }
+.ied-sh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.ied-sh h3 { margin: 0; }
+.ied-sub { font-size: 12px; color: #6F665E; }
+
+.ied-val { padding: 6px 10px; border-left: 3px solid #B08D57; border-radius: 0 8px 8px 0; background: #F8EEE8; font-size: 13px; font-weight: 600; word-break: break-word; }
+.ied-val small { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: #6F665E; }
+.ied-what { margin: 8px 0 6px; font-size: 13px; line-height: 1.45; color: #2A2622; }
+.ied-q { margin: 0 0 6px; }
+.ied-q:last-child { margin: 0; }
+.ied-q h4 { margin: 0 0 2px; font-size: 12px; color: #2A2622; }
+.ied-q p { margin: 0; font-size: 13px; line-height: 1.4; color: #4F4943; }
+
+/* import history */
+.ied-tl { list-style: none; margin: 0; padding: 0; }
+.ied-tl li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid #EFE9E2; font-size: 13px; }
+.ied-tl li:first-child { border-top: 0; }
+.ied-tl li > span:nth-child(2) b { font-size: 13px; color: #2A2622; }
+.ied-tl .ied-sub { display: block; margin-top: 2px; }
+.ied-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ied-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: #B08D57; }
+.ied-ac { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.ied-chip { display: inline-block; margin-left: 6px; padding: 2px 9px; border-radius: 14px; background: #F1E6D3; font-size: 12px; color: #6F5326; }
+
+/* affected rows */
+.ied-scroll { overflow: auto; }
+.ied-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ied-table th { position: sticky; top: 0; z-index: 1; background: #fff; padding: 0 10px 8px 0; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: #6F665E; }
+.ied-table td { max-width: 260px; padding: 5px 10px 5px 0; border-top: 1px solid #EFE9E2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ied-row { cursor: pointer; }
+.ied-row:hover td { background: #FDFBF7; }
+.ied-x { width: 24px; color: #6F5326; text-align: center; }
+.ied-xr > td { max-width: none; padding: 0 0 12px; background: transparent; white-space: normal; }
+.ied-xhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin: 4px 0 6px; padding: 8px 12px; border-left: 3px solid #B08D57; border-radius: 0 8px 8px 0; background: #F8EEE8; }
+.ied-xtitle { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-width: 0; }
+.ied-xtitle b { font-size: 13px; color: #2A2622; }
+.ied-xtitle span { font-size: 12px; color: #6F665E; word-break: break-all; }
+.ied-xopt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #6F5326; cursor: pointer; white-space: nowrap; }
+.ied-xopt input { accent-color: #B08D57; }
+.ied-xsum { margin: 0 0 6px; font-size: 12px; color: #6F665E; }
+
+/* One line per Excel column: name on the left, value on the right. Reads well with many columns. */
+.ied-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0 28px; margin: 0; padding: 0 4px; }
+.ied-kvrow { display: grid; grid-template-columns: minmax(90px, 38%) minmax(0, 1fr); align-items: baseline; gap: 10px; padding: 5px 6px; border-bottom: 1px solid #EFE9E2; }
+.ied-kvrow dt { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #6F665E; overflow-wrap: anywhere; }
+.ied-kvrow dd { margin: 0; font-size: 13px; font-weight: 600; color: #2A2622; overflow-wrap: anywhere; }
+.ied-kvrow-empty dd { font-weight: 400; color: #A8A099; }
+.ied-kvrow-p { border-radius: 6px; border-bottom-color: transparent; background: #FAF3E6; box-shadow: inset 3px 0 0 #B08D57; }
+.ied-kvrow-p dt { color: #6F5326; }
+.ied-pv { display: inline-block; max-width: 100%; padding: 2px 10px; border-radius: 12px; background: #F1E6D3; font-weight: 600; color: #6F5326; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.ied-more { margin: 10px 0 0; }
+
+/* modals */
+.ied-ctx { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding: 12px 14px; border-radius: 8px; background: #F8EEE8; text-align: left; }
+.ied-ctx b { font-size: 13px; color: #2A2622; }
+.ied-ctx span { font-size: 12px; color: #6F665E; word-break: break-word; }
+.ied-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6F665E; }
+.ied-field select { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; border: 1px solid #D9D2CA; border-radius: 8px; background: #fff; font: inherit; font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: #2A2622; }
+.ied-field select:focus { outline: 2px solid #B08D57; outline-offset: 1px; }
+.ied-check { display: flex; align-items: flex-start; gap: 10px; text-align: left; font-size: 13px; line-height: 1.45; cursor: pointer; }
+.ied-check input { margin-top: 2px; accent-color: #B08D57; }
+.ied-err { margin-top: 8px; text-align: left; font-size: 12px; color: #8A3B2E; }
+
+@media (max-width: 1000px) { .ied-two { grid-template-columns: minmax(0, 1fr); } .ied-two .ied-sec { height: 250px; } }
+
+/* compact buttons inside the history list (Button is a child component, so ::deep) */
+.ied-ac ::deep button { padding: 4px 10px; min-height: 0; font-size: 12px; }
+.ied-pv { padding: 1px 8px; font-size: 12px; }

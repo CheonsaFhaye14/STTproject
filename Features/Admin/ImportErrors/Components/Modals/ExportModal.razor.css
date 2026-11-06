@@ -1,0 +1,232 @@
+/* Export modal. Same warm palette as ImportErrors.razor.css.
+   Two columns when both a report and files are exported; every block lines up row by row. */
+
+.ex-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(980px, 86vw);
+    text-align: left;
+}
+
+.ex-section { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ex-section:disabled { opacity: .6; cursor: progress; }
+
+.ex-section legend {
+    padding: 0;
+    margin: 0 0 7px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #6F665E;
+}
+
+/* ---------- layout ---------- */
+
+.ex-cols { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr); }
+.ex-cols-2 { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+.ex-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ex-push { margin-top: auto; }
+.ex-fill { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; }
+
+/* ---------- option cards ---------- */
+
+.ex-choices { display: flex; flex-direction: column; gap: 8px; }
+.ex-choices-row { flex-direction: row; }
+
+.ex-choice {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    min-width: 0;
+    min-height: 50px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    border: 1px solid #E3DCD3;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.ex-choice:hover { border-color: #B08D57; }
+.ex-choice.on { border-color: #B08D57; background: #FDFBF7; box-shadow: 0 0 0 1px #B08D57 inset; }
+.ex-choice:focus-within { outline: 2px solid #B08D57; outline-offset: 2px; }
+
+/* The radio stays in the DOM for keyboard and screen readers; the card shows the state. */
+.ex-choice input { position: absolute; opacity: 0; pointer-events: none; }
+
+.ex-choice-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ex-choice-title { font-size: 13px; font-weight: 700; color: #2A2622; }
+.ex-choice-desc { font-size: 12px; color: #6F665E; }
+
+/* ---------- filter panels (same size on both sides) ---------- */
+
+.ex-panel {
+    box-sizing: border-box;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #EFE9E2;
+    border-radius: 10px;
+    background: #FDFBF7;
+}
+
+.ex-panel-grid {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ex-span2 { grid-column: span 2; }
+.ex-span3 { grid-column: span 3; }
+
+.ex-panel-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 58px;
+    gap: 4px;
+    font-size: 13px;
+    color: #6F665E;
+}
+
+.ex-panel-info strong { color: #2A2622; }
+.ex-panel-over { background: #F6E3E0; border-color: #E8C5BF; color: #7A2E25; }
+.ex-panel-over strong { color: #7A2E25; }
+
+.ex-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 11px; font-weight: 600; color: #6F665E; }
+.ex-field input, .ex-field select {
+    box-sizing: border-box;
+    width: 100%;
+    height: 32px;
+    min-width: 0;
+    padding: 0 8px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    color: #2A2622;
+    border: 1px solid #E3DCD3;
+    border-radius: 8px;
+    background: #fff;
+}
+.ex-field input:focus, .ex-field select:focus { outline: 2px solid #B08D57; outline-offset: 1px; }
+
+/* ---------- collapsed filter summary ---------- */
+
+.ex-filter-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid #EFE9E2;
+    border-radius: 10px;
+    background: #FDFBF7;
+    font-size: 12.5px;
+    color: #6F665E;
+}
+.ex-filter-text { min-width: 0; }
+.ex-filter-text strong { color: #2A2622; }
+
+/* Customize / Hide filters: a real button so it is easy to spot */
+.ex-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid #B08D57;
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #6F5326;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.ex-filter-btn i { font-size: 12px; }
+.ex-filter-btn i:last-child { font-size: 10px; }
+.ex-filter-btn:hover, .ex-filter-btn.open { background: #F1E6D3; }
+.ex-filter-btn:focus-visible { outline: 2px solid #B08D57; outline-offset: 2px; }
+.ex-filter-badge {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #B08D57;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    color: #fff;
+}
+.ex-filter-summary + .ex-panel { margin-top: 6px; }
+
+/* ---------- include-in-report chips ---------- */
+
+.ex-chips { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ex-cols:not(.ex-cols-2) .ex-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.ex-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 7px 10px;
+    border: 1px solid #EFE9E2;
+    border-radius: 10px;
+    background: #FDFBF7;
+    font-size: 13px;
+    color: #2A2622;
+    cursor: pointer;
+}
+.ex-check input { margin: 3px 0 0; accent-color: #B08D57; }
+.ex-check-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ex-check-text small { font-size: 11.5px; color: #6F665E; }
+.ex-check-text em { font-style: normal; font-size: 12px; color: #6F5326; }
+
+/* ---------- original-file picker ---------- */
+
+.ex-toolbar { display: flex; align-items: center; gap: 14px; font-size: 12.5px; }
+.ex-spacer { flex: 1; }
+.ex-count { font-weight: 700; color: #2A2622; }
+.ex-pageno { color: #6F665E; }
+.ex-link { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; color: #6F5326; text-decoration: underline; cursor: pointer; }
+.ex-link:disabled { color: #A8A099; cursor: default; text-decoration: none; }
+
+.ex-files-list {
+    flex: 1 1 auto;
+    min-height: 200px;
+    box-sizing: border-box;
+    border: 1px solid #E3DCD3;
+    border-radius: 10px;
+    background: #fff;
+    overflow-y: auto;
+}
+.ex-files-list > .ex-hint { margin: 0; padding: 14px; }
+
+.ex-file-row { display: flex; align-items: center; gap: 10px; height: 40px; box-sizing: border-box; padding: 0 10px; border-bottom: 1px solid #F3EEE8; font-size: 13px; cursor: pointer; }
+.ex-file-row:last-child { border-bottom: 0; }
+.ex-file-row:hover { background: #FDFBF7; }
+.ex-file-row input { margin: 0; accent-color: #B08D57; flex-shrink: 0; }
+.ex-file-name { flex: 1; min-width: 0; font-weight: 600; color: #2A2622; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-file-meta { max-width: 38%; font-size: 12px; color: #6F665E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- messages ---------- */
+
+.ex-hint { margin: 8px 0 0; font-size: 12px; color: #6F665E; }
+.ex-hint-error { color: #7A2E25; }
+.ex-summary { margin: 0; font-size: 13px; color: #6F665E; }
+
+.ex-notice { padding: 8px 12px; border-radius: 8px; font-size: 12.5px; }
+.ex-notice-error { background: #F6E3E0; color: #7A2E25; }
+.ex-notice-warn { background: #F1E6D3; color: #6F5326; }
+
+@media (max-width: 860px) {
+    .ex-cols-2 { grid-template-columns: minmax(0, 1fr); }
+    .ex-panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ex-span2, .ex-span3 { grid-column: span 1; }
+    .ex-choices-row { flex-wrap: wrap; }
+    .ex-choice { flex-basis: 150px; }
+}

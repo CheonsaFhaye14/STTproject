@@ -1,30 +1,33 @@
-﻿// using Microsoft.EntityFrameworkCore;
-// using STTproject.Models;
+﻿using Microsoft.EntityFrameworkCore;
+using STTproject.Data;
 
-// namespace STTproject.Services;
+namespace STTproject.Services;
 
-// public interface UserService
-// {
-//     Task<List<SubDistributor>> GetSubDistributorsofUserAsync(int userId, CancellationToken cancellationToken = default);
+public interface IUserService
+{
+    Task<bool> IsAdminAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
+}
 
-// }
-// public class UserServices : UserService
-// {
-//     private readonly IDbContextFactory<EntrielContext> _contextFactory;
+public class UserServices : IUserService
+{
+    private readonly IDbContextFactory<EntrielContext> _contextFactory;
 
-//     public UserServices(IDbContextFactory<EntrielContext> contextFactory)
-//     {
-//         _contextFactory = contextFactory;
-//     }
-//     public async Task<List<SubDistributor>> GetSubDistributorsAsync(int userId, CancellationToken cancellationToken = default)
-//     {
-//         using var tempContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
-//         return await tempContext.SubDistributors
-//             .AsNoTracking()
-//             .Where(s => s.EncoderId == userId && s.IsActive)
-//             .OrderBy(s => s.SubdCode)
-//             .ToListAsync(cancellationToken);
-//     }
+    public UserServices(IDbContextFactory<EntrielContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
 
-// }
+    public async Task<bool> IsAdminAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
+        return await db.Users
+            .AnyAsync(
+                u => u.UserId == userId && u.Role == "Admin",
+                cancellationToken);
+    }
+}

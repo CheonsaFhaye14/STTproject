@@ -1,0 +1,867 @@
+@inject IImportErrorsExportService ExportService
+@inject IImportErrorsService ErrorsData
+@inject IJSRuntime JS
+
+@if (Show)
+{
+    <Modal ShowModal="Show" Width="1100px" MaxWidth="100%" MaxHeight="88vh" Title="Export Import Errors"
+           Subtitle="Choose what you want to export." IconType="ModalIconType.Upload" OnClose="OnClose">
+        <ChildContent>
+            <div class="ex-body">
+
+                @* What to export *@
+                <fieldset class="ex-section" disabled="@isExporting">
+                    <legend>What to export</legend>
+                    <div class="ex-choices ex-choices-row">
+                        @ChoiceAsync("ex-content", content == ImportErrorExportContent.ErrorReport,
+                                     () => SetContentAsync(ImportErrorExportContent.ErrorReport),
+                                     "Error report only", "Excel workbook or CSV files")
+                        @ChoiceAsync("ex-content", content == ImportErrorExportContent.OriginalFiles,
+                                     () => SetContentAsync(ImportErrorExportContent.OriginalFiles),
+                                     "Original files only", "All uploads, or the ones you pick")
+                        @ChoiceAsync("ex-content", content == ImportErrorExportContent.Both,
+                                     () => SetContentAsync(ImportErrorExportContent.Both),
+                                     "Both", "Report and files in one ZIP")
+                    </div>
+                </fieldset>
+
+                <div class="@(WantsReport && WantsFiles ? "ex-cols ex-cols-2" : "ex-cols")">
+
+                    @* ---------- left column: the error report ---------- *@
+                    @if (WantsReport)
+                    {
+                        <div class="ex-col">
+
+                            <fieldset class="ex-section" disabled="@isExporting">
+                                <legend>Which errors</legend>
+                                <div class="ex-choices ex-choices-row">
+                                    @ChoiceAsync("ex-scope", !allErrors, () => SetErrorScopeAsync(false),
+                                                 "Filter results", FilteredDescription)
+                                    @ChoiceAsync("ex-scope", allErrors, () => SetErrorScopeAsync(true),
+                                                 "All import errors", "Ignores the page filters")
+                                </div>
+
+                                @if (allErrors)
+                                {
+                                    <div class="ex-panel ex-panel-info">
+                                        <strong>All import errors</strong>
+                                        <span>Every stored import error is included. The page filters are ignored.</span>
+                                    </div>
+                                }
+                                else if (IsImportBatch || errFilter is null)
+                                {
+                                    <div class="ex-panel ex-panel-info">
+                                        <strong>Filters from the page</strong>
+                                        <span>@BatchViewText</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="ex-filter-summary">
+                                        <span class="ex-filter-text"><strong>Filters:</strong> @ErrorFilterSummary</span>
+                                        <button type="button" class="ex-filter-btn@(errFiltersOpen ? " open" : "")"
+                                                aria-expanded="@errFiltersOpen.ToString().ToLowerInvariant()"
+                                                @onclick="() => errFiltersOpen = !errFiltersOpen">
+                                            <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                            <span>@(errFiltersOpen ? "Hide filters" : "Customize filters")</span>
+                                            @if (ActiveErrorFilters > 0)
+                                            {
+                                                <span class="ex-filter-badge"
+                                                      title="@ActiveErrorFilters active filter(s)">@ActiveErrorFilters</span>
+                                            }
+                                            <i class="fa-solid @(errFiltersOpen ? "fa-chevron-up" : "fa-chevron-down")"
+                                               aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    @if (errFiltersOpen)
+                                    {
+                                        <div class="ex-panel ex-panel-grid">
+                                            <label class="ex-field ex-span2">
+                                                <span>Status</span>
+                                                <select @bind="eStatus" @bind:after="OnErrorFilterChangedAsync">
+                                                    <option value="">All</option>
+                                                    <option value="@ImportErrorPresentation.Pending">Pending</option>
+                                                    <option value="@ImportErrorPresentation.Ignored">Ignored</option>
+                                                    <option value="@ImportErrorPresentation.Resolved">Resolved</option>
+                                                </select>
+                                            </label>
+                                            <label class="ex-field ex-span2">
+                                                <span>Error type</span>
+                                                <select @bind="eType" @bind:after="OnErrorFilterChangedAsync">
+                                                    <option value="">All</option>
+                                                    @foreach (var t in errorTypes)
+                                                    {
+                                                        <option value="@t">@ImportErrorPresentation.Title(t)</option>
+                                                    }
+                                                </select>
+                                            </label>
+                                            <label class="ex-field ex-span2">
+                                                <span>Sub-distributor</span>
+                                                <select @bind="eSubd" @bind:after="OnErrorFilterChangedAsync">
+                                                    <option value="">All</option>
+                                                    @foreach (var o in (fileOptions?.SubDistributors ??
+                                        Enumerable.Empty<ImportFileOption>()))
+                                                    {
+                                                        <option value="@o.Id">@o.Name</option>
+                                                    }
+                                                </select>
+                                            </label>
+                                            <label class="ex-field ex-span3">
+                                                <span>Last seen from (PHT)</span>
+                                                <input type="date" @bind="eFrom" @bind:after="OnErrorFilterChangedAsync" />
+                                            </label>
+                                            <label class="ex-field ex-span3">
+                                                <span>Last seen to (PHT)</span>
+                                                <input type="date" @bind="eTo" @bind:after="OnErrorFilterChangedAsync" />
+                                            </label>
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(errFilter.Search))
+                                    {
+                                        <p class="ex-hint">The page search “@errFilter.Search” is also applied.</p>
+                                    }
+                                    @if (errCount == 0)
+                                    {
+                                        <p class="ex-hint ex-hint-error">No errors match these filters.</p>
+                                    }
+                                }
+                            </fieldset>
+
+                            <fieldset class="ex-section" disabled="@isExporting">
+                                <legend>Report format</legend>
+                                <div class="ex-choices ex-choices-row">
+                                    @Choice("ex-format", format == ImportErrorExportFormat.Xlsx,
+                                            () => format = ImportErrorExportFormat.Xlsx, "Excel (.xlsx)", "One workbook")
+                                    @Choice("ex-format", format == ImportErrorExportFormat.Csv,
+                                            () => format = ImportErrorExportFormat.Csv, "CSV (.csv)", "ZIP, one file per section")
+                                </div>
+                            </fieldset>
+
+                            <fieldset class="ex-section ex-push" disabled="@isExporting">
+                                <legend>Include in report</legend>
+                                <div class="ex-chips">
+                                    <label class="ex-check">
+                                        <input type="checkbox" checked="@includeSummary"
+                                               @onchange="e => includeSummary = (bool)e.Value!" />
+                                        <span class="ex-check-text"><span>Summary</span><small>Totals and status
+                                            counts</small></span>
+                                        </label>
+                                        <label class="ex-check">
+                                            <input type="checkbox" checked disabled />
+                                            <span class="ex-check-text"><span>Error Details <em>(required)</em></span><small>One row
+                                                per unique error</small></span>
+                                            </label>
+                                            <label class="ex-check">
+                                                <input type="checkbox" checked="@includeHistory"
+                                                       @onchange="e => includeHistory = (bool)e.Value!" />
+                                                <span class="ex-check-text"><span>Import History</span><small>Every batch, uploader,
+                                                    date</small></span>
+                                                </label>
+                                                <label class="ex-check">
+                                                    <input type="checkbox" checked="@includeRows"
+                                                           @onchange="e => includeRows = (bool)e.Value!" />
+                                                    <span class="ex-check-text"><span>Affected Rows</span><small>Original row
+                                                        data</small></span>
+                                                    </label>
+                                                </div>
+                                            </fieldset>
+                                        </div>
+                                    }
+
+                                    @* ---------- right column: the original files ---------- *@
+                                    @if (WantsFiles)
+                                    {
+                                        <div class="ex-col">
+
+                                            <fieldset class="ex-section" disabled="@isExporting">
+                                                <legend>Original files</legend>
+                                                <div class="ex-choices ex-choices-row">
+                                                    @if (content == ImportErrorExportContent.Both)
+                                                    {
+                                                        @ChoiceAsync("ex-files", fileScope == ImportErrorExportFileScope.RelatedToErrors,
+                                                                     () => SetFileScopeAsync(ImportErrorExportFileScope.RelatedToErrors),
+                                                                     "Related to errors", "Files behind the errors")
+                                                    }
+                                                    @ChoiceAsync("ex-files", fileScope == ImportErrorExportFileScope.All,
+                                                                 () => SetFileScopeAsync(ImportErrorExportFileScope.All),
+                                                                 "All uploaded files", "Every stored upload")
+                                                    @ChoiceAsync("ex-files", fileScope == ImportErrorExportFileScope.Selected,
+                                                                 () => SetFileScopeAsync(ImportErrorExportFileScope.Selected),
+                                                                 "Select specific files", "Pick from a list")
+                                                </div>
+
+                                                @if (fileScope == ImportErrorExportFileScope.Selected)
+                                                {
+                                                    <div class="ex-filter-summary">
+                                                        <span class="ex-filter-text"><strong>Filters:</strong> @FileFilterSummary</span>
+                                                        <button type="button" class="ex-filter-btn@(fileFiltersOpen ? " open" : "")"
+                                                                aria-expanded="@fileFiltersOpen.ToString().ToLowerInvariant()"
+                                                                @onclick="() => fileFiltersOpen = !fileFiltersOpen">
+                                                            <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                                            <span>@(fileFiltersOpen ? "Hide filters" : "Customize filters")</span>
+                                                            @if (ActiveFileFilters > 0)
+                                                            {
+                                                                <span class="ex-filter-badge"
+                                                                      title="@ActiveFileFilters active filter(s)">@ActiveFileFilters</span>
+                                                            }
+                                                            <i class="fa-solid @(fileFiltersOpen ? "fa-chevron-up" : "fa-chevron-down")"
+                                                               aria-hidden="true"></i>
+                                                        </button>
+                                                    </div>
+                                                    @if (fileFiltersOpen)
+                                                    {
+                                                        <div class="ex-panel ex-panel-grid">
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Filename</span>
+                                                                <input type="text" placeholder="Search filename…" @bind="fileSearch"
+                                                                       @bind:after="OnFileFilterChangedAsync" />
+                                                            </label>
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Sub-distributor</span>
+                                                                <select @bind="fileSubd" @bind:after="OnFileFilterChangedAsync">
+                                                                    <option value="">All</option>
+                                                                    @foreach (var o in (fileOptions?.SubDistributors ??
+                                                        Enumerable.Empty<ImportFileOption>()))
+                                                                    {
+                                                                        <option value="@o.Id">@o.Name</option>
+                                                                    }
+                                                                </select>
+                                                            </label>
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Uploaded by</span>
+                                                                <select @bind="fileUploader" @bind:after="OnFileFilterChangedAsync">
+                                                                    <option value="">All</option>
+                                                                    @foreach (var o in (fileOptions?.Uploaders ?? Enumerable.Empty<ImportFileOption>()))
+                                                                    {
+                                                                        <option value="@o.Id">@o.Name</option>
+                                                                    }
+                                                                </select>
+                                                            </label>
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Import type</span>
+                                                                <select @bind="fileImportType" @bind:after="OnFileFilterChangedAsync">
+                                                                    <option value="">All</option>
+                                                                    @foreach (var t in (fileOptions?.ImportTypes ?? Enumerable.Empty<string>()))
+                                                                    {
+                                                                        <option value="@t">@t</option>
+                                                                    }
+                                                                </select>
+                                                            </label>
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Uploaded from (PHT)</span>
+                                                                <input type="date" @bind="fileFrom" @bind:after="OnFileFilterChangedAsync" />
+                                                            </label>
+                                                            <label class="ex-field ex-span2">
+                                                                <span>Uploaded to (PHT)</span>
+                                                                <input type="date" @bind="fileTo" @bind:after="OnFileFilterChangedAsync" />
+                                                            </label>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <div class="@(OverLimitText is null ? "ex-panel ex-panel-info" : "ex-panel ex-panel-info ex-panel-over")"
+                                                         role="@(OverLimitText is null ? null : "alert")">
+                                                        <strong>@FileCountLine</strong>
+                                                        <span>@(OverLimitText ?? FileScopeDescription)</span>
+                                                    </div>
+                                                }
+                                            </fieldset>
+
+                                            @if (fileScope == ImportErrorExportFileScope.Selected)
+                                            {
+                                                <fieldset class="ex-section ex-fill" disabled="@isExporting">
+                                                    <div class="ex-toolbar">
+                                                        <span class="ex-count"
+                                                              title="Changing a filter clears the selection">@($"{selectedIds.Count:N0} /                                {MaxFiles:N0} files selected")</span>
+                                                        <button type="button" class="ex-link" @onclick="SelectAllMatchingAsync"
+                                                                disabled="@(fileTotal == 0)">Select all matching (@fileTotal.ToString("N0"))</button>
+                                                        <button type="button" class="ex-link" @onclick="ClearSelection"
+                                                                disabled="@(selectedIds.Count == 0)">Clear</button>
+                                                        <span class="ex-spacer"></span>
+                                                        @if (fileTotalPages > 1)
+                                                        {
+                                                            <button type="button" class="ex-link" disabled="@(filePage <= 1 || loadingFiles)"
+                                                                    @onclick="PrevFilePageAsync">‹ Prev</button>
+                                                            <span class="ex-pageno">@filePage / @fileTotalPages</span>
+                                                            <button type="button" class="ex-link"
+                                                                    disabled="@(filePage >= fileTotalPages || loadingFiles)"
+                                                                    @onclick="NextFilePageAsync">Next ›</button>
+                                                        }
+                                                    </div>
+
+                                                    @if (!string.IsNullOrEmpty(selectionNotice))
+                                                    {
+                                                        <div class="ex-notice ex-notice-error" role="alert">@selectionNotice</div>
+                                                    }
+                                                    else if (selectedIds.Count >= MaxFiles)
+                                                    {
+                                                        <div class="ex-notice ex-notice-warn" role="status">You can select up to
+                                                            @MaxFiles.ToString("N0") files per export.</div>
+                                                        }
+
+                                                        <div class="ex-files-list" aria-busy="@(loadingFiles ? "true" : "false")">
+                                                            @if (loadingFiles)
+                                                            {
+                                                                <p class="ex-hint">Loading files…</p>
+                                                            }
+                                                            else if (fileItems.Count == 0)
+                                                            {
+                                                                <p class="ex-hint">No files match these filters.</p>
+                                                            }
+                                                            else
+                                                            {
+                                                                @foreach (var f in fileItems)
+                                                                {
+                                                                    var id = f.ImportBatchId;
+                                                                    var isOn = selectedIds.Contains(id);
+                                                                    <label class="ex-file-row" title="@FileRowTitle(f)">
+                                                                        <input type="checkbox" checked="@isOn"
+                                                                               disabled="@(!isOn && selectedIds.Count >= MaxFiles)"
+                                                                               @onchange="e => ToggleFile(id, (bool)e.Value!)" />
+                                                                        <span class="ex-file-name">@f.FileName</span>
+                                                                        <span class="ex-file-meta">#@id · @f.UploadedAtPht.ToString("MMM d, yyyy") ·
+                                                                            @(f.UploadedByName ?? "Unknown user")@(f.SubDistributorName is null ? "" : " · " +
+                                                                            f.SubDistributorName)</span>
+                                                                        </label>
+                                                                    }
+                                                                }
+                                                            </div>
+                                                        </fieldset>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <p class="ex-summary">@Summary</p>
+
+                                        @if (WantsReport && !allErrors && errFilter is null)
+                                        {
+                                            <div class="ex-notice ex-notice-warn" role="status">
+                                                The current filters could not be read. Close this window and open Export again, or choose "All import
+                                                errors".
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(errorMessage))
+                                        {
+                                            <div class="ex-notice ex-notice-error" role="alert">@errorMessage</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(warningMessage))
+                                        {
+                                            <div class="ex-notice ex-notice-warn" role="status">@warningMessage</div>
+                                        }
+                                    </div>
+                                </ChildContent>
+                                <FooterContent>
+                                    <Button Title="@(downloaded ? "Close" : "Cancel")" OnClick="OnClose" Variant="ButtonVariant.Secondary" />
+                                    <Button Title="@(isExporting ? "Exporting…" : "Export")" OnClick="ExportAsync" Disabled="@(!CanExport)"
+                                            Icon="fa-solid fa-download" Variant="ButtonVariant.Primary" />
+                                </FooterContent>
+                            </Modal>
+                        }
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Snapshot of the page's filters taken when the modal was opened. The modal edits its own copy.</summary>
+    [Parameter] public ImportErrorFilter? Filter { get; set; }
+
+    /// <summary>True when the admin is on the "By Import File" view.</summary>
+    [Parameter] public bool IsImportBatch { get; set; }
+
+    /// <summary>Rows matching the page's filters (errors, or files in the By Import File view).</summary>
+    [Parameter] public int FilteredCount { get; set; }
+
+    private ImportErrorExportContent content = ImportErrorExportContent.ErrorReport;
+    private ImportErrorExportFormat format = ImportErrorExportFormat.Xlsx;
+    private bool allErrors;
+    private bool includeSummary = true;
+    private bool includeHistory = true;
+    private bool includeRows;
+
+    // error filters (All Errors view): an editable copy of the page filter
+    private ImportErrorFilter? errFilter;
+    private string eStatus = "";
+    private string eType = "";
+    private int? eSubd;
+    private DateTime? eFrom;
+    private DateTime? eTo;
+    private IReadOnlyList<string> errorTypes = Array.Empty<string>();
+    private int errCount;
+
+    // original files
+    private ImportErrorExportFileScope fileScope = ImportErrorExportFileScope.RelatedToErrors;
+    private readonly HashSet<int> selectedIds = new();
+    private string fileSearch = "";
+    private int? fileSubd;
+    private int? fileUploader;
+    private string fileImportType = "";
+    private DateTime? fileFrom;
+    private DateTime? fileTo;
+    private ImportFileFilterOptions? fileOptions;
+    private List<ImportFileListItemDto> fileItems = new();
+    private int fileTotal;
+    private int filePage = 1;
+    private const int FilePageSize = 5;
+    private bool loadingFiles;
+    private string? selectionNotice;
+
+    // Related / All: how many distinct files the export would contain (null = unknown yet).
+    private int? fileCount;
+
+    // Filters stay collapsed (summary only) until the admin asks to customize them.
+    private bool errFiltersOpen;
+    private bool fileFiltersOpen;
+
+    private bool isExporting;
+    private bool downloaded;
+    private string? errorMessage;
+    private string? warningMessage;
+
+    private int MaxFiles => ExportService.MaxFiles;
+    private int fileTotalPages => Math.Max(1, (int)Math.Ceiling(fileTotal / (double)FilePageSize));
+
+    private bool WantsReport => content != ImportErrorExportContent.OriginalFiles;
+    private bool WantsFiles => content != ImportErrorExportContent.ErrorReport;
+
+    private bool ErrorsOk => !WantsReport || allErrors || (errFilter is not null && errCount > 0);
+
+    private bool FilesOk
+    {
+        get
+        {
+            if (!WantsFiles) return true;
+            if (fileScope == ImportErrorExportFileScope.Selected)
+                return selectedIds.Count > 0 && selectedIds.Count <= MaxFiles;
+            return fileCount.HasValue && fileCount.Value > 0 && fileCount.Value <= MaxFiles;
+        }
+    }
+
+    private bool CanExport => !isExporting && ErrorsOk && FilesOk;
+
+    private string FilteredDescription => IsImportBatch
+        ? $"{FilteredCount:N0} file{(FilteredCount == 1 ? "" : "s")} in the view"
+        : $"{errCount:N0} error{(errCount == 1 ? "" : "s")} match";
+
+    private string BatchViewText => errFilter is null
+        ? "The current filters could not be read."
+        : $"{FilteredCount:N0} import file{(FilteredCount == 1 ? "" : "s")} with errors in the current view. The report covers the errors found in them.";
+
+    private int ActiveErrorFilters =>
+        (string.IsNullOrEmpty(eStatus) ? 0 : 1) + (string.IsNullOrEmpty(eType) ? 0 : 1) + (eSubd is null ? 0 : 1) +
+        (eFrom.HasValue || eTo.HasValue ? 1 : 0);
+
+    private int ActiveFileFilters =>
+        (string.IsNullOrWhiteSpace(fileSearch) ? 0 : 1) + (fileSubd is null ? 0 : 1) + (fileUploader is null ? 0 : 1) +
+        (string.IsNullOrEmpty(fileImportType) ? 0 : 1) + (fileFrom.HasValue || fileTo.HasValue ? 1 : 0);
+
+    private static string DateRangeText(string label, DateTime? from, DateTime? to) =>
+        $"{label} {(from.HasValue ? from.Value.ToString("MMM d, yyyy") : "…")} – {(to.HasValue ? to.Value.ToString("MMM d, yyyy") : "…")}";
+
+    private string ErrorFilterSummary
+    {
+        get
+        {
+            var parts = new List<string>
+            {
+                string.IsNullOrEmpty(eStatus) ? "All statuses" : ImportErrorPresentation.StatusText(eStatus),
+                string.IsNullOrEmpty(eType) ? "All error types" : ImportErrorPresentation.Title(eType),
+                eSubd is null
+                    ? "All sub-distributors"
+                    : fileOptions?.SubDistributors.FirstOrDefault(o => o.Id == eSubd)?.Name ?? "1 sub-distributor"
+            };
+            if (eFrom.HasValue || eTo.HasValue) parts.Add(DateRangeText("Last seen", eFrom, eTo));
+            return string.Join(" · ", parts);
+        }
+    }
+
+    private string FileFilterSummary
+    {
+        get
+        {
+            var parts = new List<string>
+            {
+                string.IsNullOrWhiteSpace(fileSearch) ? "All filenames" : $"Name contains “{fileSearch.Trim()}”",
+                fileSubd is null
+                    ? "All sub-distributors"
+                    : fileOptions?.SubDistributors.FirstOrDefault(o => o.Id == fileSubd)?.Name ?? "1 sub-distributor",
+                fileUploader is null
+                    ? "All uploaders"
+                    : fileOptions?.Uploaders.FirstOrDefault(o => o.Id == fileUploader)?.Name ?? "1 uploader",
+                string.IsNullOrEmpty(fileImportType) ? "All import types" : fileImportType
+            };
+            if (fileFrom.HasValue || fileTo.HasValue) parts.Add(DateRangeText("Uploaded", fileFrom, fileTo));
+            return string.Join(" · ", parts);
+        }
+    }
+
+    private static string FileRowTitle(ImportFileListItemDto f) =>
+        $"Batch #{f.ImportBatchId} · {f.UploadedAtPht:MMM d, yyyy h:mm tt} PHT";
+
+    private string FileCountLine
+    {
+        get
+        {
+            if (!fileCount.HasValue) return errorMessage is null ? "Counting files…" : "File count unavailable";
+            var n = fileCount.Value;
+            var noun = n == 1 ? "file" : "files";
+            return fileScope == ImportErrorExportFileScope.RelatedToErrors
+                ? $"{n:N0} {noun} will be exported (limit {MaxFiles:N0})"
+                : $"{n:N0} {noun} found (limit {MaxFiles:N0})";
+        }
+    }
+
+    private string FileScopeDescription => fileScope == ImportErrorExportFileScope.RelatedToErrors
+        ? "Every upload the selected errors appeared in, each file once. A file shared by many errors is not repeated."
+        : "Every stored original file, including uploads that had no errors.";
+
+    private string? OverLimitText
+    {
+        get
+        {
+            if (fileScope == ImportErrorExportFileScope.Selected || !fileCount.HasValue || fileCount.Value <= MaxFiles) return null;
+            return fileScope == ImportErrorExportFileScope.All
+                ? $"There are {fileCount.Value:N0} uploaded files, but the limit is {MaxFiles:N0} per export. Choose \"Select specific files\" and narrow the filters."
+                : $"These errors appear in {fileCount.Value:N0} files, but the limit is {MaxFiles:N0} per export. Narrow the error filters.";
+        }
+    }
+
+    private string Summary => content switch
+    {
+        ImportErrorExportContent.ErrorReport => format == ImportErrorExportFormat.Csv
+            ? "You will get one ZIP containing a CSV file for each report sheet."
+            : "You will get one Excel workbook (Entriel_Import_Error_Report.xlsx).",
+        ImportErrorExportContent.OriginalFiles =>
+            "One file downloads as is. Several files are packaged in a single ZIP, one folder per import batch.",
+        _ =>
+            "You will get one ZIP with the report and an \"Original_Files\" folder, one subfolder per import batch."
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        errFilter = Filter is null ? null : CloneFilter(Filter);
+        errCount = FilteredCount;
+
+        // Only the All Errors view has error-level filters to edit; the By Import File view filters files.
+        if (errFilter is not null && !IsImportBatch)
+        {
+            eStatus = errFilter.Status ?? "";
+            eType = errFilter.ErrorType ?? "";
+            eSubd = errFilter.SubDistributorId;
+            eFrom = errFilter.DateFrom;
+            eTo = errFilter.DateTo;
+            await LoadErrorFilterOptionsAsync();
+        }
+    }
+
+    // ---- choices ----
+
+    private async Task SetContentAsync(ImportErrorExportContent value)
+    {
+        content = value;
+        // "Related to errors" only exists next to a report.
+        if (value == ImportErrorExportContent.OriginalFiles && fileScope == ImportErrorExportFileScope.RelatedToErrors)
+            fileScope = ImportErrorExportFileScope.Selected;
+        await OnFileScopeChangedAsync();
+    }
+
+    private async Task SetFileScopeAsync(ImportErrorExportFileScope value)
+    {
+        fileScope = value;
+        await OnFileScopeChangedAsync();
+    }
+
+    private async Task SetErrorScopeAsync(bool all)
+    {
+        allErrors = all;
+        await RefreshFileCountAsync();
+    }
+
+    private async Task OnFileScopeChangedAsync()
+    {
+        if (!WantsFiles) return;
+
+        if (fileScope == ImportErrorExportFileScope.Selected)
+        {
+            await EnsureFilePickerAsync();
+        }
+        else
+        {
+            await RefreshFileCountAsync();
+        }
+    }
+
+    // ---- error filters ----
+
+    private static ImportErrorFilter CloneFilter(ImportErrorFilter f) => new()
+    {
+        Search = f.Search,
+        Status = f.Status,
+        ErrorType = f.ErrorType,
+        SubDistributorId = f.SubDistributorId,
+        DateFrom = f.DateFrom,
+        DateTo = f.DateTo,
+        SortColumn = f.SortColumn,
+        SortAscending = f.SortAscending,
+        Page = f.Page,
+        PageSize = f.PageSize
+    };
+
+    private async Task LoadErrorFilterOptionsAsync()
+    {
+        try
+        {
+            fileOptions ??= await ExportService.GetFileFilterOptionsAsync();
+            errorTypes = await ErrorsData.GetErrorTypesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The error filters could not be loaded. Please close this window and try again.";
+        }
+    }
+
+    private async Task OnErrorFilterChangedAsync()
+    {
+        if (errFilter is null) return;
+
+        errFilter.Status = eStatus;
+        errFilter.ErrorType = eType;
+        errFilter.SubDistributorId = eSubd;
+        errFilter.DateFrom = eFrom;
+        errFilter.DateTo = eTo;
+        errFilter.Page = 1;
+
+        try
+        {
+            var probe = CloneFilter(errFilter);
+            probe.PageSize = 1;
+            var (_, total) = await ErrorsData.GetPagedErrorsAsync(probe);
+            errCount = total;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The number of matching errors could not be calculated. Please try again.";
+        }
+
+        await RefreshFileCountAsync();
+    }
+
+    // ---- file count (Related / All) ----
+
+    private async Task RefreshFileCountAsync()
+    {
+        fileCount = null;
+        if (!WantsFiles || fileScope == ImportErrorExportFileScope.Selected) return;
+        // Without a filter snapshot the server refuses a filtered export; the notice above already says so.
+        if (fileScope == ImportErrorExportFileScope.RelatedToErrors && !allErrors && errFilter is null) return;
+
+        try
+        {
+            fileCount = await ExportService.GetFileCountAsync(BuildRequest());
+        }
+        catch (ImportErrorExportException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The number of files could not be calculated. Please try again.";
+        }
+    }
+
+    // ---- file picker ----
+
+    private ImportFileFilter BuildFileFilter() => new()
+    {
+        Search = fileSearch,
+        SubDistributorId = fileSubd,
+        UploadedBy = fileUploader,
+        ImportType = fileImportType,
+        UploadedFrom = fileFrom,
+        UploadedTo = fileTo
+    };
+
+    private async Task EnsureFilePickerAsync()
+    {
+        try
+        {
+            fileOptions ??= await ExportService.GetFileFilterOptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The file filters could not be loaded. You can still search by filename.";
+        }
+        await LoadFilesAsync();
+    }
+
+    private async Task LoadFilesAsync()
+    {
+        loadingFiles = true;
+        errorMessage = null;
+        try
+        {
+            var page = await ExportService.GetFilesAsync(BuildFileFilter(), filePage, FilePageSize);
+            fileItems = page.Items;
+            fileTotal = page.Total;
+        }
+        catch (ImportErrorExportException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The file list could not be loaded. Please try again.";
+        }
+        finally
+        {
+            loadingFiles = false;
+        }
+    }
+
+    private async Task OnFileFilterChangedAsync()
+    {
+        selectedIds.Clear();
+        selectionNotice = null;
+        filePage = 1;
+        await LoadFilesAsync();
+    }
+
+    private async Task PrevFilePageAsync()
+    {
+        if (filePage <= 1) return;
+        filePage--;
+        await LoadFilesAsync();
+    }
+
+    private async Task NextFilePageAsync()
+    {
+        if (filePage >= fileTotalPages) return;
+        filePage++;
+        await LoadFilesAsync();
+    }
+
+    private void ToggleFile(int id, bool on)
+    {
+        selectionNotice = null;
+        if (on)
+        {
+            if (selectedIds.Count < MaxFiles) selectedIds.Add(id);
+        }
+        else
+        {
+            selectedIds.Remove(id);
+        }
+    }
+
+    private async Task SelectAllMatchingAsync()
+    {
+        selectionNotice = null;
+        try
+        {
+            var ids = await ExportService.GetMatchingFileIdsAsync(BuildFileFilter(), MaxFiles + 1);
+            if (ids.Count > MaxFiles)
+            {
+                selectionNotice = $"More than {MaxFiles:N0} files match these filters. Narrow your filters before selecting all.";
+                return;
+            }
+
+            selectedIds.Clear();
+            foreach (var id in ids) selectedIds.Add(id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            selectionNotice = "The matching files could not be selected. Please try again.";
+        }
+    }
+
+    private void ClearSelection()
+    {
+        selectedIds.Clear();
+        selectionNotice = null;
+    }
+
+    // ---- export ----
+
+    private ImportErrorExportRequest BuildRequest() => new()
+    {
+        Content = content,
+        AllErrors = allErrors,
+        Filter = errFilter,
+        IsImportBatchView = IsImportBatch,
+        Format = format,
+        IncludeSummary = includeSummary,
+        IncludeImportHistory = includeHistory,
+        IncludeAffectedRows = includeRows,
+        FileScope = fileScope,
+        FileFilter = BuildFileFilter(),
+        SelectedBatchIds = selectedIds.ToList()
+    };
+
+    private async Task ExportAsync()
+    {
+        errorMessage = null;
+        warningMessage = null;
+        isExporting = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ExportService.ExportAsync(BuildRequest());
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", result.FileName, result.ContentType,
+                Convert.ToBase64String(result.Bytes));
+            downloaded = true;
+
+            if (result.MissingFiles.Count > 0)
+            {
+                // Keep the modal open so the admin actually sees this.
+                var shown = string.Join(", ", result.MissingFiles.Take(3));
+                var more = result.MissingFiles.Count > 3 ? $" and {result.MissingFiles.Count - 3} more" : "";
+                warningMessage = $"Your export was downloaded, but {result.MissingFiles.Count} original " +
+                                 $"file{(result.MissingFiles.Count == 1 ? " was" : "s were")} not found: {shown}{more}. " +
+                                 "The ZIP lists them in \"Missing_Files.txt\".";
+            }
+            else
+            {
+                await OnClose.InvokeAsync();
+            }
+        }
+        catch (ImportErrorExportException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = "The export failed. Please try again, or contact support if it keeps happening.";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private RenderFragment Choice(string group, bool selected, Action onSelect, string title, string? description = null) =>
+        ChoiceAsync(group, selected, () => { onSelect(); return Task.CompletedTask; }, title, description);
+
+    private RenderFragment ChoiceAsync(string group, bool selected, Func<Task> onSelect, string title, string? description =
+null) =>
+        @<label class="@(selected ? "ex-choice on" : "ex-choice")">
+            <input type="radio" name="@group" checked="@selected" @onchange="@(() => onSelect())" />
+            <span class="ex-choice-text">
+                <span class="ex-choice-title">@title</span>
+                @if (!string.IsNullOrEmpty(description))
+                {
+                    <span class="ex-choice-desc">@description</span>
+                }
+            </span>
+        </label>;
+}

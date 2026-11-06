@@ -29,7 +29,19 @@ public partial class ImportError
 
     public DateTime CreatedAt { get; set; }
 
+    public string? Fingerprint { get; set; }
+
+    public int? PreviousImportErrorId { get; set; }
+
+    public int? VerifiedImportBatchId { get; set; }
+
     public virtual ImportBatch ImportBatch { get; set; } = null!;
+
+    public virtual ICollection<ImportErrorBatch> ImportErrorBatches { get; set; } = new List<ImportErrorBatch>();
+
+    public virtual ICollection<ImportError> InversePreviousImportError { get; set; } = new List<ImportError>();
+
+    public virtual ImportError? PreviousImportError { get; set; }
 
     public virtual User? ResolvedByNavigation { get; set; }
 }

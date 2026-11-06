@@ -23,20 +23,32 @@ public sealed class ResolvedWorksheet
     /// Why this sheet can't be read as configured: empty sheet, no header row, required columns missing,
     /// ambiguous columns. Unprefixed; the caller adds the sheet label when it flattens them.
     /// </summary>
-    public List<string> Problems { get; } = new();
+    private readonly List<PlanError> _problems = new();
+
+    /// <summary>Same texts as before, read-only. Add through <see cref="AddProblem"/> so every problem has a kind.</summary>
+    public IReadOnlyList<string> Problems => _problems.Select(p => p.Message).ToList();
+
+    internal void AddProblem(PlanErrorKind kind, string message, object? detail = null) =>
+        _problems.Add(new PlanError(kind, message, Inspection.SheetIndex, Inspection.Name, detail));
+
+    /// <summary><see cref="ProblemMessages"/> as typed errors: same sentences, each naming the sheet.</summary>
+    public IEnumerable<PlanError> ProblemErrors =>
+        _problems.Select(p => p with
+        {
+            Message = p.Message.Contains($"\"{Inspection.Name}\"") ? p.Message : $"Sheet \"{Inspection.Name}\": {p.Message}"
+        });
 
     public IXLWorksheet Worksheet => Inspection.Worksheet;
     public string Label => TemplateSheet.SheetLabel;
 
     /// <summary><see cref="Problems"/> ready to show, each naming the sheet (some already do).</summary>
-    public IEnumerable<string> ProblemMessages =>
-        Problems.Select(p => p.Contains($"\"{Inspection.Name}\"") ? p : $"Sheet \"{Inspection.Name}\": {p}");
+    public IEnumerable<string> ProblemMessages => ProblemErrors.Select(p => p.Message);
 
     /// <summary>First row after the header block; 0 when there is no header row.</summary>
     public int FirstDataRow => HeaderRow is null ? 0 : HeaderRow.Value + HeaderRowCount;
 
     /// <summary>Fail-closed: any problem means the sheet isn't read. Whether that fails the workbook is the caller's policy.</summary>
-    public bool IsReadable => HeaderRow is not null && Columns is not null && Problems.Count == 0;
+    public bool IsReadable => HeaderRow is not null && Columns is not null && _problems.Count == 0;
 }
 
 /// <summary>
@@ -94,7 +106,7 @@ public static class WorkbookResolver
         if (sheet.IsEmpty)
         {
             var empty = new ResolvedWorksheet { TemplateSheet = ts, Inspection = sheet, HeaderRowCount = count };
-            empty.Problems.Add("The sheet is empty.");
+            empty.AddProblem(PlanErrorKind.EmptySheet, "The sheet is empty.");
             return empty;
         }
 
@@ -113,7 +125,7 @@ public static class WorkbookResolver
         if (headerRow is null)
         {
             var noHeader = new ResolvedWorksheet { TemplateSheet = ts, Inspection = sheet, HeaderRowCount = count };
-            noHeader.Problems.Add(headerProblem!);
+            noHeader.AddProblem(PlanErrorKind.HeaderRowNotFound, headerProblem!);
             return noHeader;
         }
 
@@ -128,8 +140,12 @@ public static class WorkbookResolver
             HeaderRowCount = count,
             Columns = columns
         };
-        ok.Problems.AddRange(columns.MissingRequiredMessages);
-        ok.Problems.AddRange(columns.Ambiguities);
+        // MissingRequired (display names) and MissingRequiredMessages are filled together, one entry each.
+        for (var i = 0; i < columns.MissingRequiredMessages.Count; i++)
+            ok.AddProblem(PlanErrorKind.MissingRequiredHeaders, columns.MissingRequiredMessages[i],
+                new { Field = i < columns.MissingRequired.Count ? columns.MissingRequired[i] : null });
+        foreach (var message in columns.Ambiguities)
+            ok.AddProblem(PlanErrorKind.AmbiguousColumns, message);
         return ok;
     }
 }

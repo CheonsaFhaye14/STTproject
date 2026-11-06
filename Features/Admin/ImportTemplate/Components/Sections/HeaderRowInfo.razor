@@ -23,7 +23,7 @@
                                 <span class="it-dot" title="@warn[0]"></span>
                             }
                             <span class="it-badge @(col.IsRequired ? "" : "it-badge--opt")">@(col.IsRequired ? "Required" :
-                                                                                                            "Optional")</span>
+                                                                                                                                                                                                                                            "Optional")</span>
                             </button>
                         }
                     </div>
@@ -94,7 +94,7 @@
 
                                 @if (!string.IsNullOrEmpty(c.FieldKey) && Choices(c) is null)
                                 {
-                                    <div class="it-field">
+                                    <div class="it-field" style="@FocusStyle(c)">
                                         @if (IsDate(c))
                                         {
                                             <Select TItem="RuleOption" Label="Date format in the file" Placeholder="Detect automatically"
@@ -230,6 +230,22 @@
 
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    [Parameter] public string? FocusField { get; set; }
+
+    private bool _focusApplied;
+
+    private ImportTemplateColumnEditDto? FocusColumn()
+    {
+        if (string.IsNullOrWhiteSpace(FocusField)) return null;
+        return Columns.FirstOrDefault(c => string.Equals(c.FieldKey, FocusField, StringComparison.OrdinalIgnoreCase))
+               ?? (FocusField.Contains("date", StringComparison.OrdinalIgnoreCase) ? Columns.FirstOrDefault(IsDate) : null);
+    }
+
+    private string? FocusStyle(ImportTemplateColumnEditDto c) =>
+        ReferenceEquals(c, FocusColumn()) && IsDate(c)
+            ? "box-shadow:0 0 0 2px #B08D57;border-radius:10px;padding:6px;background:#FAF3E6;"
+            : null;
+
     private sealed record FieldOption(string Key, string Display);
     private sealed record RuleOption(string Value, string Text);
 
@@ -260,6 +276,12 @@
         _fields = ImportFieldRegistry.Get(ImportType)?.Fields
                       .Select(f => new FieldOption(f.Key, f.Display)).ToList()
                   ?? new List<FieldOption>();
+
+        if (!_focusApplied && FocusColumn() is { } focus)
+        {
+            _selected = focus.RowKey;
+            _focusApplied = true;
+        }
     }
     private readonly HashSet<Guid> _testing = new();
 

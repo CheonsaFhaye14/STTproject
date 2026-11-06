@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
@@ -17,26 +18,33 @@ public sealed class ImportSalesInvoiceService
 	private readonly ISalesInvoiceService _salesInvoiceService;
 	private readonly ILogger<ImportSalesInvoiceService> _logger;
 	private readonly IImportTemplateService _templates;
+	private readonly ImportLogService _importLog;
+	private readonly ImportFileStore _importFiles;
 
 	public ImportSalesInvoiceService(
 		IDbContextFactory<EntrielContext> contextFactory,
 		ISalesInvoiceService salesInvoiceService,
 		IImportTemplateService templates,
+		ImportLogService importLog,
+		ImportFileStore importFiles,
 		ILogger<ImportSalesInvoiceService> logger)
 	{
 		_contextFactory = contextFactory;
 		_salesInvoiceService = salesInvoiceService;
 		_templates = templates;
+		_importLog = importLog;
+		_importFiles = importFiles;
 		_logger = logger;
 	}
 
 	public async Task<ImportSalesInvoiceResult> ImportFromExcelAsync(
 		Stream excelStream,
+		string fileName,
 		int subDistributorId,
 		int currentUserId,
 		CancellationToken cancellationToken = default)
 	{
-		var result = await PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, cancellationToken);
+		var result = await PrepareFromExcelAsync(excelStream, fileName, subDistributorId, currentUserId, cancellationToken);
 		if (result.PreparedInvoices.Count == 0)
 		{
 			return result;
@@ -65,10 +73,11 @@ public sealed class ImportSalesInvoiceService
 
 	public Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
 		Stream excelStream,
+		string fileName,
 		int subDistributorId,
 		int currentUserId,
 		CancellationToken cancellationToken = default)
-		=> PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, null, int.MaxValue, cancellationToken);
+		=> PrepareFromExcelAsync(excelStream, subDistributorId, currentUserId, null, int.MaxValue, cancellationToken, fileName);
 
 	public async Task<ImportSalesInvoiceResult> PrepareFromExcelAsync(
 		Stream excelStream,
@@ -76,17 +85,12 @@ public sealed class ImportSalesInvoiceService
 		int currentUserId,
 		ImportTemplateEditDto? template,
 		int maxRows,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		string? fileName = null)   // null = not a real import (the Template Tester's preview): nothing is logged
 	{
 		var result = new ImportSalesInvoiceResult();
 
-		// Basic validations before processing
-		if (excelStream is null || !excelStream.CanRead)
-		{
-			result.AddError(0, string.Empty, "Import file is missing or unreadable.");
-			return result;
-		}
-
+		// Basic validations before processing. These reject the request without creating an import batch.
 		if (subDistributorId <= 0)
 		{
 			result.AddError(0, string.Empty, "A valid subdistributor is required before importing sales invoices.");
@@ -110,6 +114,26 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
+		// One Check File = one batch. Created before the template and workbook steps so their failures can be logged against it.
+		// Only real imports have a file name; the Template Tester's preview passes none and so never creates a batch.
+		// A null batchId (preview, or logging unavailable) means no further logging; the import carries on regardless.
+		var batchId = fileName is null
+			? null
+			: await _importLog.CreateBatchAsync("SalesInvoice", fileName, subDistributorId, null, currentUserId, cancellationToken);
+		result.ImportBatchId = batchId;
+
+		if (excelStream is null || !excelStream.CanRead)
+		{
+			await FailFileUnreadableAsync(batchId, fileName ?? string.Empty, "StreamNotReadable",
+				"The upload stream was missing or could not be read.", cancellationToken);
+			result.AddError(0, string.Empty, "Import file is missing or unreadable.");
+			return result;
+		}
+
+		// Keep the original upload under its batch id, before anything else can fail, so even an unreadable or rejected file can be inspected later.
+		if (batchId is int storedBatchId)
+			await _importFiles.SaveAsync(storedBatchId, fileName!, excelStream, cancellationToken);
+
 		try
 		{
 			template ??= await _templates.ResolveForImportAsync("SalesInvoice", subDistributorId, cancellationToken);
@@ -117,18 +141,26 @@ public sealed class ImportSalesInvoiceService
 		catch (TemplateSelectionRequiredException ex)
 		{
 			// More than one template could apply and nothing has chosen one. Never guess: stop with a clear message.
+			await FailPreparationAsync(batchId, ImportErrorTypes.TemplateSelectionRequired, ex.Message,
+				new { ex.ImportType, SubDistributorId = subDistributorId, ex.CandidateNames }, cancellationToken);
 			result.AddError(0, string.Empty, ex.Message);
 			return result;
 		}
 		if (template is null)
 		{
+			await FailPreparationAsync(batchId, ImportErrorTypes.TemplateNotFound,
+				"No active import template was found for this subdistributor and there is no global default.",
+				new { ImportType = "SalesInvoice", SubDistributorId = subDistributorId }, cancellationToken);
 			result.AddError(0, string.Empty,
 				"No active import template was found for this subdistributor and there is no global default. Ask an admin to set one up under Import Templates.");
 			return result;
 		}
 
 		// The template decides which sheets, which header rows and which columns.
-		using var workbook = new XLWorkbook(excelStream);
+		var openedWorkbook = await TryOpenWorkbookAsync(excelStream, fileName ?? string.Empty, batchId, result, cancellationToken);
+		if (openedWorkbook is null)
+			return result;
+		using var workbook = openedWorkbook;
 
 		var resolvedWorkbook = WorkbookResolver.Resolve(template, workbook);
 		var plan = WorkbookReader.Plan(resolvedWorkbook, template.ImportType, maxRows);
@@ -153,6 +185,12 @@ public sealed class ImportSalesInvoiceService
 			foreach (var error in plan.Errors)
 				result.AddError(0, string.Empty, error);
 			result.SheetShortfalls.AddRange(plan.SheetShortfalls);
+
+			// Every blocking reason becomes one error on this batch; the batch is closed as Failed once.
+			await FailPreparationAsync(batchId,
+				plan.ErrorDetails.Select(e => new PreparationError(
+					MapPlanErrorKind(e.Kind), e.Message, Data: new { e.SheetIndex, e.SheetName, e.Detail })),
+				cancellationToken);
 			return result;
 		}
 
@@ -203,7 +241,17 @@ public sealed class ImportSalesInvoiceService
 		if (parsedRows.Count == 0)
 		{
 			if (!result.HasIssues)
+			{
+				await FailPreparationAsync(batchId, ImportErrorTypes.NoInvoiceRows,
+					"No invoice rows were found in the template.",
+					new { SheetsRead = plan.Sheets.Select(s => s.Inspection.Name).ToList() }, cancellationToken);
 				result.AddError(0, string.Empty, "No invoice rows were found in the template.");
+			}
+			else
+			{
+				// Every row had an error. The file was read fine, so the batch is Prepared (then Cancelled when closed), not Failed.
+				await RecordPreparedAsync(batchId, result, subDistributorId, cancellationToken);
+			}
 			return result;
 		}
 
@@ -254,7 +302,7 @@ public sealed class ImportSalesInvoiceService
 				var groupConsistencyError = InvoiceDataValidator.ValidateGroupConsistency(invoiceRows);
 				if (!string.IsNullOrWhiteSpace(groupConsistencyError))
 				{
-					result.AddError(invoiceRows[0].Source, invoiceNumber, groupConsistencyError);
+					result.AddError(invoiceRows[0].Source, invoiceNumber, groupConsistencyError, code: ImportErrorTypes.InvoiceInconsistent, value: groupConsistencyError);
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						invoiceRows[0].RowNumber,
 						invoiceNumber,
@@ -272,7 +320,9 @@ public sealed class ImportSalesInvoiceService
 				if (firstRow.ResolvedCustomerId == 0 || !customerById.TryGetValue(firstRow.ResolvedCustomerId, out var customer))
 				{
 					var msg = $"Customer '{firstRowCustomerValue}' could not be resolved.";
-					result.AddError(firstRow.Source, invoiceNumber, msg, "CustomerCode");
+					result.AddError(firstRow.Source, invoiceNumber, msg, "CustomerCode",
+						code: string.IsNullOrWhiteSpace(firstRowCustomerValue) ? ImportErrorTypes.CustomerMissing : ImportErrorTypes.CustomerNotFound,
+						value: firstRowCustomerValue);
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						firstRow.RowNumber,
 						invoiceNumber,
@@ -288,7 +338,7 @@ public sealed class ImportSalesInvoiceService
 				if (!InvoiceDataValidator.ResolveOrderType(firstRow.OrderType, null, firstRow.Quantity, out var orderType))
 				{
 					var msg = $"Order type '{firstRow.OrderType}' is invalid. Use Invoice or Credit.";
-					result.AddError(firstRow.Source, invoiceNumber, msg, "OrderType");
+					result.AddError(firstRow.Source, invoiceNumber, msg, "OrderType", code: ImportErrorTypes.OrderTypeInvalid, value: firstRow.OrderType);
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						firstRow.RowNumber,
 						invoiceNumber,
@@ -361,7 +411,7 @@ public sealed class ImportSalesInvoiceService
 						{
 							var msg = $"SKU '{itemKey}' was not found.";
 							preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "SkuCode", SheetIndex: row.SheetIndex));
-							result.AddError(row.Source, invoiceNumber, msg, "SkuCode");
+							result.AddError(row.Source, invoiceNumber, msg, "SkuCode", code: ImportErrorTypes.SkuNotFound, value: itemKey);
 						}
 						items.Clear();
 						break;
@@ -372,7 +422,7 @@ public sealed class ImportSalesInvoiceService
 						var itemNameSuffix = !string.IsNullOrWhiteSpace(subdItem.ItemName) ? $" ({subdItem.ItemName})" : string.Empty;
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'{itemNameSuffix}.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "UOM", SheetIndex: row.SheetIndex));
-						result.AddError(row.Source, invoiceNumber, msg, "UOM");
+						result.AddError(row.Source, invoiceNumber, msg, "UOM", code: ImportErrorTypes.UomNotFound, value: row.UOM, context: row.SkuCode);
 						items.Clear();
 						break;
 					}
@@ -483,7 +533,7 @@ public sealed class ImportSalesInvoiceService
 						var msg = $"Invoice '{invoiceNumber}' has no valid item lines to import.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 							firstRow.RowNumber, invoiceNumber, msg, string.Empty, firstRowCustomerValue, SheetIndex: firstRow.SheetIndex));
-						result.AddError(firstRow.Source, invoiceNumber, msg);
+						result.AddError(firstRow.Source, invoiceNumber, msg, code: ImportErrorTypes.InvoiceNoValidLines);
 					}
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
@@ -512,7 +562,12 @@ public sealed class ImportSalesInvoiceService
 						string.Empty,
 						string.Empty,
 						SheetIndex: firstRow.SheetIndex));
-					result.AddError(firstRow.Source, invoiceNumber, msg);
+					// A duplicate invoice number on its own is the rule working as intended: shown in the results, never logged.
+					var onlyDuplicate = validationErrors.Count == 1
+						&& validationErrors.TryGetValue(SalesInvoiceValidation.Header.InvoiceNumber.Key, out var existsMessage)
+						&& existsMessage == SalesInvoiceValidation.InvoiceNumberExistsMessage;
+					result.AddError(firstRow.Source, invoiceNumber, msg,
+						code: onlyDuplicate ? ImportRowErrorAggregator.InvoiceDuplicateCode : ImportErrorTypes.InvoiceHeaderInvalid, value: msg);
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -523,7 +578,8 @@ public sealed class ImportSalesInvoiceService
 			{
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
 				_logger.LogError(ex, "Failed to prepare sales invoice {InvoiceNumber} from row {RowNumber}: {Message}", invoiceNumber, invoiceRows[0].RowNumber, baseMsg);
-				result.AddError(invoiceRows[0].Source, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}");
+				result.AddError(invoiceRows[0].Source, invoiceNumber, $"Unexpected error while preparing invoice '{invoiceNumber}': {baseMsg}",
+					code: ImportErrorTypes.UnexpectedPrepareError, value: baseMsg);
 				preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 					invoiceRows[0].RowNumber,
 					invoiceNumber,
@@ -535,8 +591,184 @@ public sealed class ImportSalesInvoiceService
 			}
 		}
 
+		// The file was read and prepared; the batch stays Prepared until it is committed, closed or fails.
+		await RecordPreparedAsync(batchId, result, subDistributorId, cancellationToken);
+
 		return result;
 	}
+
+	/// <summary>
+	/// Call after each commit, with the result CommitPreparedInvoicesAsync returned. Moves the batch created at Check File to
+	/// Committed (every invoice saved, no sheet skipped) or PartiallyCommitted (some saved). When nothing is saved and this commit
+	/// tried invoices that all failed, the batch becomes Failed. A later commit that does save invoices moves it on from Failed.
+	/// Nothing attempted leaves it as it was. Never creates a batch.
+	/// </summary>
+	public async Task RecordCommitOutcomeAsync(ImportSalesInvoiceResult? importResult, ImportSalesInvoiceResult? commitResult = null, CancellationToken cancellationToken = default)
+	{
+		if (importResult?.ImportBatchId is not int batchId) return;
+
+		var saved = importResult.PreparedInvoices.Count(p => p.IsSaved);
+		if (saved == 0)
+		{
+			if (commitResult is { ImportedInvoiceCount: 0 } && commitResult.Issues.Count > 0)
+				await _importLog.CompleteBatchAsync(batchId, ImportBatchStatus.Failed,
+					onlyIfCurrentStatus: new[] { ImportBatchStatus.Prepared }, cancellationToken: cancellationToken);
+			return;
+		}
+
+		var everything = saved == importResult.PreparedInvoices.Count && !importResult.HasSkippedSheets;
+		await _importLog.CompleteBatchAsync(
+			batchId,
+			everything ? ImportBatchStatus.Committed : ImportBatchStatus.PartiallyCommitted,
+			onlyIfCurrentStatus: new[] { ImportBatchStatus.Prepared, ImportBatchStatus.PartiallyCommitted, ImportBatchStatus.Failed },
+			cancellationToken: cancellationToken);
+	}
+
+	/// <summary>Call when the user closes the results screen. A batch that was never committed becomes Cancelled; any other status is left alone.</summary>
+	public Task RecordResultsClosedAsync(ImportSalesInvoiceResult? importResult, CancellationToken cancellationToken = default)
+		=> importResult?.ImportBatchId is int batchId
+			? _importLog.CompleteBatchAsync(batchId, ImportBatchStatus.Cancelled,
+				onlyIfCurrentStatus: new[] { ImportBatchStatus.Prepared }, cancellationToken: cancellationToken)
+			: Task.CompletedTask;
+
+	/// <summary>
+	/// Call after each commit, with the result CommitPreparedInvoicesAsync returned. Saves that commit's own failures (duplicate invoice,
+	/// save failed, unexpected exception) against the batch created at Check File. Only <paramref name="commitResult"/> is logged, never
+	/// importResult.Issues, which still holds the preparation errors already saved at Check File, so nothing is logged twice.
+	/// Best-effort: a logging problem is written to ILogger and never reaches the import.
+	/// </summary>
+	public async Task RecordCommitErrorsAsync(ImportSalesInvoiceResult? importResult, ImportSalesInvoiceResult? commitResult, CancellationToken cancellationToken = default)
+	{
+		if (importResult?.ImportBatchId is not int batchId || commitResult is null || commitResult.Issues.Count == 0) return;
+
+		try
+		{
+			var subDistributorId = importResult.PreparedInvoices.Select(p => p.Invoice?.SubdistributorId ?? 0).FirstOrDefault(id => id > 0);
+			var entries = ImportRowErrorAggregator.Aggregate(importResult, commitResult.Issues, subDistributorId);
+			await _importLog.LogErrorsAsync(batchId, entries, cancellationToken);
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException)
+		{
+			_logger.LogError(ex, "Import log: could not record commit errors for batch {ImportBatchId}.", batchId);
+		}
+	}
+
+	// Opens the workbook. Only exceptions that mean "this isn't a readable Excel file" are handled here;
+	// anything else (a bug, a database problem) keeps propagating so it is never mislabelled as FileUnreadable.
+	private async Task<XLWorkbook?> TryOpenWorkbookAsync(
+		Stream excelStream,
+		string fileName,
+		int? batchId,
+		ImportSalesInvoiceResult result,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			return new XLWorkbook(excelStream);
+		}
+		catch (Exception ex) when (IsUnreadableWorkbookException(ex))
+		{
+			// The full exception stays in the server log; the database only gets a short diagnostic.
+			_logger.LogError(ex, "Could not open uploaded workbook {FileName} ({ExceptionType}).", fileName, ex.GetType().FullName);
+
+			await FailFileUnreadableAsync(batchId, fileName, "InvalidExcelFile",
+				"The file content could not be parsed as a valid Excel workbook.", cancellationToken);
+
+			// Same text the results screen showed before logging existed.
+			result.AddError(0, string.Empty, $"Failed to open/import file: {ex.Message}.");
+			return null;
+		}
+	}
+
+	private static bool IsUnreadableWorkbookException(Exception ex)
+	{
+		// ClosedXML can wrap the underlying package error, so look through the inner exceptions too.
+		for (Exception? current = ex; current is not null; current = current.InnerException)
+		{
+			if (current is InvalidDataException          // not a zip, truncated zip, legacy .xls / password-protected container
+				|| current is FormatException            // includes System.IO.FileFormatException
+				|| current is XmlException               // corrupt part inside the package
+				|| current is DocumentFormat.OpenXml.Packaging.OpenXmlPackageException)
+				return true;
+		}
+		return false;
+	}
+
+	private async Task FailFileUnreadableAsync(
+		int? batchId,
+		string fileName,
+		string diagnosticCode,
+		string diagnosticMessage,
+		CancellationToken cancellationToken)
+		=> await FailPreparationAsync(batchId, ImportErrorTypes.FileUnreadable,
+			"The uploaded file could not be read.",
+			new { FileName = fileName, DiagnosticCode = diagnosticCode, DiagnosticMessage = diagnosticMessage },
+			cancellationToken);
+
+	/// <summary>One blocking reason a file couldn't be prepared. Keep <c>Data</c> small and free of stack traces.</summary>
+	private sealed record PreparationError(string Type, string Message, string? Field = null, object? Data = null);
+
+	/// <summary>
+	/// Logs every reason against the batch, then closes it as Failed, once. Does nothing without a batch
+	/// (the Template Tester's preview, or logging unavailable). Only a batch still Prepared is changed.
+	/// </summary>
+	private async Task FailPreparationAsync(int? batchId, IEnumerable<PreparationError> errors, CancellationToken cancellationToken)
+	{
+		if (batchId is not int id) return;
+
+		foreach (var e in errors)
+			await _importLog.LogErrorAsync(id, e.Type, e.Message, e.Field, data: e.Data, cancellationToken: cancellationToken);
+
+		await _importLog.CompleteBatchAsync(id, ImportBatchStatus.Failed,
+			onlyIfCurrentStatus: new[] { ImportBatchStatus.Prepared }, cancellationToken: cancellationToken);
+	}
+
+	private Task FailPreparationAsync(int? batchId, string errorType, string message, object? data, CancellationToken cancellationToken)
+		=> FailPreparationAsync(batchId, new[] { new PreparationError(errorType, message, Data: data) }, cancellationToken);
+
+	/// <summary>
+	/// The file was read and prepared: save its row-level errors, record how many rows were read, and leave the batch
+	/// Prepared until it is committed, closed or fails. Row errors never fail a batch, even when nothing is committable.
+	/// </summary>
+	private async Task RecordPreparedAsync(int? batchId, ImportSalesInvoiceResult result, int subDistributorId, CancellationToken cancellationToken)
+	{
+		if (batchId is not int id) return;
+
+		await LogRowErrorsAsync(id, result, subDistributorId, cancellationToken);
+
+		await _importLog.CompleteBatchAsync(id, ImportBatchStatus.Prepared, result.TotalRowsProcessed,
+			onlyIfCurrentStatus: new[] { ImportBatchStatus.Prepared }, cancellationToken: cancellationToken);
+	}
+
+	// Best-effort: whatever goes wrong while aggregating or saving is written to ILogger and never reaches the import.
+	private async Task LogRowErrorsAsync(int batchId, ImportSalesInvoiceResult result, int subDistributorId, CancellationToken cancellationToken)
+	{
+		if (result.Issues.Count == 0) return;
+
+		try
+		{
+			var entries = ImportRowErrorAggregator.Aggregate(result, subDistributorId);
+			await _importLog.LogErrorsAsync(batchId, entries, cancellationToken);
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException)
+		{
+			_logger.LogError(ex, "Import log: could not aggregate row errors for batch {ImportBatchId}.", batchId);
+		}
+	}
+
+	private static string MapPlanErrorKind(PlanErrorKind kind) => kind switch
+	{
+		PlanErrorKind.RequiredSheetMissing => ImportErrorTypes.RequiredSheetMissing,
+		PlanErrorKind.AmbiguousSheet => ImportErrorTypes.AmbiguousSheet,
+		PlanErrorKind.TruncatedSheetMatch => ImportErrorTypes.TruncatedSheetMatch,
+		PlanErrorKind.EmptySheet => ImportErrorTypes.EmptySheet,
+		PlanErrorKind.HeaderRowNotFound => ImportErrorTypes.HeaderRowNotFound,
+		PlanErrorKind.AmbiguousColumns => ImportErrorTypes.AmbiguousColumns,
+		PlanErrorKind.MissingRequiredHeaders => ImportErrorTypes.MissingRequiredHeaders,
+		PlanErrorKind.NoReadableSheet => ImportErrorTypes.NoReadableSheet,
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unmapped plan error kind.")
+	};
+
 	public async Task<string?> ValidateInvoiceHeaderAsync(PreparedInvoice prepared, CancellationToken cancellationToken = default)
 	{
 		var invoice = prepared.Invoice;
@@ -649,13 +881,13 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		void FailInvoice(PreparedInvoice p, string msg)
+		void FailInvoice(PreparedInvoice p, string msg, string code, string value)
 		{
 			var firstItem = p.Items.FirstOrDefault();
 			// A source row, or the file as a whole when the item has none. LineItemId is not a row number.
 			var source = firstItem?.SourceRows.FirstOrDefault() ?? default;
 			p.Issues.Add(new ImportSalesInvoiceIssue(source.RowNumber, p.InvoiceNumber, msg, string.Empty, string.Empty, SheetIndex: source.SheetIndex));
-			result.AddError(source, p.InvoiceNumber, msg);
+			result.AddError(source, p.InvoiceNumber, msg, code: code, value: value);
 			p.IsSaved = false;
 			p.SaveErrorMessage = msg;
 		}
@@ -687,12 +919,14 @@ public sealed class ImportSalesInvoiceService
 
 				if (saveResult.IsDuplicate)
 				{
-					FailInvoice(prepared, $"Sales invoice '{prepared.InvoiceNumber}' already exists for this order type, customer and salesman.");
+					FailInvoice(prepared, $"Sales invoice '{prepared.InvoiceNumber}' already exists for this order type, customer and salesman.",
+						ImportRowErrorAggregator.InvoiceDuplicateCode, prepared.InvoiceNumber);
 					continue;
 				}
 				if (!saveResult.IsSaved)
 				{
-					FailInvoice(prepared, saveResult.ErrorMessage ?? "Unable to save invoice.");
+					var failMessage = saveResult.ErrorMessage ?? "Unable to save invoice.";
+					FailInvoice(prepared, failMessage, ImportErrorTypes.InvoiceSaveFailed, failMessage);
 					continue;
 				}
 
@@ -703,7 +937,9 @@ public sealed class ImportSalesInvoiceService
 			catch (Exception ex)
 			{
 				var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
-				FailInvoice(prepared, $"Unexpected error while saving invoice '{prepared.InvoiceNumber}': {baseMsg}");
+				_logger.LogError(ex, "Failed to save sales invoice {InvoiceNumber}: {Message}", prepared.InvoiceNumber, baseMsg);
+				FailInvoice(prepared, $"Unexpected error while saving invoice '{prepared.InvoiceNumber}': {baseMsg}",
+					ImportErrorTypes.UnexpectedCommitError, baseMsg);
 			}
 		}
 
@@ -816,19 +1052,19 @@ public sealed class ImportSalesInvoiceService
 			var rowHasErrors = false;
 			var orderTypeInvalid = false;
 
-			void AddRowError(string message, string? columnName = null, int? suggestionCount = null)
+			void AddRowError(string message, string? columnName = null, int? suggestionCount = null, string? code = null, string? value = null, string? context = null)
 			{
-				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode, message, columnName, suggestionCount);
+				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode, message, columnName, suggestionCount, code, value, context);
 				rowHasErrors = true;
 			}
 
 			//-------Validate required fields------------
 			if (string.IsNullOrWhiteSpace(invoiceCode))
-				AddRowError("Invoice code is required.", "InvoiceCode");
+				AddRowError("Invoice code is required.", "InvoiceCode", code: ImportErrorTypes.InvoiceCodeMissing);
 			if (IsMissingOrEmpty(logicalRow.Cell("InvoiceDate")))
-				AddRowError("Invoice date is required.", "InvoiceDate");
+				AddRowError("Invoice date is required.", "InvoiceDate", code: ImportErrorTypes.InvoiceDateMissing);
 			else if (!TryGetDateOnly(logicalRow.Cell("InvoiceDate")!, out invoiceDate, invoiceDateFormat))
-				AddRowError("Invoice date is invalid.", "InvoiceDate");
+				AddRowError("Invoice date is invalid.", "InvoiceDate", code: ImportErrorTypes.InvoiceDateInvalid, value: GetString(logicalRow.Cell("InvoiceDate")!));
 
 			//-------Validate customer-----------------
 			List<int>? customerCandidateIds = null;
@@ -841,7 +1077,7 @@ public sealed class ImportSalesInvoiceService
 					resolvedCustomer = customerAmbiguous.OrderBy(c => c.CustomerId).First();
 				}
 				else if (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName))
-					AddRowError("Customer code or name is required.", "CustomerCode");
+					AddRowError("Customer code or name is required.", "CustomerCode", code: ImportErrorTypes.CustomerMissing);
 				else
 				{
 					var label = BuildCustomerDisplayValue(customerCode, customerName);
@@ -849,7 +1085,7 @@ public sealed class ImportSalesInvoiceService
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
 						: $"Customer '{label}' was not found.";
-					AddRowError(message, colName, customerSuggestions?.Count);
+					AddRowError(message, colName, customerSuggestions?.Count, ImportErrorTypes.CustomerNotFound, label);
 				}
 			}
 
@@ -865,7 +1101,7 @@ public sealed class ImportSalesInvoiceService
 				// Explicit OrderType column — must be valid
 				if (!InvoiceDataValidator.TryParseOrderType(orderType, out normalizedOrderType))
 				{
-					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType");
+					AddRowError($"Order type '{orderType}' is invalid. Use Invoice or Credit.", "OrderType", code: ImportErrorTypes.OrderTypeInvalid, value: orderType);
 					orderTypeInvalid = true;
 				}
 			}
@@ -888,7 +1124,7 @@ public sealed class ImportSalesInvoiceService
 			{
 				if (string.IsNullOrWhiteSpace(skuCode) && string.IsNullOrWhiteSpace(itemName))
 				{
-					AddRowError("SKU code or Item name is required.", hasItemNameColumn ? "ItemName" : "SkuCode");
+					AddRowError("SKU code or Item name is required.", hasItemNameColumn ? "ItemName" : "SkuCode", code: ImportErrorTypes.SkuMissing);
 				}
 				else if (!string.IsNullOrWhiteSpace(skuCode) && !string.IsNullOrWhiteSpace(itemName))
 				{
@@ -897,21 +1133,21 @@ public sealed class ImportSalesInvoiceService
 					var message = itemSuggestions is { Count: > 0 }
 						? $"SKU '{label}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU '{label}' was not found.";
-					AddRowError(message, colName, itemSuggestions?.Count);
+					AddRowError(message, colName, itemSuggestions?.Count, ImportErrorTypes.SkuNotFound, skuCode);
 				}
 				else if (!string.IsNullOrWhiteSpace(skuCode))
 				{
 					var message = itemSuggestions is { Count: > 0 }
 						? $"SKU '{skuCode}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"SKU '{skuCode}' was not found.";
-					AddRowError(message, "SkuCode", itemSuggestions?.Count);
+					AddRowError(message, "SkuCode", itemSuggestions?.Count, ImportErrorTypes.SkuNotFound, skuCode);
 				}
 				else
 				{
 					var message = itemSuggestions is { Count: > 0 }
 						? $"Item name '{itemName}' was not found. Did you mean: {string.Join(", ", itemSuggestions.Select(s => BuildCustomerDisplayValue(s.SubdItemCode, s.ItemName)))}?"
 						: $"Item name '{itemName}' was not found.";
-					AddRowError(message, "ItemName", itemSuggestions?.Count);
+					AddRowError(message, "ItemName", itemSuggestions?.Count, ImportErrorTypes.SkuNotFound, itemName);
 				}
 			}
 
@@ -993,11 +1229,11 @@ public sealed class ImportSalesInvoiceService
 						out _))
 				{
 					if (quantityIsEmpty)
-						AddRowError("Quantity is required.", "Quantity");
+						AddRowError("Quantity is required.", "Quantity", code: ImportErrorTypes.QuantityMissing);
 					else if (rawQuantity is null)
-						AddRowError("Quantity must be a whole number.", "Quantity");
+						AddRowError("Quantity must be a whole number.", "Quantity", code: ImportErrorTypes.QuantityInvalid, value: GetString(quantityCell!));
 					else if (InvoiceDataValidator.IsMissingUomValue(uom))
-						AddRowError("UOM is required.", "UOM");
+						AddRowError("UOM is required.", "UOM", code: ImportErrorTypes.UomMissing);
 				}
 				else
 				{
@@ -1031,7 +1267,7 @@ public sealed class ImportSalesInvoiceService
 						else
 						{
 							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM");
+							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM", code: ImportErrorTypes.UomNotFound, value: uom, context: skuCode);
 						}
 					}
 					else if (uomAmbiguousMatches is { Count: > 1 })
@@ -1088,7 +1324,7 @@ public sealed class ImportSalesInvoiceService
 
 					if (!TryGetInt(cell, out var qty))
 					{
-						AddRowError($"{errorField} must be a whole number.", errorField);
+						AddRowError($"{errorField} must be a whole number.", errorField, code: ImportErrorTypes.QuantityInvalid, value: rawValue);
 						return;
 					}
 
@@ -1119,7 +1355,7 @@ public sealed class ImportSalesInvoiceService
 						else
 						{
 							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-							AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField);
+							AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField, code: ImportErrorTypes.UomNotFound, value: normalizedUomName, context: skuCode);
 							return;
 						}
 					}
@@ -1169,7 +1405,7 @@ public sealed class ImportSalesInvoiceService
 					var errorCol = hasCaseQuantityColumn ? "CaseQuantity" :
 								hasPieceQuantityColumn ? "PieceQuantity" :
 								hasInBoxQuantityColumn ? "InBoxQuantity" : "DozenQuantity";
-					AddRowError("At least one quantity column (Case, Dozen, Piece, or InBox) is required.", errorCol);
+					AddRowError("At least one quantity column (Case, Dozen, Piece, or InBox) is required.", errorCol, code: ImportErrorTypes.NoQuantityColumnValue);
 				}
 			}
 			if (rowHasErrors)

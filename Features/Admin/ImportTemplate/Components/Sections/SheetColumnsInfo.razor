@@ -136,8 +136,7 @@
                             @if (ReadSheetCount > 1)
                             {
                                 <text>Each sheet is read on its own, so every sheet that isn't ignored needs all the required
-                                    fields.
-                                    Set a sheet to Ignore if it shouldn't be read.</text>
+                                    fields. Set a sheet to Ignore if it shouldn't be read.</text>
                                 }
                             </span>
                             <Button Variant="ButtonVariant.Secondary" Title="@(fresh && !ignored ? "Continue to columns" : "Done")"
@@ -175,7 +174,8 @@
                     }
                     else
                     {
-                        <HeaderRowInfo ImportType="@Model.ImportType" Columns="s.Columns" OnChanged="Refresh" />
+                        <HeaderRowInfo ImportType="@Model.ImportType" Columns="s.Columns" OnChanged="Refresh"
+                                       FocusField="@FocusField" />
                     }
                 </div>
             }
@@ -185,6 +185,7 @@
               OnYes="RemoveActiveSheet" OnNo="CancelRemove" />
 @code {
     [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
+    [Parameter] public string? FocusField { get; set; }
 
     private const string NeedRequired = "Required";
     private const string NeedOptional = "Optional";
@@ -196,6 +197,11 @@
 
     protected override void OnInitialized()
     {
+        if (!string.IsNullOrWhiteSpace(FocusField))
+        {
+            var at = Model.Sheets.FindIndex(sh => sh.SheetMatchMode != SheetMatchModes.Ignore && sh.Columns.Any(IsFocusColumn));
+            if (at >= 0) _active = at;
+        }
         _showSettings = Model.Sheets.Count > 0 && IsFresh(Model.Sheets[Math.Min(_active, Model.Sheets.Count - 1)]);
     }
 
@@ -372,6 +378,11 @@ SheetChip("ti-search", "Position not set yet", true),
 
     private void AskRemove() => _confirmRemove = true;
     private void CancelRemove() => _confirmRemove = false;
+
+    private bool IsFocusColumn(ImportTemplateColumnEditDto c) =>
+        string.Equals(c.FieldKey, FocusField, StringComparison.OrdinalIgnoreCase)
+        || (FocusField!.Contains("date", StringComparison.OrdinalIgnoreCase)
+            && ImportFieldRegistry.GetField(Model.ImportType, c.FieldKey)?.Type == ImportFieldType.Date);
 
     private void SelectSheet(int idx)
     {

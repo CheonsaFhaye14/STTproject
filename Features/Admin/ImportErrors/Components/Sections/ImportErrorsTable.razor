@@ -1,0 +1,516 @@
+@using STTproject.Features.Admin.Customers.Services
+@implements IDisposable
+@inject IImportErrorsService ImportErrorsData
+@inject IAdminCustomerService AdminCustomerService
+<link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
+
+<div class="clt-page">
+    <div class="clt-layout">
+
+        <aside class="clt-sidebar">
+            <div class="clt-sidebar-stats">
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Total</span>
+                    <span class="clt-stat-value">@statTotal</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Pending</span>
+                    <span class="clt-stat-value clt-stat-active">@pendingCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Ignored</span>
+                    <span class="clt-stat-value clt-stat-inactive">@ignoredCount</span>
+                </div>
+                <div class="clt-stat">
+                    <span class="clt-stat-label">Resolved</span>
+                    <span class="clt-stat-value clt-stat-inactive">@resolvedCount</span>
+                </div>
+            </div>
+            <div class="clt-divider"></div>
+
+            @* Search *@
+            <div class="clt-filter-group">
+                <Input TValue="string" Label="Search"
+                       Placeholder="@(IsImportBatch ? "File or subdistributor…" : "Value, invoice or file…")"
+                       Value="@SearchTerm" ValueChanged="OnSearchChanged" />
+            </div>
+
+            @if (IsImportBatch)
+            {
+                @* Status *@
+                <div class="clt-filter-group">
+                    <label class="clt-filter-label">Import Status</label>
+                    <div class="clt-radio-group">
+                        <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                            <input type="radio" name="status" value="" @onchange="() => OnStatusChanged(string.Empty)"
+                                   checked="@(SelectedStatus == "")" />
+                            <span>All</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "committed" ? "selected" : "")">
+                            <input type="radio" name="status" value="committed"
+                                   @onchange='() => OnStatusChanged("committed")' checked="@(SelectedStatus == "committed")" />
+                            <span>Committed</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "partiallycommitted" ? "selected" : "")">
+                            <input type="radio" name="status" value="partiallycommitted"
+                                   @onchange='() => OnStatusChanged("partiallycommitted")'
+                                   checked="@(SelectedStatus == "partiallycommitted")" />
+                            <span>Partially Committed</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "cancelled" ? "selected" : "")">
+                            <input type="radio" name="status" value="cancelled"
+                                   @onchange='() => OnStatusChanged("cancelled")' checked="@(SelectedStatus == "cancelled")" />
+                            <span>Cancelled</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "Failed" ? "selected" : "")">
+                            <input type="radio" name="status" value="Failed" @onchange='() => OnStatusChanged("Failed")'
+                                   checked="@(SelectedStatus == "Failed")" />
+                            <span>Failed</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "Prepared" ? "selected" : "")">
+                            <input type="radio" name="status" value="Prepared" @onchange='() => OnStatusChanged("Prepared")'
+                                   checked="@(SelectedStatus == "Prepared")" />
+                            <span>Prepared</span>
+                        </label>
+                    </div>
+                </div>
+            }
+
+            @if (!IsImportBatch)
+            {
+                @* Status *@
+                <div class="clt-filter-group">
+                    <label class="clt-filter-label">Status</label>
+                    <div class="clt-radio-group">
+                        <label class="clt-radio-option @(SelectedStatus == "" ? "selected" : "")">
+                            <input type="radio" name="status" value="" @onchange="() => OnStatusChanged(string.Empty)"
+                                   checked="@(SelectedStatus == "")" />
+                            <span>All</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "pending" ? "selected" : "")">
+                            <input type="radio" name="status" value="pending" @onchange='() => OnStatusChanged("pending")'
+                                   checked="@(SelectedStatus == "pending")" />
+                            <span>Pending</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "ignored" ? "selected" : "")">
+                            <input type="radio" name="status" value="ignored" @onchange='() => OnStatusChanged("ignored")'
+                                   checked="@(SelectedStatus == "ignored")" />
+                            <span>Ignored</span>
+                        </label>
+                        <label class="clt-radio-option @(SelectedStatus == "resolved" ? "selected" : "")">
+                            <input type="radio" name="status" value="resolved" @onchange='() => OnStatusChanged("resolved")'
+                                   checked="@(SelectedStatus == "resolved")" />
+                            <span>Resolved</span>
+                        </label>
+                    </div>
+                </div>
+
+                @* Problem *@
+                <div class="clt-filter-group">
+                    <AutoComplete @key="@($"type-{filterResetKey}")" Label="Problem" Placeholder="All problems"
+                                  TItem="FilterOption" Items="ErrorTypesOptions" ValueSelector="x => x.Value"
+                                  TextSelector="x => x.Text" SelectedValue="@SelectedErrorType"
+                                  SelectedValueChanged="OnErrorTypeSelected" />
+                </div>
+            }
+
+            @* Subdistributor *@
+            
+            <div class="clt-filter-group">
+                <AutoComplete @key="@($"subd-{filterResetKey}")" Label="Subdistributor" TItem="SubdOption"
+                              Items="SubDistributors" ValueSelector="x => x.Id.ToString()"
+                              TextSelector="x => x.Name ?? string.Empty" Placeholder="All subdistributors"
+                              SelectedValue="@(SelectedSubDistributorId?.ToString())" SelectedItemChanged="OnSubdSelected" />
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <button class="clt-clear-btn" @onclick="ClearFilters">Clear all filters</button>
+            }
+        </aside>
+
+        <main class="clt-main">
+            <div class="clt-table-card">
+                <div class="clt-table-scroll">
+                    <table class="clt-table">
+                        <thead>
+                            <tr>
+                                @if (!IsImportBatch)
+                                {
+                                    <th @onclick='() => SortBy("Problem")' style="cursor:pointer">Problem
+                                        @SortIndicator("Problem")</th>
+                                        <th @onclick='() => SortBy("Value")' style="cursor:pointer">Value
+                                            @SortIndicator("Value")</th>
+                                            <th @onclick='() => SortBy("Subdistributor")' style="cursor:pointer">Subdistributor
+                                                @SortIndicator("Subdistributor")</th>
+                                                <th @onclick='() => SortBy("Seen")' style="cursor:pointer">Seen @SortIndicator("Seen")
+                                                </th>
+                                                <th @onclick='() => SortBy("Status")' style="cursor:pointer">Status
+                                                    @SortIndicator("Status")</th>
+                                                }
+                                else
+                                                {
+                                                    <th @onclick='() => SortBy("File")' style="cursor:pointer">File @SortIndicator("File")
+                                                    </th>
+                                                    <th @onclick='() => SortBy("Uploaded")' style="cursor:pointer">Uploaded
+                                                        @SortIndicator("Uploaded")</th>
+                                                        <th @onclick='() => SortBy("Import")' style="cursor:pointer">Import
+                                                            @SortIndicator("Import")</th>
+                                                            <th @onclick='() => SortBy("ErrorsFound")' style="cursor:pointer">Errors Found
+                                                                @SortIndicator("ErrorsFound")</th>
+                                                            }
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (isLoading)
+                                                        {
+                                                            <tr>
+                                                                <td colspan="@ColumnCount" class="clt-empty">
+                                                                    <div class="clt-empty-inner">
+                                                                        <p>Loading…</p>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                        else if (RowCount == 0)
+                                                        {
+                                                            <tr>
+                                                                <td colspan="@ColumnCount" class="clt-empty">
+                                                                    <div class="clt-empty-inner">
+                                                                        <p>@(HasActiveFilters ? "No records match your filters" : "No records found")
+                                                                        </p>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                        else if (!IsImportBatch)
+                                                        {
+                                                            @foreach (var row in PagedErrors)
+                                                            {
+                                                                var errorId = row.ImportErrorId;
+                                                                <tr class="clt-row-click" @onclick="() => OnViewDetails.InvokeAsync(errorId)">
+                                                                    <td>
+                                                                        <span class="ie-problem">@ImportErrorPresentation.Title(row.ErrorType)</span>
+                                                                    </td>
+                                                                    <td class="ie-value" title="@row.Value">@row.Value</td>
+                                                                    <td class="clt-muted">@row.SubDistributorName</td>
+                                                                    <td>
+                                                                        @row.Occurrences
+                                                                        <span class="ie-sub">last @(row.LastSeenAt?.ToString("MMM d, yyyy"))</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span
+                                                                        class="ie-pill @StatusClass(row.Status)">@ImportErrorPresentation.StatusText(row.Status)</span>
+                                                                        @{
+                                                                            var note = ImportErrorPresentation.ResolutionNote(row.Status, row.ResolutionType,
+                                                                row.ResolvedAt);
+                                                                        }
+                                                                        @if (note.Length > 0)
+                                                                        {
+                                                                            <span class="ie-sub">@note</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td @onclick:stopPropagation="true">
+                                                                        <div class="clt-actions">
+                                                                            @if (ImportErrorPresentation.IsPending(row.Status) &&
+                                                                    ImportErrorPresentation.CanFix(row.ErrorType))
+                                                                            {
+                                                                                <Button Title="Fix" Variant="ButtonVariant.Primary"
+                                                                                        OnClick="() => OnFix.InvokeAsync(errorId)" />
+                                                                            }
+                                                                            <Button Title="Details" Variant="ButtonVariant.Secondary"
+                                                                                    OnClick="() => OnViewDetails.InvokeAsync(errorId)" />
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            @foreach (var file in PagedBatches)
+                                                            {
+                                                                var batchId = file.ImportBatchId;
+                                                                <tr class="clt-row-click" @onclick="() => OnViewFile.InvokeAsync(batchId)">
+                                                                    <td>@file.FileName</td>
+                                                                    <td>@file.UploadedAt.ToString("MMM d, yyyy")</td>
+                                                                    <td><span class="ie-pill ie-pill-prepared">@file.BatchStatus</span></td>
+                                                                    <td>
+                                                                        @file.UniqueErrors unique error@(file.UniqueErrors == 1 ? "" : "s") ·
+                                                                        @file.Occurrences occurrence@(file.Occurrences == 1 ? "" : "s")
+                                                                        <span class="ie-sub">@(file.PendingErrors > 0 ? $"{file.PendingErrors} pending" :
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              "None pending")</span>
+                                                                        </td>
+                                                                        <td @onclick:stopPropagation="true">
+                                                                            <div class="clt-actions">
+                                                                                <Button Title="View Errors" Variant="ButtonVariant.Secondary"
+                                                                                        OnClick="() => OnViewFile.InvokeAsync(batchId)" />
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div class="clt-footer">
+                                                <span class="clt-footer-count">Showing @RowCount of @totalCount @(IsImportBatch ? "import files" :
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              "errors")</span>
+                                                    @if (totalPages > 1)
+                                                    {
+                                                        <div class="clt-pagination">
+                                                            <button class="clt-page-btn" disabled="@(currentPage == 1)"
+                                                                    @onclick="() => GoToPage(currentPage - 1)">←</button>
+                                                            <span>Page @currentPage of @totalPages</span>
+                                                            <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                                                                    @onclick="() => GoToPage(currentPage + 1)">→</button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </main>
+                                        </div>
+                                    </div>
+
+@code {
+    [Parameter] public bool IsImportBatch { get; set; }
+
+    [Parameter] public EventCallback OnLoaded { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+
+    /// <summary>Row click or Details. Argument = ImportErrorId.</summary>
+    [Parameter] public EventCallback<int> OnViewDetails { get; set; }
+
+    /// <summary>Fix button. Argument = ImportErrorId.</summary>
+    [Parameter] public EventCallback<int> OnFix { get; set; }
+
+    /// <summary>View Errors button in the By Import File view. Argument = ImportBatchId.</summary>
+    [Parameter] public EventCallback<int> OnViewFile { get; set; }
+
+    private record FilterOption(string Value, string Text);
+    private record SubdOption(int Id, string? Name);
+
+    private List<ImportErrorListDto> PagedErrors { get; set; } = new();
+    private List<ImportBatchListDto> PagedBatches { get; set; } = new();
+    private List<SubdOption> SubDistributors { get; set; } = new();
+    private List<string> AllErrorTypes { get; set; } = new();
+
+    private List<FilterOption> ErrorTypesOptions =>
+        AllErrorTypes.Select(t => new FilterOption(t, ImportErrorPresentation.Title(t))).ToList();
+
+    private string SelectedStatus { get; set; } = "";
+    private string SelectedErrorType { get; set; } = "";
+    private int? SelectedSubDistributorId { get; set; }
+    private int filterResetKey;
+
+    private string SortColumn { get; set; } = "Seen";
+    private bool SortAscending { get; set; } = false;
+    private bool _lastIsImportBatch;
+
+    private int currentPage = 1;
+    private const int pageSize = 50;
+    private int totalCount; // rows in the current view (errors or files)
+    private int statTotal; // sidebar: all unique errors
+    private int pendingCount;
+    private int ignoredCount;
+    private int resolvedCount;
+    private int totalPages => (int)Math.Ceiling(totalCount / (double)pageSize);
+
+    private bool isLoading = true;
+    private System.Threading.Timer? _debounceTimer;
+
+    private int ColumnCount => IsImportBatch ? 5 : 6;
+    private int RowCount => IsImportBatch ? PagedBatches.Count : PagedErrors.Count;
+
+    private string _searchTerm = "";
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(_ =>
+            {
+                _ = InvokeAsync(async () =>
+                {
+                    currentPage = 1;
+                    await LoadPageAsync();
+                });
+            }, null, 400, Timeout.Infinite);
+        }
+    }
+    private void OnSearchChanged(string? value) => SearchTerm = value ?? string.Empty;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchTerm) ||
+        !string.IsNullOrEmpty(SelectedStatus) ||
+        (!IsImportBatch && !string.IsNullOrEmpty(SelectedErrorType)) ||
+        SelectedSubDistributorId.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lastIsImportBatch = IsImportBatch;
+        ApplyDefaultSort();
+        try
+        {
+            SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync())
+                .Select(sd => new SubdOption(sd.SubDistributorId, sd.SubDistributorName))
+                .ToList();
+            AllErrorTypes = (await ImportErrorsData.GetErrorTypesAsync()).ToList();
+
+            await LoadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import errors: {ex.Message}");
+            isLoading = false;
+        }
+    }
+
+    // The page flips IsImportBatch when the admin clicks the segmented control.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsImportBatch == _lastIsImportBatch) return;
+
+        _lastIsImportBatch = IsImportBatch;
+        SelectedStatus = ""; // the two views have different status lists
+        currentPage = 1;
+        ApplyDefaultSort();
+        await LoadPageAsync();
+    }
+
+    private void ApplyDefaultSort()
+    {
+        // Newest activity first in both views.
+        SortColumn = IsImportBatch ? "Uploaded" : "Seen";
+        SortAscending = false;
+    }
+
+    private ImportErrorFilter BuildFilter() => new()
+    {
+        Search = _searchTerm,
+        Status = SelectedStatus,
+        ErrorType = IsImportBatch ? null : SelectedErrorType,
+        SubDistributorId = SelectedSubDistributorId,
+        SortColumn = SortColumn,
+        SortAscending = SortAscending,
+        Page = currentPage,
+        PageSize = pageSize
+    };
+
+    /// <summary>The filters currently applied, so the Export modal can export the same results.</summary>
+    public ImportErrorFilter GetCurrentFilter() => BuildFilter();
+
+    public async Task LoadPageAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var filter = BuildFilter();
+
+            if (IsImportBatch)
+            {
+                var (items, total) = await ImportErrorsData.GetPagedBatchesAsync(filter);
+                PagedBatches = items.ToList();
+                totalCount = total;
+            }
+            else
+            {
+                var (items, total) = await ImportErrorsData.GetPagedErrorsAsync(filter);
+                PagedErrors = items.ToList();
+                totalCount = total;
+            }
+
+            var counts = await ImportErrorsData.GetStatusCountsAsync(filter);
+            statTotal = counts.Total;
+            pendingCount = counts.Pending;
+            ignoredCount = counts.Ignored;
+            resolvedCount = counts.Resolved;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import errors: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (OnCountChanged.HasDelegate) await OnCountChanged.InvokeAsync(totalCount);
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync();
+        }
+    }
+
+    private async Task OnStatusChanged(string status)
+    {
+        SelectedStatus = status;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task OnSubdSelected(SubdOption? sd)
+    {
+        int? newValue = sd is { Id: > 0 } ? sd.Id : null;
+        if (newValue == SelectedSubDistributorId) return;
+        SelectedSubDistributorId = newValue;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task OnErrorTypeSelected(string? value)
+    {
+        SelectedErrorType = value ?? string.Empty;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _debounceTimer?.Dispose();
+        _searchTerm = "";
+        SelectedStatus = "";
+        SelectedErrorType = "";
+        SelectedSubDistributorId = null;
+        ApplyDefaultSort();
+        currentPage = 1;
+        filterResetKey++;
+        await LoadPageAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadPageAsync();
+    }
+
+    private async Task SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    private string SortIndicator(string column)
+    {
+        if (SortColumn != column) return string.Empty;
+        return SortAscending ? " ▲" : " ▼";
+    }
+
+    private static string StatusClass(string? status) => ImportErrorPresentation.StatusKey(status) switch
+    {
+        ImportErrorPresentation.Pending => "ie-pill-pending",
+        ImportErrorPresentation.Ignored => "ie-pill-ignored",
+        ImportErrorPresentation.Resolved => "ie-pill-resolved",
+        _ => "ie-pill-pending"
+    };
+
+    public void Dispose() => _debounceTimer?.Dispose();
+}

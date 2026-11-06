@@ -72,6 +72,16 @@ public sealed class WorkbookMatch
     /// <summary>Reasons the workbook can't be used. Ready to show.</summary>
     public List<string> Errors { get; } = new();
 
+    /// <summary>The same reasons as <see cref="Errors"/>, with a code and context. Always the same length and order.</summary>
+    public List<PlanError> ErrorDetails { get; } = new();
+
+    /// <summary>The only way to add an error, so the text list and the typed list can't drift apart.</summary>
+    internal void AddError(PlanErrorKind kind, string message, object? detail = null)
+    {
+        Errors.Add(message);
+        ErrorDetails.Add(new PlanError(kind, message, Detail: detail));
+    }
+
     /// <summary>Things worth knowing that don't stop the import.</summary>
     public List<string> Warnings { get; } = new();
 
@@ -101,7 +111,7 @@ public static class WorkbookMatcher
         // Fail closed: a truncated result carries no assignment information at all.
         if (assignment.Truncated)
         {
-            match.Errors.Add(TruncatedMessage);
+            match.AddError(PlanErrorKind.TruncatedSheetMatch, TruncatedMessage);
             foreach (var ins in inspections)
                 match.Worksheets.Add(new WorksheetReport(
                     ins, ins.IsVisible ? WorksheetStatus.Undetermined : WorksheetStatus.Hidden, null));
@@ -123,7 +133,9 @@ public static class WorkbookMatcher
             if (a.TemplateSheet.IsRequired)
             {
                 match.MissingRequired.Add(missing);
-                match.Errors.Add($"Required sheet \"{a.TemplateSheet.SheetLabel}\" was not found in the file: {missing.Reason}.");
+                match.AddError(PlanErrorKind.RequiredSheetMissing,
+                    $"Required sheet \"{a.TemplateSheet.SheetLabel}\" was not found in the file: {missing.Reason}.",
+                    new { SheetLabel = a.TemplateSheet.SheetLabel, missing.Reason });
             }
             else
             {
@@ -179,7 +191,8 @@ public static class WorkbookMatcher
 
             var amb = new SheetAmbiguity(sheets, worksheets, AmbiguityMessage(sheets, worksheets));
             match.Ambiguities.Add(amb);
-            match.Errors.Add(amb.Message);
+            match.AddError(PlanErrorKind.AmbiguousSheet, amb.Message,
+                new { TemplateSheets = sheets.Select(s => s.SheetLabel).ToList(), Worksheets = worksheets.Select(w => w.Name).ToList() });
         }
     }
 

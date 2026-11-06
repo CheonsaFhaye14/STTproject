@@ -29,6 +29,14 @@ public class ResolvedWorkbookTests
         Col("Quantity", "Qty", required: false),
     };
 
+    // One column per field, as the validator requires (a field is mapped once per sheet; extra headers are aliases).
+    // The tester runs ValidateStructure first, so tester tests need columns that pass it.
+    private static List<ImportTemplateColumnEditDto> SavableColumns() => new()
+    {
+        Col("InvoiceCode", "Invoice No."), Col("CustomerCode", "Customer Code"),
+        Col("SkuCode", "SKU"), Col("Quantity", "Qty", required: false),
+    };
+
     private static ImportTemplateSheetEditDto Sheet(
         string label, string mode, string? value = null, bool required = true,
         List<ImportTemplateColumnEditDto>? cols = null,
@@ -378,8 +386,8 @@ public class ResolvedWorkbookTests
             ("Sales", File(Row(GoodHeaders), Row("1", "A", "S", "2"))),
             ("Returns", File(Row(GoodHeaders), Row("2", "B", "T", "1"))));
         var tpl = Tpl(
-            Sheet("Returns label", SheetMatchModes.Exact, "Returns"),
-            Sheet("Sales label", SheetMatchModes.Exact, "Sales"));
+            Sheet("Returns label", SheetMatchModes.Exact, "Returns", cols: SavableColumns()),
+            Sheet("Sales label", SheetMatchModes.Exact, "Sales", cols: SavableColumns()));
 
         using var stream = Save(wb);
         var result = new ImportTemplateTestService().Test(tpl, stream, "file.xlsx");
@@ -398,8 +406,8 @@ public class ResolvedWorkbookTests
             ("Lookup", File(Row("x"))));
         wb.Worksheet("Lookup").Visibility = XLWorksheetVisibility.Hidden;
         var tpl = Tpl(
-            Sheet("Sales", SheetMatchModes.Exact, "Sales"),
-            Sheet("Returns", SheetMatchModes.Exact, "Returns", required: false));
+            Sheet("Sales", SheetMatchModes.Exact, "Sales", cols: SavableColumns()),
+            Sheet("Returns", SheetMatchModes.Exact, "Returns", required: false, cols: SavableColumns()));
 
         using var stream = Save(wb);
         var result = new ImportTemplateTestService().Test(tpl, stream, "file.xlsx");
@@ -414,7 +422,7 @@ public class ResolvedWorkbookTests
     public void An_incomplete_template_can_be_tested_but_not_saved()
     {
         using var wb = Book(("Data", File(Row(GoodHeaders), Row("1", "A", "S", "2"))));
-        var tpl = Tpl(Sheet("Sales", SheetMatchModes.Exact, "Data"));   // SalesInvoice needs far more than these columns
+        var tpl = Tpl(Sheet("Sales", SheetMatchModes.Exact, "Data", cols: SavableColumns()));   // SalesInvoice needs far more than these columns
 
         Assert.NotEmpty(ImportTemplateValidator.Validate(tpl));         // save: blocked
         Assert.Empty(ImportTemplateValidator.ValidateStructure(tpl));   // test: allowed
@@ -441,7 +449,8 @@ public class ResolvedWorkbookTests
     }
 }
 
-// Whole-template required groups: pooled across required, non-Ignore sheets. Save enforces them; the chips use the same rule.
+// Required groups are checked per sheet: the importer reads every non-Ignore sheet on its own, so groups are NOT
+// pooled across sheets. Save enforces this (Validate); the chips use the same rule (MissingRequiredGroups).
 public class PooledRequiredGroupTests
 {
     private static ImportTemplateColumnEditDto Col(string field, string header) => new()
@@ -459,10 +468,9 @@ public class PooledRequiredGroupTests
         Columns = cols.Select(c => Col(c.Field, c.Header)).ToList()
     };
 
-    private static ImportTemplateEditDto Tpl(bool fallback = false, int? subd = null, params ImportTemplateSheetEditDto[] sheets) => new()
+    private static ImportTemplateEditDto Tpl(params ImportTemplateSheetEditDto[] sheets) => new()
     {
         ImportType = "SalesInvoice",
-        SubDistributorId = subd,
         Sheets = sheets.ToList()
     };
 
@@ -473,24 +481,25 @@ public class PooledRequiredGroupTests
         ("InvoiceCode", "Invoice No."), ("SkuCode", "SKU"), ("Quantity", "Qty"), ("UnitOfMeasure", "UOM"));
 
     [Fact]
-    public void Required_groups_split_across_required_sheets_are_valid()
+    public void Required_groups_split_across_sheets_are_not_pooled()
     {
         var errors = ImportTemplateValidator.Validate(Tpl(sheets: new[] { Header(), Lines() }));
 
-        Assert.Empty(errors);
+        Assert.Contains(errors, e => e.StartsWith("Sheet \"Header\":") && e.Contains("SKU Code"));
+        Assert.Contains(errors, e => e.StartsWith("Sheet \"Lines\":") && e.Contains("Invoice Date"));
+        Assert.Contains(errors, e => e.Contains("Each sheet is read on its own"));
     }
 
     [Fact]
-    public void A_group_mapped_only_on_an_optional_sheet_does_not_count()
+    public void An_optional_sheet_must_be_complete_on_its_own_too()
     {
         var errors = ImportTemplateValidator.Validate(Tpl(sheets: new[] { Header(), Lines(required: false) }));
 
-        Assert.Contains(errors, e => e.Contains("SKU Code"));
-        Assert.Contains(errors, e => e.Contains("optional sheet"));
+        Assert.Contains(errors, e => e.StartsWith("Sheet \"Lines\":"));
     }
 
     [Fact]
-    public void An_ignored_sheet_does_not_count()
+    public void An_ignored_sheet_is_never_read_so_it_has_nothing_to_cover()
     {
         var ignored = Lines();
         ignored.SheetMatchMode = SheetMatchModes.Ignore;
@@ -498,23 +507,18 @@ public class PooledRequiredGroupTests
 
         var errors = ImportTemplateValidator.Validate(Tpl(sheets: new[] { Header(), ignored }));
 
-        Assert.Contains(errors, e => e.Contains("SKU Code"));
+        Assert.Contains(errors, e => e.Contains("SKU Code"));                       // Header is still incomplete
+        Assert.DoesNotContain(errors, e => e.Contains("Lines"));                    // but the ignored sheet adds nothing
+        Assert.Empty(ImportTemplateValidator.MissingRequiredGroups(ignored, "SalesInvoice"));
     }
 
     [Fact]
-    public void A_template_that_falls_back_to_the_global_default_may_leave_gaps()
+    public void A_single_incomplete_sheet_reports_its_gaps_without_a_sheet_prefix()
     {
-        var errors = ImportTemplateValidator.Validate(Tpl(fallback: true, subd: 1, sheets: new[] { Header() }));
-
-        Assert.Empty(errors);
-    }
-
-    [Fact]
-    public void A_global_default_may_not_leave_gaps_even_if_fallback_is_set()
-    {
-        var errors = ImportTemplateValidator.Validate(Tpl(fallback: true, subd: null, sheets: new[] { Header() }));
+        var errors = ImportTemplateValidator.Validate(Tpl(sheets: new[] { Header() }));
 
         Assert.Contains(errors, e => e.Contains("SKU Code"));
+        Assert.DoesNotContain(errors, e => e.StartsWith("Sheet "));
     }
 
     [Fact]
@@ -523,7 +527,7 @@ public class PooledRequiredGroupTests
         var tpl = Tpl(sheets: new[] { Header() });
 
         Assert.Equal(
-            ImportTemplateValidator.MissingRequiredGroups(tpl),
-            ImportTemplateValidator.Validate(tpl).Where(e => !e.Contains("optional sheet")));
+            ImportTemplateValidator.MissingRequiredGroups(tpl.Sheets[0], tpl.ImportType),
+            ImportTemplateValidator.Validate(tpl));
     }
 }

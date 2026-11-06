@@ -4,6 +4,8 @@ namespace STTproject.Features.User.SalesInvoice.Validators;
 
 public static class SalesInvoiceValidation
 {
+    public const string InvoiceNumberExistsMessage = "Sales invoice code already exists for this order type.";
+
     public static class Header
     {
         public static readonly SalesInvoiceField InvoiceNumber = new(nameof(InvoiceNumber), "Sales Invoice Code", true, "Sales Invoice Code is required.");
@@ -48,7 +50,7 @@ public static class SalesInvoiceValidation
         }
         else if (await invoiceNumberExistsAsync())
         {
-            errors[Header.InvoiceNumber.Key] = "Sales invoice code already exists for this order type.";
+            errors[Header.InvoiceNumber.Key] = InvoiceNumberExistsMessage;
         }
 
         if (string.IsNullOrWhiteSpace(invoice.SalesManName))

@@ -1,0 +1,95 @@
+/* Import Errors list page. Reuses the clt-* table/sidebar classes from Table.css and only adds what the
+   new design needs. Colors fall back to the Entriel palette if your own CSS variables aren't defined. */
+
+.ie-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* "All Errors" / "By Import File" switch */
+.ie-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    background: #EFE9E2;
+    border-radius: 10px;
+}
+
+.ie-seg button {
+    border: 0;
+    background: transparent;
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6F665E;
+    cursor: pointer;
+}
+
+.ie-seg button:hover:not(.on) { color: #2A2622; }
+
+.ie-seg button.on {
+    background: #fff;
+    color: #2A2622;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.ie-seg button:focus-visible { outline: 2px solid #B08D57; outline-offset: 2px; }
+
+/* table cells */
+.ie-problem { display: block; font-weight: 700; }
+
+.ie-sub {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 400;
+    color: #6F665E;
+}
+
+.ie-value {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ie-file {
+    display: block;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.clt-row-click { cursor: pointer; }
+.clt-row-click:hover { background: #FDFBF7; }
+
+/* status pills */
+.ie-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ie-pill::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.ie-pill-pending  { background: #F1E6D3; color: #6F5326; }
+.ie-pill-ignored  { background: #EAE7E3; color: #4F4943; }
+.ie-pill-resolved { background: #E0EEDF; color: #2B5530; }
+.ie-pill-prepared { background: #E8E5F0; color: #4A4270; }

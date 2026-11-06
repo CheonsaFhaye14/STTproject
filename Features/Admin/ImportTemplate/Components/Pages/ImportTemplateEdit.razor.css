@@ -12,7 +12,7 @@
     --it-label-text:  #3a3a33;  /* labels*/
     --it-muted:       #8A8A92;  /* muted text, hints */
     --it-accent:      #A8884F;  /* switches, tab underline */
-    --it-accent-soft: #e8d492;  /* active pill */
+    --it-accent-soft: #eee2d4;  /* active pill */
     --it-gold:        #C9A227;  /* section number circle */
     --it-col:         #FDFCF8;  /* column cards */
     --it-strip:       #F0E6CC;  /* inner strips (test, value map) */
@@ -378,4 +378,14 @@
 .it-form ::deep .tt-alias {
     margin-left: 4px; padding: 2px 4px; font-size: 10px; font-weight: 400; line-height: 1; vertical-align: 1px;
     color: var(--it-accent); background: var(--it-input-bg); border: 1px solid var(--it-accent); border-radius: 4px;
+}
+
+.tt-loading {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .75rem 1rem;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .5rem;
+    color: var(--bs-secondary-color);
 }

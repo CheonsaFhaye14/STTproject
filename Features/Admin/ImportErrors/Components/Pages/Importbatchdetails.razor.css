@@ -1,0 +1,42 @@
+/* Import file details page. Same warm palette as ImportErrors.razor.css and Importerrordetails.razor.css.
+   Layout classes (clt-page, clt-layout, clt-sidebar, clt-table-card, clt-table, ...) come from Table.css,
+   so this page looks like the Import Errors list. */
+
+.ibd-page { display: flex; flex-direction: column; gap: 12px; }
+
+.ibd-crumb { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: #6F665E; }
+.ibd-link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: #6F5326; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ibd-link:focus-visible { outline: 2px solid #B08D57; outline-offset: 2px; }
+
+.ibd-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; }
+.ibd-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 13px; color: #6F665E; }
+.ibd-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-left: auto; }
+
+.ibd-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ibd-pill::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; }
+.ibd-pill-pending  { background: #F1E6D3; color: #6F5326; }
+.ibd-pill-ignored  { background: #EAE7E3; color: #4F4943; }
+.ibd-pill-resolved { background: #E0EEDF; color: #2B5530; }
+.ibd-pill-batch    { background: #E8E5F0; color: #4A4270; }
+
+.ibd-card { background: #fff; border: 1px solid #E6DFD6; border-radius: 12px; }
+.ibd-empty { padding: 28px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+
+.ibd-note { padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.ibd-note-warn { background: #FBEDEA; border: 1px solid #E8C6BE; color: #8A3B2E; }
+.ibd-note-gold { background: #FAF3E6; border: 1px solid #E9D9B9; color: #5A4420; }
+
+/* file information strip */
+.ibd-strip { display: flex; flex-wrap: wrap; }
+.ibd-strip > div { flex: 1; min-width: 130px; padding: 8px 14px; border-left: 1px solid #EFE9E2; }
+.ibd-strip > div:first-child { border-left: 0; }
+.ibd-strip span { display: block; margin-bottom: 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #6F665E; }
+.ibd-strip b { font-size: 14px; font-weight: 600; color: #2A2622; overflow-wrap: anywhere; }
+
+/* errors table: fixed height, scrolls inside the card */
+.ibd-table-scroll { max-height: calc(100vh - 380px); min-height: 320px; overflow: auto; }
+
+.ibd-row { cursor: pointer; }
+.ibd-row:hover { background: #FDFBF7; }
+.ibd-problem { display: block; font-weight: 700; }
+.ibd-value { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

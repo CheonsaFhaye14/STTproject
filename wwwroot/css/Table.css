@@ -810,3 +810,118 @@
     color: var(--clt-muted);
 }
 
+
+/* ---------------------------------------------------------- */
+/* Import Errors page                                           */
+/* ---------------------------------------------------------- */
+
+.ie-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* "All Errors" / "By Import File" switch */
+.ie-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    background: var(--clt-canvas);
+    border: 1px solid var(--clt-line);
+    border-radius: 10px;
+}
+
+    .ie-seg button {
+        border: 0;
+        background: transparent;
+        padding: 8px 16px;
+        border-radius: 7px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--clt-muted);
+        cursor: pointer;
+        transition: color 0.15s ease, background 0.15s ease;
+    }
+
+        .ie-seg button:hover:not(.on) {
+            color: var(--clt-ink);
+        }
+
+        .ie-seg button.on {
+            background: var(--clt-surface);
+            color: var(--clt-ink);
+            box-shadow: 0 1px 3px rgba(33, 26, 16, 0.12);
+        }
+
+        .ie-seg button:focus-visible {
+            outline: 2px solid var(--clt-accent);
+            outline-offset: 2px;
+        }
+
+/* Table cells */
+.ie-problem {
+    display: block;
+    font-weight: 600;
+}
+
+.ie-sub {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--clt-muted);
+}
+
+.ie-value {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.clt-row-click {
+    cursor: pointer;
+}
+
+/* Status pills (same shape as .clt-status) */
+.ie-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+    .ie-pill::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+.ie-pill-pending {
+    background: var(--clt-accent-soft);
+    color: var(--clt-accent);
+}
+
+.ie-pill-ignored {
+    background: var(--clt-canvas);
+    color: var(--clt-muted);
+}
+
+.ie-pill-resolved {
+    background: #e0eedf;
+    color: #2b5530;
+}
+
+.ie-pill-prepared {
+    background: #e8e5f0;
+    color: #4a4270;
+}

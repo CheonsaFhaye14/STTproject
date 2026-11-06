@@ -1,0 +1,26 @@
+@inherits LayoutComponentBase
+@using STTproject.Services
+@using STTproject.Shared.Layout.Admin
+@using STTproject.Shared.Layout.User
+@inject IUserContextService UserContext
+@inject IUserService UserService
+
+<LayoutView Layout="@currentLayout">
+    @Body
+</LayoutView>
+
+@code {
+    private Type currentLayout = typeof(UserSideBar);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserContext.UserId is int userId)
+        {
+            bool isAdmin = await UserService.IsAdminAsync(userId);
+
+            currentLayout = isAdmin
+                ? typeof(AdminSideBar)
+                : typeof(UserSideBar);
+        }
+    }
+}

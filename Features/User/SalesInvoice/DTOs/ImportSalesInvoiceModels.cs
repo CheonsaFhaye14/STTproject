@@ -43,6 +43,11 @@ public sealed class PreparedInvoice
 
 public sealed class ImportSalesInvoiceResult
 {
+    /// <summary>
+    /// The ImportBatch this Check File attempt created. Carried to the commit and close steps so they update the same batch.
+    /// Null when no batch exists (the request was rejected before one was made, or logging failed).
+    /// </summary>
+    public int? ImportBatchId { get; set; }
     public List<ImportedInvoiceRow> Rows { get; } = new();
     public int TotalRowsProcessed { get; set; }
     /// <summary>
@@ -148,10 +153,14 @@ public sealed class ImportSalesInvoiceResult
         string invoiceNumber,
         string message,
         string? columnName = null,
-        int? suggestionCount = null) =>
+        int? suggestionCount = null,
+        string? code = null,
+        string? value = null,
+        string? context = null) =>
         Issues.Add(new ImportSalesInvoiceIssue(
             source.RowNumber, invoiceNumber, message, string.Empty, string.Empty,
-            columnName, suggestionCount, SheetIndex: source.SheetIndex));
+            columnName, suggestionCount, SheetIndex: source.SheetIndex,
+            Code: code, Value: value, Context: context));
 
     public void AddIssue(ImportSalesInvoiceIssue issue) => Issues.Add(issue);
 }
@@ -207,7 +216,12 @@ public sealed record ImportSalesInvoiceIssue(
     int? SuggestionCount = null,
     string? GroupKey = null,
     bool IsHoldNote = false,
-    int SheetIndex = 0)
+    int SheetIndex = 0,
+    // Phase 7: how the row error is logged. Code is an ImportErrorTypes value; Value is the offending text
+    // (SKU, customer, UOM...); Context narrows it where the same value means different things (the SKU for a UOM).
+    string? Code = null,
+    string? Value = null,
+    string? Context = null)
 {
     public string Message => Header;
     public SourceRowKey Source => new(SheetIndex, RowNumber);

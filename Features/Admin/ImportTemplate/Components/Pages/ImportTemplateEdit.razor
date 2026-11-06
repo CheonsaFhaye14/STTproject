@@ -13,55 +13,87 @@
     <h3 class="mb-0">@(IsNew ? "New import template" : "Edit import template")</h3>
 </div>
 
-@if (_loading)
+@if (FromErrorId is int fromId)
 {
-    <div class="text-muted">Loading...</div>
-}
-else if (_model is null)
-{
-    <div class="alert alert-warning">This template no longer exists.</div>
-}
-else
-{
-    @if (_errors.Count > 0)
-    {
-        <div class="alert alert-danger">
-            <strong>Please fix the following:</strong>
-            <ul class="mb-0 ps-3">
-                @foreach (var e in _errors)
-                {
-                    <li>@e</li>
+    <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
+        <span>
+            <strong>Opened from import error #@fromId.</strong>
+            @FocusHint()
+            @if (_model?.IsGlobalDefault == true)
+            {
+                <span><b>This is the global default template.</b> Changing it affects every subdistributor that has no template
+                    of its own.</span>
                 }
-            </ul>
-        </div>
-    }
-    @if (_pendingDraft is not null)
-    {
-        <div class="alert alert-warning d-flex justify-content-between align-items-center">
-            <span>You have an unsaved draft from @_pendingDraft.SavedAt.ToString("MMM d, h:mm tt").</span>
-            <span class="d-flex gap-2">
-                <Button Variant="ButtonVariant.Primary" Title="Restore draft" OnClick="RestoreDraft" />
-                <Button Variant="ButtonVariant.Secondary" Title="Discard" OnClick="DiscardDraft" />
+                @if (BatchId is int b)
+                {
+                    <span>You are fixing the template used by <b>batch #@b</b>.</span>
+                }
+                Nothing changes until you save. Saving does not resolve the error, and it does not re-check other files it
+                appeared in. Re-import each affected file; the error closes only once its rows pass validation.
             </span>
+            <a href="@ErrorUrl">← Back to the error</a>
         </div>
     }
-    <div class="it-form">
-        <TemplateInfo Model="_model" Subds="_subds" Principals="_principals" IsNew="IsNew" @bind-IsGlobal="_isGlobal"
-                      OnChanged="Refresh" />
 
-        <SheetColumnsInfo Model="_model" />
+    @if (_loading)
+    {
+        <div class="text-muted">Loading...</div>
+    }
+    else if (_model is null)
+    {
+        <div class="alert alert-warning">This template no longer exists.</div>
+    }
+    else
+    {
+        @if (_errors.Count > 0)
+        {
+            <div class="alert alert-danger">
+                <strong>Please fix the following:</strong>
+                <ul class="mb-0 ps-3">
+                    @foreach (var e in _errors)
+                    {
+                        <li>@e</li>
+                    }
+                </ul>
+            </div>
+        }
+        @if (_pendingDraft is not null)
+        {
+            <ConfirmModal Show="true" Title="Unsaved draft found" IconClass="fa-solid fa-file-pen"
+                          Message="You have an unsaved draft for this template. Do you want to restore it or discard it?"
+                          YesLabel="Restore draft" NoLabel="Discard" OnYes="RestoreDraft" OnNo="DiscardDraft" />
+        }
+        <div class="it-form">
+            <TemplateInfo Model="_model" Subds="_subds" Principals="_principals" IsNew="IsNew" @bind-IsGlobal="_isGlobal"
+                          OnChanged="Refresh" />
 
-        <TemplateTester Model="_model" Subds="_subds" />
-    </div>
-    <div class="d-flex justify-content-end gap-2">
-        <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving"
-                Title="@(_saving ? "Saving..." : "Save the template")"></Button>
-        <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
-    </div>
-}
+            <SheetColumnsInfo Model="_model" FocusField="@(FromErrorId.HasValue ? Focus : null)" />
+
+            <TemplateTester Model="_model" Subds="_subds" />
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <Button Variant="ButtonVariant.Primary" OnClick="SaveAsync" Disabled="@_saving"
+                    Title="@(_saving ? "Saving..." : "Save the template")"></Button>
+            <Button Variant="ButtonVariant.Secondary" OnClick="CancelAsync" Title="Cancel"></Button>
+        </div>
+    }
 
 @code {
     [Parameter] public int? Id { get; set; }
+
+    // Set when the admin arrives from Import Error details ("Fix template"). Used only for the banner and the return link.
+    [SupplyParameterFromQuery(Name = "fromError")] public int? FromErrorId { get; set; }
+    [SupplyParameterFromQuery(Name = "focus")] public string? Focus { get; set; }
+
+    // The batch whose import context (subdistributor and import type) chose this template. Display only.
+    [SupplyParameterFromQuery(Name = "batch")] public int? BatchId { get; set; }
+
+    private string ErrorUrl => FromErrorId is int e ? $"/admin/import-errors/{e}" : "/admin/import-errors";
+    private string BackUrl => FromErrorId.HasValue ? ErrorUrl : "/admin/import-templates";
+
+    private string FocusHint() => string.IsNullOrWhiteSpace(Focus)
+        ? string.Empty
+        : $"Check the \"{Focus}\" column mapping and its date format.";
 
     private ImportTemplateEditDto? _model;
     private List<SubDistributorOptionDto> _subds = new();
@@ -116,7 +148,7 @@ else
 
     private Task CancelAsync()
     {
-        Nav.NavigateTo("/admin/import-templates");
+        Nav.NavigateTo(BackUrl);
         return Task.CompletedTask;
     }
 
@@ -144,7 +176,7 @@ else
         {
             _timer?.Dispose();
             await Drafts.ClearAsync(Id);
-            Nav.NavigateTo("/admin/import-templates");
+            Nav.NavigateTo(BackUrl);
         }
         else
             _errors = result.Errors;

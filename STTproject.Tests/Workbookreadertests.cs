@@ -17,7 +17,9 @@ public class WorkbookReaderTests
 
     private static ImportTemplateColumnEditDto Col(string field, string header, bool required = true) => new()
     {
-        FieldKey = field, HeaderText = header, IsRequired = required
+        FieldKey = field,
+        HeaderText = header,
+        IsRequired = required
     };
 
     // Everything a Sales Invoice sheet needs on its own.
@@ -33,15 +35,15 @@ public class WorkbookReaderTests
         string label, string mode, string? value = null, bool required = true,
         List<ImportTemplateColumnEditDto>? cols = null,
         string headerMode = HeaderRowModes.Automatic, int? headerRow = null) => new()
-    {
-        SheetLabel = label,
-        SheetMatchMode = mode,
-        SheetMatchValue = value,
-        IsRequired = required,
-        HeaderRowMode = headerMode,
-        HeaderRowNumber = headerRow,
-        Columns = cols ?? FlatColumns()
-    };
+        {
+            SheetLabel = label,
+            SheetMatchMode = mode,
+            SheetMatchValue = value,
+            IsRequired = required,
+            HeaderRowMode = headerMode,
+            HeaderRowNumber = headerRow,
+            Columns = cols ?? FlatColumns()
+        };
 
     private static ImportTemplateEditDto Tpl(params ImportTemplateSheetEditDto[] sheets) => new()
     {
@@ -357,9 +359,9 @@ public class WorkbookReaderTests
 
         Assert.Null(plan.Rows);
         var message = Assert.Single(plan.Errors);
-        Assert.StartsWith("Missing required columns:", message);
-        Assert.Contains("Invoice Date is required.", message);
-        Assert.Contains("Salesman is required.", message);
+        Assert.StartsWith("Required fields not mapped on any sheet", message);
+        Assert.Contains("Invoice Date", message);
+        Assert.Contains("Salesman", message);
     }
 
     [Fact]
@@ -419,9 +421,9 @@ public class WorkbookReaderTests
 
         Assert.Null(plan.Rows);
         Assert.Equal(2, plan.Sheets.Count);                                        // both resolved fine
-        Assert.DoesNotContain(plan.Errors, e => e.StartsWith("Missing required"));  // together they'd be complete
-        Assert.Contains(plan.Errors, e => e.Contains("Header") && e.Contains("on its own") && e.Contains("split"));
-        Assert.Contains(plan.Errors, e => e.Contains("Lines") && e.Contains("on its own"));
+        Assert.DoesNotContain(plan.Errors, e => e.StartsWith("Required fields not mapped"));  // together they'd be complete
+        Assert.Contains(plan.Errors, e => e.Contains("Sheet \"Header\"") && e.Contains("can't provide all required fields"));
+        Assert.Contains(plan.Errors, e => e.Contains("Sheet \"Lines\"") && e.Contains("can't provide all required fields"));
     }
 
     [Fact]

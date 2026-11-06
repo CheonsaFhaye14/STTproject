@@ -168,20 +168,9 @@
             <tr>
                 @* Company Item *@
                 <td>
-                    <span class="clt-code">
-                        @item.CompanyItemCode
-                    </span>
                     <div class="clt-name">
-                        @item.CompanyItemName
+                        @item.CompanyItemCode - @item.CompanyItemName
                     </div>
-                    @if (schedules.Count > 1)
-                    {
-                        <div class="clt-muted">Dual price list</div>
-                    }
-                    else
-                    {
-                        <div class="clt-muted">Single price list</div>
-                    }
                 </td>
 
                 @* Effective Date *@

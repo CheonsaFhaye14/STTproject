@@ -1,0 +1,88 @@
+@page "/admin/import-errors"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@inject NavigationManager NavManager
+
+<link rel="stylesheet" href="css/ImportErrors.css" asp-append-version="true" />
+
+<LoadingOverlay Show="isLoading" Title="Loading import errors…" Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-exclamation-triangle" />
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page">
+
+        <div class="clt-page-header">
+            <div>
+                <h1 class="clt-page-title">Import Errors</h1>
+                <p class="clt-page-sub">
+                    @(showFiles
+                        ? $"{totalCount} import files with errors"
+                        : $"{totalCount} unique errors, grouped across import batches")
+                </p>
+            </div>
+            <div class="clt-header-actions ie-header-right">
+                <div class="ie-seg" role="tablist" aria-label="Import errors view">
+                    <button type="button" role="tab" class="@(!showFiles ? "on" : "")"
+                            aria-selected="@(showFiles ? "false" : "true")" @onclick="() => SetView(false)">All
+                        Errors</button>
+                        <button type="button" role="tab" class="@(showFiles ? "on" : "")"
+                                aria-selected="@(showFiles ? "true" : "false")" @onclick="() => SetView(true)">By Import
+                            File</button>
+                        </div>
+                        <Button Title="Export" Variant="ButtonVariant.Secondary" OnClick="OpenExportModal"></Button>
+                    </div>
+                </div>
+
+                <ImportErrorsTable @ref="table" IsImportBatch="showFiles" OnLoaded="OnTableLoaded"
+                                   OnCountChanged="OnCountChanged" OnViewDetails="OpenDetails" OnFix="OpenFix" OnViewFile="OpenFile" />
+
+                @if (showExportModal)
+                {
+                    <ExportModal Show="true" Filter="exportFilter" IsImportBatch="showFiles" FilteredCount="totalCount"
+                                 OnClose="CloseExportModal" />
+                }
+
+            </div>
+        </div>
+
+@code {
+    private bool showExportModal;
+    private ImportErrorsTable? table;
+    private ImportErrorFilter? exportFilter; // snapshot taken when the modal opens
+    private bool isLoading = true;
+    private bool showFiles;
+    private int totalCount;
+
+    private Task OnTableLoaded()
+    {
+        // Only the first load shows the full-page overlay. Switching views uses the table's own "Loading…" row.
+        if (isLoading)
+        {
+            isLoading = false;
+            return InvokeAsync(StateHasChanged);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void OnCountChanged(int count)
+    {
+        totalCount = count;
+        StateHasChanged();
+    }
+
+    private void SetView(bool files) => showFiles = files;
+
+    // These routes belong to the next two pages (error details, and file details).
+    private void OpenDetails(int importErrorId) => NavManager.NavigateTo($"/admin/import-errors/{importErrorId}");
+
+    // The Fix button opens the details page, where Fix → Verify → Resolved happens.
+    private void OpenFix(int importErrorId) => NavManager.NavigateTo($"/admin/import-errors/{importErrorId}");
+
+    private void OpenFile(int importBatchId) => NavManager.NavigateTo($"/admin/import-errors/files/{importBatchId}");
+
+    private void OpenExportModal()
+    {
+        exportFilter = table?.GetCurrentFilter();
+        showExportModal = true;
+    }
+    private void CloseExportModal() => showExportModal = false;
+}

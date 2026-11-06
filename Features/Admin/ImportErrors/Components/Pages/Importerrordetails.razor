@@ -1,0 +1,877 @@
+@page "/admin/import-errors/{ImportErrorId:int}"
+@layout STTproject.Shared.Layout.Admin.AdminSideBar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IImportErrorDetailsService DetailsData
+@inject IImportErrorVerificationService Verifier
+
+<LoadingOverlay Show="isLoading" Title="Loading error…" Subtitle="Please wait while we fetch the details."
+                IconClass="fa-solid fa-exclamation-triangle" />
+
+<div style="@(isLoading ? "display:none;" : "")">
+    <div class="clt-page ied-page">
+
+        @if (error is null)
+        {
+            <nav class="ied-crumb" aria-label="Breadcrumb">
+                <button type="button" class="ied-link" @onclick="Back">← Back to Import Errors</button>
+            </nav>
+            <div class="ied-card ied-empty">
+                <h1 class="clt-page-title">Error not found</h1>
+                <p class="clt-page-sub">It may have been removed, or the link is wrong.</p>
+                <Button Title="← Back to Import Errors" Variant="ButtonVariant.Secondary" OnClick="Back" />
+            </div>
+        }
+        else
+        {
+            var title = ImportErrorPresentation.Title(error.ErrorType);
+            var guide = ImportErrorGuidance.For(error.ErrorType, error.Message);
+            var pending = ImportErrorPresentation.IsPending(error.Status);
+            var ignored = ImportErrorPresentation.StatusKey(error.Status) == ImportErrorPresentation.Ignored;
+            var resolved = ImportErrorPresentation.StatusKey(error.Status) == ImportErrorPresentation.Resolved;
+            var auto = error.ResolutionType != null && error.ResolutionType.Contains("auto",
+        StringComparison.OrdinalIgnoreCase);
+
+            <nav class="ied-crumb" aria-label="Breadcrumb">
+                <button type="button" class="ied-link" @onclick="Back">← Back to Import Errors</button>
+            </nav>
+
+            <div class="ied-head">
+                <div>
+                    <h1 class="clt-page-title">@title</h1>
+                    <div class="ied-meta">
+                        <span
+                        class="ied-pill @StatusClass(error.Status)">@ImportErrorPresentation.StatusText(error.Status)</span>
+                    </div>
+                </div>
+                <div class="ied-actions">
+                    @if (pending)
+                    {
+                        @if (error.CanVerify)
+                        {
+                            <Button Title="@("Verify & Resolve")" Variant="ButtonVariant.Secondary" OnClick="OpenVerify"
+                                    Disabled="busy" />
+                        }
+                        else
+                        {
+                            <Button Title="Resolve Manually" Variant="ButtonVariant.Secondary" OnClick="OpenResolve"
+                                    Disabled="busy" />
+                        }
+                        <Button Title="Ignore" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = true"
+                                Disabled="busy" />
+                        @if (error.Batches.Count > 0)
+                        {
+                            <Button Title="Download original file" Variant="ButtonVariant.Secondary"
+                                    OnClick="() => DownloadAsync(error.Batches[0])" Disabled="busy" />
+                        }
+                        @if (ImportErrorPresentation.CanFix(error.ErrorType) ||
+                ImportErrorPresentation.UsesTemplateFix(error.ErrorType))
+                        {
+                            <Button Title="@ImportErrorGuidance.FixLabel(error.ErrorType)" Variant="ButtonVariant.Primary"
+                                    OnClick="Fix" Disabled="busy" />
+                        }
+                    }
+                    else if (ignored)
+                    {
+                        <Button Title="Reopen error" Variant="ButtonVariant.Secondary" OnClick="ReopenAsync" Disabled="busy" />
+                    }
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="ied-note ied-note-@(messageIsError ? "warn" : "gold")" role="status">@message</div>
+            }
+            @if (error.Recurrence is { } rec)
+            {
+                <div class="ied-note ied-note-gold" role="note">
+                    <b>Returned</b>
+                    <span>@RecurrenceIntro(rec)</span>
+                    <span>
+                        Previous error:
+                        <button type="button" class="ied-link"
+                                @onclick="() => OpenError(rec.PreviousImportErrorId)">#@rec.PreviousImportErrorId</button>
+                        · @RecurrenceDetail(rec)
+                    </span>
+                    <span>@RecurrenceBatch()</span>
+                </div>
+            }
+            @if (resolved)
+            {
+                <div class="ied-note ied-note-ok">
+                    <b>@ResolvedTitle(auto)</b>
+                    <span>@ResolvedLine(auto)</span>
+                </div>
+            }
+            @if (ignored)
+            {
+                <div class="ied-note ied-note-gray">
+                    <b>Ignored</b>
+                    <span>This error is out of the pending list but stays on record. You can reopen it any time.</span>
+                </div>
+            }
+
+            @* ---------- summary strip ---------- *@
+            <section class="ied-card ied-strip" aria-label="Affected data">
+                <div><span>Subdistributor</span><b>@(error.SubDistributorName ?? "—")</b></div>
+                <div><span>Occurrences</span><b>@error.Occurrences</b></div>
+                <div><span>Affected invoices</span><b>@error.AffectedInvoices</b></div>
+                <div><span>First detected</span><b>@Date(error.FirstSeenAtPht)</b></div>
+                <div><span>Last detected</span><b>@Date(error.LastSeenAtPht)</b></div>
+                <div><span>Error code</span><b class="ied-mono">@error.ErrorType</b></div>
+            </section>
+
+            <div class="ied-two">
+                @* ---------- overview ---------- *@
+                <section class="ied-card ied-sec">
+                    <h3>Overview</h3>
+                    <div class="ied-body">
+                        @if (!string.IsNullOrWhiteSpace(error.Value))
+                        {
+                            <div class="ied-val">
+                                @error.Value
+                                <small>@ValueSource()</small>
+                            </div>
+                        }
+                        <p class="ied-what">@guide.What</p>
+                        <div class="ied-q">
+                            <h4>Why did this happen?</h4>
+                            <p>@guide.Why</p>
+                        </div>
+                        <div class="ied-q">
+                            <h4>What should you do?</h4>
+                            <p>@guide.Todo</p>
+                        </div>
+                    </div>
+                </section>
+
+                @* ---------- import history ---------- *@
+                <section class="ied-card ied-sec">
+                    <div class="ied-sh">
+                        <h3>Import history</h3>
+                        <span class="ied-sub">@Plural(error.Batches.Count, "import attempt")</span>
+                    </div>
+                    @if (error.Batches.Count == 0)
+                    {
+                        <p class="ied-sub">No import batches are linked to this error.</p>
+                    }
+                    else
+                    {
+                        <div class="ied-body">
+                            <ul class="ied-tl">
+                                @foreach (var b in error.Batches)
+                                {
+                                    var batchId = b.ImportBatchId;
+                                    <li>
+                                        <i class="ied-dot"></i>
+                                        <span>
+                                            <b>@Date(b.UploadedAtPht) · Batch #@b.ImportBatchId</b>
+                                            @if (batchId == firstBatchId)
+                                            {
+                                                <span class="ied-chip">First detected</span>
+                                            }
+                                            <span class="ied-sub ied-clip" title="@b.FileName">
+                                                @b.FileName · @OccText(b.Occurrences)
+                                                @HistoryTail(b)
+                                            </span>
+                                        </span>
+                                        <span class="ied-ac">
+                                            <Button Title="View details" Variant="ButtonVariant.Secondary"
+                                                    OnClick="() => OpenFile(batchId)" />
+                                            <Button Title="Download" Variant="ButtonVariant.Secondary"
+                                                    OnClick="() => DownloadAsync(b)" Disabled="busy" />
+                                        </span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </section>
+            </div>
+
+            @* ---------- affected rows ---------- *@
+            <section class="ied-card ied-sec">
+                <div class="ied-sh">
+                    <h3>Affected Excel rows</h3>
+                    <span class="ied-sub">@Plural(error.Rows.Count, "row") · click a row to see the full Excel row</span>
+                </div>
+
+                @if (error.Rows.Count == 0)
+                {
+                    <p class="ied-sub">No row details were stored for this error.</p>
+                }
+                else
+                {
+                    <div class="ied-scroll ied-body">
+                        <table class="ied-table">
+                            <thead>
+                                <tr>
+                                    <th>Batch</th>
+                                    <th>Sheet · Row</th>
+                                    <th>Invoice</th>
+                                    <th>Problem value</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (r, i) in ShownRows.Select((r, i) => (r, i)))
+                                {
+                                    var key = i;
+                                    var open = expanded.Contains(key);
+                                    <tr class="ied-row" @onclick="() => ToggleRow(key)">
+                                        <td title="@r.FileName">#@r.ImportBatchId</td>
+                                        <td>@SheetRow(r)</td>
+                                        <td>@(r.Invoice ?? "—")</td>
+                                        <td><span class="ied-pv" title="@error.Value">@error.Value</span></td>
+                                        <td class="ied-x" aria-label="Full Excel row">@(open ? "▾" : "▸")</td>
+                                    </tr>
+                                    @if (open)
+                                    {
+                                        <tr class="ied-xr">
+                                            <td colspan="5">
+                                                <div class="ied-xhead">
+                                                    <div class="ied-xtitle">
+                                                        <b>@RowTitle(r)</b>
+                                                        <span>@RowSource(r)</span>
+                                                    </div>
+                                                    <label class="ied-xopt">
+                                                        <input type="checkbox" @bind="hideEmpty" />
+                                                        <span>Hide empty columns</span>
+                                                    </label>
+                                                </div>
+                                                @if (r.Data is null || r.Data.Count == 0)
+                                                {
+                                                    <span class="ied-sub">No snapshot of this row was stored.</span>
+                                                }
+                                                else
+                                                {
+                                                    <p class="ied-xsum">@RowSummary(r)</p>
+                                                    <dl class="ied-kv">
+                                                        @foreach (var kv in VisibleCells(r))
+                                                        {
+                                                            <div class="@CellClass(kv.Value)">
+                                                                <dt>@kv.Key</dt>
+                                                                <dd>@CellValue(kv.Value)</dd>
+                                                            </div>
+                                                        }
+                                                    </dl>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (error.Rows.Count > MaxShownRows)
+                    {
+                        <p class="ied-sub">@CapText()</p>
+                    }
+                    @if (error.RowsTruncated)
+                    {
+                        <p class="ied-sub">@TruncText()</p>
+                    }
+                }
+            </section>
+        }
+    </div>
+</div>
+
+@if (showIgnore)
+{
+    <Modal ShowModal="showIgnore" Width="480px" MaxWidth="100%" Title="Ignore this error"
+           Subtitle="It leaves your pending list but stays on record. You can reopen it any time."
+           OnClose="() => showIgnore = false">
+        <ChildContent>
+            <div class="ied-ctx"><b>@ImportErrorPresentation.Title(error?.ErrorType)</b><span>@error?.Value</span></div>
+        </ChildContent>
+        <FooterContent>
+            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = false" />
+            <Button Title="Ignore error" Variant="ButtonVariant.Primary" OnClick="IgnoreAsync" Disabled="busy" />
+        </FooterContent>
+    </Modal>
+}
+
+@if (showBatchPick)
+{
+    <Modal ShowModal="showBatchPick" Width="760px" MaxWidth="100%" Title="Which file do you want to fix?"
+           Subtitle="This error appeared in files with different import settings, so Entriel can't pick a template for you."
+           OnClose="() => showBatchPick = false">
+        <ChildContent>
+            <div class="ied-note ied-note-gold" style="margin-bottom:10px;text-align:left;">
+                Fixing one file's template does not resolve this error for the other files. It stays pending until every
+                affected file has been re-imported and passes validation.
+            </div>
+            <div class="ied-scroll" style="max-height:320px;">
+                <table class="ied-table">
+                    <thead>
+                        <tr>
+                            <th>Batch</th>
+                            <th>Subdistributor</th>
+                            <th>Import type</th>
+                            <th>Uploaded</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in batchOptions)
+                        {
+                            var id = o.ImportBatchId;
+                            <tr>
+                                <td>#@o.ImportBatchId</td>
+                                <td>@(o.SubDistributorName ?? "—")</td>
+                                <td>@o.ImportType</td>
+                                <td>@Date(o.UploadedAtPht)</td>
+                                <td><Button Title="Fix this template" Variant="ButtonVariant.Secondary"
+                                                OnClick="() => ChooseBatchAsync(id)" Disabled="busy" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </ChildContent>
+            <FooterContent>
+                <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showBatchPick = false" />
+            </FooterContent>
+        </Modal>
+    }
+
+    @if (showVerify)
+    {
+        <Modal ShowModal="showVerify" Width="820px" MaxWidth="100%" Title="Verify and resolve"
+               Subtitle="Re-import the corrected file first. Entriel then re-checks this error's affected invoices against it."
+               OnClose="() => showVerify = false">
+            <ChildContent>
+                <div class="ied-ctx"><b>@ImportErrorPresentation.Title(error?.ErrorType)</b><span>@error?.Value</span></div>
+                <div class="ied-note ied-note-gold" style="margin-bottom:10px;text-align:left;">
+                    The error is resolved only if the same problem is gone and every affected invoice
+                    (@(error?.AffectedInvoiceCodes.Count ?? 0)) is in the file. Saving a template or uploading a file does not
+                    resolve it by itself.
+                </div>
+
+                @if (loadingCandidates)
+                {
+                    <p class="ied-sub">Loading uploads…</p>
+                }
+                else if (candidates.Count == 0)
+                {
+                    <p class="ied-sub">No later upload was found for this subdistributor. Correct the source file, upload it with
+                        Check File, then come back.</p>
+                    }
+            else
+                    {
+                        <div class="ied-scroll" style="max-height:260px;">
+                            <table class="ied-table">
+                                <thead>
+                                    <tr>
+                                        <th>Batch</th>
+                                        <th>File</th>
+                                        <th>Uploaded</th>
+                                        <th>By</th>
+                                        <th>Import</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var cnd in candidates)
+                                    {
+                                        var id = cnd.ImportBatchId;
+                                        <tr>
+                                            <td>#@cnd.ImportBatchId</td>
+                                            <td title="@cnd.FileName">@cnd.FileName</td>
+                                            <td>@Date(cnd.UploadedAtPht)</td>
+                                            <td>@(cnd.UploadedByName ?? "—")</td>
+                                            <td>@cnd.BatchStatus</td>
+                                            <td><Button Title="Verify with this file" Variant="ButtonVariant.Secondary"
+                                                            OnClick="() => VerifyAsync(id)" Disabled="verifying" /></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        @if (verifying)
+                        {
+                            <p class="ied-sub" style="margin-top:10px;">Checking the file…</p>
+                        }
+                        @if (verifyResult is { } vr && vr.Outcome != VerificationOutcome.Verified)
+                        {
+                            <div class="ied-note ied-note-warn" style="margin-top:10px;text-align:left;" role="alert">
+                                <b>Not resolved</b>
+                                <span>@vr.Message</span>
+                            </div>
+                            @if (vr.Issues.Count > 0)
+                            {
+                                <div class="ied-scroll" style="max-height:220px;margin-top:8px;">
+                                    <table class="ied-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Invoice</th>
+                                                <th>Sheet · Row</th>
+                                                <th>Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var iss in vr.Issues.Take(MaxShownIssues))
+                                            {
+                                                <tr>
+                                                    <td>@(iss.Invoice ?? "—")</td>
+                                                    <td>@IssueLocation(iss)</td>
+                                                    <td title="@iss.Reason">@iss.Reason</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if (vr.Issues.Count > MaxShownIssues)
+                                {
+                                    <p class="ied-sub">@("Showing the first " + MaxShownIssues + " of " + vr.Issues.Count + ".")</p>
+                                }
+                            }
+                        }
+                    </ChildContent>
+                    <FooterContent>
+                        <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="() => showVerify = false" />
+                    </FooterContent>
+                </Modal>
+            }
+
+            @if (showPick)
+            {
+                <Modal ShowModal="showPick" Width="480px" MaxWidth="100%" Title="Which template read this file?"
+                       Subtitle="@("More than one active template could apply to batch #" + pickedBatchId + ". Pick the one its file uses.")"
+                       OnClose="() => showPick = false">
+                    <ChildContent>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            @foreach (var o in pickOptions)
+                            {
+                                var id = o.ImportTemplateId;
+                                <Button Title="@(o.TemplateName + (o.IsGlobalDefault ? " (global default)" : string.Empty))"
+                                        Variant="ButtonVariant.Secondary" OnClick="() => OpenTemplate(id)" />
+                            }
+                        </div>
+                    </ChildContent>
+                    <FooterContent>
+                        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showPick = false" />
+                    </FooterContent>
+                </Modal>
+            }
+
+            @if (showResolve)
+            {
+                <Modal ShowModal="showResolve" Width="480px" MaxWidth="100%" Title="Resolve manually"
+                       Subtitle="Use this only when Entriel can't verify the fix on its own, for example when the mistake is in the source Excel file."
+                       OnClose="() => showResolve = false">
+                    <ChildContent>
+                        <div class="ied-ctx"><b>@ImportErrorPresentation.Title(error?.ErrorType)</b><span>@error?.Value</span></div>
+                        <label class="ied-field">
+                            <span>Resolution type</span>
+                            <select @bind="resolveType">
+                                <option value="">Select…</option>
+                                @foreach (var t in ImportErrorDetailsService.ManualResolutionTypes)
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="ied-check">
+                            <input type="checkbox" @bind="resolveConfirm" />
+                            <span>I confirm this has been addressed. Entriel has not verified it automatically.</span>
+                        </label>
+                        @if (!string.IsNullOrEmpty(resolveError))
+                        {
+                            <div class="ied-err" role="alert">@resolveError</div>
+                        }
+                    </ChildContent>
+                    <FooterContent>
+                        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showResolve = false" />
+                        <Button Title="Resolve" Variant="ButtonVariant.Primary" OnClick="ResolveAsync" Disabled="busy" />
+                    </FooterContent>
+                </Modal>
+            }
+
+@code {
+    [Parameter] public int ImportErrorId { get; set; }
+
+    private const int MaxShownRows = 200;
+
+    private ImportErrorDetailsDto? error;
+    private bool isLoading = true;
+    private bool busy;
+    private int loadedId = -1;
+
+    private readonly HashSet<int> expanded = new();
+
+    private bool hideEmpty = true;
+    private bool showIgnore;
+    private bool showResolve;
+    private bool showPick;
+    private bool showVerify;
+    private bool loadingCandidates;
+    private bool verifying;
+    private List<VerificationCandidateDto> candidates = new();
+    private VerificationResultDto? verifyResult;
+    private bool showBatchPick;
+    private int pickedBatchId;
+    private List<FixContextDto> batchOptions = new();
+    private List<FixTemplateOption> pickOptions = new();
+    private string resolveType = "";
+    private bool resolveConfirm;
+    private string? resolveError;
+
+    private string? message;
+    private bool messageIsError;
+
+    private int? firstBatchId => error?.Batches.Count > 0 ? error.Batches[^1].ImportBatchId : null;
+
+    private IEnumerable<ImportErrorAffectedRowDto> ShownRows =>
+        error is null ? Enumerable.Empty<ImportErrorAffectedRowDto>()
+        : error.Rows.Take(MaxShownRows);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedId == ImportErrorId) return;
+        loadedId = ImportErrorId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            error = await DetailsData.GetAsync(ImportErrorId);
+            expanded.Clear();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import error {ImportErrorId}: {ex.Message}");
+            error = null;
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Back() => Nav.NavigateTo("/admin/import-errors");
+    private void OpenError(int importErrorId) => Nav.NavigateTo($"/admin/import-errors/{importErrorId}");
+    private void OpenFile(int importBatchId) => Nav.NavigateTo($"/admin/import-errors/files/{importBatchId}");
+    private async Task Fix()
+    {
+        if (!ImportErrorPresentation.UsesTemplateFix(error?.ErrorType))
+        {
+            Nav.NavigateTo(ImportErrorGuidance.FixRoute(error?.ErrorType, ImportErrorId));
+            return;
+        }
+
+        await GuardedAsync(async () =>
+        {
+            var contexts = await DetailsData.GetFixContextsAsync(ImportErrorId);
+            if (contexts.Count == 0)
+            {
+                messageIsError = true;
+                message = "No import batch is linked to this error, so Entriel can't tell which template to open.";
+                return;
+            }
+
+            // Same subdistributor and import type in every batch: one template applies, so no choice is needed.
+            // Different contexts: never guess. The admin picks the batch whose template they want to fix.
+            var sameContext = contexts
+                .Select(x => (x.SubDistributorId, (x.ImportType ?? string.Empty).Trim().ToLowerInvariant()))
+                .Distinct().Count() == 1;
+
+            if (sameContext) await OpenForBatchAsync(contexts[0].ImportBatchId);
+            else { batchOptions = contexts.ToList(); showBatchPick = true; }
+        });
+    }
+
+    private async Task ChooseBatchAsync(int batchId)
+    {
+        showBatchPick = false;
+        await GuardedAsync(() => OpenForBatchAsync(batchId));
+    }
+
+    private async Task OpenForBatchAsync(int batchId)
+    {
+        pickedBatchId = batchId;
+        var options = await DetailsData.FindFixTemplatesAsync(ImportErrorId, batchId);
+        if (options.Count == 1) OpenTemplate(options[0].ImportTemplateId);
+        else if (options.Count > 1) { pickOptions = options.ToList(); showPick = true; }
+        else
+        {
+            messageIsError = true;
+            message = "No active import template was found for batch #" + batchId + ", so there is nothing to fix. Create one under Import Templates.";
+        }
+    }
+
+    private async Task GuardedAsync(Func<Task> work)
+    {
+        busy = true;
+        message = null;
+        try { await work(); }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            messageIsError = true;
+            message = "The import template could not be found. Please try again.";
+        }
+        finally { busy = false; }
+    }
+
+    // The template page only reads these; it never saves anything by itself.
+    private void OpenTemplate(int templateId)
+    {
+        showPick = false;
+        var focus = Uri.EscapeDataString(string.IsNullOrWhiteSpace(error?.FieldName) ? "InvoiceDate" : error!.FieldName!);
+        Nav.NavigateTo($"/admin/import-templates/{templateId}?fromError={ImportErrorId}&batch={pickedBatchId}&focus={focus}");
+    }
+    private void ToggleRow(int key) { if (!expanded.Add(key)) expanded.Remove(key); }
+
+    private bool IsProblemCell(string value) =>
+        error is not null && value.Length > 0 && string.Equals(value.Trim(), error.Value.Trim(),
+StringComparison.OrdinalIgnoreCase);
+
+    private async Task RunAsync(Func<Task<bool>> action, string done)
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            var ok = await action();
+            messageIsError = !ok;
+            message = ok ? done : "This error was changed by someone else. The page has been refreshed.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            messageIsError = true;
+            message = "That didn't work. Please try again, or contact support if it keeps happening.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task IgnoreAsync()
+    {
+        showIgnore = false;
+        await RunAsync(() => DetailsData.IgnoreAsync(ImportErrorId), "Error ignored.");
+    }
+
+    private Task ReopenAsync() => RunAsync(() => DetailsData.ReopenAsync(ImportErrorId), "Error reopened.");
+
+    private async Task OpenVerify()
+    {
+        showVerify = true;
+        verifyResult = null;
+        candidates = new();
+        loadingCandidates = true;
+        try { candidates = (await Verifier.GetCandidatesAsync(ImportErrorId)).ToList(); }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            verifyResult = new VerificationResultDto { Outcome = VerificationOutcome.Unverifiable, Message = "The list of uploads could not be loaded. Please try again." };
+        }
+        finally { loadingCandidates = false; }
+    }
+
+    // Resolves only if Entriel itself verifies the fix; the page just shows what happened.
+    private async Task VerifyAsync(int batchId)
+    {
+        verifying = true;
+        verifyResult = null;
+        try
+        {
+            verifyResult = await Verifier.VerifyAndResolveAsync(ImportErrorId, batchId);
+            if (verifyResult.Outcome == VerificationOutcome.Verified)
+            {
+                showVerify = false;
+                messageIsError = false;
+                message = "Verified and resolved. " + verifyResult.Message;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            verifyResult = new VerificationResultDto { Outcome = VerificationOutcome.Unverifiable, Message = "The check could not be completed. The error is still Pending. Please try again." };
+        }
+        finally { verifying = false; }
+    }
+
+    private const int MaxShownIssues = 50;
+
+    private void OpenResolve()
+    {
+        resolveType = "";
+        resolveConfirm = false;
+        resolveError = null;
+        showResolve = true;
+    }
+
+    private async Task ResolveAsync()
+    {
+        if (string.IsNullOrEmpty(resolveType) || !resolveConfirm)
+        {
+            resolveError = "Please choose a type and confirm.";
+            return;
+        }
+        showResolve = false;
+        await RunAsync(() => DetailsData.ResolveManuallyAsync(ImportErrorId, resolveType), "Marked as resolved manually.");
+    }
+
+    private async Task DownloadAsync(ImportErrorBatchDetailDto batch)
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            var file = await DetailsData.GetOriginalFileAsync(batch.ImportBatchId);
+            if (file is null)
+            {
+                messageIsError = true;
+                message = $"The original file for batch #{batch.ImportBatchId} was not found. It may never have been saved, or it was cleaned up.";
+                return;
+            }
+            await JS.InvokeVoidAsync("downloadFileFromBytes", file.FileName, file.ContentType, Convert.ToBase64String(file.Bytes));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            messageIsError = true;
+            message = "The file could not be downloaded.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+
+    // Text is built here (not inline in the markup) so the Razor parser never has to read quotes, colons or interpolations.
+    private static string Date(DateTime? d) => d.HasValue ? d.Value.ToString("MMM d, yyyy") : "—";
+    private static string Plural(int n, string noun) => n + " " + noun + (n == 1 ? "" : "s");
+    private static string OccText(int n) => Plural(n, "occurrence");
+
+    private string ResolvedTitle(bool auto) =>
+        error?.VerifiedImportBatchId != null ? "Verified and resolved" : auto ? "Resolved automatically" : "Resolved manually";
+
+    private string ResolvedLine(bool auto)
+    {
+        if (error is null) return string.Empty;
+        if (auto)
+            return "Entriel re-checked the affected rows" + (error.ResolvedAtPht.HasValue ? " on " + Date(error.ResolvedAtPht) : "")
++ " and they now pass validation.";
+
+        var parts = new List<string>();
+        if (error.ResolvedByName != null) parts.Add("By " + error.ResolvedByName);
+        if (error.ResolvedAtPht.HasValue) parts.Add(Date(error.ResolvedAtPht));
+        if (error.VerifiedImportBatchId.HasValue) parts.Add("Verified against batch #" + error.VerifiedImportBatchId.Value);
+        if (!string.IsNullOrWhiteSpace(error.ResolutionType)) parts.Add("Type: " + error.ResolutionType);
+        return string.Join(" · ", parts);
+    }
+
+    private static string RecurrenceIntro(ImportErrorRecurrenceDto r)
+    {
+        var status = ImportErrorPresentation.StatusKey(r.PreviousStatus);
+        if (status == ImportErrorPresentation.Resolved)
+        {
+            var auto = r.PreviousResolutionType != null && r.PreviousResolutionType.Contains("auto",
+StringComparison.OrdinalIgnoreCase);
+            return "This problem was previously marked as resolved " + (auto ? "automatically." : "manually.");
+        }
+        return "This problem was previously recorded as " +
+ImportErrorPresentation.StatusText(r.PreviousStatus).ToLowerInvariant() + ".";
+    }
+
+    private static string RecurrenceDetail(ImportErrorRecurrenceDto r)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(r.PreviousResolutionType)) parts.Add("Resolution: " + r.PreviousResolutionType);
+        if (r.PreviousResolvedByName != null) parts.Add("Resolved by " + r.PreviousResolvedByName);
+        if (r.PreviousResolvedAtPht.HasValue) parts.Add(Date(r.PreviousResolvedAtPht));
+        parts.Add(Plural(r.PreviousOccurrences, "earlier occurrence"));
+        return string.Join(" · ", parts);
+    }
+
+    private string RecurrenceBatch() =>
+        firstBatchId.HasValue ? "The same problem was detected again in Batch #" + firstBatchId.Value + "." : "The same problem was detected again.";
+
+    private static string HistoryTail(ImportErrorBatchDetailDto b) => b.UploadedByName is null ? string.Empty : " · " +
+b.UploadedByName;
+
+    private string ValueSource()
+    {
+        if (error is null) return string.Empty;
+        var field = ImportErrorPresentation.FieldLabel(error.FieldName);
+        var source = error.SubDistributorName ?? "Source file";
+        return field.Length > 0 ? source + " · " + field : source;
+    }
+
+    private static string IssueLocation(VerificationIssueDto i)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(i.Sheet)) parts.Add(i.Sheet);
+        if (i.RowNumber.HasValue) parts.Add(i.RowNumber.Value.ToString());
+        return parts.Count == 0 ? "—" : string.Join(" · ", parts);
+    }
+
+    private static string SheetRow(ImportErrorAffectedRowDto r)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(r.Sheet)) parts.Add(r.Sheet);
+        if (r.RowNumber.HasValue) parts.Add(r.RowNumber.Value.ToString());
+        return parts.Count == 0 ? "—" : string.Join(" · ", parts);
+    }
+
+    private static string RowSource(ImportErrorAffectedRowDto r)
+    {
+        var text = r.FileName;
+        if (r.Sheet != null) text += " · Sheet: " + r.Sheet;
+        if (r.RowNumber.HasValue) text += " · Excel row " + r.RowNumber.Value;
+        return text;
+    }
+
+    private string RowTitle(ImportErrorAffectedRowDto r) =>
+        (r.RowNumber.HasValue ? "Excel row " + r.RowNumber.Value : "Excel row") + (string.IsNullOrEmpty(r.Invoice) ? "" : " · " + r.Invoice);
+
+    private IEnumerable<KeyValuePair<string, string>> VisibleCells(ImportErrorAffectedRowDto r) =>
+        (r.Data ?? new()).Where(kv => !hideEmpty || !string.IsNullOrWhiteSpace(kv.Value) || IsProblemCell(kv.Value));
+
+    private string RowSummary(ImportErrorAffectedRowDto r)
+    {
+        var data = r.Data ?? new();
+        var problems = data.Where(kv => IsProblemCell(kv.Value)).Select(kv => kv.Key).ToList();
+        var empty = data.Count(kv => string.IsNullOrWhiteSpace(kv.Value));
+        var text = data.Count + " columns";
+        if (hideEmpty && empty > 0) text += " (" + empty + " empty hidden)";
+        if (problems.Count > 0) text += " · Problem value found in: " + string.Join(", ", problems);
+        return text;
+    }
+
+    private string CellClass(string value) => IsProblemCell(value) ? "ied-kvrow ied-kvrow-p" :
+string.IsNullOrWhiteSpace(value) ? "ied-kvrow ied-kvrow-empty" : "ied-kvrow";
+    private static string CellValue(string value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private string CapText() =>
+        "Showing the first " + MaxShownRows.ToString("N0") + " of " + (error?.Rows.Count ?? 0).ToString("N0") + " rows. Use Export and tick Affected Rows for the full list.";
+
+    private static string TruncText() =>
+        "At least one file had more affected rows than Entriel stores (" +
+STTproject.Services.ImportLogService.MaxAffectedRows.ToString("N0") +
+        " per error per file), so this list is not complete. The occurrence count above is.";
+
+    private static string StatusClass(string? status) => ImportErrorPresentation.StatusKey(status) switch
+    {
+        ImportErrorPresentation.Ignored => "ied-pill-ignored",
+        ImportErrorPresentation.Resolved => "ied-pill-resolved",
+        _ => "ied-pill-pending"
+    };
+}

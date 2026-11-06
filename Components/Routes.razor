@@ -1,6 +1,7 @@
 ﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(STTproject.Shared.Layout.User.UserSideBar)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        <RouteView RouteData="@routeData" DefaultLayout="typeof(STTproject.Shared.Layout.User.UserSideBar)" />
+
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
 </Router>

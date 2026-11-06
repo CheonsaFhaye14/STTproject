@@ -14,6 +14,7 @@ using STTproject.Features.Admin.SalesInvoice.Services;
 using STTproject.Features.Admin.Subdistributor.Services;
 using STTproject.Features.Admin.PriceIncrease.Services;
 using STTproject.Features.Admin.ImportTemplate.Services;
+using STTproject.Features.Admin.ImportErrors.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,9 +55,19 @@ builder.Services.AddScoped<IAdminSubDistributorService, AdminSubDistributorServi
 builder.Services.AddScoped<IAdminPriceIncreaseService, AdminPriceIncreaseService>();
 builder.Services.AddScoped<IImportTemplateService, ImportTemplateService>();
 builder.Services.AddScoped<IImportTemplateTestService, ImportTemplateTestService>();
+builder.Services.AddScoped<IImportErrorsService, ImportErrorsService>();
+builder.Services.AddScoped<IImportErrorsExportService, ImportErrorsExportService>();
 builder.Services.AddScoped<ImportCustomersService>();
 builder.Services.AddScoped<ImportCompanyItemsService>();
 builder.Services.AddScoped<TemplateDraftService>();
+builder.Services.AddScoped<ImportLogService>();
+builder.Services.AddScoped<ImportFileStore>();
+builder.Services.AddScoped<IImportFileStore, DiskImportFileStore>();
+builder.Services.AddScoped<IImportErrorDetailsService, ImportErrorDetailsService>();
+builder.Services.AddScoped<IUserService, UserServices>();
+builder.Services.AddScoped<IImportBatchDetailsService, ImportBatchDetailsService>();
+builder.Services.AddScoped<IImportErrorVerificationService, ImportErrorVerificationService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

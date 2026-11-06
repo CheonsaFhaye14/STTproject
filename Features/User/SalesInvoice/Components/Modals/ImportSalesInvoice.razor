@@ -71,7 +71,7 @@
 
             using var importStream = new MemoryStream(fileBytes);
             importResult = await ImportSalesInvoiceService.PrepareFromExcelAsync(
-                importStream, SubDistributorId, UserContext.UserId ?? 0);
+                importStream, selectedFile.Name, SubDistributorId, UserContext.UserId ?? 0);
         }
         catch (Exception ex)
         {
@@ -98,6 +98,8 @@
         if (toCommit.Count == 0) return;
 
         var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
+        await ImportSalesInvoiceService.RecordCommitErrorsAsync(importResult, commitResult);
+        await ImportSalesInvoiceService.RecordCommitOutcomeAsync(importResult, commitResult);
 
         foreach (var prepared in toCommit)
             prepared.Selected = !prepared.IsSaved;
@@ -130,6 +132,7 @@
 
     private async Task CloseResults()
     {
+        await ImportSalesInvoiceService.RecordResultsClosedAsync(importResult);
         showResults = false;
         selectedFile = null;
         importResult = null;
