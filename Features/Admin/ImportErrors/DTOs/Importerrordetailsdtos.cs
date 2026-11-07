@@ -31,6 +31,13 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         public int? VerifiedImportBatchId { get; set; }
 
         /// <summary>
+        /// Only for an error resolved by a recheck (ResolutionType "Verified by recheck"): the ORIGINAL batches whose stored files were rechecked
+        /// with the current template and master data, newest first. They are the error's own batch links, which never change once it is Resolved
+        /// (a recurrence creates a new error). Empty otherwise. Not the same as VerifiedImportBatchId, which is a corrected file that was re-imported.
+        /// </summary>
+        public List<int> RecheckedImportBatchIds { get; set; } = new();
+
+        /// <summary>
         /// True when Entriel can check this error against a corrected file: a sales invoice row-level error with a fingerprint
         /// and complete (not truncated) evidence of which invoices were affected.
         /// </summary>
@@ -41,8 +48,31 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         /// <summary>Newest first.</summary>
         public List<ImportErrorBatchDetailDto> Batches { get; set; } = new();
 
-        /// <summary>Affected Excel rows across all batches, newest batch first, then sheet and row number.</summary>
+        /// <summary>
+        /// The same batches as <see cref="Batches"/>, newest first, with batches that uploaded the identical file (same ImportFileId)
+        /// grouped together. A batch with no shared file (uploaded before deduplication) is a group of one. Every batch is still its own
+        /// upload attempt: grouping changes how they are shown, never what is stored.
+        /// </summary>
+        public List<ImportErrorUploadGroupDto> UploadGroups { get; set; } = new();
+
+        /// <summary>Affected Excel rows across all batches, newest batch first, then sheet and row number. One entry per batch per row.</summary>
         public List<ImportErrorAffectedRowDto> Rows { get; set; } = new();
+
+        /// <summary>
+        /// The same rows as <see cref="Rows"/>, one entry per logical Excel row (sheet and row number) however many uploads reported it.
+        /// Each keeps the snapshot it had in every upload. Nothing stored is merged away: this is only how the page lists it.
+        /// </summary>
+        public List<ImportErrorLogicalRowDto> LogicalRows { get; set; } = new();
+
+        /// <summary>The error's own facts shown in the Overview for types that need more than one value (customer code and name, item code, name and unit).</summary>
+        public List<ImportErrorFactDto> Facts { get; set; } = new();
+
+        /// <summary>One of <see cref="ImportErrorCorrectionState"/>. See <see cref="CorrectionNote"/> for what it is based on.</summary>
+        public string CorrectionState { get; set; } = ImportErrorCorrectionState.StillReported;
+        public string CorrectionNote { get; set; } = string.Empty;
+
+        /// <summary>The upload that confirmed the correction. Only set when <see cref="CorrectionState"/> is Corrected by a re-import.</summary>
+        public int? CorrectionBatchId { get; set; }
 
         /// <summary>Set when this error is a recurrence: the same problem came back after an earlier error was closed. Null otherwise.</summary>
         public ImportErrorRecurrenceDto? Recurrence { get; set; }
@@ -77,6 +107,28 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         public int Occurrences { get; set; }
         public DateTime? FirstSeenAtPht { get; set; }
         public DateTime? LastSeenAtPht { get; set; }
+
+        /// <summary>The shared file this batch uploaded. Null for a batch with no shared file.</summary>
+        public int? ImportFileId { get; set; }
+
+        /// <summary>The Excel row(s) the importer reported for this error in this attempt, for example "Sales · 165". Null when none was stored.</summary>
+        public string? ReportedRowsText { get; set; }
+    }
+
+    /// <summary>Upload attempts of one identical file, newest first.</summary>
+    public class ImportErrorUploadGroupDto
+    {
+        public int? ImportFileId { get; set; }
+
+        /// <summary>The newest attempt's file name. Each attempt keeps its own name in <see cref="Batches"/>.</summary>
+        public string FileName { get; set; } = string.Empty;
+
+        public List<ImportErrorBatchDetailDto> Batches { get; set; } = new();
+
+        public int AttemptCount => Batches.Count;
+        public int Occurrences => Batches.Sum(b => b.Occurrences);
+        public DateTime FirstUploadedAtPht => Batches.Min(b => b.UploadedAtPht);
+        public DateTime LastUploadedAtPht => Batches.Max(b => b.UploadedAtPht);
     }
 
     public class ImportErrorAffectedRowDto
@@ -87,8 +139,83 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         public int? RowNumber { get; set; }
         public string? Invoice { get; set; }
 
+        /// <summary>
+        /// True for a row the importer reported. False for a row listed only because it belongs to the same invoice as a reported row.
+        /// Evidence stored before this existed has no such mark, and its rows count as reported.
+        /// </summary>
+        public bool IsReportedRow { get; set; } = true;
+
         /// <summary>The source file's own headers and cell text in column order, or null when no snapshot was stored.</summary>
         public List<KeyValuePair<string, string>>? Data { get; set; }
+
+        /// <summary>The template field this error is about when it is one field (for example "SalesManName"). Null when none was stored.</summary>
+        public string? ProblemField { get; set; }
+
+        /// <summary>That field's value in this row. Null together with <see cref="HasProblemValue"/> false when none was stored; blank means the cell was empty.</summary>
+        public string? ProblemValue { get; set; }
+        public bool HasProblemValue { get; set; }
+
+        /// <summary>Structured facts stored with a reported row (CustomerCode, CustomerName, ItemCode, ItemName, UploadedUom). Null for older evidence.</summary>
+        public Dictionary<string, string?>? Details { get; set; }
+    }
+
+    /// <summary>One Excel row (sheet + row number) of an error, with the snapshot each upload kept of it. Newest upload first.</summary>
+    public class ImportErrorLogicalRowDto
+    {
+        public string? Sheet { get; set; }
+        public int? RowNumber { get; set; }
+        public string? Invoice { get; set; }
+
+        /// <summary>True when at least one upload reported this row. False when it is only ever listed because it belongs to a reported invoice.</summary>
+        public bool IsReportedRow { get; set; }
+
+        /// <summary>From the newest snapshot that has one.</summary>
+        public string? ProblemField { get; set; }
+        public string? ProblemValue { get; set; }
+        public bool HasProblemValue { get; set; }
+        public List<KeyValuePair<string, string>>? Data { get; set; }
+
+        /// <summary>Compact facts from the newest snapshot that has them (RowCustomer, RowItemCode, RowItem, RowQty, RowAmount, RowSalesman). Null for older evidence.</summary>
+        public Dictionary<string, string?>? Details { get; set; }
+
+        /// <summary>What the newest recheck read for this row's field with the template of that moment. Null when no recheck stored it.</summary>
+        public string? CheckedValue { get; set; }
+        public bool HasCheckedValue { get; set; }
+        public DateTime? CheckedAtPht { get; set; }
+
+        /// <summary>True when the uploads disagree about what the row contained.</summary>
+        public bool SnapshotsDiffer { get; set; }
+
+        public List<ImportErrorRowSnapshotDto> Snapshots { get; set; } = new();
+        public int ReportedInUploads => Snapshots.Count(s => s.IsReportedRow);
+    }
+
+    /// <summary>What one upload kept of one row.</summary>
+    public class ImportErrorRowSnapshotDto
+    {
+        public int ImportBatchId { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public DateTime UploadedAtPht { get; set; }
+        public bool IsReportedRow { get; set; }
+        public string? ProblemValue { get; set; }
+        public bool HasProblemValue { get; set; }
+        public List<KeyValuePair<string, string>>? Data { get; set; }
+    }
+
+    /// <summary>A labeled value for the Overview.</summary>
+    public sealed record ImportErrorFactDto(string Label, string Value);
+
+    /// <summary>Whether an error has been fixed, judged only from evidence Entriel already holds.</summary>
+    public static class ImportErrorCorrectionState
+    {
+        /// <summary>Reported in the most recent checked upload for this subdistributor and import type.</summary>
+        public const string StillReported = "Still reported";
+
+        /// <summary>A later validation confirmed it: a corrected file that passed the verification, or a recheck with current settings.</summary>
+        public const string Corrected = "Corrected";
+
+        /// <summary>Reported earlier, and no later validation confirms either way. Not being listed in a later upload is not proof.</summary>
+        public const string PreviouslyReported = "Previously reported";
     }
 
     /// <summary>One batch this error appeared in, with the import context a template is chosen by. Newest first.</summary>

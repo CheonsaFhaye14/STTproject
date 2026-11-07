@@ -13,6 +13,10 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         public const string Ignored = "ignored";
         public const string Resolved = "resolved";
 
+        // ImportError.ResolutionType values written by ImportErrorVerificationService. Neither may contain "auto".
+        public const string VerifiedByReimport = "Verified by re-import";
+        public const string VerifiedByRecheck = "Verified by recheck";
+
         // Error types that can be fixed inside Entriel by correcting a mapping.
         private static readonly HashSet<string> Fixable = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -23,7 +27,7 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         // not in a mapping page, so they are deliberately not in Fixable above (the list pages route Fixable types by FixRoute).
         private static readonly HashSet<string> TemplateFixable = new(StringComparer.OrdinalIgnoreCase)
         {
-            "InvoiceDateInvalid"
+            "InvoiceDateInvalid", "SalesmanMissing", "CustomerNotFound", "UomNotFound"
         };
 
         private static readonly Dictionary<string, string> Titles = new(StringComparer.OrdinalIgnoreCase)
@@ -79,16 +83,27 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
             _ => string.IsNullOrWhiteSpace(status) ? "Unknown" : status!
         };
 
+        /// <summary>True when the ResolutionType is the one written by a corrected-file verification (VerifyAndResolveAsync).</summary>
+        public static bool IsVerifiedByReimport(string? resolutionType) =>
+            string.Equals(resolutionType?.Trim(), VerifiedByReimport, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>True when the ResolutionType is the one written by a recheck of the original file (RecheckWithCurrentSettingsAsync).</summary>
+        public static bool IsVerifiedByRecheck(string? resolutionType) =>
+            string.Equals(resolutionType?.Trim(), VerifiedByRecheck, StringComparison.OrdinalIgnoreCase);
+
         /// <summary>
-        /// Second line under a Resolved status. Align the "auto" check with whatever your
-        /// ResolutionType column stores for automatic (verified) resolutions.
+        /// Second line under a Resolved status, by ResolutionType:
+        /// "Verified by re-import" (a corrected file was uploaded), "Verified by recheck" (the original file was rechecked after a
+        /// template or master data fix), a type containing "auto" (automatic), anything else (a manual resolution).
         /// </summary>
         public static string ResolutionNote(string? status, string? resolutionType, DateTime? resolvedAt)
         {
             if (StatusKey(status) != Resolved) return string.Empty;
-            var auto = resolutionType != null && resolutionType.Contains("auto", StringComparison.OrdinalIgnoreCase);
-            var verified = resolutionType != null && resolutionType.StartsWith("Verified", StringComparison.OrdinalIgnoreCase);
-            var text = verified ? "Verified by re-import" : auto ? "Verified automatically" : "Resolved manually";
+            var text =
+                IsVerifiedByRecheck(resolutionType) ? "Verified by recheck"
+                : IsVerifiedByReimport(resolutionType) ? "Verified by re-import"
+                : resolutionType != null && resolutionType.Contains("auto", StringComparison.OrdinalIgnoreCase) ? "Verified automatically"
+                : "Resolved manually";
             return resolvedAt.HasValue ? $"{text} · {resolvedAt.Value:MMM d, yyyy}" : text;
         }
 

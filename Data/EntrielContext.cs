@@ -33,6 +33,10 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ImportErrorBatch> ImportErrorBatches { get; set; }
 
+    public virtual DbSet<ImportErrorEvidence> ImportErrorEvidences { get; set; }
+
+    public virtual DbSet<ImportFile> ImportFiles { get; set; }
+
     public virtual DbSet<ImportTemplate> ImportTemplates { get; set; }
 
     public virtual DbSet<ImportTemplateColumn> ImportTemplateColumns { get; set; }
@@ -246,6 +250,8 @@ public partial class EntrielContext : DbContext
         {
             entity.ToTable("ImportBatch");
 
+            entity.HasIndex(e => e.ImportFileId, "IX_ImportBatch_ImportFileId");
+
             entity.Property(e => e.ImportBatchId).ValueGeneratedNever();
             entity.Property(e => e.BatchStatus)
                 .HasMaxLength(50)
@@ -256,6 +262,10 @@ public partial class EntrielContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.UploadedAt).HasColumnType("datetime");
+
+            entity.HasOne(d => d.ImportFile).WithMany(p => p.ImportBatches)
+                .HasForeignKey(d => d.ImportFileId)
+                .HasConstraintName("FK_ImportBatch_ImportFileId");
 
             entity.HasOne(d => d.SubDistributor).WithMany(p => p.ImportBatches)
                 .HasForeignKey(d => d.SubDistributorId)
@@ -300,7 +310,7 @@ public partial class EntrielContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
 
-            entity.HasOne(d => d.ImportBatch).WithMany(p => p.ImportErrors)
+            entity.HasOne(d => d.ImportBatch).WithMany(p => p.ImportErrorImportBatches)
                 .HasForeignKey(d => d.ImportBatchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ImportError_ImportBatch");
@@ -312,11 +322,17 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.ResolvedByNavigation).WithMany(p => p.ImportErrors)
                 .HasForeignKey(d => d.ResolvedBy)
                 .HasConstraintName("FK_ImportError_Users");
+
+            entity.HasOne(d => d.VerifiedImportBatch).WithMany(p => p.ImportErrorVerifiedImportBatches)
+                .HasForeignKey(d => d.VerifiedImportBatchId)
+                .HasConstraintName("FK_ImportError_VerifiedImportBatch");
         });
 
         modelBuilder.Entity<ImportErrorBatch>(entity =>
         {
             entity.ToTable("ImportErrorBatch");
+
+            entity.HasIndex(e => e.EvidenceId, "IX_ImportErrorBatch_EvidenceId");
 
             entity.HasIndex(e => e.ImportBatchId, "IX_ImportErrorBatch_ImportBatchId");
 
@@ -325,6 +341,10 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.FirstSeenAt).HasColumnType("datetime");
             entity.Property(e => e.LastSeenAt).HasColumnType("datetime");
             entity.Property(e => e.Occurrences).HasDefaultValue(1, "DF_ImportErrorBatch_Occurrences");
+
+            entity.HasOne(d => d.Evidence).WithMany(p => p.ImportErrorBatches)
+                .HasForeignKey(d => d.EvidenceId)
+                .HasConstraintName("FK_ImportErrorBatch_Evidence");
 
             entity.HasOne(d => d.ImportBatch).WithMany(p => p.ImportErrorBatches)
                 .HasForeignKey(d => d.ImportBatchId)
@@ -335,6 +355,43 @@ public partial class EntrielContext : DbContext
                 .HasForeignKey(d => d.ImportErrorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ImportErrorBatch_ImportError");
+        });
+
+        modelBuilder.Entity<ImportErrorEvidence>(entity =>
+        {
+            entity.HasKey(e => e.EvidenceId);
+
+            entity.ToTable("ImportErrorEvidence");
+
+            entity.HasIndex(e => new { e.ImportErrorId, e.EvidenceHash }, "UX_ImportErrorEvidence_Error_Hash").IsUnique();
+
+            entity.Property(e => e.EvidenceId).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime");
+            entity.Property(e => e.EvidenceHash)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+
+            entity.HasOne(d => d.ImportError).WithMany(p => p.ImportErrorEvidences)
+                .HasForeignKey(d => d.ImportErrorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ImportErrorEvidence_ImportError");
+        });
+
+        modelBuilder.Entity<ImportFile>(entity =>
+        {
+            entity.ToTable("ImportFile");
+
+            entity.HasIndex(e => e.FileHash, "UX_ImportFile_FileHash").IsUnique();
+
+            entity.Property(e => e.ImportFileId).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime");
+            entity.Property(e => e.FileHash)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.FileName).HasMaxLength(255);
+            entity.Property(e => e.StoragePath).HasMaxLength(500);
         });
 
         modelBuilder.Entity<ImportTemplate>(entity =>

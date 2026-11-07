@@ -16,6 +16,11 @@ namespace STTproject.Features.User.SalesInvoice.Services;
 ///
 /// Two payloads per error: Data (a small summary, stored on the ImportError) and BatchData (this batch's evidence, stored on
 /// ImportErrorBatch): every affected row with ALL its original columns, taken from the sheet's RawHeaders / RawRows.
+///
+/// Whole-invoice evidence: InvoiceInconsistent and InvoiceHeaderInvalid are judged on an invoice as a whole but are reported on one
+/// row. Their evidence also lists every other row of the same invoice number (even rows that grouping put in a different group),
+/// marked IsReportedRow = false. Those context rows are evidence only: they never change Occurrences, SourceRowNumber, the
+/// error's grouping or its fingerprint, and the reported rows are always stored first.
 /// </summary>
 public static class ImportRowErrorAggregator
 {
@@ -24,6 +29,15 @@ public static class ImportRowErrorAggregator
     /// results, but an administrator has nothing to fix, so it is never logged.
     /// </summary>
     public const string InvoiceDuplicateCode = "InvoiceDuplicate";
+
+    /// <summary>Errors that are judged on a whole invoice. Their evidence also lists the invoice's other rows (see class summary).</summary>
+    private static readonly HashSet<string> WholeInvoiceCodes = new(StringComparer.Ordinal)
+    {
+        ImportErrorTypes.InvoiceInconsistent,
+        ImportErrorTypes.InvoiceHeaderInvalid,
+        // Not judged on the whole invoice, but its evidence lists the invoice's other rows (with their real salesman) for comparison.
+        ImportErrorTypes.SalesmanMissing
+    };
 
     public const int MaxSampleRows = 20;
     public const int MaxVariants = 5;
@@ -41,7 +55,11 @@ public static class ImportRowErrorAggregator
         string? InvoiceNumber,
         string? ProblemField,
         string? ProblemValue,
-        Dictionary<string, string>? RowData);
+        Dictionary<string, string>? RowData,
+        // True for a row the importer actually reported; false for a row listed only because it belongs to the same invoice.
+        bool IsReportedRow = true,
+        // Structured facts for the details page (customer code/name, item code/name, uploaded unit). Evidence only.
+        IReadOnlyDictionary<string, string?>? Details = null);
 
     private sealed class Group
     {
@@ -57,7 +75,9 @@ public static class ImportRowErrorAggregator
         public readonly HashSet<string> Invoices = new(StringComparer.Ordinal);
         public readonly List<object> Samples = new();
         public readonly List<AffectedRow> AffectedRows = new();
+        public readonly HashSet<(int Sheet, int Row)> AffectedKeys = new();
         public bool Truncated;
+        public bool ContextTruncated;
     }
 
     public static List<ImportErrorEntry> Aggregate(ImportSalesInvoiceResult result, int subDistributorId)
@@ -72,6 +92,7 @@ public static class ImportRowErrorAggregator
     {
         var groups = new List<Group>();                       // first-seen order, which is also the order they are saved in
         var index = new Dictionary<GroupKey, Group>();
+        var wholeInvoice = new List<(Group Group, ImportSalesInvoiceIssue Issue)>();
 
         foreach (var issue in issues)
         {
@@ -121,7 +142,11 @@ public static class ImportRowErrorAggregator
             // The complete evidence: this row with every original column. A row seen twice for the same error was skipped above.
             if (issue.RowNumber > 0)
             {
+                // Recorded before the capacity check, so a reported row that does not fit is still never re-added as a context row.
+                group.AffectedKeys.Add((issue.SheetIndex, issue.RowNumber));
+
                 if (group.AffectedRows.Count < ImportLogService.MaxAffectedRows)
+                {
                     group.AffectedRows.Add(new AffectedRow(
                         result.Sheets.TryGetValue(issue.SheetIndex, out var snapSheet) ? snapSheet.Name : null,
                         issue.SheetIndex,
@@ -129,10 +154,24 @@ public static class ImportRowErrorAggregator
                         issue.InvoiceNumber,
                         issue.ColumnName,
                         classified ? Clip(issue.Value) : null,
-                        SnapshotRow(result, issue.SheetIndex, issue.RowNumber)));
+                        SnapshotRow(result, issue.SheetIndex, issue.RowNumber),
+                        Details: issue.Details));
+                }
                 else
                     group.Truncated = true;
             }
+
+            if (classified && WholeInvoiceCodes.Contains(code))
+                wholeInvoice.Add((group, issue));
+        }
+
+        // Context rows are added only after every reported row of every error is stored, so they can never take the room a reported
+        // row needs. They are not occurrences: group.Rows (and so Occurrences and SourceRowNumber) is not touched.
+        if (wholeInvoice.Count > 0)
+        {
+            var rowsByInvoice = IndexRowsByInvoice(result);
+            foreach (var (group, issue) in wholeInvoice)
+                AddInvoiceContextRows(result, group, issue, rowsByInvoice);
         }
 
         return groups
@@ -162,9 +201,89 @@ public static class ImportRowErrorAggregator
                     Occurrences = g.Rows.Count,
                     AffectedInvoices = g.Invoices.OrderBy(i => i, StringComparer.Ordinal).ToList(),
                     Truncated = g.Truncated ? true : (bool?)null,
+                    // Reported rows are complete, but the invoice's other rows did not all fit.
+                    ContextTruncated = g.ContextTruncated ? true : (bool?)null,
                     AffectedRows = g.AffectedRows
                 }))
             .ToList();
+    }
+
+    /// <summary>
+    /// Every row of the file by its normalized invoice number, from the union of the parsed rows, the rows that had errors and the
+    /// raw rows (which also holds rows that were skipped before parsing finished, such as zero-quantity rows). Parsed and errored
+    /// rows carry the invoice code after the template's rules; raw rows carry the cell text, so a rule that rewrites the invoice
+    /// code can keep a raw-only row from matching.
+    /// </summary>
+    private static Dictionary<string, HashSet<(int Sheet, int Row)>> IndexRowsByInvoice(ImportSalesInvoiceResult result)
+    {
+        var byInvoice = new Dictionary<string, HashSet<(int Sheet, int Row)>>(StringComparer.Ordinal);
+
+        void Add(string? invoiceCode, int sheetIndex, int rowNumber)
+        {
+            var invoice = Normalize(invoiceCode);
+            if (invoice.Length == 0 || rowNumber <= 0) return;
+
+            if (!byInvoice.TryGetValue(invoice, out var set))
+                byInvoice[invoice] = set = new HashSet<(int Sheet, int Row)>();
+            set.Add((sheetIndex, rowNumber));
+        }
+
+        foreach (var row in result.Rows) Add(row.InvoiceCode, row.SheetIndex, row.RowNumber);
+        foreach (var errored in result.ErroredRows) Add(errored.InvoiceCode, errored.SheetIndex, errored.RowNumber);
+        foreach (var (key, values) in result.RawValuesByRow)
+        {
+            if (key.IsFileLevel) continue;
+            values.TryGetValue("InvoiceCode", out var rawCode);
+            Add(rawCode, key.SheetIndex, key.RowNumber);
+        }
+
+        return byInvoice;
+    }
+
+    /// <summary>Adds every other row of the reported invoice to the group's evidence as a context row (IsReportedRow = false).</summary>
+    private static void AddInvoiceContextRows(
+        ImportSalesInvoiceResult result,
+        Group group,
+        ImportSalesInvoiceIssue issue,
+        Dictionary<string, HashSet<(int Sheet, int Row)>> rowsByInvoice)
+    {
+        if (!rowsByInvoice.TryGetValue(Normalize(issue.InvoiceNumber), out var rows)) return;
+
+        var contextField = group.Code == ImportErrorTypes.SalesmanMissing && !string.IsNullOrWhiteSpace(group.Field) ? group.Field : null;
+
+        foreach (var (sheetIndex, rowNumber) in rows.OrderBy(r => r.Sheet).ThenBy(r => r.Row))
+        {
+            if (group.AffectedKeys.Contains((sheetIndex, rowNumber))) continue;   // a reported row, or already listed
+
+            if (group.AffectedRows.Count >= ImportLogService.MaxAffectedRows)
+            {
+                group.ContextTruncated = true;
+                return;
+            }
+
+            group.AffectedKeys.Add((sheetIndex, rowNumber));
+            group.AffectedRows.Add(new AffectedRow(
+                result.Sheets.TryGetValue(sheetIndex, out var sheet) ? sheet.Name : null,
+                sheetIndex,
+                rowNumber,
+                issue.InvoiceNumber,
+                // The row's real value of the problem field (empty when it is blank), so the page can show it next to the error's own rows.
+                // Null when the error has no single field, or the importer did not keep the row's values.
+                contextField,
+                contextField is null ? null : ContextFieldValue(result, sheetIndex, rowNumber, contextField),
+                SnapshotRow(result, sheetIndex, rowNumber),
+                IsReportedRow: false));
+        }
+    }
+
+    // The importer's own value for one template field of one row ("" when the cell is blank), or null when it was not kept.
+    private static string? ContextFieldValue(ImportSalesInvoiceResult result, int sheetIndex, int rowNumber, string field)
+    {
+        if (!result.RawValuesByRow.TryGetValue(new(sheetIndex, rowNumber), out var values)) return null;
+        foreach (var (name, value) in values)
+            if (string.Equals(name, field, StringComparison.OrdinalIgnoreCase))
+                return Clip((value ?? string.Empty).Trim()) ?? string.Empty;
+        return null;
     }
 
     /// <summary>Trim, collapse inner whitespace, upper-case: how values are compared. The original is kept in the data.</summary>

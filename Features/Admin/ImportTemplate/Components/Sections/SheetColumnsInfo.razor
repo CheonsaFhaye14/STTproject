@@ -11,6 +11,11 @@
         </div>
     }
 
+    @if (HasProblemSheets)
+    {
+        <div class="alert alert-warning py-2 small">@ProblemSheetsText()</div>
+    }
+
     <div class="it-tabs">
         @for (var i = 0; i < Model.Sheets.Count; i++)
         {
@@ -26,6 +31,10 @@
                 @if (tab.SheetMatchMode != SheetMatchModes.Ignore && !tab.IsRequired)
                 {
                     <span class="badge bg-light text-dark border ms-1">optional</span>
+                }
+                @if (ReadsProblemSheet(tab))
+                {
+                    <span class="badge bg-warning text-dark ms-1" title="This tab reads a sheet that still has rows to fix">fix here</span>
                 }
                 @if (SheetGaps(tab) > 0)
                 {
@@ -187,6 +196,38 @@
     [Parameter, EditorRequired] public ImportTemplateEditDto Model { get; set; } = default!;
     [Parameter] public string? FocusField { get; set; }
 
+    /// <summary>Names of the Excel sheets that still have rows to fix (from an import error). Used only to mark and open the tab that reads them.</summary>
+    [Parameter] public IReadOnlyList<string>? ProblemSheets { get; set; }
+
+    private bool HasProblemSheets => ProblemSheets is { Count: > 0 };
+
+    // True when this template sheet reads one of the Excel sheets named in the error. Exact and Contains can be compared with the file's sheet
+    // name. Any, Headers and Position cannot, so they only count when the template reads a single sheet. Otherwise nothing is guessed.
+    private bool ReadsProblemSheet(ImportTemplateSheetEditDto s)
+    {
+        if (!HasProblemSheets || s.SheetMatchMode == SheetMatchModes.Ignore) return false;
+
+        var value = s.SheetMatchValue?.Trim() ?? string.Empty;
+        foreach (var raw in ProblemSheets!)
+        {
+            var name = raw.Trim();
+            if (s.SheetMatchMode == SheetMatchModes.Exact && value.Length > 0 && string.Equals(value, name, StringComparison.OrdinalIgnoreCase)) return true;
+            if (s.SheetMatchMode == SheetMatchModes.Contains && value.Length > 0 && name.Contains(value, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        return ReadSheetCount == 1
+            && (s.SheetMatchMode == SheetMatchModes.Any || s.SheetMatchMode == SheetMatchModes.Headers || s.SheetMatchMode == SheetMatchModes.Position);
+    }
+
+    private string ProblemSheetsText()
+    {
+        var names = string.Join(", ", ProblemSheets!);
+        var label = ProblemSheets!.Count == 1 ? "sheet " : "sheets ";
+        return Model.Sheets.Any(ReadsProblemSheet)
+            ? "The error is in " + label + names + ". The tabs marked \"fix here\" read it."
+            : "The error is in " + label + names + ", but Entriel can't tell which tab reads it. Check the tabs that map the field.";
+    }
+
     private const string NeedRequired = "Required";
     private const string NeedOptional = "Optional";
     private static readonly string[] NeedOptions = { NeedRequired, NeedOptional };
@@ -200,6 +241,13 @@
         if (!string.IsNullOrWhiteSpace(FocusField))
         {
             var at = Model.Sheets.FindIndex(sh => sh.SheetMatchMode != SheetMatchModes.Ignore && sh.Columns.Any(IsFocusColumn));
+            if (at >= 0) _active = at;
+        }
+        if (HasProblemSheets)
+        {
+            // Open the tab that reads the sheet with rows to fix, preferring one that maps the field being fixed.
+            var at = Model.Sheets.FindIndex(sh => ReadsProblemSheet(sh) && (string.IsNullOrWhiteSpace(FocusField) || sh.Columns.Any(IsFocusColumn)));
+            if (at < 0) at = Model.Sheets.FindIndex(ReadsProblemSheet);
             if (at >= 0) _active = at;
         }
         _showSettings = Model.Sheets.Count > 0 && IsFresh(Model.Sheets[Math.Min(_active, Model.Sheets.Count - 1)]);

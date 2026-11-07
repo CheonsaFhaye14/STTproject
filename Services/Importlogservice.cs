@@ -57,6 +57,8 @@ public static class ImportErrorTypes
     public const string InvoiceNoValidLines = "InvoiceNoValidLines";
     public const string InvoiceInconsistent = "InvoiceInconsistent";
     public const string InvoiceHeaderInvalid = "InvoiceHeaderInvalid";
+    /// <summary>A row whose salesman name is blank. Logged once per such row, so one master error covers all of them.</summary>
+    public const string SalesmanMissing = "SalesmanMissing";
     public const string UnexpectedPrepareError = "UnexpectedPrepareError";
 
     // Phase 8: failures when an invoice is actually saved (commit). Logged once per commit, apart from the Check File errors.
@@ -123,10 +125,16 @@ public sealed class ImportLogService
     private readonly IDbContextFactory<EntrielContext> _contextFactory;
     private readonly ILogger<ImportLogService> _logger;
 
-    public ImportLogService(IDbContextFactory<EntrielContext> contextFactory, ILogger<ImportLogService> logger)
+    // Configuration key ImportEvidence:WriteLegacyDataJson (default true). While true, ImportErrorBatch.DataJson is written exactly as
+    // before, next to the new ImportErrorEvidence row. Only switch it off after evidence retrieval and display are verified.
+    private readonly bool _writeLegacyDataJson;
+
+    public ImportLogService(
+        IDbContextFactory<EntrielContext> contextFactory, ILogger<ImportLogService> logger, IConfiguration? configuration = null)
     {
         _contextFactory = contextFactory;
         _logger = logger;
+        _writeLegacyDataJson = !bool.TryParse(configuration?["ImportEvidence:WriteLegacyDataJson"], out var write) || write;
     }
 
     /// <summary>
@@ -350,6 +358,7 @@ public sealed class ImportLogService
         {
             var existingIds = errorIdByFingerprint.Values.ToList();
             var joins = await context.ImportErrorBatches
+                .Include(j => j.Evidence)
                 .Where(j => j.ImportBatchId == importBatchId && existingIds.Contains(j.ImportErrorId))
                 .ToListAsync(cancellationToken);
 
@@ -364,6 +373,7 @@ public sealed class ImportLogService
         var now = DateTime.UtcNow;
         var nextNew = 0;
         var created = 0;
+        var createdErrorIds = new HashSet<int>();
 
         foreach (var item in chunk)
         {
@@ -379,6 +389,7 @@ public sealed class ImportLogService
                     entry.Data, item.Fingerprint, previousId, now));
 
                 errorIdByFingerprint[item.Fingerprint] = errorId;
+                createdErrorIds.Add(errorId);
                 created++;
             }
 
@@ -388,7 +399,7 @@ public sealed class ImportLogService
                 join.Occurrences += entry.Occurrences;
                 join.LastSeenAt = now;
                 if (entry.BatchData is not null)
-                    join.DataJson = MergeBatchData(join.DataJson, entry.BatchData, join.Occurrences);
+                    join.DataJson = MergeBatchData(join.DataJson ?? join.Evidence?.DataJson, entry.BatchData, join.Occurrences);
             }
             else
             {
@@ -406,8 +417,86 @@ public sealed class ImportLogService
             }
         }
 
+        // Evidence rows are added in the same SaveChanges (same transaction) as the errors and links they belong to.
+        await AttachEvidenceAsync(context, joinByErrorId, createdErrorIds, now, cancellationToken);
+
         await context.SaveChangesAsync(cancellationToken);
         return (created, chunk.Count - created);
+    }
+
+    private readonly record struct EvidenceKey(int ImportErrorId, string Hash);
+
+    /// <summary>
+    /// Points every ImportErrorBatch of this chunk at an ImportErrorEvidence row for its current evidence. One row exists per
+    /// (error, evidence hash): identical evidence is reused, changed evidence gets a NEW row, and an evidence row that is already
+    /// stored is never modified or deleted (a link that now has different evidence is simply repointed). The legacy DataJson is
+    /// left as it is unless ImportEvidence:WriteLegacyDataJson is false.
+    /// A concurrent import inserting the same (error, hash) first violates the unique index; the chunk rolls back and the
+    /// existing single retry then finds that row.
+    /// </summary>
+    private async Task AttachEvidenceAsync(
+        EntrielContext context,
+        Dictionary<int, ImportErrorBatch> joins,
+        HashSet<int> createdErrorIds,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var work = new List<(ImportErrorBatch Join, EvidenceKey Key, string Json)>();
+        foreach (var join in joins.Values)
+        {
+            // DataJson is the evidence as it will be stored; when it was not stored (legacy writing off), the linked evidence is the same thing.
+            var json = join.DataJson ?? join.Evidence?.DataJson;
+            if (string.IsNullOrWhiteSpace(json)) continue;
+
+            work.Add((join, new EvidenceKey(join.ImportErrorId, ImportEvidenceHasher.Hash(json)), json));
+        }
+
+        if (work.Count == 0) return;
+
+        // Evidence that is already stored for these errors. A brand-new error cannot have any yet.
+        var known = new Dictionary<EvidenceKey, int>();
+        var existingErrorIds = work.Select(w => w.Key.ImportErrorId).Where(id => !createdErrorIds.Contains(id)).Distinct().ToList();
+        if (existingErrorIds.Count > 0)
+        {
+            var hashes = work.Select(w => w.Key.Hash).Distinct().ToList();
+            var found = await context.ImportErrorEvidences
+                .AsNoTracking()
+                .Where(e => existingErrorIds.Contains(e.ImportErrorId) && hashes.Contains(e.EvidenceHash))
+                .Select(e => new { e.ImportErrorId, e.EvidenceHash, e.EvidenceId })
+                .ToListAsync(cancellationToken);
+
+            foreach (var f in found) known[new EvidenceKey(f.ImportErrorId, f.EvidenceHash)] = f.EvidenceId;
+        }
+
+        // New evidence: one row per distinct (error, hash), ids reserved in one round trip.
+        var toCreate = work.Where(w => !known.ContainsKey(w.Key)).Select(w => w.Key).Distinct().ToList();
+        var createdRows = new Dictionary<EvidenceKey, ImportErrorEvidence>();
+        if (toCreate.Count > 0)
+        {
+            var (firstId, increment) = await ReserveIdsAsync(context, "ImportErrorEvidenceIdSequence", toCreate.Count, cancellationToken);
+            var next = 0;
+            foreach (var key in toCreate)
+            {
+                var row = new ImportErrorEvidence
+                {
+                    EvidenceId = checked((int)(firstId + next++ * increment)),
+                    ImportErrorId = key.ImportErrorId,
+                    EvidenceHash = key.Hash,
+                    DataJson = work.First(w => w.Key == key).Json,
+                    CreatedAt = now
+                };
+                context.ImportErrorEvidences.Add(row);
+                createdRows[key] = row;
+            }
+        }
+
+        foreach (var (join, key, _) in work)
+        {
+            if (createdRows.TryGetValue(key, out var created)) join.Evidence = created;
+            else join.EvidenceId = known[key];
+
+            if (!_writeLegacyDataJson) join.DataJson = null;
+        }
     }
 
     /// <summary>
@@ -470,15 +559,27 @@ public sealed class ImportLogService
     // Reserves <count> consecutive ids from the error sequence in ONE round trip (sp_sequence_get_range needs the same
     // UPDATE permission on the sequence as NEXT VALUE FOR). The ids are first, first + increment, ... so the increment
     // is read back rather than assumed. A range that wrapped past the sequence's end would no longer be unique, so it throws.
-    private static async Task<(long First, long Increment)> ReserveErrorIdsAsync(
-        EntrielContext context, int count, CancellationToken cancellationToken)
+    private static Task<(long First, long Increment)> ReserveErrorIdsAsync(
+        EntrielContext context, int count, CancellationToken cancellationToken) =>
+        ReserveIdsAsync(context, "ImportErrorIdSequence", count, cancellationToken);
+
+    // Same range reservation for any of the sequences below. The name is checked against this list, never built from input.
+    private static async Task<(long First, long Increment)> ReserveIdsAsync(
+        EntrielContext context, string sequenceName, int count, CancellationToken cancellationToken)
     {
+        var qualifiedName = sequenceName switch
+        {
+            "ImportErrorIdSequence" => "dbo.ImportErrorIdSequence",
+            "ImportErrorEvidenceIdSequence" => "dbo.ImportErrorEvidenceIdSequence",
+            _ => throw new ArgumentOutOfRangeException(nameof(sequenceName))
+        };
+
         await context.Database.OpenConnectionAsync(cancellationToken);
         await using var command = context.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
             DECLARE @first sql_variant, @increment sql_variant, @cycles int;
             EXEC sys.sp_sequence_get_range
-                @sequence_name = N'dbo.ImportErrorIdSequence',
+                @sequence_name = @sequence,
                 @range_size = @count,
                 @range_first_value = @first OUTPUT,
                 @range_cycle_count = @cycles OUTPUT,
@@ -491,14 +592,19 @@ public sealed class ImportLogService
         size.Value = (long)count;
         command.Parameters.Add(size);
 
+        var sequence = command.CreateParameter();
+        sequence.ParameterName = "@sequence";
+        sequence.Value = qualifiedName;
+        command.Parameters.Add(sequence);
+
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
-            throw new InvalidOperationException("The ImportErrorIdSequence did not return a range.");
+            throw new InvalidOperationException("The " + sequenceName + " did not return a range.");
 
         var first = reader.GetInt64(0);
         var increment = reader.GetInt64(1);
         if (reader.GetInt32(2) != 0)
-            throw new InvalidOperationException("The ImportErrorIdSequence wrapped around while reserving ids, so they would not be unique.");
+            throw new InvalidOperationException("The " + sequenceName + " wrapped around while reserving ids, so they would not be unique.");
 
         return (first, increment);
     }

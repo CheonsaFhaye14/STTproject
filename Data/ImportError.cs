@@ -39,9 +39,13 @@ public partial class ImportError
 
     public virtual ICollection<ImportErrorBatch> ImportErrorBatches { get; set; } = new List<ImportErrorBatch>();
 
+    public virtual ICollection<ImportErrorEvidence> ImportErrorEvidences { get; set; } = new List<ImportErrorEvidence>();
+
     public virtual ICollection<ImportError> InversePreviousImportError { get; set; } = new List<ImportError>();
 
     public virtual ImportError? PreviousImportError { get; set; }
 
     public virtual User? ResolvedByNavigation { get; set; }
+
+    public virtual ImportBatch? VerifiedImportBatch { get; set; }
 }

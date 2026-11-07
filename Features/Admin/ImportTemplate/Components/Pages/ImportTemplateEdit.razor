@@ -67,7 +67,7 @@
             <TemplateInfo Model="_model" Subds="_subds" Principals="_principals" IsNew="IsNew" @bind-IsGlobal="_isGlobal"
                           OnChanged="Refresh" />
 
-            <SheetColumnsInfo Model="_model" FocusField="@(FromErrorId.HasValue ? Focus : null)" />
+            <SheetColumnsInfo Model="_model" FocusField="@(FromErrorId.HasValue ? Focus : null)" ProblemSheets="ProblemSheetList" />
 
             <TemplateTester Model="_model" Subds="_subds" />
         </div>
@@ -87,6 +87,13 @@
 
     // The batch whose import context (subdistributor and import type) chose this template. Display only.
     [SupplyParameterFromQuery(Name = "batch")] public int? BatchId { get; set; }
+
+    // The Excel sheets (by name) that still have rows to fix, separated by |. Display only: it marks the template tabs that read them.
+    [SupplyParameterFromQuery(Name = "sheets")] public string? Sheets { get; set; }
+
+    private List<string> ProblemSheetList => FromErrorId.HasValue && !string.IsNullOrWhiteSpace(Sheets)
+        ? Sheets.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+        : new List<string>();
 
     private string ErrorUrl => FromErrorId is int e ? $"/admin/import-errors/{e}" : "/admin/import-errors";
     private string BackUrl => FromErrorId.HasValue ? ErrorUrl : "/admin/import-templates";

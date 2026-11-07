@@ -20,6 +20,7 @@ public sealed class ImportSalesInvoiceService
 	private readonly IImportTemplateService _templates;
 	private readonly ImportLogService _importLog;
 	private readonly ImportFileStore _importFiles;
+	private readonly ImportFileService? _importFileService;
 
 	public ImportSalesInvoiceService(
 		IDbContextFactory<EntrielContext> contextFactory,
@@ -27,13 +28,15 @@ public sealed class ImportSalesInvoiceService
 		IImportTemplateService templates,
 		ImportLogService importLog,
 		ImportFileStore importFiles,
-		ILogger<ImportSalesInvoiceService> logger)
+		ILogger<ImportSalesInvoiceService> logger,
+		ImportFileService? importFileService = null)
 	{
 		_contextFactory = contextFactory;
 		_salesInvoiceService = salesInvoiceService;
 		_templates = templates;
 		_importLog = importLog;
 		_importFiles = importFiles;
+		_importFileService = importFileService;
 		_logger = logger;
 	}
 
@@ -131,8 +134,17 @@ public sealed class ImportSalesInvoiceService
 		}
 
 		// Keep the original upload under its batch id, before anything else can fail, so even an unreadable or rejected file can be inspected later.
+		// Identical content is stored once and shared by every batch that uploads it (ImportBatch.ImportFileId). If that cannot be done
+		// for any reason, the file is saved the old way under its own batch folder, so an upload is never lost because of deduplication.
 		if (batchId is int storedBatchId)
-			await _importFiles.SaveAsync(storedBatchId, fileName!, excelStream, cancellationToken);
+		{
+			var attached = _importFileService is null
+				? null
+				: await _importFileService.StoreAndAttachAsync(storedBatchId, fileName!, excelStream, cancellationToken);
+
+			if (attached is null)
+				await _importFiles.SaveAsync(storedBatchId, fileName!, excelStream, cancellationToken);
+		}
 
 		try
 		{
@@ -322,7 +334,8 @@ public sealed class ImportSalesInvoiceService
 					var msg = $"Customer '{firstRowCustomerValue}' could not be resolved.";
 					result.AddError(firstRow.Source, invoiceNumber, msg, "CustomerCode",
 						code: string.IsNullOrWhiteSpace(firstRowCustomerValue) ? ImportErrorTypes.CustomerMissing : ImportErrorTypes.CustomerNotFound,
-						value: firstRowCustomerValue);
+						value: firstRowCustomerValue,
+						details: new Dictionary<string, string?> { ["CustomerCode"] = firstRow.CustomerCode?.Trim(), ["CustomerName"] = firstRow.CustomerName?.Trim() });
 					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
 						firstRow.RowNumber,
 						invoiceNumber,
@@ -422,7 +435,8 @@ public sealed class ImportSalesInvoiceService
 						var itemNameSuffix = !string.IsNullOrWhiteSpace(subdItem.ItemName) ? $" ({subdItem.ItemName})" : string.Empty;
 						var msg = $"UOM '{row.UOM}' was not found for SKU '{row.SkuCode}'{itemNameSuffix}.";
 						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(row.RowNumber, invoiceNumber, msg, string.Empty, BuildCustomerDisplayValue(row.CustomerCode, row.CustomerName), "UOM", SheetIndex: row.SheetIndex));
-						result.AddError(row.Source, invoiceNumber, msg, "UOM", code: ImportErrorTypes.UomNotFound, value: row.UOM, context: row.SkuCode);
+						result.AddError(row.Source, invoiceNumber, msg, "UOM", code: ImportErrorTypes.UomNotFound, value: row.UOM, context: row.SkuCode,
+							details: UomDetails(row.SkuCode, subdItem.ItemName, row.ItemName, row.UOM));
 						items.Clear();
 						break;
 					}
@@ -554,20 +568,47 @@ public sealed class ImportSalesInvoiceService
 
 				if (validationErrors.Count > 0)
 				{
-					var msg = string.Join(" ", validationErrors.Values);
-					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
-						firstRow.RowNumber,
-						invoiceNumber,
-						msg,
-						string.Empty,
-						string.Empty,
-						SheetIndex: firstRow.SheetIndex));
-					// A duplicate invoice number on its own is the rule working as intended: shown in the results, never logged.
-					var onlyDuplicate = validationErrors.Count == 1
-						&& validationErrors.TryGetValue(SalesInvoiceValidation.Header.InvoiceNumber.Key, out var existsMessage)
-						&& existsMessage == SalesInvoiceValidation.InvoiceNumberExistsMessage;
-					result.AddError(firstRow.Source, invoiceNumber, msg,
-						code: onlyDuplicate ? ImportRowErrorAggregator.InvoiceDuplicateCode : ImportErrorTypes.InvoiceHeaderInvalid, value: msg);
+					// A blank salesman is reported on every affected row as SalesmanMissing, so the header check's own "Sales man name is
+					// required." is not shown or logged again. Every other header error is unchanged: with no salesman problem, loggedErrors
+					// is validationErrors, so the shown message, the logged code and the logged value are exactly what they were.
+					var loggedErrors = validationErrors
+						.Where(e => e.Key != SalesInvoiceValidation.Header.SalesManName.Key)
+						.ToDictionary(e => e.Key, e => e.Value);
+					if (loggedErrors.Count > 0)
+					{
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+							firstRow.RowNumber,
+							invoiceNumber,
+							string.Join(" ", loggedErrors.Values),
+							string.Empty,
+							string.Empty,
+							SheetIndex: firstRow.SheetIndex));
+					}
+					if (validationErrors.ContainsKey(SalesInvoiceValidation.Header.SalesManName.Key))
+					{
+						// The invoice must stay blocked (an invoice with any issue is not ready to commit). This is the same issue the row-level
+						// check raised for this row (same row, column and message), so the results page lists it once. It is not logged here:
+						// the row-level one already is.
+						preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+							firstRow.RowNumber,
+							invoiceNumber,
+							SalesmanMissingMessage,
+							string.Empty,
+							string.Empty,
+							"SalesManName",
+							SheetIndex: firstRow.SheetIndex,
+							Code: ImportErrorTypes.SalesmanMissing));
+					}
+					if (loggedErrors.Count > 0)
+					{
+						var loggedMsg = string.Join(" ", loggedErrors.Values);
+						// A duplicate invoice number on its own is the rule working as intended: shown in the results, never logged.
+						var onlyDuplicate = loggedErrors.Count == 1
+							&& loggedErrors.TryGetValue(SalesInvoiceValidation.Header.InvoiceNumber.Key, out var existsMessage)
+							&& existsMessage == SalesInvoiceValidation.InvoiceNumberExistsMessage;
+						result.AddError(firstRow.Source, invoiceNumber, loggedMsg,
+							code: onlyDuplicate ? ImportRowErrorAggregator.InvoiceDuplicateCode : ImportErrorTypes.InvoiceHeaderInvalid, value: loggedMsg);
+					}
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
@@ -1033,6 +1074,17 @@ public sealed class ImportSalesInvoiceService
 			}
 
 			result.TotalRowsProcessed++;
+
+			// Every row with a blank salesman is reported on its own, whatever else is wrong with it. The invoice-level header check only
+			// sees the first row of each invoice group, so it can never find the others. This is raised BEFORE issueStart is taken, so it
+			// is not counted as one of the row's own issues: the row still parses, groups and blocks other rows exactly as before.
+			// The error identity is the same for every row (no value, no context), so they all aggregate into one master error.
+			if (!string.IsNullOrWhiteSpace(invoiceCode) && string.IsNullOrWhiteSpace(salesManName))
+			{
+				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode.Trim(), SalesmanMissingMessage,
+					columnName: "SalesManName", code: ImportErrorTypes.SalesmanMissing);
+			}
+
 			var issueStart = result.Issues.Count;
 
 			var rawValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -1052,9 +1104,9 @@ public sealed class ImportSalesInvoiceService
 			var rowHasErrors = false;
 			var orderTypeInvalid = false;
 
-			void AddRowError(string message, string? columnName = null, int? suggestionCount = null, string? code = null, string? value = null, string? context = null)
+			void AddRowError(string message, string? columnName = null, int? suggestionCount = null, string? code = null, string? value = null, string? context = null, IReadOnlyDictionary<string, string?>? details = null)
 			{
-				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode, message, columnName, suggestionCount, code, value, context);
+				result.AddError(new SourceRowKey(sheetIndex, rowNumber), invoiceCode, message, columnName, suggestionCount, code, value, context, details);
 				rowHasErrors = true;
 			}
 
@@ -1085,7 +1137,8 @@ public sealed class ImportSalesInvoiceService
 					var message = customerSuggestions is { Count: > 0 }
 						? $"Customer '{label}' was not found. Did you mean: {string.Join(", ", customerSuggestions.Select(s => BuildCustomerDisplayValue(s.CustomerCode, s.CustomerName)))}?"
 						: $"Customer '{label}' was not found.";
-					AddRowError(message, colName, customerSuggestions?.Count, ImportErrorTypes.CustomerNotFound, label);
+					AddRowError(message, colName, customerSuggestions?.Count, ImportErrorTypes.CustomerNotFound, label,
+						details: new Dictionary<string, string?> { ["CustomerCode"] = customerCode?.Trim(), ["CustomerName"] = customerName?.Trim() });
 				}
 			}
 
@@ -1267,7 +1320,8 @@ public sealed class ImportSalesInvoiceService
 						else
 						{
 							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM", code: ImportErrorTypes.UomNotFound, value: uom, context: skuCode);
+							AddRowError($"UOM '{uom}' was not found for SKU '{skuCode}'{itemNameSuffix}.", "UOM", code: ImportErrorTypes.UomNotFound, value: uom, context: skuCode,
+								details: UomDetails(skuCode, resolvedItem.ItemName, itemName, uom));
 						}
 					}
 					else if (uomAmbiguousMatches is { Count: > 1 })
@@ -1283,8 +1337,8 @@ public sealed class ImportSalesInvoiceService
 							SheetIndex: sheetIndex,
 							InvoiceCode: invoiceCode,
 							InvoiceDate: invoiceDate,
-							CustomerCode: customerCode,
-							CustomerName: customerName,
+							CustomerCode: customerCode ?? string.Empty,
+							CustomerName: customerName ?? string.Empty,
 							OrderType: normalizedOrderType,
 							SalesManName: salesManName,
 							SkuCode: skuCode,
@@ -1355,7 +1409,8 @@ public sealed class ImportSalesInvoiceService
 						else
 						{
 							var itemNameSuffix = !string.IsNullOrWhiteSpace(resolvedItem.ItemName) ? $" ({resolvedItem.ItemName})" : string.Empty;
-							AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField, code: ImportErrorTypes.UomNotFound, value: normalizedUomName, context: skuCode);
+							AddRowError($"UOM '{normalizedUomName}' was not found for SKU '{skuCode}'{itemNameSuffix}.", errorField, code: ImportErrorTypes.UomNotFound, value: normalizedUomName, context: skuCode,
+								details: UomDetails(skuCode, resolvedItem.ItemName, itemName, normalizedUomName));
 							return;
 						}
 					}
@@ -1369,8 +1424,8 @@ public sealed class ImportSalesInvoiceService
 						SheetIndex: sheetIndex,
 						InvoiceCode: invoiceCode,
 						InvoiceDate: invoiceDate,
-						CustomerCode: customerCode,
-						CustomerName: customerName,
+						CustomerCode: customerCode ?? string.Empty,
+						CustomerName: customerName ?? string.Empty,
 						OrderType: rowOrderType,
 						SalesManName: salesManName,
 						SkuCode: skuCode,
@@ -1652,6 +1707,20 @@ public sealed class ImportSalesInvoiceService
 			.Replace("`", string.Empty)
 			.Replace("’", string.Empty);
 	}
+
+	private const string SalesmanMissingMessage = "Salesman name is missing.";
+
+	/// <summary>
+	/// Evidence-only facts for a "UOM not found" row: the item code, the item's name (Entriel's own name when the item was found, otherwise
+	/// the file's) and the unit as uploaded. Never part of the error's identity: that stays the unit (Value) and the SKU (Context).
+	/// </summary>
+	private static IReadOnlyDictionary<string, string?> UomDetails(string? itemCode, string? masterItemName, string? uploadedItemName, string? uploadedUom) =>
+		new Dictionary<string, string?>
+		{
+			["ItemCode"] = itemCode?.Trim(),
+			["ItemName"] = !string.IsNullOrWhiteSpace(masterItemName) ? masterItemName.Trim() : uploadedItemName?.Trim(),
+			["UploadedUom"] = uploadedUom?.Trim()
+		};
 
 	private static string BuildCustomerDisplayValue(string? customerCode, string? customerName)
 	{

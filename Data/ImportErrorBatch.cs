@@ -19,6 +19,10 @@ public partial class ImportErrorBatch
 
     public DateTime LastSeenAt { get; set; }
 
+    public int? EvidenceId { get; set; }
+
+    public virtual ImportErrorEvidence? Evidence { get; set; }
+
     public virtual ImportBatch ImportBatch { get; set; } = null!;
 
     public virtual ImportError ImportError { get; set; } = null!;

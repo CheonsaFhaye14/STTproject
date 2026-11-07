@@ -23,9 +23,15 @@ public partial class ImportBatch
 
     public DateTime UploadedAt { get; set; }
 
+    public int? ImportFileId { get; set; }
+
     public virtual ICollection<ImportErrorBatch> ImportErrorBatches { get; set; } = new List<ImportErrorBatch>();
 
-    public virtual ICollection<ImportError> ImportErrors { get; set; } = new List<ImportError>();
+    public virtual ICollection<ImportError> ImportErrorImportBatches { get; set; } = new List<ImportError>();
+
+    public virtual ICollection<ImportError> ImportErrorVerifiedImportBatches { get; set; } = new List<ImportError>();
+
+    public virtual ImportFile? ImportFile { get; set; }
 
     public virtual SubDistributor? SubDistributor { get; set; }
 

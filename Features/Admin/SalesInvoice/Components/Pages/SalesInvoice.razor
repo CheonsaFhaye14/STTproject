@@ -6,9 +6,7 @@
 @inject NavigationManager Nav
 @inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
 
-<LoadingOverlay Show="isLoading"
-                Title="Loading sales invoices…"
-                Subtitle="Please wait while we fetch the latest data."
+<LoadingOverlay Show="isLoading" Title="Loading sales invoices…" Subtitle="Please wait while we fetch the latest data."
                 IconClass="fa-solid fa-file-invoice" />
 
 <div style="@(isLoading ? "display:none;" : "")">
@@ -21,19 +19,14 @@
                 <p class="clt-page-sub">@totalCount total sales invoices</p>
             </div>
             <div class="clt-page-actions">
-                <Button Title="Import invoices"
-                        OnClick="@(() => showImportModal = true)"
-                        Icon="fa-solid fa-file-arrow-up"
-                        Variant="ButtonVariant.Secondary" />
-                <Button OnClick="OpenAddModal" Title="Add invoice"
-                        Icon="fa-solid fa-plus"
+                <Button Title="Import invoices" OnClick="@(() => showImportModal = true)"
+                        Icon="fa-solid fa-file-arrow-up" Variant="ButtonVariant.Secondary" />
+                <Button OnClick="OpenAddModal" Title="Add invoice" Icon="fa-solid fa-plus"
                         Variant="ButtonVariant.Primary" />
 
                 <!-- More actions: rarely used / destructive -->
                 <div class="more-menu">
-                    <Button Title="More"
-                            Icon="fa-solid fa-ellipsis"
-                            Variant="ButtonVariant.Secondary"
+                    <Button Title="More" Icon="fa-solid fa-ellipsis" Variant="ButtonVariant.Secondary"
                             OnClick="ToggleMoreMenu" />
                     @if (showMoreMenu)
                     {
@@ -44,7 +37,8 @@
                                 <span>Deleted invoices</span>
                             </button>
                             <hr class="more-menu-divider" />
-                            <button type="button" class="more-menu-item more-menu-item--danger" role="menuitem" @onclick="OpenBatchDelete">
+                            <button type="button" class="more-menu-item more-menu-item--danger" role="menuitem"
+                                    @onclick="OpenBatchDelete">
                                 <i class="fa-solid fa-trash"></i>
                                 <span>Batch delete</span>
                             </button>
@@ -66,9 +60,8 @@
                                                                                                                                                                                 : "Are you sure you want to create this sales invoice?")"
                       OnYes="ConfirmSave" OnNo="CancelConfirm" />
 
-        <ImportSalesInvoice Show="showImportModal"
-                            OnClose="@(() => showImportModal = false)"
-                            OnImportCompleted="OnImportCompletedAsync" />
+        <ImportSalesInvoice Show="showImportModal" InitialSubDistributorId="Subd"
+                            OnClose="@(() => showImportModal = false)" OnImportCompleted="OnImportCompletedAsync" />
 
         <!-- Add / Edit modal -->
         @if (showAddModal)
@@ -76,16 +69,17 @@
             <AddSalesInvoice @ref="addInvoiceModal" SalesInvoiceId="editInvoiceId" onCancel="CancelAddModal"
                              OnRequestConfirm="OpenConfirmModal" />
         }
-        <BatchDelete Show="showBatchDelete"
-                     SubDistributors="subDistributors"
-                     AvailableYears="availableYears"
-                     OnClose="() => showBatchDelete = false"
-                     OnDeleted="OnImportCompletedAsync" />
+        <BatchDelete Show="showBatchDelete" SubDistributors="subDistributors" AvailableYears="availableYears"
+                     OnClose="() => showBatchDelete = false" OnDeleted="OnImportCompletedAsync" />
 
     </div>
 </div>
 
 @code {
+    // Opened from an import error: ?import=1 opens the import window, &subd= picks the subdistributor.
+    [SupplyParameterFromQuery(Name = "import")] public int? Import { get; set; }
+    [SupplyParameterFromQuery(Name = "subd")] public int? Subd { get; set; }
+
     private ConfirmModal? confirmModal;
     private SalesInvoiceTable? invoiceTable;
     private AddSalesInvoice? addInvoiceModal;
@@ -175,6 +169,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        showImportModal = Import == 1;
         await LoadBatchDeleteOptionsAsync();
     }
 

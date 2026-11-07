@@ -62,11 +62,13 @@ builder.Services.AddScoped<ImportCompanyItemsService>();
 builder.Services.AddScoped<TemplateDraftService>();
 builder.Services.AddScoped<ImportLogService>();
 builder.Services.AddScoped<ImportFileStore>();
+builder.Services.AddScoped<ImportFileService>();
 builder.Services.AddScoped<IImportFileStore, DiskImportFileStore>();
 builder.Services.AddScoped<IImportErrorDetailsService, ImportErrorDetailsService>();
 builder.Services.AddScoped<IUserService, UserServices>();
 builder.Services.AddScoped<IImportBatchDetailsService, ImportBatchDetailsService>();
 builder.Services.AddScoped<IImportErrorVerificationService, ImportErrorVerificationService>();
+builder.Services.AddScoped<IInvoiceFileValidator, SalesInvoiceFileValidator>();
 
 var app = builder.Build();
 

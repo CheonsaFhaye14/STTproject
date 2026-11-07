@@ -156,11 +156,12 @@ public sealed class ImportSalesInvoiceResult
         int? suggestionCount = null,
         string? code = null,
         string? value = null,
-        string? context = null) =>
+        string? context = null,
+        IReadOnlyDictionary<string, string?>? details = null) =>
         Issues.Add(new ImportSalesInvoiceIssue(
             source.RowNumber, invoiceNumber, message, string.Empty, string.Empty,
             columnName, suggestionCount, SheetIndex: source.SheetIndex,
-            Code: code, Value: value, Context: context));
+            Code: code, Value: value, Context: context, Details: details));
 
     public void AddIssue(ImportSalesInvoiceIssue issue) => Issues.Add(issue);
 }
@@ -221,7 +222,10 @@ public sealed record ImportSalesInvoiceIssue(
     // (SKU, customer, UOM...); Context narrows it where the same value means different things (the SKU for a UOM).
     string? Code = null,
     string? Value = null,
-    string? Context = null)
+    string? Context = null,
+    // Structured facts about the row for the details page (customer code and name, item code and name, uploaded UOM). Evidence only:
+    // they never take part in the error's identity or fingerprint, which stay Code + field + Value + Context.
+    IReadOnlyDictionary<string, string?>? Details = null)
 {
     public string Message => Header;
     public SourceRowKey Source => new(SheetIndex, RowNumber);

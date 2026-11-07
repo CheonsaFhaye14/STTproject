@@ -46,6 +46,10 @@
 
 @code {
     [Parameter] public bool Show { get; set; }
+
+    /// <summary>Picks this subdistributor when the window opens with none chosen (used when arriving from an import error).</summary>
+    [Parameter] public int? InitialSubDistributorId { get; set; }
+    private bool initialApplied;
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnImportCompleted { get; set; }
 
@@ -68,6 +72,13 @@
         {
             hasLoadedSubDistributors = true;
             subDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
+        }
+
+        if (Show && !initialApplied && InitialSubDistributorId is > 0 && selectedSubDistributorId is null
+            && subDistributors.Any(x => x.SubDistributorId == InitialSubDistributorId))
+        {
+            initialApplied = true;
+            selectedSubDistributorId = InitialSubDistributorId;
         }
     }
 

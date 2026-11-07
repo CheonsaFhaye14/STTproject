@@ -452,7 +452,8 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                     l.Occurrences,
                     FirstSeen = (DateTime?)l.FirstSeenAt,
                     LastSeen = (DateTime?)l.LastSeenAt,
-                    l.DataJson
+                    // Linked evidence first; the legacy per-batch DataJson is the fallback (older rows, or evidence not linked yet).
+                    DataJson = l.Evidence != null && l.Evidence.DataJson != null ? l.Evidence.DataJson : l.DataJson
                 })
                 .ToListAsync(ct);
 
