@@ -1,0 +1,18 @@
+@* Footer under a dashboard table: "Showing X of Y …" and ← page / pages → *@
+<div class="foot">
+    <span>Showing @Shown of @Total @Label</span>
+    <div class="pager">
+        <button type="button" class="pbtn" disabled="@(Page <= 1)" @onclick="() => PageChanged.InvokeAsync(Page - 1)">←</button>
+        <span>@Page / @Pages</span>
+        <button type="button" class="pbtn" disabled="@(Page >= Pages)" @onclick="() => PageChanged.InvokeAsync(Page + 1)">→</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Page { get; set; }
+    [Parameter] public int Pages { get; set; }
+    [Parameter] public int Shown { get; set; }
+    [Parameter] public int Total { get; set; }
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+}

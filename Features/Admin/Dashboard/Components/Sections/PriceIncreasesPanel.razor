@@ -1,0 +1,117 @@
+@using STTproject.Features.Admin.Dashboard.Components
+@using STTproject.Features.Admin.Dashboard.DTOs
+@inherits DashPanelBase
+
+@{
+    var rows = Sorted(Data.Where(p => string.IsNullOrEmpty(principal) || p.Principal == principal), Keys, p => p.ItemName);
+    var pageRows = PageOf(rows);
+}
+
+<section class="panel p-price">
+    <div class="card pcard">
+        <div class="pcard-head">
+            <div class="head-text">
+                <h3 class="pcard-title">Scheduled price increases</h3>
+                <div class="pcard-sub">Not yet applied · overdue means the effectivity date passed but the increase hasn't been applied</div>
+            </div>
+            <div class="ctrls">
+                <span class="ctl-select">
+                    <Select TItem="string"
+                            Items="principals"
+                            ShowPlaceholder="true"
+                            Placeholder="All principals"
+                            SelectedValue="@principal"
+                            SelectedValueChanged="OnPrincipalChanged" />
+                </span>
+            </div>
+        </div>
+
+        <div class="body" @ref="tableBody">
+            <table>
+                <colgroup><col><col style="width:130px"><col style="width:150px"><col style="width:120px"><col style="width:120px"><col style="width:120px"><col style="width:150px"></colgroup>
+                <thead>
+                    <tr>
+                        <th class="@SortClass("item")" @onclick='() => ToggleSort("item")'>Item <i>@SortArrow("item")</i></th>
+                        <th class="@SortClass("principal")" @onclick='() => ToggleSort("principal")'>Principal <i>@SortArrow("principal")</i></th>
+                        <th class="@SortClass("date")" @onclick='() => ToggleSort("date")'>Effective <i>@SortArrow("date")</i></th>
+                        <th class="@SortClass("old") num" @onclick='() => ToggleSort("old", startDescending: true)'>Current <i>@SortArrow("old")</i></th>
+                        <th class="@SortClass("inc") num" @onclick='() => ToggleSort("inc", startDescending: true)'>Increase <i>@SortArrow("inc")</i></th>
+                        <th class="@SortClass("new") num" @onclick='() => ToggleSort("new", startDescending: true)'>New price <i>@SortArrow("new")</i></th>
+                        <th class="@SortClass("subs") num" @onclick='() => ToggleSort("subs", startDescending: true)'>Sub items affected <i>@SortArrow("subs")</i></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (rows.Count == 0)
+                    {
+                        <tr><td colspan="7" class="empty">@("No scheduled price increases" + (string.IsNullOrEmpty(principal) ? "" : " for " + principal) + ".")</td></tr>
+                    }
+                    @foreach (var p in pageRows)
+                    {
+                        <tr>
+                            <td title="@p.ItemName">
+                                <b class="item-name">@p.ItemName</b>
+                                <span class="muted small">@(p.ItemCode + (p.PriceListType is null ? "" : " · " + p.PriceListType))</span>
+                            </td>
+                            <td class="muted">@p.Principal</td>
+                            <td>
+                                @if (p.IsOverdue)
+                                {
+                                    <span class="tag t-bad">Overdue</span>
+                                }
+                                <span class="muted"> @DashFormat.DateShort(p.EffectivityDate)</span>
+                            </td>
+                            <td class="num muted">@DashFormat.Peso(p.OldPrice)</td>
+                            <td class="num pos">+@DashFormat.Peso(p.IncreaseAmount)</td>
+                            <td class="num"><b>@DashFormat.Peso(p.NewPrice)</b></td>
+                            <td class="num">@p.SubdItemsAffected</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <DashPager Page="CurrentPage" Pages="TotalPages(rows.Count)" Shown="pageRows.Count" Total="rows.Count"
+                   Label="schedules" PageChanged="GoToPage" />
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public List<PendingPriceIncreaseDto> Data { get; set; } = new();
+
+    private string principal = string.Empty;
+    private List<string> principals = new();
+    private ElementReference tableBody;
+
+    private static readonly Dictionary<string, Func<PendingPriceIncreaseDto, IComparable>> Keys = new()
+    {
+        ["item"] = p => p.ItemName,
+        ["principal"] = p => p.Principal,
+        ["date"] = p => p.EffectivityDate,
+        ["old"] = p => p.OldPrice,
+        ["inc"] = p => p.IncreaseAmount,
+        ["new"] = p => p.NewPrice,
+        ["subs"] = p => p.SubdItemsAffected
+    };
+
+    protected override void OnInitialized()
+    {
+        SortKey = "date";   // soonest first, so overdue ones are on top
+        SortAsc = true;
+    }
+
+    protected override void OnParametersSet()
+    {
+        principals = Data.Select(p => p.Principal).Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await WatchRowsAsync(tableBody, rowHeight: 40);
+    }
+
+    private void OnPrincipalChanged(string value)
+    {
+        principal = value ?? string.Empty;
+        CurrentPage = 1;
+    }
+}

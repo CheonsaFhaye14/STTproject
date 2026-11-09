@@ -1,0 +1,220 @@
+@using STTproject.Features.Admin.Dashboard.Components
+@using STTproject.Features.Admin.Dashboard.DTOs
+@inherits DashPanelBase
+
+@{
+    var rows = Sorted(Data.Batches, Keys, b => b.FileName);
+    var pageRows = PageOf(rows);
+    var selected = Data.Batches.FirstOrDefault(b => b.ImportBatchId == selectedBatchId);
+}
+
+<section class="panel p-err">
+    @* ================= LEFT: batches ================= *@
+    <div class="card pcard">
+        <div class="pcard-head">
+            <div class="head-text">
+                <h3 class="pcard-title">Batches with pending errors</h3>
+                <div class="pcard-sub">One batch = one upload · click a batch to see its errors</div>
+            </div>
+            <a class="link" href="@ErrorTrackingUrl">Open error tracking →</a>
+        </div>
+        <div class="body" @ref="tableBody">
+            <table>
+                <colgroup>
+                    <col style="width:72px">
+                    <col>
+                    <col style="width:110px">
+                    <col style="width:90px">
+                    <col style="width:80px">
+                    <col style="width:80px">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Batch</th>
+                        <th class="@SortClass("file")" @onclick='() => ToggleSort("file")'>File
+                            <i>@SortArrow("file")</i></th>
+                            <th class="@SortClass("uploaded")"
+                                @onclick='() => ToggleSort("uploaded", startDescending: true)'>Uploaded
+                                <i>@SortArrow("uploaded")</i></th>
+                                <th>Status</th>
+                                <th class="@SortClass("pending") num"
+                                    @onclick='() => ToggleSort("pending", startDescending: true)'>Pending
+                                    <i>@SortArrow("pending")</i></th>
+                                    <th class="num">Waiting</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (rows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6" class="empty">No pending errors 🎉</td>
+                                    </tr>
+                                }
+                                @foreach (var b in pageRows)
+                                {
+                                    var batch = b;
+                                    var st = DashFormat.BatchStatus(batch.BatchStatus);
+                                    var waiting = DashFormat.Waiting(batch.OldestPendingAt);
+                                    <tr class="click tall @(selectedBatchId == batch.ImportBatchId ? "sel" : "")"
+                                        @onclick="() => ToggleBatch(batch.ImportBatchId)">
+                                        <td><b>#@batch.ImportBatchId</b></td>
+                                        <td title="@batch.FileName">
+                                            <div class="file">
+                                                <b>@batch.FileName</b>
+                                                <span>@batch.SubdCode · @batch.SubdName</span>
+                                            </div>
+                                        </td>
+                                        <td class="muted">@DashFormat.DateTimeShort(batch.UploadedAt)</td>
+                                        <td><span class="tag @st.Css">@st.Text</span></td>
+                                        <td class="num pending-num">@batch.PendingCount</td>
+                                        <td class="num @(waiting == "Today" ? "muted" : "")">@waiting</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <DashPager Page="CurrentPage" Pages="TotalPages(rows.Count)" Shown="pageRows.Count" Total="rows.Count"
+                               Label="batches" PageChanged="GoToPage" />
+                </div>
+
+                @* ================= RIGHT: all errors, or the selected file ================= *@
+                <div class="card pcard">
+                    <div class="pcard-head">
+                        <div class="head-text">
+                            @if (selected is null)
+                            {
+                                <h3 class="pcard-title">All pending errors</h3>
+                                <div class="pcard-sub">@Data.PendingCount errors in @Data.Batches.Count batches · click a batch on the
+                                    left for its details</div>
+                                }
+                else
+                                {
+                                    <h3 class="pcard-title ell" title="@selected.FileName">@selected.FileName</h3>
+                                    <div class="pcard-sub">Batch #@selected.ImportBatchId · @selected.PendingCount pending errors</div>
+                                }
+                            </div>
+                            @if (selected is not null)
+                            {
+                                <button type="button" class="back" @onclick="() => selectedBatchId = null">← All batches</button>
+                            }
+                        </div>
+
+                        <div class="body scroll-y">
+                            @if (selected is null)
+                            {
+                                var byType = Data.Batches.SelectMany(b => b.Types)
+                                    .GroupBy(t => t.ErrorType)
+                                    .Select(g => (Label: DashFormat.Humanize(g.Key), Type: g.Key, Count: g.Sum(x => x.Count)))
+                                    .OrderByDescending(x => x.Count).ToList();
+                                var bySubd = Data.Batches
+                                    .GroupBy(b => (b.SubdCode, b.SubdName))
+                                    .Select(g => (g.Key.SubdCode, g.Key.SubdName, Count: g.Sum(x => x.PendingCount)))
+                                    .OrderByDescending(x => x.Count).Take(4).ToList();
+                                var maxType = byType.Select(x => x.Count).DefaultIfEmpty(1).Max();
+                                var maxSubd = bySubd.Select(x => x.Count).DefaultIfEmpty(1).Max();
+
+                                <div class="sec">By type</div>
+                                @foreach (var t in byType)
+                                {
+                                    <div class="hbar" title="@Describe(t.Type)">
+                                        <div class="lbl">@t.Label</div>
+                                        <div class="val">@t.Count</div>
+                                        <div class="track">
+                                            <div class="fill red" style="width:@DashFormat.Css(t.Count * 100.0 / maxType)%"></div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="sec mt">By sub distributor</div>
+                                @foreach (var s in bySubd)
+                                {
+                                    <div class="hbar">
+                                        <div class="lbl"><span class="chip">@s.SubdCode</span>@s.SubdName</div>
+                                        <div class="val">@s.Count</div>
+                                        <div class="track">
+                                            <div class="fill amber" style="width:@DashFormat.Css(s.Count * 100.0 / maxSubd)%"></div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                var st = DashFormat.BatchStatus(selected.BatchStatus);
+                                <div class="kv">
+                                    <span>Sub distributor</span><b title="@selected.SubdName"><span class="chip">@selected.SubdCode</span>
+                                    @selected.SubdName</b>
+                                    <span>Uploaded</span><b>@DashFormat.DateTimeShort(selected.UploadedAt)</b>
+                                    <span>Result</span><b><span class="tag @st.Css">@st.Text</span></b>
+                                    <span>Waiting</span><b>@DashFormat.Waiting(selected.OldestPendingAt)</b>
+                                    @if (selected.TimesUploaded > 1)
+                                    {
+                                        <span>Same file</span><b><span class="tag t-part">Uploaded @(selected.TimesUploaded)×</span></b>
+                                    }
+                                </div>
+
+                                <div class="sec">Error types in this file</div>
+                                @foreach (var t in selected.Types)
+                                {
+                                    var desc = Describe(t.ErrorType);
+                                    <div class="hbar">
+                                        <div class="lbl">
+                                            @DashFormat.Humanize(t.ErrorType)
+                                            @if (!string.IsNullOrEmpty(desc))
+                                            {
+                                                <span class="muted small"> · @desc</span>
+                                            }
+                                        </div>
+                                        <div class="val">@t.Count</div>
+                                        <div class="track">
+                                            <div class="fill red" style="width:@DashFormat.Css(t.Count * 100.0 / selected.PendingCount)%"></div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <a class="link mt-link" href="@BatchErrorsUrl(selected.ImportBatchId)">Resolve errors for batch
+                                    #@selected.ImportBatchId →</a>
+                                }
+                            </div>
+                        </div>
+                    </section>
+
+@code {
+    [Parameter, EditorRequired] public PendingErrorsSummaryDto Data { get; set; } = new();
+
+    // Import Errors Logs list, and the file page for one batch (ImportBatchDetails.razor).
+    private const string ErrorTrackingUrl = "/admin/import-errors";
+    private static string BatchErrorsUrl(int batchId) => $"/admin/import-errors/files/{batchId}";
+
+    // Optional one-line explanations shown next to each error type. Key = ImportError.ErrorType.
+    // Add your real ErrorType values here; types without an entry just show their name.
+    private static readonly Dictionary<string, string> TypeDescriptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // ["InvoiceInconsistent"] = "Rows of one invoice disagree (e.g. different dates)",
+        // ["InvoiceHeaderInvalid"] = "Invoice number, date or customer can't be read",
+    };
+
+    private static string Describe(string type) => TypeDescriptions.GetValueOrDefault(type) ?? string.Empty;
+
+    private int? selectedBatchId;
+    private ElementReference tableBody;
+
+    private static readonly Dictionary<string, Func<PendingErrorBatchDto, IComparable>> Keys = new()
+    {
+        ["file"] = b => b.FileName,
+        ["uploaded"] = b => b.UploadedAt,
+        ["pending"] = b => b.PendingCount
+    };
+
+    protected override void OnInitialized()
+    {
+        SortKey = "pending";
+        SortAsc = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await WatchRowsAsync(tableBody, rowHeight: 46);
+    }
+
+    private void ToggleBatch(int id) => selectedBatchId = selectedBatchId == id ? null : id;
+}

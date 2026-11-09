@@ -1,0 +1,175 @@
+@using STTproject.Features.Admin.Dashboard.Components
+@using STTproject.Features.Admin.Dashboard.DTOs
+@inherits DashPanelBase
+
+@{
+    var filtered = Data.PerSubd.Where(s => string.IsNullOrWhiteSpace(search)
+        || s.SubdName.Contains(search, StringComparison.OrdinalIgnoreCase)
+        || s.SubdCode.Contains(search, StringComparison.OrdinalIgnoreCase));
+    var rows = Sorted(filtered, Keys, s => s.SubdName);
+    var pageRows = PageOf(rows);
+    var maxCust = Math.Max(1, Data.PerSubd.Select(s => s.CustomersTotal).DefaultIfEmpty(0).Max());
+    var maxItems = Math.Max(1, Data.PerSubd.Select(s => s.SubdItemsTotal).DefaultIfEmpty(0).Max());
+}
+
+<section class="panel p-data">
+    @* ================= LEFT: totals ================= *@
+    <div class="card pcard">
+        <div class="pcard-head">
+            <div class="head-text">
+                <h3 class="pcard-title">Totals</h3>
+                <div class="pcard-sub">Everything in the system right now</div>
+            </div>
+        </div>
+        <div class="body tiles">
+            @Tile("Customers", Data.CustomersActive, Data.CustomersInactive, "Customers", CustomersUrl)
+            @Tile("Company items", Data.CompanyItemsActive, Data.CompanyItemsInactive, "Company Items", CompanyItemsUrl)
+            @Tile("Mapped sub items", Data.SubdItemsActive, Data.SubdItemsInactive, "Map Items", MapItemsUrl)
+            @Tile("Sub distributors", Data.SubdsActive, Data.SubdsInactive, "SubDistributors", SubDistributorsUrl)
+        </div>
+    </div>
+
+    @* ================= RIGHT: per sub distributor ================= *@
+    <div class="card pcard">
+        <div class="pcard-head">
+            <div class="head-text">
+                <h3 class="pcard-title">Per sub distributor</h3>
+                <div class="pcard-sub">Customers and mapped sub items · bars show active (green) vs inactive (red)</div>
+            </div>
+            <div class="ctrls">
+                <span class="ctl-search">
+                    <Input TValue="string" Placeholder="Search sub distributor…" Value="search"
+                           ValueChanged="OnSearchChanged" />
+                </span>
+            </div>
+        </div>
+
+        <div class="body" @ref="tableBody">
+            <table>
+                <colgroup>
+                    <col style="width:96px">
+                    <col>
+                    <col style="width:90px">
+                    <col style="width:210px">
+                    <col style="width:210px">
+                    <col style="width:90px">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="@SortClass("code")" @onclick='() => ToggleSort("code")'>Code
+                            <i>@SortArrow("code")</i></th>
+                            <th class="@SortClass("name")" @onclick='() => ToggleSort("name")'>Sub distributor
+                                <i>@SortArrow("name")</i></th>
+                                <th class="@SortClass("status")" @onclick='() => ToggleSort("status")'>Status
+                                    <i>@SortArrow("status")</i></th>
+                                    <th class="@SortClass("cust")" @onclick='() => ToggleSort("cust", startDescending: true)'>
+                                        Customers <span class="muted light">active / total</span> <i>@SortArrow("cust")</i></th>
+                                        <th class="@SortClass("items")" @onclick='() => ToggleSort("items", startDescending: true)'>
+                                            Mapped sub items <span class="muted light">active / total</span> <i>@SortArrow("items")</i>
+                                        </th>
+                                        <th class="@SortClass("princ") num" @onclick='() => ToggleSort("princ", startDescending: true)'>
+                                            Principals <i>@SortArrow("princ")</i></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (rows.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="empty">No sub distributor matches "@search".</td>
+                                            </tr>
+                                        }
+                                        @foreach (var s in pageRows)
+                                        {
+                                            <tr>
+                                                <td><span class="chip">@s.SubdCode</span></td>
+                                                <td title="@s.SubdName">@s.SubdName</td>
+                                                <td><span class="tag @(s.IsActive ? "t-ok" : "t-grey")">@(s.IsActive ? "Active" :
+                                                                    "Inactive")</span></td>
+                                                    <td>@Pair(s.CustomersActive, s.CustomersInactive, maxCust)</td>
+                                                    <td>@Pair(s.SubdItemsActive, s.SubdItemsInactive, maxItems)</td>
+                                                    <td class="num">@s.PrincipalCount</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <DashPager Page="CurrentPage" Pages="TotalPages(rows.Count)" Shown="pageRows.Count" Total="rows.Count"
+                                           Label="sub distributors" PageChanged="GoToPage" />
+                            </div>
+                        </section>
+
+@code {
+    [Parameter, EditorRequired] public RecordsDto Data { get; set; } = new();
+
+    // Same routes as the AdminSideBar menu.
+    private const string CustomersUrl = "/admin/customer";
+    private const string CompanyItemsUrl = "/admin/companyitem";
+    private const string MapItemsUrl = "/admin/mapitem";
+    private const string SubDistributorsUrl = "/admin/subdistributor";
+
+    private string? search = string.Empty;
+    private ElementReference tableBody;
+
+    private static readonly Dictionary<string, Func<SubdRecordDto, IComparable>> Keys = new()
+    {
+        ["code"] = s => s.SubdCode,
+        ["name"] = s => s.SubdName,
+        ["status"] = s => s.IsActive ? "Active" : "Inactive",
+        ["cust"] = s => s.CustomersTotal,
+        ["items"] = s => s.SubdItemsTotal,
+        ["princ"] = s => s.PrincipalCount
+    };
+
+    protected override void OnInitialized()
+    {
+        SortKey = "cust";
+        SortAsc = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await WatchRowsAsync(tableBody, rowHeight: 40);
+    }
+
+    private void OnSearchChanged(string? value)
+    {
+        search = value?.Trim() ?? string.Empty;
+        CurrentPage = 1;
+    }
+
+    private static string W(int part, int whole) => DashFormat.Css(whole == 0 ? 0 : part * 100.0 / whole);
+
+    private RenderFragment Tile(string label, int active, int inactive, string linkText, string href) => __builder =>
+    {
+        var total = active + inactive;
+        <div class="tile">
+            <div class="tile-top">
+                <span class="l">@label</span>
+                <a class="link small" href="@href">@linkText →</a>
+            </div>
+            <div class="v">@DashFormat.Number(total)</div>
+            <div class="bar2">
+                <div style="width:@W(active, total)%;background:var(--green)"></div>
+                <div style="width:@W(inactive, total)%;background:var(--red)"></div>
+            </div>
+            <div class="split">
+                <span>Active <b class="pos">@DashFormat.Number(active)</b></span>
+                <span>Inactive <b class="neg">@DashFormat.Number(inactive)</b></span>
+            </div>
+        </div>
+    };
+
+    private static RenderFragment Pair(int active, int inactive, int max) => __builder =>
+    {
+        <div class="cell2">
+            <div class="mini">
+                <div style="width:@W(active, max)%;background:var(--green)"></div>
+                <div
+                    style="width:@(inactive > 0 ? DashFormat.Css(Math.Max(2, inactive * 100.0 / max)) : "0")%;background:var(--red)">
+                </div>
+            </div>
+            <b>@DashFormat.Number(active)</b>
+            <span class="muted of">/ @DashFormat.Number(active + inactive)</span>
+        </div>
+    };
+}
