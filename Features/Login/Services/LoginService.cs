@@ -7,6 +7,9 @@ namespace STTproject.Features.Login.Services
     public interface ILoginService
     {
         Task<(bool Success, Data.User? User, string? ErrorCode)> AuthenticateAsync(string username, string password);
+
+        /// <summary>Returns the user if they still exist and are active; otherwise null.</summary>
+        Task<Data.User?> GetActiveUserAsync(int userId);
     }
 
     public class LoginService : ILoginService
@@ -29,7 +32,8 @@ namespace STTproject.Features.Login.Services
             {
                 await using var context = await _contextFactory.CreateDbContextAsync();
 
-                // 👇 find by username only first, then verify password separately
+                // NOTE: passwords are still compared as plain text. Switch to hashed
+                // passwords (e.g. PasswordHasher<User>) when the Users table is migrated.
                 var user = await context.Users
                     .AsNoTracking()
                     .FirstOrDefaultAsync(u => u.IsActive && u.Username == username && u.Password == password);
@@ -49,6 +53,15 @@ namespace STTproject.Features.Login.Services
                 _logger.LogError(ex, "Unexpected login error for username '{Username}'.", username);
                 return (false, null, "db");
             }
+        }
+
+        public async Task<STTproject.Data.User?> GetActiveUserAsync(int userId)
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+
+            return await context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive);
         }
     }
 }

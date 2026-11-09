@@ -1,6 +1,18 @@
-﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using STTproject.Shared
+
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="typeof(STTproject.Shared.Layout.User.UserSideBar)" />
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="typeof(STTproject.Shared.Layout.User.UserSideBar)">
+            <NotAuthorized>
+                @* Not signed in      -> "/" shows the login form.
+                   Signed in, wrong role -> "/" sends them to their own landing page. *@
+                <RedirectToLogin />
+            </NotAuthorized>
+            <Authorizing>
+                <p class="text-muted p-3">Checking access…</p>
+            </Authorizing>
+        </AuthorizeRouteView>
 
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>

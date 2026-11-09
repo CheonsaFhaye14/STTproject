@@ -1,0 +1,11 @@
+@namespace STTproject.Shared
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        // forceLoad = full page request, so the login page's server-side pass can read
+        // the auth cookie and route a signed-in user to /admin or /home.
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+}

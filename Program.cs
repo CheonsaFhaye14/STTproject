@@ -1,3 +1,6 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Components;
 using STTproject.Data;
@@ -26,6 +29,30 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpContextAccessor();
+
+// =========================
+// AUTHENTICATION (signed + encrypted cookie)
+// =========================
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = UserContextService.AuthCookieName;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+
+        // How long a login ticket is valid. With "Remember Me" the cookie itself
+        // also survives a browser restart; without it, it's a session cookie.
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+        options.SlidingExpiration = true;
+
+        options.LoginPath = "/";
+        options.LogoutPath = "/logout";
+        options.AccessDeniedPath = "/";
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddDbContextFactory<EntrielContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -81,6 +108,10 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
 
 app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService) =>
@@ -92,9 +123,7 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
     var rememberMe = string.Equals(form["rememberMe"].ToString(), "true", StringComparison.OrdinalIgnoreCase)
         || string.Equals(form["rememberMe"].ToString(), "1", StringComparison.OrdinalIgnoreCase);
 
-    var (success, user, errorCode) = await loginService.AuthenticateAsync(username, password);
-
-    if (!success)
+    string BuildErrorRedirect(string errorCode)
     {
         var query = $"?error={errorCode}&username={Uri.EscapeDataString(username)}";
         if (rememberMe)
@@ -105,7 +134,14 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
         {
             query += $"&role={Uri.EscapeDataString(requestedRole)}";
         }
-        return Results.Redirect($"/{query}");
+        return $"/{query}";
+    }
+
+    var (success, user, errorCode) = await loginService.AuthenticateAsync(username, password);
+
+    if (!success)
+    {
+        return Results.Redirect(BuildErrorRedirect(errorCode ?? "invalid"));
     }
 
     var normalizedRole = string.Equals(requestedRole, "Admin", StringComparison.OrdinalIgnoreCase)
@@ -114,48 +150,40 @@ app.MapPost("/login", async (HttpContext httpContext, ILoginService loginService
 
     if (!string.Equals(user!.Role, normalizedRole, StringComparison.OrdinalIgnoreCase))
     {
-        var query = $"?error=role&username={Uri.EscapeDataString(username)}";
-        if (rememberMe)
-        {
-            query += "&rememberMe=1";
-        }
-        if (!string.IsNullOrWhiteSpace(requestedRole))
-        {
-            query += $"&role={Uri.EscapeDataString(requestedRole)}";
-        }
-        return Results.Redirect($"/{query}");
+        return Results.Redirect(BuildErrorRedirect("role"));
     }
 
-    var cookieOptions = new CookieOptions
+    var claims = new List<Claim>
     {
-        HttpOnly = true,
-        Secure = httpContext.Request.IsHttps,
-        SameSite = SameSiteMode.Lax,
-        Path = "/"
+        new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+        new(ClaimTypes.Name, user.Username),
+        new(ClaimTypes.Role, normalizedRole)
     };
 
-    if (rememberMe)
-    {
-        cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(7);
-    }
+    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+    var principal = new ClaimsPrincipal(identity);
 
-    httpContext.Response.Cookies.Append(UserContextService.UserIdCookieName, user!.UserId.ToString(), cookieOptions);
-    httpContext.Response.Cookies.Append(
-        "sttproject_username",
-        user.Username,
-    cookieOptions);
+    var authProperties = new AuthenticationProperties
+    {
+        // true  -> persistent cookie, survives closing the browser (Remember Me)
+        // false -> session cookie, gone when the browser closes
+        IsPersistent = rememberMe,
+        ExpiresUtc = rememberMe ? DateTimeOffset.UtcNow.AddDays(7) : null,
+        AllowRefresh = true
+    };
+
+    await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, authProperties);
+
+    // Clean up the old unsigned cookies from the previous login system.
+    UserContextService.DeleteLegacyCookies(httpContext);
+
     return Results.Redirect(normalizedRole == "Admin" ? "/admin" : "/home");
 });
 
-app.MapGet("/logout", (HttpContext httpContext) =>
+app.MapGet("/logout", async (HttpContext httpContext) =>
 {
-    httpContext.Response.Cookies.Delete(UserContextService.UserIdCookieName, new CookieOptions
-    {
-        HttpOnly = true,
-        Secure = httpContext.Request.IsHttps,
-        SameSite = SameSiteMode.Lax,
-        Path = "/"
-    });
+    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    UserContextService.DeleteLegacyCookies(httpContext);
 
     return Results.Redirect("/");
 });
