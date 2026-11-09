@@ -1,5 +1,10 @@
 @using STTproject.Features.Admin.Customers.Services
+@using STTproject.Services
+@using System.Text.Json
+@using Microsoft.JSInterop
 @implements IDisposable
+@inject IJSRuntime JS
+@inject IUserContextService UserContext
 @inject IImportErrorsService ImportErrorsData
 @inject IAdminCustomerService AdminCustomerService
 <link rel="stylesheet" href="css/Table.css" asp-append-version="true" />
@@ -189,7 +194,7 @@
                                                             @foreach (var row in PagedErrors)
                                                             {
                                                                 var errorId = row.ImportErrorId;
-                                                                <tr class="clt-row-click" @onclick="() => OnViewDetails.InvokeAsync(errorId)">
+                                                                <tr>
                                                                     <td>
                                                                         <span class="ie-problem">@ImportErrorPresentation.Title(row.ErrorType)</span>
                                                                     </td>
@@ -213,13 +218,7 @@
                                                                     </td>
                                                                     <td @onclick:stopPropagation="true">
                                                                         <div class="clt-actions">
-                                                                            @if (ImportErrorPresentation.IsPending(row.Status) &&
-                                                                    ImportErrorPresentation.CanFix(row.ErrorType))
-                                                                            {
-                                                                                <Button Title="Fix" Variant="ButtonVariant.Primary"
-                                                                                        OnClick="() => OnFix.InvokeAsync(errorId)" />
-                                                                            }
-                                                                            <Button Title="Details" Variant="ButtonVariant.Secondary"
+<Button Title="Details" Variant="ButtonVariant.Secondary"
                                                                                     OnClick="() => OnViewDetails.InvokeAsync(errorId)" />
                                                                         </div>
                                                                     </td>
@@ -231,7 +230,7 @@
                                                             @foreach (var file in PagedBatches)
                                                             {
                                                                 var batchId = file.ImportBatchId;
-                                                                <tr class="clt-row-click" @onclick="() => OnViewFile.InvokeAsync(batchId)">
+                                                                <tr>
                                                                     <td>@file.FileName</td>
                                                                     <td>@file.UploadedAt.ToString("MMM d, yyyy")</td>
                                                                     <td><span class="ie-pill ie-pill-prepared">@file.BatchStatus</span></td>
@@ -282,9 +281,6 @@
     /// <summary>Row click or Details. Argument = ImportErrorId.</summary>
     [Parameter] public EventCallback<int> OnViewDetails { get; set; }
 
-    /// <summary>Fix button. Argument = ImportErrorId.</summary>
-    [Parameter] public EventCallback<int> OnFix { get; set; }
-
     /// <summary>View Errors button in the By Import File view. Argument = ImportBatchId.</summary>
     [Parameter] public EventCallback<int> OnViewFile { get; set; }
 
@@ -299,7 +295,14 @@
     private List<FilterOption> ErrorTypesOptions =>
         AllErrorTypes.Select(t => new FilterOption(t, ImportErrorPresentation.Title(t))).ToList();
 
-    private string SelectedStatus { get; set; } = "";
+    // Each view has its own status list, so each keeps its own selection. SelectedStatus is the one for the view on screen.
+    private string statusErrors = "";
+    private string statusFiles = "";
+    private string SelectedStatus
+    {
+        get => IsImportBatch ? statusFiles : statusErrors;
+        set { if (IsImportBatch) statusFiles = value; else statusErrors = value; }
+    }
     private string SelectedErrorType { get; set; } = "";
     private int? SelectedSubDistributorId { get; set; }
     private int filterResetKey;
@@ -359,13 +362,89 @@
                 .Select(sd => new SubdOption(sd.SubDistributorId, sd.SubDistributorName))
                 .ToList();
             AllErrorTypes = (await ImportErrorsData.GetErrorTypesAsync()).ToList();
-
-            await LoadPageAsync();
+            // The first page load waits for OnAfterRenderAsync, where the saved filters can be read.
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading import errors: {ex.Message}");
             isLoading = false;
+        }
+    }
+
+    // ---- Filter draft: the filters are kept in the browser, so coming back from a details page shows the same list. ----
+    // "Clear all filters" removes it. Sort and page are not kept.
+    private sealed class FilterDraft
+    {
+        public string? Search { get; set; }
+        public string? StatusErrors { get; set; }
+        public string? StatusFiles { get; set; }
+        public string? ErrorType { get; set; }
+        public int? SubDistributorId { get; set; }
+    }
+
+    private IJSObjectReference? draftJs;
+    private string DraftKey => "import-errors-filters:" + (UserContext.UserId ?? 0);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await RestoreDraftAsync();
+        await LoadPageAsync();
+    }
+
+    private async Task RestoreDraftAsync()
+    {
+        try
+        {
+            draftJs ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+            var json = await draftJs.InvokeAsync<string?>("loadSalesInvoiceDraft", DraftKey);
+            if (string.IsNullOrWhiteSpace(json)) return;
+
+            var d = JsonSerializer.Deserialize<FilterDraft>(json);
+            if (d is null) return;
+
+            _searchTerm = d.Search ?? string.Empty;   // the field, not the property: restoring must not start the search timer
+            statusErrors = d.StatusErrors ?? string.Empty;
+            statusFiles = d.StatusFiles ?? string.Empty;
+            SelectedErrorType = AllErrorTypes.Contains(d.ErrorType ?? string.Empty) ? d.ErrorType! : string.Empty;
+            SelectedSubDistributorId = d.SubDistributorId.HasValue && SubDistributors.Any(x => x.Id == d.SubDistributorId.Value)
+                ? d.SubDistributorId : null;
+            filterResetKey++;   // the pickers read their selection again
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or JsonException or InvalidOperationException)
+        {
+            // No saved filters, or the browser could not be reached: start with the defaults.
+        }
+    }
+
+    private async Task PersistDraftAsync()
+    {
+        try
+        {
+            draftJs ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
+
+            var isDefault = string.IsNullOrWhiteSpace(_searchTerm) && string.IsNullOrEmpty(statusErrors) && string.IsNullOrEmpty(statusFiles)
+                && string.IsNullOrEmpty(SelectedErrorType) && !SelectedSubDistributorId.HasValue;
+            if (isDefault)
+            {
+                await draftJs.InvokeVoidAsync("clearSalesInvoiceDraft", DraftKey);
+                return;
+            }
+
+            var json = JsonSerializer.Serialize(new FilterDraft
+            {
+                Search = _searchTerm,
+                StatusErrors = statusErrors,
+                StatusFiles = statusFiles,
+                ErrorType = SelectedErrorType,
+                SubDistributorId = SelectedSubDistributorId
+            });
+            await draftJs.InvokeVoidAsync("saveSalesInvoiceDraft", DraftKey, json);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException)
+        {
+            // Best effort: the list still works without a saved draft.
         }
     }
 
@@ -375,8 +454,7 @@
         if (IsImportBatch == _lastIsImportBatch) return;
 
         _lastIsImportBatch = IsImportBatch;
-        SelectedStatus = ""; // the two views have different status lists
-        currentPage = 1;
+        currentPage = 1; // SelectedStatus now reads the other view's own selection
         ApplyDefaultSort();
         await LoadPageAsync();
     }
@@ -409,6 +487,7 @@
         await InvokeAsync(StateHasChanged);
         try
         {
+            await PersistDraftAsync();
             var filter = BuildFilter();
 
             if (IsImportBatch)
@@ -470,7 +549,8 @@
     {
         _debounceTimer?.Dispose();
         _searchTerm = "";
-        SelectedStatus = "";
+        statusErrors = "";
+        statusFiles = "";
         SelectedErrorType = "";
         SelectedSubDistributorId = null;
         ApplyDefaultSort();

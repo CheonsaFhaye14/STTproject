@@ -63,6 +63,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             };
         }
         private IJSObjectReference? jsModule;
+        private string? suggestedUomName;
+        private bool deepLinkApplied;
         private IJSObjectReference? mapItemJsModule;
         private DotNetObjectReference<MapItem>? objRef;
         private bool principalEnterPrimed = false;
@@ -154,6 +156,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private Task CloseAddUomModalAsync()
         {
             showAddUomModal = false;
+            suggestedUomName = null;
             _ = PersistDraftAsync();
             return Task.CompletedTask;
         }
@@ -169,6 +172,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 .ToList();
 
             showAddUomModal = false;
+            suggestedUomName = null;
             await PersistDraftAsync();
             StateHasChanged();
         }
@@ -490,9 +494,94 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     await HydrateClientStateAfterRenderAsync();
                 }
 
+                await ApplyDeepLinkAsync();
+
                 isPageLoading = false;
                 StateHasChanged();
             }
+        }
+
+        /// <summary>
+        /// Opened from an import error as /admin/mapitem?subd=&amp;sku=&amp;uom=. Loads that subdistributor, opens the mapped item with that
+        /// SKU for editing and opens the Add UOM window with the unit entered. Runs once, after the saved draft has been restored, so the
+        /// link wins over an old draft. Anything it cannot find is reported and the page is left as far as it got.
+        /// </summary>
+        private async Task ApplyDeepLinkAsync()
+        {
+            if (deepLinkApplied || !IsAdminMode || !userContext.UserId.HasValue) return;
+            deepLinkApplied = true;
+
+            // The first render happens while OnParametersSetAsync is still loading the sub distributors, so wait for it to finish.
+            await onParametersSetLock.WaitAsync();
+            onParametersSetLock.Release();
+
+            var query = System.Web.HttpUtility.ParseQueryString(new Uri(Navigation.Uri).Query);
+            if (!int.TryParse(query["subd"], out var subdId) || subdId <= 0) return;
+            var sku = query["sku"]?.Trim();
+            var skuName = query["name"]?.Trim();
+            var uom = query["uom"]?.Trim();
+
+            if (!subdList.Any(s => s.SubDistributorId == subdId))
+            {
+                itemActionErrorMessage = "The sub distributor from the import error was not found.";
+                showErrorModal = true;
+                return;
+            }
+
+            selectedSubdId = subdId;
+            UpdateSelectedSubdLocation();
+            selectedPrincipal = null;
+            ResetItemForm(persistDraft: false);
+            await LoadMapTablesAsync();
+
+            // Item not found: nothing is mapped yet, so put the code and name from the file into the header and let the admin pick the company item.
+            var newSku = query["newsku"]?.Trim();
+            var newName = query["newname"]?.Trim();
+            if (!string.IsNullOrWhiteSpace(newSku) || !string.IsNullOrWhiteSpace(newName))
+            {
+                itemCode = newSku ?? string.Empty;
+                itemName = newName ?? string.Empty;
+                await PersistDraftAsync();
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(sku) && string.IsNullOrWhiteSpace(skuName)) return;
+
+            // LoadMapTablesAsync above already loaded this sub distributor's items. Find the one the file meant by its
+            // sub item code AND item name. If the name differs slightly, fall back to the code alone, then the name alone,
+            // but only when that picks exactly one item. It never guesses between several.
+            static string Norm(string? v) => string.Join(' ', (v ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+            var wantCode = Norm(sku);
+            var wantName = Norm(skuName);
+            var forSubd = subDistributorItems.ToList();
+
+            MapSubDistributorItemRow? item = null;
+            if (wantCode.Length > 0 && wantName.Length > 0)
+                item = forSubd.FirstOrDefault(i => Norm(i.SubItemCode) == wantCode && Norm(i.Description) == wantName);
+            if (item is null && wantCode.Length > 0)
+            {
+                var byCode = forSubd.Where(i => Norm(i.SubItemCode) == wantCode).ToList();
+                if (byCode.Count == 1) item = byCode[0];
+            }
+            if (item is null && wantName.Length > 0)
+            {
+                var byName = forSubd.Where(i => Norm(i.Description) == wantName).ToList();
+                if (byName.Count == 1) item = byName[0];
+            }
+
+            if (item is null)
+            {
+                var what = string.IsNullOrWhiteSpace(skuName) ? $"SKU '{sku}'" : $"SKU '{sku}' / '{skuName}'";
+                itemActionErrorMessage = $"No single mapped item matching {what} was found for this sub distributor. Map the item first, then fix its units.";
+                showErrorModal = true;
+                return;
+            }
+
+            await BeginEditItem(item);
+            if (!string.IsNullOrWhiteSpace(uom)) suggestedUomName = uom;
+            await OpenAddUomModal();
+            StateHasChanged();
         }
 
         private async Task HydrateClientStateAfterRenderAsync()

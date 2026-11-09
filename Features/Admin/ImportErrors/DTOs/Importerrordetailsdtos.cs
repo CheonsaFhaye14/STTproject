@@ -38,6 +38,13 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         public List<int> RecheckedImportBatchIds { get; set; } = new();
 
         /// <summary>
+        /// The way the admin chose in the Fix window the last time (reimport, template or mapping), kept in ImportError.DataJson as FixChoice.
+        /// It is what the admin chose to do, not proof of what they changed. Null when none was recorded.
+        /// </summary>
+        public string? FixChoice { get; set; }
+        public DateTime? FixChoiceAtPht { get; set; }
+
+        /// <summary>
         /// True when Entriel can check this error against a corrected file: a sales invoice row-level error with a fingerprint
         /// and complete (not truncated) evidence of which invoices were affected.
         /// </summary>
@@ -253,4 +260,33 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
 
     /// <summary>A stored original file, ready to hand to the browser.</summary>
     public sealed record ImportOriginalFile(string FileName, string ContentType, byte[] Bytes);
+
+    /// <summary>What an uploaded workbook contains, read from the stored original file: every sheet with its first rows.</summary>
+    public sealed class ImportSheetPreviewDto
+    {
+        public int ImportBatchId { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        /// <summary>Set when the file could not be found or opened; Sheets is then empty.</summary>
+        public string? Problem { get; set; }
+        public List<ImportSheetDto> Sheets { get; set; } = new();
+    }
+
+    public sealed class ImportSheetDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool IsHidden { get; set; }
+        /// <summary>Last used row and column in the sheet.</summary>
+        public int RowCount { get; set; }
+        public int ColumnCount { get; set; }
+        /// <summary>How many columns the preview rows show (the sheet may have more).</summary>
+        public int ShownColumns { get; set; }
+        /// <summary>The first non-empty rows, with their Excel row numbers.</summary>
+        public List<ImportSheetRowDto> Rows { get; set; } = new();
+    }
+
+    public sealed class ImportSheetRowDto
+    {
+        public int RowNumber { get; set; }
+        public List<string> Cells { get; set; } = new();
+    }
 }

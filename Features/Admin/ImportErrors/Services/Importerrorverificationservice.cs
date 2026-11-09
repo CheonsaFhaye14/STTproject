@@ -341,6 +341,10 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             var field = detail.FieldName;
             if (string.IsNullOrWhiteSpace(field) || run.Rows is null || run.Rows.Count == 0) return;
 
+            // The importer names a unit error's field "UOM" but keeps the cell under the template field "UnitOfMeasure".
+            // Without this the unit column would never match and no value would be stored for the row.
+            if (string.Equals(field, "UOM", StringComparison.OrdinalIgnoreCase)) field = "UnitOfMeasure";
+
             var read = new Dictionary<(string, int), string>();
             foreach (var r in run.Rows)
             {

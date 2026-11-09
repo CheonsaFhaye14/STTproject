@@ -24,6 +24,8 @@ public partial class AddUom
     [Parameter] public decimal? ApplicableStockPrice { get; set; }
     [Parameter] public string? PriceListLabel { get; set; }
     [Parameter] public string? ReferenceNote { get; set; }
+    /// <summary>A unit name to have ready in the Unit of Measure field when the window opens (for example from an import error).</summary>
+    [Parameter] public string? SuggestedUomName { get; set; }
     private bool StockUomRequired => !string.IsNullOrWhiteSpace(CompanyStockUomName);
     private bool stockUomChosenByUser;
     private string? suggestedStockUom;
@@ -203,6 +205,7 @@ public partial class AddUom
                 ConversionBasedOnInput = string.Empty;
                 validationErrors.Clear();
             }
+            ApplySuggestedUom();
             stockUomChosenByUser = workingUomEntries.Values.Any(e => e.IsActive && e.IsStockUom);
             RefreshStockUomSuggestion();
             showClearDraftConfirmModal = false;
@@ -214,6 +217,26 @@ public partial class AddUom
         else if (!ShowAddUomModal)
         {
             wasShown = false;
+        }
+    }
+
+    // Picks the suggested unit in the Unit of Measure field: the matching standard option, or "Other" with the name typed in.
+    // Left alone when the unit is already in the list or the user already chose something (a restored draft).
+    private void ApplySuggestedUom()
+    {
+        var name = SuggestedUomName?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || !string.IsNullOrEmpty(selectedUomOption)) return;
+        if (workingUomEntries.ContainsKey(NormalizeBaseUomName(name))) return;
+
+        var standard = DefaultOptions.FirstOrDefault(o => string.Equals(o, name, StringComparison.OrdinalIgnoreCase));
+        if (standard is not null)
+        {
+            SelectedUomOption = standard;
+        }
+        else
+        {
+            SelectedUomOption = "__custom";
+            CustomUom = name;
         }
     }
 

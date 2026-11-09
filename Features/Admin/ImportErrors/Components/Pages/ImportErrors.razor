@@ -33,7 +33,7 @@
                 </div>
 
                 <ImportErrorsTable @ref="table" IsImportBatch="showFiles" OnLoaded="OnTableLoaded"
-                                   OnCountChanged="OnCountChanged" OnViewDetails="OpenDetails" OnFix="OpenFix" OnViewFile="OpenFile" />
+                                   OnCountChanged="OnCountChanged" OnViewDetails="OpenDetails" OnViewFile="OpenFile" />
 
                 @if (showExportModal)
                 {
@@ -73,9 +73,6 @@
 
     // These routes belong to the next two pages (error details, and file details).
     private void OpenDetails(int importErrorId) => NavManager.NavigateTo($"/admin/import-errors/{importErrorId}");
-
-    // The Fix button opens the details page, where Fix → Verify → Resolved happens.
-    private void OpenFix(int importErrorId) => NavManager.NavigateTo($"/admin/import-errors/{importErrorId}");
 
     private void OpenFile(int importBatchId) => NavManager.NavigateTo($"/admin/import-errors/files/{importBatchId}");
 

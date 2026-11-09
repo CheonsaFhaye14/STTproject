@@ -140,7 +140,8 @@
             DraftStorageKey="@GetAddUomDraftStorageKey()" OnAdd="HandleAddUomModalAddAsync" OnCancel="CloseAddUomModalAsync"
             ItemCode="@modalCompanyItemCode" ItemName="@modalCompanyItemName" InUseUomNames="@inUseUomNames"
             CompanyStockUomName="@modalStockUomName" ApplicableStockPrice="@modalApplicableStockPrice"
-            PriceListLabel="@modalPriceListLabel" ReferenceNote="@modalReferenceNote" />
+            PriceListLabel="@modalPriceListLabel" ReferenceNote="@modalReferenceNote"
+            SuggestedUomName="@suggestedUomName" />
 
     <ImportMapItems Show="showImportMapItemModal" OnClose="@(() => showImportMapItemModal = false)"
                     OnImportCompleted="HandleImportMapItemCompletedAsync" />

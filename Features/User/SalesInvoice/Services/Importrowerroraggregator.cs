@@ -155,7 +155,7 @@ public static class ImportRowErrorAggregator
                         issue.ColumnName,
                         classified ? Clip(issue.Value) : null,
                         SnapshotRow(result, issue.SheetIndex, issue.RowNumber),
-                        Details: issue.Details));
+                        Details: MergeDetails(RowFacts(result, issue.SheetIndex, issue.RowNumber), issue.Details)));
                 }
                 else
                     group.Truncated = true;
@@ -272,8 +272,50 @@ public static class ImportRowErrorAggregator
                 contextField,
                 contextField is null ? null : ContextFieldValue(result, sheetIndex, rowNumber, contextField),
                 SnapshotRow(result, sheetIndex, rowNumber),
-                IsReportedRow: false));
+                IsReportedRow: false,
+                Details: RowFacts(result, sheetIndex, rowNumber)));
         }
+    }
+
+    private static readonly string[] QuantityFields = { "Quantity", "CaseQuantity", "DozenQuantity", "PieceQuantity", "InBoxQuantity" };
+
+    /// <summary>
+    /// A few of the row's own values, by the importer's template field (not the file's header text), so the details page can show
+    /// a compact line for every affected row: customer, item code, item, quantity, amount and salesman ("" when blank). Evidence only.
+    /// Keys start with "Row" so they never clash with an error's own details. Null when the importer did not keep the row's values.
+    /// </summary>
+    private static Dictionary<string, string?>? RowFacts(ImportSalesInvoiceResult result, int sheetIndex, int rowNumber)
+    {
+        if (!result.RawValuesByRow.TryGetValue(new(sheetIndex, rowNumber), out var values)) return null;
+
+        string? Get(string field)
+        {
+            foreach (var (name, value) in values)
+                if (string.Equals(name, field, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(value))
+                    return Clip(value.Trim());
+            return null;
+        }
+
+        return new Dictionary<string, string?>
+        {
+            ["RowCustomer"] = Get("CustomerName") ?? Get("CustomerCode"),
+            ["RowInvoiceDate"] = Get("InvoiceDate"),
+            ["RowItemCode"] = Get("SkuCode"),
+            ["RowItem"] = Get("ItemName"),
+            ["RowQty"] = QuantityFields.Select(Get).FirstOrDefault(q => q != null),
+            ["RowAmount"] = Get("NetAmount"),
+            ["RowSalesman"] = Get("SalesManName") ?? string.Empty
+        };
+    }
+
+    // The error's own details win over the row facts (their keys differ anyway).
+    private static IReadOnlyDictionary<string, string?>? MergeDetails(
+        Dictionary<string, string?>? facts, IReadOnlyDictionary<string, string?>? own)
+    {
+        if (own is null) return facts;
+        var merged = facts is null ? new Dictionary<string, string?>() : new Dictionary<string, string?>(facts);
+        foreach (var (k, v) in own) merged[k] = v;
+        return merged;
     }
 
     // The importer's own value for one template field of one row ("" when the cell is blank), or null when it was not kept.

@@ -57,10 +57,6 @@
                         {
                             <Button Title="Verify" Variant="ButtonVariant.Secondary" OnClick="VerifyRowsAsync" Disabled="busy" />
                         }
-                        else
-                        {
-                            <Button Title="Resolve Manually" Variant="ButtonVariant.Secondary" OnClick="OpenResolve" Disabled="busy" />
-                        }
                         <Button Title="Ignore" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = true" Disabled="busy" />
                     }
                     else if (ignored)
@@ -204,6 +200,107 @@
                         </section>
                     </div>
 
+                    @* ---------- ambiguous sheet: the sheets the file really has ---------- *@
+                    @if (IsAmbiguousSheet)
+                    {
+                        <section class="ied-card ied-sec ied-rows">
+                            <div class="ied-sh">
+                                <h3>Sheets in this file</h3>
+                                <span class="ied-sub">@SheetsHint()</span>
+                            </div>
+
+                            @if (sheetPreview is null)
+                            {
+                                <p class="ied-sub">No upload is linked to this error, so its sheets can't be shown.</p>
+                            }
+                            else if (sheetPreview.Problem is not null)
+                            {
+                                <p class="ied-sub">@sheetPreview.Problem</p>
+                            }
+                            else if (sheetPreview.Sheets.Count == 0)
+                            {
+                                <p class="ied-sub">This file has no sheets.</p>
+                            }
+                            else
+                            {
+                                <div class="ied-tabs" role="tablist" aria-label="Sheets in this file">
+                                    @for (var ti = 0; ti < sheetPreview.Sheets.Count; ti++)
+                                    {
+                                        var tabIndex = ti;
+                                        var tab = sheetPreview.Sheets[ti];
+                                        var named = SameText(tab.Name, AmbiguousSheetName);
+                                        var tabTitle = tab.Name + (named ? " (named in the error)" : string.Empty) + (tab.IsHidden ? " (hidden sheet)" : string.Empty);
+                                        <button type="button" role="tab"
+                                                class="@(tabIndex == ActiveSheet ? "ied-tab ied-tab-on" : "ied-tab")"
+                                                aria-selected="@(tabIndex == ActiveSheet ? "true" : "false")"
+                                                title="@tabTitle"
+                                                @onclick="() => selectedSheet = tabIndex">
+                                            @if (named) { <span class="ied-tab-flag" aria-hidden="true">●</span> }
+                                            <span class="ied-tab-name">@tab.Name</span>
+                                        </button>
+                                    }
+                                </div>
+
+                                foreach (var sh in sheetPreview.Sheets.Where((_, i) => i == ActiveSheet))
+                                {
+                                    <div class="ied-sheet">
+                                        <div class="ied-sheet-head">
+                                            <strong>@sh.Name</strong>
+                                            @if (SameText(sh.Name, AmbiguousSheetName))
+                                            {
+                                                <span class="ied-tag">Named in the error</span>
+                                            }
+                                            @if (sh.IsHidden)
+                                            {
+                                                <span class="ied-tag ied-tag-muted">Hidden</span>
+                                            }
+                                            <span class="ied-sub">@Plural(sh.RowCount, "row") · @Plural(sh.ColumnCount, "column")</span>
+                                        </div>
+
+                                        @if (sh.Rows.Count == 0)
+                                        {
+                                            <p class="ied-sub">This sheet is empty.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="ied-rowscroll">
+                                                <table class="ied-table ied-sheetprev">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Row</th>
+                                                            @for (var ci = 0; ci < sh.ShownColumns; ci++)
+                                                            {
+                                                                <th>@ColumnLetter(ci)</th>
+                                                            }
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @for (var ri = 0; ri < sh.Rows.Count; ri++)
+                                                        {
+                                                            var row = sh.Rows[ri];
+                                                            <tr class="@(ri == 0 ? "ied-hdrrow" : null)">
+                                                                <td>@row.RowNumber</td>
+                                                                @foreach (var cell in row.Cells)
+                                                                {
+                                                                    <td title="@cell">@(string.IsNullOrEmpty(cell) ? "—" : cell)</td>
+                                                                }
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            @if (sh.ColumnCount > sh.ShownColumns)
+                                            {
+                                                <p class="ied-sub">@("Showing the first " + sh.ShownColumns + " of " + sh.ColumnCount + " columns.")</p>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            }
+                        </section>
+                    }
+                    else
+                    {
                     @* ---------- rows to fix ---------- *@
                     <section class="ied-card ied-sec ied-rows">
                         <div class="ied-sh">
@@ -245,6 +342,11 @@
                                                 <th>Invoice</th>
                                                 <th>Problem</th>
                                                 <th>Status</th>
+                                                @if (ShowInvoiceFacts)
+                                                {
+                                                    <th>Invoice date</th>
+                                                    <th>Customer</th>
+                                                }
                                                 @foreach (var col in cols)
                                                 {
                                                     <th class="@(numeric.Contains(col) ? "ied-num" : null)">@col</th>
@@ -271,6 +373,11 @@
                                                         }
                                                     </td>
                                                     <td><span class="ied-st @st.Css" title="@st.Hint">@st.Text</span></td>
+                                                    @if (ShowInvoiceFacts)
+                                                    {
+                                                        <td title="@RowDate(r)">@CellValue(RowDate(r))</td>
+                                                        <td title="@RowCustomer(r)">@CellValue(RowCustomer(r))</td>
+                                                    }
                                                     @foreach (var col in cols)
                                                     {
                                                         <td class="@(numeric.Contains(col) ? "ied-num" : null)" title="@DataCell(r, col)">@CellValue(DataCell(r, col))</td>
@@ -296,6 +403,7 @@
                             }
                         }
                     </section>
+                    }
 
                     @* ---------- technical details ---------- *@
                     <section class="ied-card ied-sec ied-tech">
@@ -421,39 +529,6 @@
                             </Modal>
                         }
 
-                        @if (showResolve)
-                        {
-                            <Modal ShowModal="showResolve" Width="480px" MaxWidth="100%" Title="Resolve manually"
-                                   Subtitle="Use this only when Entriel can't verify the fix on its own, for example when the mistake is in the source Excel file."
-                                   OnClose="() => showResolve = false">
-                                <ChildContent>
-                                    <div class="ied-ctx"><b>@ImportErrorPresentation.Title(error?.ErrorType)</b><span>@error?.Value</span></div>
-                                    <label class="ied-field">
-                                        <span>Resolution type</span>
-                                        <select @bind="resolveType">
-                                            <option value="">Select…</option>
-                                            @foreach (var t in ImportErrorDetailsService.ManualResolutionTypes)
-                                            {
-                                                <option value="@t">@t</option>
-                                            }
-                                        </select>
-                                    </label>
-                                    <label class="ied-check">
-                                        <input type="checkbox" @bind="resolveConfirm" />
-                                        <span>I confirm this has been addressed. Entriel has not verified it automatically.</span>
-                                    </label>
-                                    @if (!string.IsNullOrEmpty(resolveError))
-                                    {
-                                        <div class="ied-err" role="alert">@resolveError</div>
-                                    }
-                                </ChildContent>
-                                <FooterContent>
-                                    <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showResolve = false" />
-                                    <Button Title="Resolve" Variant="ButtonVariant.Primary" OnClick="ResolveAsync" Disabled="busy" />
-                                </FooterContent>
-                            </Modal>
-                        }
-
 @code {
     [Parameter] public int ImportErrorId { get; set; }
 
@@ -471,7 +546,6 @@
     private string search = string.Empty;
     private bool showAll;
     private bool showIgnore;
-    private bool showResolve;
     private bool showPick;
     private bool showFix;
     private bool verifying;
@@ -482,12 +556,58 @@
     private int pickedBatchId;
     private List<FixContextDto> batchOptions = new();
     private List<FixTemplateOption> pickOptions = new();
-    private string resolveType = "";
-    private bool resolveConfirm;
-    private string? resolveError;
 
     private string? message;
     private bool messageIsError;
+
+    // ---- Ambiguous sheet: show what the uploaded file really contains ----
+    private ImportSheetPreviewDto? sheetPreview;
+    private int selectedSheet;
+    private int ActiveSheet => sheetPreview is null || sheetPreview.Sheets.Count == 0 ? 0 : Math.Min(selectedSheet, sheetPreview.Sheets.Count - 1);
+    private bool IsAmbiguousSheet => ImportErrorGuidance.IsAmbiguousSheet(error?.ErrorType);
+
+    // The error message names the sheet: Sheet "Sheet 1" fits "Summary", ... equally well
+    private string? AmbiguousSheetName
+    {
+        get
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(error?.Message ?? string.Empty, "^Sheet \"(.+?)\" fits");
+            return m.Success ? m.Groups[1].Value : null;
+        }
+    }
+
+    private string SheetsHint() => sheetPreview is null || sheetPreview.Problem is not null
+        ? "What the uploaded file contains"
+        : $"From {sheetPreview.FileName} (upload #{sheetPreview.ImportBatchId}) · first rows of the selected sheet";
+
+    private static string ColumnLetter(int index)
+    {
+        var s = string.Empty;
+        for (var n = index + 1; n > 0; n = (n - 1) / 26) s = (char)('A' + (n - 1) % 26) + s;
+        return s;
+    }
+
+    private async Task LoadSheetPreviewAsync()
+    {
+        sheetPreview = null;
+        if (!IsAmbiguousSheet || error is null || error.Batches.Count == 0) return;
+
+        try
+        {
+            var batch = error.Batches[0];
+            sheetPreview = await DetailsData.GetSheetPreviewAsync(batch.ImportBatchId);
+            sheetPreview.FileName = batch.FileName;
+
+            // Open on the sheet the error names; otherwise the first one.
+            var named = sheetPreview.Sheets.FindIndex(x => SameText(x.Name, AmbiguousSheetName));
+            selectedSheet = named >= 0 ? named : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            sheetPreview = null;
+        }
+    }
 
     private int? firstBatchId => error?.Batches.Count > 0 ? error.Batches[^1].ImportBatchId : null;
 
@@ -507,6 +627,7 @@
             error = await DetailsData.GetAsync(ImportErrorId);
             showAll = false;
             expandedGroups.Clear();
+            await LoadSheetPreviewAsync();
         }
         catch (Exception ex)
         {
@@ -534,13 +655,34 @@
     private async Task ChooseFixAsync(string key)
     {
         showFix = false;
+
+        // Remember the way chosen so the resolved banner can say how the error was fixed. Best effort, never blocks the fix.
+        try { await DetailsData.RecordFixChoiceAsync(ImportErrorId, key); } catch { }
+
         switch (key)
         {
             case ImportErrorGuidance.ChoiceReimport:
-                Nav.NavigateTo(ImportErrorGuidance.ReimportRoute(error?.SubDistributorId));
+                // A wrong subdistributor is a likely cause of "Ambiguous sheet", so the import window opens without one selected.
+                Nav.NavigateTo(ImportErrorGuidance.ReimportRoute(ImportErrorGuidance.IsAmbiguousSheet(error?.ErrorType) ? null : error?.SubDistributorId));
                 break;
             case ImportErrorGuidance.ChoiceMapping:
-                Nav.NavigateTo(ImportErrorGuidance.FixRoute(error?.ErrorType, ImportErrorId));
+                if (string.Equals(error?.ErrorType, "UomNotFound", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Opens Map Item with the subdistributor loaded, the item in edit mode and the Add UOM window open on the unit.
+                    string? Fact(string label) => error?.Facts.FirstOrDefault(f => string.Equals(f.Label, label, StringComparison.OrdinalIgnoreCase))?.Value;
+                    Nav.NavigateTo(ImportErrorGuidance.UomMappingRoute(error?.SubDistributorId, Fact("Item code"), Fact("Item name"), Fact("Uploaded UOM")));
+                }
+                else if (string.Equals(error?.ErrorType, "SkuNotFound", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Map Item with the subdistributor selected and the file's item code and name already in its header.
+                    string? RowFact(string key) => error?.LogicalRows.Where(r => r.IsReportedRow && r.Details != null)
+                        .Select(r => r.Details!.TryGetValue(key, out var v) ? v : null).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+                    var field = error?.LogicalRows.FirstOrDefault(r => r.IsReportedRow && !string.IsNullOrWhiteSpace(r.ProblemField))?.ProblemField;
+                    var code = RowFact("RowItemCode") ?? (string.Equals(field, "SkuCode", StringComparison.OrdinalIgnoreCase) ? error?.Value : null);
+                    var itemName = RowFact("RowItem") ?? (string.Equals(field, "ItemName", StringComparison.OrdinalIgnoreCase) ? error?.Value : null);
+                    Nav.NavigateTo(ImportErrorGuidance.ItemMappingRoute(error?.SubDistributorId, code, itemName));
+                }
+                else Nav.NavigateTo(ImportErrorGuidance.FixRoute(error?.ErrorType, ImportErrorId));
                 break;
             case ImportErrorGuidance.ChoiceTemplate:
                 await FixTemplateAsync();
@@ -678,13 +820,39 @@
     private string RowsHint() =>
         allColumns ? "Every column from the Excel file" : "Row, invoice, problem and status";
 
-    // Only the rows the importer reported (invoice context rows stay in the stored evidence but are not listed). The search looks at what the table shows (and the Excel cells when they are shown).
+    // Errors judged on a whole invoice: the invoice's other rows are listed too (marked Context) so the admin can compare them.
+    private bool ShowInvoiceFacts =>
+        string.Equals(error?.ErrorType, "InvoiceInconsistent", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(error?.ErrorType, "InvoiceHeaderInvalid", StringComparison.OrdinalIgnoreCase);
+
+    private static string? Fact(ImportErrorLogicalRowDto r, string key) =>
+        r.Details != null && r.Details.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
+
+    // The row's invoice date: the importer's own value when it was kept, otherwise the Excel column that looks like the invoice date.
+    private static string RowDate(ImportErrorLogicalRowDto r)
+    {
+        var fact = Fact(r, "RowInvoiceDate");
+        if (fact != null) return fact;
+
+        static bool LooksLikeInvoiceDate(string header)
+        {
+            var h = header.Trim().ToLowerInvariant();
+            return h == "date" || (h.Contains("invoice") && h.Contains("date")) || h.Contains("inv date") || h.Contains("inv. date");
+        }
+
+        var cell = r.Data?.FirstOrDefault(kv => LooksLikeInvoiceDate(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value)).Value;
+        return string.IsNullOrWhiteSpace(cell) ? string.Empty : cell.Trim();
+    }
+
+    private static string RowCustomer(ImportErrorLogicalRowDto r) => Fact(r, "RowCustomer") ?? string.Empty;
+
+    // The importer's reported rows, plus (for whole-invoice errors) the invoice's other rows. The search looks at what the table shows (and the Excel cells when they are shown).
     private List<ImportErrorLogicalRowDto> FilteredRows()
     {
         if (error is null) return new();
         var q = search.Trim();
         return error.LogicalRows
-            .Where(r => r.IsReportedRow)
+            .Where(r => r.IsReportedRow || ShowInvoiceFacts)
             .Where(r => q.Length == 0 || RowMatches(r, q))
             .ToList();
     }
@@ -874,25 +1042,6 @@
         }
     }
 
-    private void OpenResolve()
-    {
-        resolveType = "";
-        resolveConfirm = false;
-        resolveError = null;
-        showResolve = true;
-    }
-
-    private async Task ResolveAsync()
-    {
-        if (string.IsNullOrEmpty(resolveType) || !resolveConfirm)
-        {
-            resolveError = "Please choose a type and confirm.";
-            return;
-        }
-        showResolve = false;
-        await RunAsync(() => DetailsData.ResolveManuallyAsync(ImportErrorId, resolveType), "Marked as resolved manually.");
-    }
-
     private async Task DownloadAsync(ImportErrorBatchDetailDto batch)
     {
         busy = true;
@@ -930,8 +1079,12 @@
         
     private bool IsRecheck => error is not null && ImportErrorPresentation.IsVerifiedByRecheck(error.ResolutionType);
 
+    // How the admin said they fixed it (from the Fix window), or null. Only used for errors verified by recheck or re-import.
+    private string? FixedVia => error is null || (!IsRecheck && !IsReimport) ? null : ImportErrorGuidance.FixChoiceName(error.ErrorType, error.FixChoice);
+
     private string ResolvedTitle(bool auto) =>
-        IsRecheck ? "Verified by recheck"
+        FixedVia is { } via ? "Fixed via " + via
+        : IsRecheck ? "Verified by recheck"
         : IsReimport ? "Verified by re-import"
         : auto ? "Resolved automatically"
         : "Resolved manually";
@@ -944,6 +1097,7 @@
 + " and they now pass validation.";
 
         var parts = new List<string>();
+        if (FixedVia != null) parts.Add(IsRecheck ? "Verified by recheck" : "Verified by re-import");
         if (IsRecheck && error.RecheckedImportBatchIds.Count > 0)
             parts.Add("Original file(s) rechecked: " + string.Join(", ", error.RecheckedImportBatchIds.Select(id => "batch #" +
 id)));

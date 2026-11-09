@@ -27,7 +27,7 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
         // not in a mapping page, so they are deliberately not in Fixable above (the list pages route Fixable types by FixRoute).
         private static readonly HashSet<string> TemplateFixable = new(StringComparer.OrdinalIgnoreCase)
         {
-            "InvoiceDateInvalid", "SalesmanMissing", "CustomerNotFound", "UomNotFound"
+            "InvoiceDateInvalid", "SalesmanMissing", "CustomerNotFound", "UomNotFound", "SkuNotFound", "AmbiguousSheet", "QuantityInvalid", "NoQuantityColumnValue"
         };
 
         private static readonly Dictionary<string, string> Titles = new(StringComparer.OrdinalIgnoreCase)

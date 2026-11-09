@@ -159,7 +159,7 @@
                                                                     @foreach (var e in visible)
                                                                     {
                                                                         var errorId = e.ImportErrorId;
-                                                                        <tr class="ibd-row" @onclick="() => OpenError(errorId)">
+                                                                        <tr>
                                                                             <td><span class="ibd-problem">@ImportErrorPresentation.Title(e.ErrorType)</span>
                                                                             </td>
                                                                             <td class="ibd-value" title="@e.Value">@e.Value</td>
@@ -168,14 +168,8 @@
                                                                                 <span
                                                                                 class="ibd-pill @StatusClass(e.Status)">@ImportErrorPresentation.StatusText(e.Status)</span>
                                                                             </td>
-                                                                            <td @onclick:stopPropagation="true">
+                                                                            <td>
                                                                                 <div class="clt-actions">
-                                                                                    @if (ImportErrorPresentation.IsPending(e.Status) &&
-                                                                        ImportErrorPresentation.CanFix(e.ErrorType))
-                                                                                    {
-                                                                                        <Button Title="Fix" Variant="ButtonVariant.Primary"
-                                                                                                OnClick="() => OpenError(errorId)" />
-                                                                                    }
                                                                                     <Button Title="Details" Variant="ButtonVariant.Secondary"
                                                                                             OnClick="() => OpenError(errorId)" />
                                                                                 </div>

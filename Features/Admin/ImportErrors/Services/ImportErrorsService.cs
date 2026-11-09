@@ -34,17 +34,19 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             var total = await q.CountAsync();
 
             var asc = f.SortAscending;
+            // Pending errors always come first. The chosen column only orders within the pending group and within the rest.
+            var pendingFirst = q.OrderBy(e => e.Status.ToLower() == ImportErrorPresentation.Pending ? 0 : 1);
             IOrderedQueryable<ImportError> sorted = f.SortColumn switch
             {
-                "Problem" => asc ? q.OrderBy(e => e.ErrorType) : q.OrderByDescending(e => e.ErrorType),
-                "Value" => asc ? q.OrderBy(e => e.ErrorMessage) : q.OrderByDescending(e => e.ErrorMessage),
+                "Problem" => asc ? pendingFirst.ThenBy(e => e.ErrorType) : pendingFirst.ThenByDescending(e => e.ErrorType),
+                "Value" => asc ? pendingFirst.ThenBy(e => e.ErrorMessage) : pendingFirst.ThenByDescending(e => e.ErrorMessage),
                 "Subdistributor" => asc
-                    ? q.OrderBy(e => e.ImportBatch.SubDistributor!.SubdName)
-                    : q.OrderByDescending(e => e.ImportBatch.SubDistributor!.SubdName),
-                "Status" => asc ? q.OrderBy(e => e.Status) : q.OrderByDescending(e => e.Status),
+                    ? pendingFirst.ThenBy(e => e.ImportBatch.SubDistributor!.SubdName)
+                    : pendingFirst.ThenByDescending(e => e.ImportBatch.SubDistributor!.SubdName),
+                "Status" => asc ? pendingFirst.ThenBy(e => e.Status) : pendingFirst.ThenByDescending(e => e.Status),
                 _ => asc
-                    ? q.OrderBy(e => e.ImportErrorBatches.Max(b => (DateTime?)b.LastSeenAt))
-                    : q.OrderByDescending(e => e.ImportErrorBatches.Max(b => (DateTime?)b.LastSeenAt)),
+                    ? pendingFirst.ThenBy(e => e.ImportErrorBatches.Max(b => (DateTime?)b.LastSeenAt))
+                    : pendingFirst.ThenByDescending(e => e.ImportErrorBatches.Max(b => (DateTime?)b.LastSeenAt)),
             };
 
             var rows = await sorted
@@ -97,14 +99,16 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             var total = await q.CountAsync();
 
             var asc = f.SortAscending;
+            // Files that still have pending errors always come first.
+            var pendingFirst = q.OrderBy(b => b.ImportErrorBatches.Any(x => x.ImportError.Status.ToLower() == ImportErrorPresentation.Pending) ? 0 : 1);
             IOrderedQueryable<ImportBatch> sorted = f.SortColumn switch
             {
-                "File" => asc ? q.OrderBy(b => b.FileName) : q.OrderByDescending(b => b.FileName),
-                "Import" => asc ? q.OrderBy(b => b.BatchStatus) : q.OrderByDescending(b => b.BatchStatus),
+                "File" => asc ? pendingFirst.ThenBy(b => b.FileName) : pendingFirst.ThenByDescending(b => b.FileName),
+                "Import" => asc ? pendingFirst.ThenBy(b => b.BatchStatus) : pendingFirst.ThenByDescending(b => b.BatchStatus),
                 "ErrorsFound" => asc
-                    ? q.OrderBy(b => b.ImportErrorBatches.Count())
-                    : q.OrderByDescending(b => b.ImportErrorBatches.Count()),
-                _ => asc ? q.OrderBy(b => b.UploadedAt) : q.OrderByDescending(b => b.UploadedAt),
+                    ? pendingFirst.ThenBy(b => b.ImportErrorBatches.Count())
+                    : pendingFirst.ThenByDescending(b => b.ImportErrorBatches.Count()),
+                _ => asc ? pendingFirst.ThenBy(b => b.UploadedAt) : pendingFirst.ThenByDescending(b => b.UploadedAt),
             };
 
             var items = await sorted

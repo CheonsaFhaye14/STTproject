@@ -161,8 +161,7 @@
                                                 <label class="ex-check">
                                                     <input type="checkbox" checked="@includeRows"
                                                            @onchange="e => includeRows = (bool)e.Value!" />
-                                                    <span class="ex-check-text"><span>Affected Rows</span><small>Original row
-                                                        data</small></span>
+                                                    <span class="ex-check-text"><span>Affected Rows</span><small>Excel rows, with context rows labelled</small></span>
                                                     </label>
                                                 </div>
                                             </fieldset>
@@ -185,7 +184,7 @@
                                                     }
                                                     @ChoiceAsync("ex-files", fileScope == ImportErrorExportFileScope.All,
                                                                  () => SetFileScopeAsync(ImportErrorExportFileScope.All),
-                                                                 "All uploaded files", "Every stored upload")
+                                                                 "All uploaded files", "Every stored file")
                                                     @ChoiceAsync("ex-files", fileScope == ImportErrorExportFileScope.Selected,
                                                                  () => SetFileScopeAsync(ImportErrorExportFileScope.Selected),
                                                                  "Select specific files", "Pick from a list")
@@ -274,7 +273,7 @@
                                                 <fieldset class="ex-section ex-fill" disabled="@isExporting">
                                                     <div class="ex-toolbar">
                                                         <span class="ex-count"
-                                                              title="Changing a filter clears the selection">@($"{selectedIds.Count:N0} /                                {MaxFiles:N0} files selected")</span>
+                                                              title="Changing a filter clears the selection">@($"{selectedIds.Count:N0} / {MaxFiles:N0} uploads selected")</span>
                                                         <button type="button" class="ex-link" @onclick="SelectAllMatchingAsync"
                                                                 disabled="@(fileTotal == 0)">Select all matching (@fileTotal.ToString("N0"))</button>
                                                         <button type="button" class="ex-link" @onclick="ClearSelection"
@@ -379,7 +378,7 @@
     private bool allErrors;
     private bool includeSummary = true;
     private bool includeHistory = true;
-    private bool includeRows;
+    private bool includeRows = true;
 
     // error filters (All Errors view): an editable copy of the page filter
     private ImportErrorFilter? errFilter;
@@ -508,13 +507,13 @@
             var n = fileCount.Value;
             var noun = n == 1 ? "file" : "files";
             return fileScope == ImportErrorExportFileScope.RelatedToErrors
-                ? $"{n:N0} {noun} will be exported (limit {MaxFiles:N0})"
-                : $"{n:N0} {noun} found (limit {MaxFiles:N0})";
+                ? $"{n:N0} {noun} will be exported (identical uploads count once, limit {MaxFiles:N0})"
+                : $"{n:N0} {noun} found (identical uploads count once, limit {MaxFiles:N0})";
         }
     }
 
     private string FileScopeDescription => fileScope == ImportErrorExportFileScope.RelatedToErrors
-        ? "Every upload the selected errors appeared in, each file once. A file shared by many errors is not repeated."
+        ? "Every file the selected errors appeared in. A file uploaded more than once, or shared by many errors, is exported once."
         : "Every stored original file, including uploads that had no errors.";
 
     private string? OverLimitText
@@ -534,9 +533,9 @@
             ? "You will get one ZIP containing a CSV file for each report sheet."
             : "You will get one Excel workbook (Entriel_Import_Error_Report.xlsx).",
         ImportErrorExportContent.OriginalFiles =>
-            "One file downloads as is. Several files are packaged in a single ZIP, one folder per import batch.",
+            "One file downloads as is. Several files are packaged in a single ZIP with a Files_Index.csv that lists which uploads each file came from. Identical files are included once.",
         _ =>
-            "You will get one ZIP with the report and an \"Original_Files\" folder, one subfolder per import batch."
+            "You will get one ZIP with the report and an \"Original_Files\" folder. Identical files are included once; the report's \"Original Files\" sheet lists which uploads each file came from."
     };
 
     protected override async Task OnInitializedAsync()

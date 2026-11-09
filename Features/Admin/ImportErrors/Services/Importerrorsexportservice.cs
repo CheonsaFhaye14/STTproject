@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
@@ -17,7 +18,7 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         /// <summary>Most original files one export may contain (config key ImportErrorExport:MaxFiles, default 200).</summary>
         int MaxFiles { get; }
 
-        /// <summary>Distinct files the request would export, using the same scope rules as ExportAsync.</summary>
+        /// <summary>Distinct files the request would export, using the same scope rules as ExportAsync. Identical uploads count once.</summary>
         Task<int> GetFileCountAsync(ImportErrorExportRequest request, CancellationToken ct = default);
 
         /// <summary>One page of uploaded files for the picker. Independent of the error filters.</summary>
@@ -33,6 +34,7 @@ namespace STTproject.Features.Admin.ImportErrors.Services
     {
         private const string XlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         private const int MaxCellChars = 32000; // Excel's hard limit is 32,767 per cell
+        private const string NotAvailable = "Not available";
 
         private readonly IDbContextFactory<EntrielContext> _factory;
         private readonly IImportFileStore _files;
@@ -55,29 +57,57 @@ namespace STTproject.Features.Admin.ImportErrors.Services
 
         // ---- neutral shapes: everything schema-specific is read once, in LoadAsync ----
 
-        /// <summary>One affected Excel row, read from ImportErrorBatch.DataJson.</summary>
-        /// <summary>RowData keeps the source file's own headers and cell text, in column order.</summary>
-        private sealed record AffectedRow(string? Sheet, int? RowNumber, string? Invoice,
-            IReadOnlyList<KeyValuePair<string, string>>? RowData);
+        /// <summary>One affected Excel row, read from the stored evidence. RowData keeps the source file's own headers and cell text, in column order.</summary>
+        private sealed record AffectedRow(string? Sheet, int? RowNumber, string? Invoice, bool Reported,
+            string? ProblemField, string? ProblemValue, IReadOnlyList<KeyValuePair<string, string>>? RowData);
 
-        /// <summary>Everything stored for one (error, batch) pair: its rows, every affected invoice, and whether the row list was cut at the storage limit.</summary>
+        /// <summary>Everything stored for one error in one file: its rows, every affected invoice, and whether the row list was cut at the storage limit.</summary>
         private sealed record PairRows(List<AffectedRow> Rows, bool Truncated, List<string> Invoices);
 
+        /// <summary>One error in one physical file. Uploads of the identical file (same ImportFileId) share one group, so their rows are listed once.</summary>
+        private sealed record AffectedGroup(int ErrorId, string FileKey, List<LinkRec> Links, PairRows Pair)
+        {
+            public int Occurrences => Links.Count == 0 ? 0 : Links.Max(l => l.Occurrences);
+            public IEnumerable<int> BatchIds => Links.Select(l => l.BatchId).Distinct().OrderBy(i => i);
+        }
+
         /// <summary>One line of the Affected Rows sheet, before the dynamic source columns are laid out.</summary>
-        private sealed record AffectedEntry(int ErrorId, int BatchId, string? Sheet, int? Row, string? Note,
+        private sealed record AffectedEntry(int ErrorId, string ErrorType, string FileName, string BatchIds, string? Sheet, int? Row,
+            string? Role, string? ProblemField, string? ProblemValue, string? Invoice, string? Note,
             IReadOnlyList<KeyValuePair<string, string>>? Data);
 
         private sealed record ErrorRec(int Id, string ErrorType, string Message, string? Field, string Value,
             string Status, string? ResolutionType, int? ResolvedBy, DateTime? ResolvedAt,
-            int BatchId, string BatchFile, int? SourceRow, int? PreviousId);
+            int BatchId, string BatchFile, int? SourceRow, int? PreviousId, string? FixChoice, DateTime? FixChoiceAt);
 
         private sealed record LinkRec(int ErrorId, int BatchId, string FileName, string? Subdistributor,
-            int? UploadedBy, DateTime UploadedAt, int Occurrences, DateTime? FirstSeen, DateTime? LastSeen, string? DataJson);
+            int? UploadedBy, DateTime UploadedAt, int Occurrences, DateTime? FirstSeen, DateTime? LastSeen, string? DataJson,
+            int? ImportFileId);
 
         private sealed record Sheet(string Name, string[] Headers, List<object?[]> Rows, int MaxColWidth = 60);
 
-        /// <summary>One original file to export: one per ImportBatch.</summary>
-        private sealed record FileRef(int BatchId, string FileName);
+        /// <summary>One physical original file: every upload (batch) that stored identical content is listed in BatchIds.</summary>
+        private sealed class FileRef
+        {
+            public int? FileId;
+            public List<int> BatchIds = new();
+            public string FileName = string.Empty;
+            public HashSet<string> Names = new(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private sealed record ExportedFile(FileRef Ref, string Path, byte[] Bytes);
+
+        private sealed record BatchInfo(int Id, DateTime UploadedAt, int? UploadedBy, string? Subd, string ImportType);
+
+        private static string FileKey(int? importFileId, int batchId) =>
+            importFileId.HasValue ? "file:" + importFileId.Value : "batch:" + batchId;
+
+        // Problems with the file as a whole: they are not tied to one Excel row, so "Excel Row" is legitimately empty.
+        private static readonly HashSet<string> FileLevelTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "FileUnreadable", "RequiredSheetMissing", "MissingRequiredHeaders", "AmbiguousColumns", "AmbiguousSheet",
+            "TemplateNotFound", "TemplateSelectionRequired", "NoInvoiceRows"
+        };
 
         public async Task<ImportErrorExportResult> ExportAsync(ImportErrorExportRequest request, CancellationToken ct = default)
         {
@@ -132,40 +162,75 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 return result;
             }
 
-            // ---- original files: one per physical batch, even when many errors point at it ----
-            var batches = await ResolveFilesAsync(ctx, request, links, ct);
+            // ---- original files: one per distinct file, even when many uploads or errors point at it ----
+            var groups = await ResolveFilesAsync(ctx, request, links, ct);
+
+            var missing = new List<string>();
+            var missingGroups = new List<FileRef>();
+            var exported = new List<ExportedFile>();
+            var byHash = new Dictionary<string, ExportedFile>(StringComparer.Ordinal);
+            var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // "Both" puts the folder at Original_Files/; originals-only wraps everything in Entriel_Original_Files/.
+            var filesRoot = wantsReport ? "Original_Files" : "Entriel_Original_Files";
+
+            foreach (var g in groups)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                // Identical uploads share one stored file, so any of them can supply it. Newest first.
+                byte[]? bytes = null;
+                foreach (var id in g.BatchIds.OrderByDescending(i => i))
+                {
+                    bytes = await _files.GetOriginalFileAsync(id, ct);
+                    if (bytes != null) break;
+                }
+
+                if (bytes == null)
+                {
+                    missingGroups.Add(g);
+                    missing.Add($"{g.FileName} (batch {string.Join(", ", g.BatchIds.OrderBy(i => i))})");
+                    continue;
+                }
+
+                // Older uploads were stored one copy per batch. If the content is byte-for-byte the same, it is exported once.
+                var hash = Convert.ToHexString(SHA256.HashData(bytes));
+                if (byHash.TryGetValue(hash, out var already))
+                {
+                    already.Ref.BatchIds.AddRange(g.BatchIds);
+                    foreach (var n in g.Names) already.Ref.Names.Add(n);
+                    continue;
+                }
+
+                var file = new ExportedFile(g, UniquePath(filesRoot, SafeName(g.FileName), usedPaths), bytes);
+                byHash[hash] = file;
+                exported.Add(file);
+            }
 
             // A single file with no report goes out untouched, not inside a one-item ZIP.
-            if (!wantsReport && batches.Count == 1)
+            if (!wantsReport && exported.Count == 1 && missing.Count == 0)
             {
-                var only = batches[0];
-                result.Bytes = await _files.GetOriginalFileAsync(only.BatchId, ct)
-                    ?? throw new ImportErrorExportException($"The original file \"{only.FileName}\" could not be found.");
-                result.FileName = SafeName(only.FileName);
-                result.ContentType = ContentTypeFor(only.FileName);
+                var only = exported[0];
+                result.Bytes = only.Bytes;
+                result.FileName = SafeName(only.Ref.FileName);
+                result.ContentType = ContentTypeFor(only.Ref.FileName);
                 result.OriginalFileCount = 1;
                 return result;
             }
 
-            var missing = new List<string>();
-            var found = 0;
-            // "Both" puts the folder at Original_Files/; originals-only wraps everything in Entriel_Original_Files/.
-            var filesRoot = wantsReport ? "Original_Files" : "Entriel_Original_Files";
+            if (exported.Count == 0 && !wantsReport)
+                throw new ImportErrorExportException("The original files for this selection could not be found.");
 
-            var bytesOut = await ZipAsync(async zip =>
+            // The index tells the admin which upload (batch) each file in the ZIP came from, who uploaded it and when.
+            var filesSheet = await BuildFilesSheetAsync(ctx, exported, missingGroups, ct);
+            sheets?.Add(filesSheet);
+
+            result.Bytes = Zip(zip =>
             {
                 if (wantsReport) AddReport(zip, sheets!, request.Format, xlsxName: "Error_Report.xlsx", csvFolder: "Error_Report/");
 
-                foreach (var b in batches)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var bytes = await _files.GetOriginalFileAsync(b.BatchId, ct);
-                    if (bytes == null) { missing.Add($"{b.FileName} (batch #{b.BatchId})"); continue; }
+                foreach (var f in exported) AddEntry(zip, f.Path, f.Bytes);
 
-                    // Batch folders are kept even when file names are identical. Bytes are written as stored.
-                    AddEntry(zip, $"{filesRoot}/Batch_{b.BatchId}/{SafeName(b.FileName)}", bytes);
-                    found++;
-                }
+                if (!wantsReport) AddEntry(zip, "Files_Index.csv", BuildCsv(filesSheet));
 
                 if (missing.Count > 0)
                     AddEntry(zip, "Missing_Files.txt", Encoding.UTF8.GetBytes(
@@ -174,15 +239,20 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                         + string.Join("\r\n", missing)));
             });
 
-            if (found == 0 && !wantsReport)
-                throw new ImportErrorExportException("The original files for this selection could not be found.");
-
-            result.Bytes = bytesOut;
             result.FileName = wantsReport ? $"Entriel_Export_{ToPh(stamp):yyyy-MM-dd}.zip" : "Entriel_Original_Files.zip";
             result.ContentType = "application/zip";
-            result.OriginalFileCount = found;
+            result.OriginalFileCount = exported.Count;
             result.MissingFiles = missing;
             return result;
+        }
+
+        private static string UniquePath(string root, string name, HashSet<string> used)
+        {
+            var ext = Path.GetExtension(name);
+            var stem = Path.GetFileNameWithoutExtension(name);
+            var path = $"{root}/{name}";
+            for (var n = 2; !used.Add(path); n++) path = $"{root}/{stem} ({n}){ext}";
+            return path;
         }
 
         // =====================================================================================
@@ -201,9 +271,35 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             new($"This export would include {count:N0} files, but the limit is {_maxFiles:N0} per export. {advice}");
 
         /// <summary>
-        /// The distinct ImportBatches to export, decided on the server from the request's scope. Batch ids from the request are
+        /// Groups uploads into physical files. Uploads that share an ImportFileId stored identical content, so they become one entry
+        /// listing every batch. An upload without an ImportFileId (older data) stays on its own here; identical content is still
+        /// combined later, when the bytes are read.
+        /// </summary>
+        private static List<FileRef> GroupFiles(IEnumerable<(int BatchId, string FileName, int? FileId)> uploads)
+        {
+            var byKey = new Dictionary<string, FileRef>(StringComparer.Ordinal);
+            var list = new List<FileRef>();
+
+            foreach (var u in uploads.OrderBy(x => x.BatchId))
+            {
+                var key = FileKey(u.FileId, u.BatchId);
+                if (!byKey.TryGetValue(key, out var g))
+                {
+                    g = new FileRef { FileId = u.FileId };
+                    byKey[key] = g;
+                    list.Add(g);
+                }
+                g.BatchIds.Add(u.BatchId);
+                g.FileName = u.FileName;               // newest upload's name
+                g.Names.Add(u.FileName);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// The distinct files to export, decided on the server from the request's scope. Batch ids from the request are
         /// only ever used to look rows up again: a selected id that no longer exists or no longer matches the filter is refused.
-        /// The limit counts distinct batches, never error-to-batch links, and is checked before any file is read.
+        /// The limit counts distinct files (identical uploads count once) and is checked before any file is read.
         /// </summary>
         private async Task<List<FileRef>> ResolveFilesAsync(
             EntrielContext ctx, ImportErrorExportRequest request, List<LinkRec> links, CancellationToken ct)
@@ -220,41 +316,35 @@ namespace STTproject.Features.Admin.ImportErrors.Services
 
                         var found = await FilteredFiles(ctx, request.FileFilter ?? new ImportFileFilter())
                             .Where(b => ids.Contains(b.ImportBatchId))
-                            .OrderBy(b => b.ImportBatchId)
-                            .Select(b => new FileRef(b.ImportBatchId, b.FileName))
+                            .Select(b => new { b.ImportBatchId, b.FileName, b.ImportFileId })
                             .ToListAsync(ct);
 
                         if (found.Count != ids.Count)
                             throw new ImportErrorExportException(
                                 "Some of the selected files no longer exist or no longer match the filters. Reopen the file list and select them again.");
-                        return found;
+                        return GroupFiles(found.Select(f => (f.ImportBatchId, f.FileName, (int?)f.ImportFileId)));
                     }
 
                 case ImportErrorExportFileScope.All:
                     {
                         var all = await ctx.ImportBatches.AsNoTracking()
-                            .OrderBy(b => b.ImportBatchId)
-                            .Select(b => new FileRef(b.ImportBatchId, b.FileName))
-                            .Take(_maxFiles + 1)
+                            .Select(b => new { b.ImportBatchId, b.FileName, b.ImportFileId })
                             .ToListAsync(ct);
 
-                        if (all.Count == 0)
+                        var grouped = GroupFiles(all.Select(f => (f.ImportBatchId, f.FileName, (int?)f.ImportFileId)));
+                        if (grouped.Count == 0)
                             throw new ImportErrorExportException("There are no uploaded files to export.");
-                        if (all.Count > _maxFiles)
-                        {
-                            var total = await ctx.ImportBatches.AsNoTracking().CountAsync(ct);
-                            throw TooManyFiles(total, "Choose \"Select specific files\" and narrow the filters.");
-                        }
-                        return all;
+                        if (grouped.Count > _maxFiles)
+                            throw TooManyFiles(grouped.Count, "Choose \"Select specific files\" and narrow the filters.");
+                        return grouped;
                     }
 
                 default:
                     {
-                        // One entry per physical batch, even when many selected errors appeared in it.
-                        var related = links.GroupBy(l => l.BatchId)
-                            .Select(g => new FileRef(g.Key, g.First().FileName))
-                            .OrderBy(f => f.BatchId)
-                            .ToList();
+                        // One entry per physical file, even when many selected errors or uploads point at it.
+                        var related = GroupFiles(links
+                            .GroupBy(l => l.BatchId)
+                            .Select(g => (g.Key, g.First().FileName, g.First().ImportFileId)));
 
                         if (related.Count == 0)
                             throw new ImportErrorExportException("None of the selected errors is linked to an uploaded file.");
@@ -273,15 +363,25 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             switch (request.FileScope)
             {
                 case ImportErrorExportFileScope.Selected:
-                    return (request.SelectedBatchIds ?? new List<int>()).Where(i => i > 0).Distinct().Count();
+                    {
+                        var ids = (request.SelectedBatchIds ?? new List<int>()).Where(i => i > 0).Distinct().ToList();
+                        return await ctx.ImportBatches.AsNoTracking()
+                            .Where(b => ids.Contains(b.ImportBatchId))
+                            .Select(b => b.ImportFileId ?? -b.ImportBatchId)
+                            .Distinct()
+                            .CountAsync(ct);
+                    }
 
                 case ImportErrorExportFileScope.All:
-                    return await ctx.ImportBatches.AsNoTracking().CountAsync(ct);
+                    return await ctx.ImportBatches.AsNoTracking()
+                        .Select(b => b.ImportFileId ?? -b.ImportBatchId)
+                        .Distinct()
+                        .CountAsync(ct);
 
                 default:
                     return await ResolveErrors(ctx, request)
                         .SelectMany(e => e.ImportErrorBatches)
-                        .Select(l => l.ImportBatchId)
+                        .Select(l => l.ImportBatch.ImportFileId ?? -l.ImportBatch.ImportBatchId)
                         .Distinct()
                         .CountAsync(ct);
             }
@@ -402,9 +502,71 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         private static DateTime PhDateToUtc(DateTime phDate) =>
             DateTime.SpecifyKind(phDate.Date, DateTimeKind.Unspecified).AddHours(-8);
 
+        /// <summary>
+        /// The "Original Files" sheet: one row per file in the ZIP (and per file that was asked for but not found), with every upload
+        /// that stored it. This is how an admin sees which uploads were combined into one file.
+        /// </summary>
+        private static async Task<Sheet> BuildFilesSheetAsync(
+            EntrielContext ctx, List<ExportedFile> exported, List<FileRef> missingGroups, CancellationToken ct)
+        {
+            var batchIds = exported.SelectMany(f => f.Ref.BatchIds)
+                .Concat(missingGroups.SelectMany(g => g.BatchIds)).Distinct().ToList();
+
+            var infoRows = await ctx.ImportBatches.AsNoTracking()
+                .Where(b => batchIds.Contains(b.ImportBatchId))
+                .Select(b => new
+                {
+                    b.ImportBatchId,
+                    b.UploadedAt,
+                    UploadedBy = (int?)b.UploadedBy,
+                    Subd = b.SubDistributor != null ? b.SubDistributor.SubdName : null,
+                    b.ImportType
+                })
+                .ToListAsync(ct);
+            var info = infoRows.ToDictionary(x => x.ImportBatchId,
+                x => new BatchInfo(x.ImportBatchId, x.UploadedAt, x.UploadedBy, x.Subd, x.ImportType));
+
+            var userIds = info.Values.Where(i => i.UploadedBy.HasValue).Select(i => i.UploadedBy!.Value).Distinct().ToList();
+            var users = await ctx.Users.AsNoTracking().Where(u => userIds.Contains(u.UserId))
+                .ToDictionaryAsync(u => u.UserId, u => u.Username, ct);
+
+            object?[] Row(FileRef r, string where, string status)
+            {
+                var ids = r.BatchIds.Distinct().OrderBy(i => i).ToList();
+                var infos = ids.Where(info.ContainsKey).Select(i => info[i]).ToList();
+                var others = r.Names.Where(n => !string.Equals(n, r.FileName, StringComparison.OrdinalIgnoreCase)).OrderBy(n => n).ToList();
+
+                string Who(int? id) => id.HasValue && users.TryGetValue(id.Value, out var n) && !string.IsNullOrWhiteSpace(n)
+                    ? n : id.HasValue ? $"Unknown user (#{id.Value})" : "Unknown user";
+
+                return new object?[]
+                {
+                    where,
+                    r.FileName,
+                    others.Count == 0 ? null : string.Join("; ", others),
+                    string.Join(", ", ids),
+                    ids.Count,
+                    string.Join("; ", infos.Select(i => i.Subd).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct()),
+                    string.Join("; ", infos.Select(i => i.ImportType).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct()),
+                    infos.Count == 0 ? null : ToPh(infos.Min(i => i.UploadedAt)),
+                    infos.Count == 0 ? null : ToPh(infos.Max(i => i.UploadedAt)),
+                    string.Join("; ", infos.Select(i => Who(i.UploadedBy)).Distinct()),
+                    status
+                };
+            }
+
+            var rows = exported.Select(f => Row(f.Ref, f.Path, "Included")).ToList();
+            rows.AddRange(missingGroups.Select(g => Row(g, "(not in this export)", "Not found on the server")));
+
+            return new Sheet("Original Files", new[]
+            {
+                "File In Export", "Original Filename", "Other Filenames (same content)", "Uploads (Batch IDs)", "Times Uploaded",
+                "Sub-distributor", "Import Type", "First Uploaded (PHT)", "Last Uploaded (PHT)", "Uploaded By", "Status"
+            }, rows, MaxColWidth: 55);
+        }
+
         // =====================================================================================
-        // Data access. The one remaining ASSUMPTION is the User name property (see LoadNamesAsync).
-        // If the build complains, fix them here and nowhere else.
+        // Data access.
         // =====================================================================================
 
         private static async Task<(List<ErrorRec> Errors, List<LinkRec> Links)> LoadAsync(
@@ -432,11 +594,16 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 })
                 .ToListAsync(ct);
 
-            var errors = raw.Select(r => new ErrorRec(
-                r.ImportErrorId, r.ErrorType, r.ErrorMessage, r.FieldName,
-                ProblemValue(r.ErrorType, r.DataJson),
-                r.Status, r.ResolutionType, r.ResolvedBy, r.ResolvedAt,
-                r.ImportBatchId, r.BatchFile, r.SourceRowNumber, r.PreviousImportErrorId)).ToList();
+            var errors = raw.Select(r =>
+            {
+                var fix = ReadFixChoice(r.DataJson);
+                return new ErrorRec(
+                    r.ImportErrorId, r.ErrorType, r.ErrorMessage, r.FieldName,
+                    ProblemValue(r.ErrorType, r.DataJson),
+                    r.Status, r.ResolutionType, r.ResolvedBy, r.ResolvedAt,
+                    r.ImportBatchId, r.BatchFile, r.SourceRowNumber, r.PreviousImportErrorId,
+                    fix.Choice, fix.At);
+            }).ToList();
 
             var ids = errorsQuery.Select(e => e.ImportErrorId);
             var linkRows = await ctx.ImportErrorBatches.AsNoTracking()
@@ -446,6 +613,7 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                     ErrorId = l.ImportError.ImportErrorId,
                     BatchId = l.ImportBatch.ImportBatchId,
                     l.ImportBatch.FileName,
+                    FileId = (int?)l.ImportBatch.ImportFileId,
                     Subd = l.ImportBatch.SubDistributor != null ? l.ImportBatch.SubDistributor.SubdName : null,
                     UploadedBy = (int?)l.ImportBatch.UploadedBy,
                     l.ImportBatch.UploadedAt,
@@ -458,9 +626,30 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 .ToListAsync(ct);
 
             var links = linkRows.Select(l => new LinkRec(l.ErrorId, l.BatchId, l.FileName, l.Subd,
-                l.UploadedBy, l.UploadedAt, l.Occurrences, l.FirstSeen, l.LastSeen, l.DataJson)).ToList();
+                l.UploadedBy, l.UploadedAt, l.Occurrences, l.FirstSeen, l.LastSeen, l.DataJson, l.FileId)).ToList();
 
             return (errors, links);
+        }
+
+        /// <summary>Which fix the admin opened for this error (stored in ImportError.DataJson by the details page), if any.</summary>
+        private static (string? Choice, DateTime? At) ReadFixChoice(string? dataJson)
+        {
+            if (string.IsNullOrWhiteSpace(dataJson)) return (null, null);
+            try
+            {
+                using var doc = JsonDocument.Parse(dataJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object
+                    || !TryProp(doc.RootElement, "FixChoice", out var fc) || fc.ValueKind != JsonValueKind.Object) return (null, null);
+
+                var choice = Text(fc, "Choice");
+                DateTime? at = TryProp(fc, "At", out var a) && a.ValueKind == JsonValueKind.String && a.TryGetDateTime(out var dt)
+                    ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : null;
+                return (choice, at);
+            }
+            catch (JsonException)
+            {
+                return (null, null);
+            }
         }
 
         /// <summary>Display names for uploaders, resolvers and the exporting admin.</summary>
@@ -495,10 +684,10 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         }
 
         /// <summary>
-        /// Reads the evidence of one (error, batch) pair from ImportErrorBatch.DataJson. Evidence written before full row
-        /// snapshots existed only has "SampleRows" (sheet, row, invoice), so those are used when "AffectedRows" is missing.
-        /// If a batch has neither, the error's own SourceRowNumber is used for the batch that first recorded it.
-        /// Each (sheet, row) appears once. Nothing is invented: a row without a stored snapshot has RowData = null.
+        /// Reads the evidence of one (error, batch) pair. Evidence written before full row snapshots existed only has "SampleRows"
+        /// (sheet, row, invoice), so those are used when "AffectedRows" is missing. If a batch has neither, the error's own
+        /// SourceRowNumber is used for the batch that first recorded it. Each (sheet, row) appears once. Nothing is invented: a row
+        /// without a stored snapshot has RowData = null.
         /// </summary>
         private static PairRows ParseAffectedRows(LinkRec link, ErrorRec? error)
         {
@@ -540,10 +729,16 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                                 // One entry per distinct Excel row per error per batch.
                                 if (rowNumber.HasValue && !seen.Add((sheetName, rowNumber.Value))) continue;
 
+                                // Evidence written before context rows existed has no mark: all its rows are the reported ones.
+                                var reported = !(TryProp(item, "IsReportedRow", out var rep) && rep.ValueKind == JsonValueKind.False);
+
                                 rows.Add(new AffectedRow(
                                     sheetName,
                                     rowNumber,
                                     Text(item, "InvoiceNumber") ?? Text(item, "InvoiceCode"),
+                                    reported,
+                                    Text(item, "ProblemField"),
+                                    Text(item, "ProblemValue"),
                                     ReadRowData(item)));
                             }
 
@@ -558,9 +753,42 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             }
 
             if (rows.Count == 0 && error is { SourceRow: not null } && error.BatchId == link.BatchId)
-                rows.Add(new AffectedRow(null, error.SourceRow, null, null));
+                rows.Add(new AffectedRow(null, error.SourceRow, null, true, null, null, null));
 
             return new PairRows(rows, truncated, invoices);
+        }
+
+        /// <summary>
+        /// Combines the evidence of every upload of the same file for one error. Identical files give identical rows, so each
+        /// (sheet, row) is kept once; an upload that lacks the evidence is filled in from one that has it.
+        /// </summary>
+        private static PairRows Merge(List<PairRows> pairs)
+        {
+            var rows = new List<AffectedRow>();
+            var index = new Dictionary<(string, int), int>();
+
+            foreach (var r in pairs.SelectMany(p => p.Rows))
+            {
+                if (r.RowNumber.HasValue)
+                {
+                    var key = (r.Sheet ?? string.Empty, r.RowNumber.Value);
+                    if (index.TryGetValue(key, out var at))
+                    {
+                        // Keep the richer copy: one with the original row data and the problem details.
+                        if (rows[at].RowData is null && r.RowData is not null) rows[at] = r;
+                        continue;
+                    }
+                    index[key] = rows.Count;
+                }
+                rows.Add(r);
+            }
+
+            // A row recorded without its sheet name (fallback) is the same row as one that has it.
+            rows = rows.Where(r => !(r.Sheet is null && r.RowNumber.HasValue
+                    && rows.Any(o => o.Sheet is not null && o.RowNumber == r.RowNumber))).ToList();
+
+            var invoices = pairs.SelectMany(p => p.Invoices).Distinct(StringComparer.Ordinal).ToList();
+            return new PairRows(rows, pairs.Any(p => p.Truncated), invoices);
         }
 
         /// <summary>The stored row snapshot as header/value pairs in the order they were saved, or null when the row has none.</summary>
@@ -685,7 +913,11 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         // Report sheets
         // =====================================================================================
 
-        private static readonly string[] AffectedFixedHeaders = { "Error ID", "Batch ID", "Sheet Name", "Excel Row Number", "Data Note" };
+        private static readonly string[] AffectedFixedHeaders =
+        {
+            "Error ID", "Error Type", "File", "Upload (Batch IDs)", "Sheet Name", "Excel Row Number", "Row Role",
+            "Problem Field", "Problem Value", "Invoice", "Note"
+        };
 
         private static List<Sheet> BuildSheets(List<ErrorRec> errors, List<LinkRec> links,
             Dictionary<int, string> names, int exportedBy, DateTime exportedAt, ImportErrorExportRequest req)
@@ -699,10 +931,20 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             var byError = links.ToLookup(l => l.ErrorId);
             var errorById = errors.ToDictionary(e => e.Id);
 
-            // Evidence per (error, batch), read once and shared by Error Details, Summary and Affected Rows.
-            var affected = new Dictionary<(int ErrorId, int BatchId), PairRows>();
-            foreach (var l in links)
-                affected[(l.ErrorId, l.BatchId)] = ParseAffectedRows(l, errorById.GetValueOrDefault(l.ErrorId));
+            // Evidence per (error, physical file), read once and shared by Error Details, Summary and Affected Rows.
+            // Uploads of the identical file are one group, so their rows are listed once, not once per upload.
+            var groups = links
+                .GroupBy(l => (l.ErrorId, Key: FileKey(l.ImportFileId, l.BatchId)))
+                .Select(g =>
+                {
+                    var ordered = g.OrderBy(l => l.BatchId).ToList();
+                    var error = errorById.GetValueOrDefault(g.Key.ErrorId);
+                    var pair = Merge(ordered.Select(l => ParseAffectedRows(l, error)).ToList());
+                    return new AffectedGroup(g.Key.ErrorId, g.Key.Key, ordered, pair);
+                })
+                .OrderBy(g => g.ErrorId).ThenBy(g => g.Links[0].BatchId)
+                .ToList();
+            var groupsByError = groups.ToLookup(g => g.ErrorId);
 
             var sheets = new List<Sheet>();
 
@@ -730,7 +972,12 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 var other = errors.Count - pending - ignored - resolved;
                 if (other > 0) rows.Add(new object?[] { "Other Status", other });
 
-                rows.Add(new object?[] { "Total Occurrences", links.Sum(l => l.Occurrences) });
+                var uploads = links.Select(l => l.BatchId).Distinct().Count();
+                var distinctFiles = links.Select(l => FileKey(l.ImportFileId, l.BatchId)).Distinct().Count();
+                rows.Add(new object?[] { "Uploads Involved", uploads });
+                rows.Add(new object?[] { "Different Files Involved", distinctFiles });
+                rows.Add(new object?[] { "Rows Affected (identical files counted once)", groups.Sum(g => g.Occurrences) });
+                rows.Add(new object?[] { "Total Occurrences (every upload counted)", links.Sum(l => l.Occurrences) });
                 rows.Add(new object?[] { "Affected Subdistributors",
                     subds.Count == 0 ? "None" : $"{subds.Count}: {string.Join("; ", subds)}" });
                 rows.Add(new object?[] { "Exported By", UserLabel(exportedBy) });
@@ -739,16 +986,15 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 // Say so when the Affected Rows sheet cannot be the complete picture.
                 if (req.IncludeAffectedRows)
                 {
-                    var pairs = links.DistinctBy(l => (l.ErrorId, l.BatchId)).Select(l => affected[(l.ErrorId, l.BatchId)]).ToList();
-                    var cut = pairs.Count(p => p.Truncated);
-                    var noSnapshot = pairs.Count(p => p.Rows.Count == 0 || p.Rows.Any(r => r.RowData is null));
+                    var cut = groups.Count(g => g.Pair.Truncated);
+                    var noSnapshot = groups.Count(g => g.Pair.Rows.Count == 0 || g.Pair.Rows.Any(r => r.RowData is null));
 
                     if (cut > 0)
                         rows.Add(new object?[] { "Affected Rows Note",
-                            $"{cut:N0} error/batch combination(s) reached the {ImportLogService.MaxAffectedRows:N0}-row storage limit, so their row lists are incomplete." });
+                            $"{cut:N0} error/file combination(s) reached the {ImportLogService.MaxAffectedRows:N0}-row storage limit, so their row lists are incomplete." });
                     if (noSnapshot > 0)
                         rows.Add(new object?[] { "Original Row Data Note",
-                            $"{noSnapshot:N0} error/batch combination(s) have no stored original row data (older imports or file-level errors)." });
+                            $"{noSnapshot:N0} error/file combination(s) have no stored original row data (older imports or file-level errors)." });
                 }
 
                 sheets.Add(new Sheet("Summary", new[] { "Information", "Value" }, rows));
@@ -757,103 +1003,122 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             // ---- Error Details (always; one row per unique error) ----
             sheets.Add(new Sheet("Error Details", new[]
             {
-                "Error ID", "Error Type", "Error Message", "Field Name", "Problematic Value", "Subdistributor", "Status",
-                "Total Occurrences", "Affected Invoices", "First Detected (PHT)", "Last Detected (PHT)",
-                "Resolution Type", "Resolution Note", "Resolved By", "Resolved At (PHT)", "Previous Error ID",
-                "Error Type (Technical)"
+                "Error ID", "Status", "Error Type", "What Went Wrong", "Field", "Problematic Value", "Subdistributor",
+                "Files Affected", "Uploads", "Rows Affected", "Total Occurrences (all uploads)", "Affected Invoices",
+                "First Detected (PHT)", "Last Detected (PHT)", "What To Do", "Fix Chosen", "Fix Chosen At (PHT)",
+                "Resolution", "Resolved By", "Resolved At (PHT)", "Previous Error ID", "Error Type (Technical)"
             }, errors.Select(e =>
             {
                 var l = byError[e.Id].ToList();
+                var g = groupsByError[e.Id].ToList();
 
                 // Ignored and Resolved are different actions. Only a Resolved error shows resolution data; nothing is
                 // inferred for Pending or Ignored errors because no audit trail is stored for them.
                 var isResolved = ImportErrorPresentation.StatusKey(e.Status) == ImportErrorPresentation.Resolved;
 
-                var invoices = l.SelectMany(x =>
-                    {
-                        var p = affected[(x.ErrorId, x.BatchId)];
-                        return p.Invoices.Concat(p.Rows.Select(r => r.Invoice ?? string.Empty));
-                    })
+                var invoices = g.SelectMany(x => x.Pair.Invoices.Concat(x.Pair.Rows.Select(r => r.Invoice ?? string.Empty)))
                     .Where(i => !string.IsNullOrWhiteSpace(i))
                     .Distinct(StringComparer.Ordinal).OrderBy(i => i, StringComparer.Ordinal).ToList();
+
+                var fixName = e.FixChoice is null ? null
+                    : ImportErrorGuidance.FixChoiceName(e.ErrorType, e.FixChoice) ?? e.FixChoice;
 
                 return new object?[]
                 {
                     e.Id,
+                    ImportErrorPresentation.StatusText(e.Status),
                     FriendlyType(e.ErrorType),
                     e.Message,
                     ImportErrorPresentation.FieldLabel(e.Field),
                     e.Value,
                     string.Join("; ", l.Select(x => x.Subdistributor).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct()),
-                    ImportErrorPresentation.StatusText(e.Status),
+                    g.Count,
+                    l.Select(x => x.BatchId).Distinct().Count(),
+                    g.Sum(x => x.Occurrences),
                     l.Sum(x => x.Occurrences),
                     string.Join(", ", invoices),
                     l.Count == 0 ? null : ToPh(l.Min(x => x.FirstSeen ?? x.UploadedAt)),
                     l.Count == 0 ? null : ToPh(l.Max(x => x.LastSeen ?? x.UploadedAt)),
+                    isResolved ? null : ImportErrorGuidance.For(e.ErrorType, e.Message).Todo,
+                    fixName,
+                    ToPh(e.FixChoiceAt),
                     isResolved ? e.ResolutionType : null,
-                    null, // ImportError has no resolution-note column yet; fill this in once one exists.
                     isResolved && e.ResolvedBy.HasValue ? UserLabel(e.ResolvedBy) : null,
                     isResolved ? ToPh(e.ResolvedAt) : null,
                     e.PreviousId,
                     e.ErrorType
                 };
-            }).ToList()));
+            }).ToList(), MaxColWidth: 50));
 
             // ---- Import History (optional; one row per ImportErrorBatch) ----
             if (req.IncludeImportHistory)
             {
                 sheets.Add(new Sheet("Import History", new[]
                 {
-                    "Error ID", "Batch ID", "Original Filename", "Subdistributor", "Uploaded By", "Uploaded At (PHT)",
+                    "Error ID", "Batch ID", "File ID", "Original Filename", "Subdistributor", "Uploaded By", "Uploaded At (PHT)",
                     "Occurrences", "First Seen (PHT)", "Last Seen (PHT)"
                 }, links.OrderBy(l => l.ErrorId).ThenBy(l => l.UploadedAt).Select(l => new object?[]
                 {
-                    l.ErrorId, l.BatchId, l.FileName, l.Subdistributor, UserLabel(l.UploadedBy), ToPh(l.UploadedAt),
+                    l.ErrorId, l.BatchId, l.ImportFileId, l.FileName, l.Subdistributor, UserLabel(l.UploadedBy), ToPh(l.UploadedAt),
                     l.Occurrences, ToPh(l.FirstSeen), ToPh(l.LastSeen)
                 }).ToList()));
             }
 
             // ---- Affected Rows (optional; the stored JSON becomes real columns) ----
             if (req.IncludeAffectedRows)
-                sheets.Add(BuildAffectedRowsSheet(links, affected));
+                sheets.Add(BuildAffectedRowsSheet(groups, errorById));
 
             return sheets;
         }
 
         /// <summary>
-        /// One line per distinct affected Excel row per error per batch. The original file's own headers become columns, built
-        /// from whatever the stored snapshots contain (different subdistributor templates give different columns), so nothing
-        /// is hardcoded. The storage format is untouched: this only reshapes it at export time.
+        /// One line per distinct Excel row per error per file. The original file's own headers become columns, built from whatever the
+        /// stored snapshots contain (different subdistributor templates give different columns), so nothing is hardcoded. Rows of the
+        /// same invoice that were not themselves wrong are kept but labelled "Same invoice (context)". The storage format is untouched.
         /// </summary>
-        private static Sheet BuildAffectedRowsSheet(List<LinkRec> links, Dictionary<(int ErrorId, int BatchId), PairRows> affected)
+        private static Sheet BuildAffectedRowsSheet(List<AffectedGroup> groups, Dictionary<int, ErrorRec> errorById)
         {
             var entries = new List<AffectedEntry>();
 
-            foreach (var l in links.OrderBy(l => l.ErrorId).ThenBy(l => l.BatchId).DistinctBy(l => (l.ErrorId, l.BatchId)))
+            foreach (var g in groups)
             {
-                var pair = affected[(l.ErrorId, l.BatchId)];
+                var error = errorById.GetValueOrDefault(g.ErrorId);
+                var type = FriendlyType(error?.ErrorType);
+                var fileName = g.Links[^1].FileName;
+                var batchIds = string.Join(", ", g.BatchIds);
+                var pair = g.Pair;
 
                 if (pair.Rows.Count == 0)
                 {
-                    entries.Add(new AffectedEntry(l.ErrorId, l.BatchId, null, null,
-                        "No row-level details were stored for this batch (a file-level error, or an older import).", null));
+                    var fileLevel = error is not null && FileLevelTypes.Contains(error.ErrorType);
+                    entries.Add(new AffectedEntry(g.ErrorId, type, fileName, batchIds, null, null, null, null, null, null,
+                        fileLevel
+                            ? "This problem is about the file as a whole, so it is not tied to one Excel row."
+                            : "The Excel rows were not stored for this import (it was uploaded before row details were kept).",
+                        null));
                     continue;
                 }
 
                 // Never imply the list is complete when it is not.
+                var reportedCount = pair.Rows.Count(r => r.Reported);
                 string? partial = null;
                 if (pair.Truncated)
-                    partial = $"Truncated: only {pair.Rows.Count:N0} of {l.Occurrences:N0} affected rows were stored (limit {ImportLogService.MaxAffectedRows:N0}).";
-                else if (pair.Rows.Count < l.Occurrences)
-                    partial = $"Partial list: {pair.Rows.Count:N0} of {l.Occurrences:N0} affected rows were stored for this batch.";
+                    partial = $"Truncated: only {pair.Rows.Count:N0} of {g.Occurrences:N0} affected rows were stored (limit {ImportLogService.MaxAffectedRows:N0}).";
+                else if (reportedCount < g.Occurrences)
+                    partial = $"Partial list: {reportedCount:N0} of {g.Occurrences:N0} affected rows were stored for this file.";
 
-                foreach (var r in pair.Rows.OrderBy(r => r.Sheet, StringComparer.Ordinal).ThenBy(r => r.RowNumber))
+                foreach (var r in pair.Rows.OrderBy(r => r.Sheet, StringComparer.Ordinal).ThenBy(r => r.RowNumber ?? int.MaxValue))
                 {
                     var notes = new List<string>();
+                    if (!r.Reported) notes.Add("Not an error itself: another row of the same invoice, shown for context.");
                     if (r.RowData is null) notes.Add("Original row data is not available (no row snapshot was stored for this import).");
+                    if (r.RowNumber is null) notes.Add("The Excel row number was not stored.");
                     if (partial is not null) notes.Add(partial);
 
-                    entries.Add(new AffectedEntry(l.ErrorId, l.BatchId, r.Sheet, r.RowNumber,
+                    entries.Add(new AffectedEntry(g.ErrorId, type, fileName, batchIds, r.Sheet, r.RowNumber,
+                        r.Reported ? "Error row" : "Same invoice (context)",
+                        string.IsNullOrWhiteSpace(r.ProblemField) ? null : ImportErrorPresentation.FieldLabel(r.ProblemField),
+                        r.ProblemValue, r.Invoice,
                         notes.Count == 0 ? null : string.Join(" ", notes), r.RowData));
                 }
             }
@@ -884,10 +1149,17 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             {
                 var row = new object?[headers.Count];
                 row[0] = e.ErrorId;
-                row[1] = e.BatchId;
-                row[2] = e.Sheet;
-                row[3] = e.Row;
-                row[4] = e.Note;
+                row[1] = e.ErrorType;
+                row[2] = e.FileName;
+                row[3] = e.BatchIds;
+                row[4] = e.Sheet;
+                // A row that has no stored number says so, instead of leaving a cell that looks like a mistake.
+                row[5] = e.Row.HasValue ? e.Row.Value : NotAvailable;
+                row[6] = e.Role;
+                row[7] = e.ProblemField;
+                row[8] = e.ProblemValue;
+                row[9] = e.Invoice;
+                row[10] = e.Note;
 
                 if (e.Data is not null)
                     foreach (var kv in e.Data)
@@ -1001,13 +1273,6 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         {
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true)) fill(zip);
-            return ms.ToArray();
-        }
-
-        private static async Task<byte[]> ZipAsync(Func<ZipArchive, Task> fill)
-        {
-            using var ms = new MemoryStream();
-            using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true)) await fill(zip);
             return ms.ToArray();
         }
 

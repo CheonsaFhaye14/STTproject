@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.ImportErrors.DTOs;
@@ -16,6 +17,9 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         /// <summary>The stored upload for a batch, or null when it was never saved or was cleaned up.</summary>
         Task<ImportOriginalFile?> GetOriginalFileAsync(int importBatchId, CancellationToken ct = default);
 
+        /// <summary>Every sheet in a batch's stored original file, with its first rows. Never throws: a missing or unreadable file sets Problem.</summary>
+        Task<ImportSheetPreviewDto> GetSheetPreviewAsync(int importBatchId, CancellationToken ct = default);
+
         /// <summary>Every batch this error appeared in (ImportErrorBatch), newest first, with the context a template is chosen by.</summary>
         Task<IReadOnlyList<FixContextDto>> GetFixContextsAsync(int importErrorId, CancellationToken ct = default);
 
@@ -24,6 +28,12 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         /// otherwise the global default(s). Empty when none exists, or when the batch is not linked to this error.
         /// </summary>
         Task<IReadOnlyList<FixTemplateOption>> FindFixTemplatesAsync(int importErrorId, int importBatchId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Remembers which way the admin chose in the Fix window (reimport, template or mapping) as FixChoice in ImportError.DataJson, so a later
+        /// resolution can say how it was fixed. Only for a Pending error. Best effort: never throws, and every other property of the JSON is kept.
+        /// </summary>
+        Task RecordFixChoiceAsync(int importErrorId, string choice, CancellationToken ct = default);
 
         /// <summary>Pending → Ignored. False when the error isn't Pending.</summary>
         Task<bool> IgnoreAsync(int importErrorId, CancellationToken ct = default);
@@ -240,6 +250,8 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 Rows = rows,
                 LogicalRows = logicalRows,
                 Facts = BuildFacts(e.ErrorType, ImportErrorPresentation.ExtractProblemValue(e.DataJson, e.ErrorMessage), e.ErrorMessage, e.DataJson, rows),
+                FixChoice = ReadFixChoice(e.DataJson).Choice,
+                FixChoiceAtPht = ReadFixChoice(e.DataJson).AtPht,
                 CorrectionState = correction.State,
                 CorrectionNote = correction.Note,
                 CorrectionBatchId = correction.BatchId,
@@ -254,6 +266,65 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                     PreviousOccurrences = prev.Occurrences
                 }
             };
+        }
+
+        private const int PreviewMaxSheets = 30;
+        private const int PreviewMaxRows = 6;
+        private const int PreviewMaxColumns = 12;
+        private const int PreviewScanRows = 200;
+
+        public async Task<ImportSheetPreviewDto> GetSheetPreviewAsync(int importBatchId, CancellationToken ct = default)
+        {
+            var dto = new ImportSheetPreviewDto { ImportBatchId = importBatchId };
+
+            byte[]? bytes;
+            try { bytes = await _files.GetOriginalFileAsync(importBatchId, ct); }
+            catch (Exception ex) { Console.WriteLine(ex.ToString()); bytes = null; }
+
+            if (bytes is null)
+            {
+                dto.Problem = "The original file for this upload could not be found, so its sheets can't be shown.";
+                return dto;
+            }
+
+            try
+            {
+                using var wb = new XLWorkbook(new MemoryStream(bytes));
+                foreach (var ws in wb.Worksheets.Take(PreviewMaxSheets))
+                {
+                    var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+                    var lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+                    var sheet = new ImportSheetDto
+                    {
+                        Name = ws.Name,
+                        IsHidden = ws.Visibility != XLWorksheetVisibility.Visible,
+                        RowCount = lastRow,
+                        ColumnCount = lastCol,
+                        ShownColumns = Math.Min(lastCol, PreviewMaxColumns)
+                    };
+
+                    // The first rows that have anything in them, so blank rows above a header don't hide it.
+                    for (var r = 1; r <= Math.Min(lastRow, PreviewScanRows) && sheet.Rows.Count < PreviewMaxRows; r++)
+                    {
+                        var cells = new List<string>();
+                        for (var col = 1; col <= sheet.ShownColumns; col++)
+                        {
+                            var text = (ws.Cell(r, col).GetFormattedString() ?? string.Empty).Trim();
+                            cells.Add(text.Length > 60 ? text[..60] + "…" : text);
+                        }
+                        if (cells.All(string.IsNullOrEmpty)) continue;
+                        sheet.Rows.Add(new ImportSheetRowDto { RowNumber = r, Cells = cells });
+                    }
+                    dto.Sheets.Add(sheet);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                dto.Sheets.Clear();
+                dto.Problem = "The original file could not be opened as an Excel workbook, so its sheets can't be shown.";
+            }
+            return dto;
         }
 
         public async Task<ImportOriginalFile?> GetOriginalFileAsync(int importBatchId, CancellationToken ct = default)
@@ -279,6 +350,53 @@ namespace STTproject.Features.Admin.ImportErrors.Services
         // ---------------- status changes ----------------
         // Only the columns that exist today are used: Status, ResolutionType, ResolvedBy, ResolvedAt.
         // ImportError has no note or reason column and no audit trail, so none is stored.
+
+        public async Task RecordFixChoiceAsync(int importErrorId, string choice, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(choice)) return;
+            try
+            {
+                await using var ctx = await _factory.CreateDbContextAsync(ct);
+                var e = await ctx.ImportErrors.FirstOrDefaultAsync(x => x.ImportErrorId == importErrorId, ct);
+                if (e is null || !ImportErrorPresentation.IsPending(e.Status)) return;
+
+                var root = new System.Text.Json.Nodes.JsonObject();
+                if (!string.IsNullOrWhiteSpace(e.DataJson))
+                {
+                    try { root = System.Text.Json.Nodes.JsonNode.Parse(e.DataJson) as System.Text.Json.Nodes.JsonObject ?? root; }
+                    catch (JsonException) { return; }   // unreadable existing JSON: leave it alone rather than overwrite it
+                }
+
+                root["FixChoice"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["Choice"] = choice.Trim().ToLowerInvariant(),
+                    ["At"] = DateTime.UtcNow,
+                    ["By"] = _user.UserId
+                };
+                e.DataJson = root.ToJsonString();
+                await ctx.SaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Could not record the fix choice for error " + importErrorId + ": " + ex.Message);
+            }
+        }
+
+        private static (string? Choice, DateTime? AtPht) ReadFixChoice(string? dataJson)
+        {
+            if (string.IsNullOrWhiteSpace(dataJson)) return (null, null);
+            try
+            {
+                using var doc = JsonDocument.Parse(dataJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object
+                    || !Prop(doc.RootElement, "FixChoice", out var fc) || fc.ValueKind != JsonValueKind.Object) return (null, null);
+                var choice = Text(fc, "Choice");
+                DateTime? at = Prop(fc, "At", out var a) && a.ValueKind == JsonValueKind.String && a.TryGetDateTime(out var dt)
+                    ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : null;
+                return (string.IsNullOrWhiteSpace(choice) ? null : choice, ToPh(at));
+            }
+            catch (JsonException) { return (null, null); }
+        }
 
         public async Task<bool> IgnoreAsync(int importErrorId, CancellationToken ct = default)
         {
