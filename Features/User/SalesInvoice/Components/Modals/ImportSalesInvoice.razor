@@ -98,6 +98,11 @@
         if (toCommit.Count == 0) return;
 
         var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
+
+        // Remember the customer picked for each saved invoice, so the next import of this file resolves it without a warning.
+        // Best-effort: a mapping problem is logged and never affects the commit.
+        await ImportSalesInvoiceService.SaveConfirmedCustomerMappingsAsync(toCommit, UserContext.UserId.Value);
+
         await ImportSalesInvoiceService.RecordCommitErrorsAsync(importResult, commitResult);
         await ImportSalesInvoiceService.RecordCommitOutcomeAsync(importResult, commitResult);
 

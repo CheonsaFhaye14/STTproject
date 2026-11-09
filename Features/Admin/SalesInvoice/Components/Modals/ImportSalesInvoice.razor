@@ -47,7 +47,6 @@
 @code {
     [Parameter] public bool Show { get; set; }
 
-    /// <summary>Picks this subdistributor when the window opens with none chosen (used when arriving from an import error).</summary>
     [Parameter] public int? InitialSubDistributorId { get; set; }
     private bool initialApplied;
     [Parameter] public EventCallback OnClose { get; set; }
@@ -143,6 +142,11 @@
         if (toCommit.Count == 0) return;
 
         var commitResult = await ImportSalesInvoiceService.CommitPreparedInvoicesAsync(toCommit, UserContext.UserId.Value);
+
+        // Remember the customer picked for each saved invoice, so the next import of this file resolves it without a warning.
+        // Best-effort: a mapping problem is logged and never affects the commit.
+        await ImportSalesInvoiceService.SaveConfirmedCustomerMappingsAsync(toCommit, UserContext.UserId.Value);
+
         await ImportSalesInvoiceService.RecordCommitErrorsAsync(importResult, commitResult);
         await ImportSalesInvoiceService.RecordCommitOutcomeAsync(importResult, commitResult);
 

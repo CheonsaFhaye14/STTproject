@@ -21,6 +21,7 @@ public sealed class PreparedInvoice
     public PendingCustomerChoice? CustomerChoice { get; set; }
     public string OrderTypeKey { get; set; } = string.Empty;
     public string SalesManKey { get; set; } = string.Empty;
+    public List<CustomerSource> MergedCustomerSources { get; } = new();
     public string BuildGroupKey(int customerId) => string.Join("|",
         InvoiceNumber.Trim().ToUpperInvariant(),
         customerId.ToString(CultureInfo.InvariantCulture),
@@ -289,7 +290,7 @@ public sealed class PendingCustomerChoice
     public bool IsUserSelected { get; private set; }
     public string? ValidationMessage { get; set; }
     public bool CanConfirm => string.IsNullOrEmpty(ValidationMessage);
-
+    public CustomerSource Source { get; init; } = new(null, null);
     public CustomerCandidateOption? Selected =>
         Candidates.FirstOrDefault(c => c.CustomerId == SelectedCustomerId);
 
@@ -308,4 +309,8 @@ public sealed class PendingCustomerChoice
     }
 
     public void Confirm() { if (CanConfirm) IsConfirmed = true; }
+}
+public sealed record CustomerSource(string? Code, string? Name)
+{
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Code) && string.IsNullOrWhiteSpace(Name);
 }

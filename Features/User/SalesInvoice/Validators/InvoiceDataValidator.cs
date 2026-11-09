@@ -95,6 +95,23 @@ public sealed class InvoiceDataValidator
             }
         }
 
+        // STEP 1.9: The file has no customer code, only a name. If exactly one customer carries that name as its
+        // Subd customer name (an admin mapping, or one remembered from a confirmed import), use it before fuzzy name matching.
+        if (candidates.Count == 0 && string.IsNullOrWhiteSpace(customerCode) && !string.IsNullOrWhiteSpace(customerName))
+        {
+            var searchSubdName = NormalizeCustomerLookup(customerName);
+            var subdNameMatches = allCustomersList
+                .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustName) &&
+                            NormalizeCustomerLookup(c.SubdCustName) == searchSubdName)
+                .ToList();
+
+            if (TryCollapseToSingleLogicalCustomer(subdNameMatches, out var collapsedSubdName))
+            {
+                customer = collapsedSubdName;
+                return true;
+            }
+        }
+
         // STEP 2: Try raw name match first (strip code prefix only, keep everything else)
         if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(customerName))
         {
