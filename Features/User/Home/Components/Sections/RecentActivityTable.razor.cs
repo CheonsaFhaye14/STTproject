@@ -71,6 +71,12 @@ namespace STTproject.Features.User.Home.Components.Sections
         private string selectedInvoiceCode = string.Empty;
         private HomeSalesInvoiceDetailRow? selectedInvoiceDetails;
 
+        // Loading
+        private bool isLoadingData = true;       // first load: "Loading…" row in the table
+        private bool isBusy;                     // button actions: full-screen LoadingOverlay
+        private string busyTitle = "Loading…";
+        private string? busySubtitle;
+
         protected override async Task OnParametersSetAsync()
         {
             // Only load when the user changes, not on every parent re-render.
@@ -80,7 +86,62 @@ namespace STTproject.Features.User.Home.Components.Sections
             }
 
             loadedUserId = UserId;
-            await ReloadRecentActivityAsync();
+            isLoadingData = true;
+            try
+            {
+                await ReloadRecentActivityAsync();
+            }
+            finally
+            {
+                isLoadingData = false;
+            }
+        }
+
+        /// <summary>
+        /// Shows the LoadingOverlay while <paramref name="work"/> runs.
+        /// Ignores extra clicks while something is already loading, and always
+        /// hides the overlay again even if the work throws.
+        /// </summary>
+        private async Task RunWithLoadingAsync(string title, string? subtitle, Func<Task> work)
+        {
+            if (isBusy)
+            {
+                return;
+            }
+
+            isBusy = true;
+            busyTitle = title;
+            busySubtitle = subtitle;
+            StateHasChanged();
+            await Task.Yield(); // let the overlay render before the slow call starts
+
+            try
+            {
+                await work();
+            }
+            finally
+            {
+                isBusy = false;
+            }
+        }
+
+        /// <summary>
+        /// Full page navigation: keep the overlay up until the browser leaves the page.
+        /// </summary>
+        private async Task NavigateWithLoadingAsync(string url, string title)
+        {
+            if (isBusy)
+            {
+                return;
+            }
+
+            isBusy = true;
+            busyTitle = title;
+            busySubtitle = "Please wait…";
+            StateHasChanged();
+            await Task.Yield();
+
+            Navigation.NavigateTo(url, forceLoad: true);
         }
 
         private async Task ReloadRecentActivityAsync()
@@ -234,19 +295,21 @@ namespace STTproject.Features.User.Home.Components.Sections
 
         // ---------- Batch View Modal ----------
 
-        async Task OpenBatchDetailsAsync(HomeSalesInvoiceBatchRow row)
-        {
-            selectedBatchId = row.BatchId;
-            selectedBatchSubdName = row.SubdName;
-            selectedBatchInvoices = await homeService.GetBatchInvoiceSummariesAsync(
-                UserId,
-                row.SubDistributorId,
-                row.BatchCreatedDate,
-                row.FirstSalesInvoiceId,
-                row.LastSalesInvoiceId);
+        Task OpenBatchDetailsAsync(HomeSalesInvoiceBatchRow row) =>
+            RunWithLoadingAsync("Loading batch details…", row.BatchId, async () =>
+            {
+                var invoices = await homeService.GetBatchInvoiceSummariesAsync(
+                    UserId,
+                    row.SubDistributorId,
+                    row.BatchCreatedDate,
+                    row.FirstSalesInvoiceId,
+                    row.LastSalesInvoiceId);
 
-            showBatchDetailsModal = true;
-        }
+                selectedBatchId = row.BatchId;
+                selectedBatchSubdName = row.SubdName;
+                selectedBatchInvoices = invoices;
+                showBatchDetailsModal = true;
+            });
 
         void CloseBatchDetails()
         {
@@ -263,19 +326,17 @@ namespace STTproject.Features.User.Home.Components.Sections
             await OpenInvoiceDetailsByIdAsync(row.SalesInvoiceId, row.InvoiceCode);
         }
 
-        async Task OpenInvoiceDetailsByIdAsync(int salesInvoiceId, string? invoiceCode = null)
-        {
-            selectedInvoiceCode = invoiceCode ?? string.Empty;
-
-            selectedInvoiceDetails = await homeService.GetInvoiceDetailByIdAsync(UserId, salesInvoiceId);
-
-            if (selectedInvoiceDetails != null && string.IsNullOrWhiteSpace(selectedInvoiceCode))
+        Task OpenInvoiceDetailsByIdAsync(int salesInvoiceId, string? invoiceCode = null) =>
+            RunWithLoadingAsync("Loading invoice details…", invoiceCode, async () =>
             {
-                selectedInvoiceCode = selectedInvoiceDetails.InvoiceNumber;
-            }
+                var details = await homeService.GetInvoiceDetailByIdAsync(UserId, salesInvoiceId);
 
-            showInvoiceDetailsModal = true;
-        }
+                selectedInvoiceDetails = details;
+                selectedInvoiceCode = !string.IsNullOrWhiteSpace(invoiceCode)
+                    ? invoiceCode
+                    : details?.InvoiceNumber ?? string.Empty;
+                showInvoiceDetailsModal = true;
+            });
 
         void CloseInvoiceDetails()
         {
@@ -286,12 +347,14 @@ namespace STTproject.Features.User.Home.Components.Sections
 
         Task EditInvoiceDetails()
         {
-            if (selectedInvoiceDetails != null)
+            if (selectedInvoiceDetails == null)
             {
-                Navigation.NavigateTo($"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}", forceLoad: true);
+                return Task.CompletedTask;
             }
 
-            return Task.CompletedTask;
+            return NavigateWithLoadingAsync(
+                $"/salesinvoice/edit/{selectedInvoiceDetails.SalesInvoiceId}",
+                "Opening invoice for editing…");
         }
     }
 }

@@ -57,15 +57,6 @@
             </div>
 
             <div class="modal-body">
-                <div class="result-bar">
-                    <span class="result-count">Showing @filteredInvoices.Count of @BatchInvoices.Count invoices</span>
-
-                    @if (HasActiveFilters)
-                    {
-                        <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
-                    }
-                </div>
-
                 <table class="activity-table">
                     <thead>
                         <tr>
@@ -107,6 +98,16 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <!-- RESULT COUNT (always under the table, outside the scroll area) -->
+            <div class="result-bar">
+                <span class="result-count">Showing @filteredInvoices.Count of @BatchInvoices.Count invoices</span>
+
+                @if (HasActiveFilters)
+                {
+                    <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
+                }
             </div>
 
             <div class="modal-actions">

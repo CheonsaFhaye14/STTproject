@@ -13,6 +13,8 @@
   <Content Remove="STTproject.Tests\**" />
   <EmbeddedResource Remove="STTproject.Tests\**" />
   <None Remove="STTproject.Tests\**" />
+  <Content Remove="ApplicationData\**" />
+  <None Remove="ApplicationData\**" />
 </ItemGroup>
 
   <ItemGroup>

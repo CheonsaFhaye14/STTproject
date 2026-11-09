@@ -70,24 +70,6 @@
         </div>
     </div>
 
-    <div class="result-bar">
-        <span class="result-count">
-            @if (IsBatchView)
-            {
-                @($"Showing {filteredBatchRows.Count} of {batchRows.Count} batches")
-            }
-            else
-            {
-                @($"Showing {filteredFlatRows.Count} of {flatRows.Count} invoices")
-            }
-        </span>
-
-        @if (HasActiveFilters)
-        {
-            <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
-        }
-    </div>
-
     <!-- BATCH VIEW (Grouped View) -->
     @if (IsBatchView)
     {
@@ -129,7 +111,7 @@
                     {
                         <tr>
                             <td colspan="4">
-                                @(HasActiveFilters ? "No batches match your filters." : "No sales invoice activity found.")
+                                @(isLoadingData ? "Loading recent activity…" : HasActiveFilters ? "No batches match your filters." : "No sales invoice activity found.")
                             </td>
                         </tr>
                     }
@@ -173,7 +155,8 @@
                     {
                         <tr>
                             <td colspan="6">
-                                @(HasActiveFilters ? "No invoices match your filters." : "No sales invoice found.")
+                                @(isLoadingData ? "Loading invoices…" : HasActiveFilters ? "No invoices match your filters." :
+                       "No sales invoice found.")
                             </td>
                         </tr>
                     }
@@ -181,6 +164,25 @@
             </table>
         </div>
     }
+
+    <!-- RESULT COUNT (always under the table) -->
+    <div class="result-bar">
+        <span class="result-count">
+            @if (IsBatchView)
+            {
+                @($"Showing {filteredBatchRows.Count} of {batchRows.Count} batches")
+            }
+            else
+            {
+                @($"Showing {filteredFlatRows.Count} of {flatRows.Count} invoices")
+            }
+        </span>
+
+        @if (HasActiveFilters)
+        {
+            <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
+        }
+    </div>
 </div>
 
 <!-- MODALS -->
@@ -190,3 +192,6 @@
 
 <InvoiceDetail Show="showInvoiceDetailsModal" InvoiceCode="@selectedInvoiceCode" InvoiceDetails="selectedInvoiceDetails"
                OnClose="CloseInvoiceDetails" OnEdit="EditInvoiceDetails" />
+
+<!-- LOADING (shown while a button's work is running) -->
+<LoadingOverlay Show="isBusy" Title="@busyTitle" Subtitle="@busySubtitle" />

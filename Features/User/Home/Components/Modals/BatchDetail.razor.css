@@ -113,14 +113,17 @@
     color: #5F5E5A;
 }
 
-/* RESULT BAR */
+/* RESULT BAR (pinned between the table and the footer) */
 .result-bar {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     min-height: 22px;
-    margin-bottom: 4px;
+    padding: 6px 24px;
+    border-top: 1px solid #E5E3DD;
+    background: #FFFFFF;
 }
 
 .result-count {
@@ -167,6 +170,8 @@
         position: sticky;
         top: 0;
         z-index: 2;
+        /* cover the row gaps around the sticky header (see Recent Activity) */
+        box-shadow: 0 -8px 0 0 #FFFFFF, 0 6px 0 0 #FFFFFF;
     }
 
         .activity-table thead th:first-child {
@@ -213,6 +218,9 @@
 
     .activity-table .btn-primary {
         width: clamp(88px, 9vw, 110px);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
         height: 28px;
         padding: 0 10px;
         background-color: #B08D57;
@@ -235,11 +243,10 @@
 /* FOOTER */
 .modal-actions {
     flex: 0 0 auto;
-    padding: 12px 24px;
+    padding: 4px 24px 14px;
     display: flex;
     justify-content: flex-start;
     background: #FFFFFF;
-    border-top: 1px solid #E5E3DD;
 }
 
 /* CLOSE BUTTON */

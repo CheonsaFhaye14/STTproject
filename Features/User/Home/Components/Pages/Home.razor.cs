@@ -12,6 +12,9 @@ namespace STTproject.Features.User.Home.Components.Pages
 
         protected List<SubDistributor> subdList = new();
 
+        protected bool isNavigating;
+        protected string navigatingTitle = "Loading…";
+
         protected override async Task OnParametersSetAsync()
         {
             if (!userContext.UserId.HasValue)
@@ -32,15 +35,30 @@ namespace STTproject.Features.User.Home.Components.Pages
             subdList = await homeService.GetSubDistributorsAsync(userid);
         }
 
-        async Task InputSalesInvoice(int subDistributorId)
-        {
+        Task InputSalesInvoice(int subDistributorId) =>
             // Force full page reload to ensure component lifecycle runs properly
-            Navigation.NavigateTo($"/salesinvoice/{subDistributorId}", forceLoad: true);
-        }
+            NavigateWithLoadingAsync($"/salesinvoice/{subDistributorId}", "Opening sales invoice…");
 
-        async Task GoToMapItems()
+        Task GoToMapItems() =>
+            NavigateWithLoadingAsync("/mapitem", "Opening Map Items…");
+
+        /// <summary>
+        /// Shows the LoadingOverlay, then does a full page load.
+        /// The overlay stays up until the browser leaves the page, and extra clicks are ignored.
+        /// </summary>
+        private async Task NavigateWithLoadingAsync(string url, string title)
         {
-            Navigation.NavigateTo("/mapitem", forceLoad: true);
+            if (isNavigating)
+            {
+                return;
+            }
+
+            isNavigating = true;
+            navigatingTitle = title;
+            StateHasChanged();
+            await Task.Yield(); // let the overlay render before the page starts unloading
+
+            Navigation.NavigateTo(url, forceLoad: true);
         }
     }
 }

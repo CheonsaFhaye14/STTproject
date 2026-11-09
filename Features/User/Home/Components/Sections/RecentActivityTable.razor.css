@@ -130,13 +130,15 @@
         box-sizing: border-box;
     }
 
-/* RESULT BAR */
+/* RESULT BAR (pinned under the table; the table area above takes the remaining height) */
 .result-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     min-height: 22px;
+    padding-top: 6px;
+    border-top: 1px solid #E5E3DD;
 }
 
 .result-count {
@@ -176,7 +178,6 @@
     border-collapse: separate;
     border-spacing: 0 6px;
     table-layout: fixed;
-    margin-top: -6px; /* cancel the first row of spacing */
 }
 
     .activity-table thead th {
@@ -190,6 +191,9 @@
         position: sticky;
         top: 0;
         z-index: 2;
+        /* paint over the 6px row gaps above and below the sticky header,
+           so scrolling rows don't show through and look overlapped */
+        box-shadow: 0 -6px 0 0 #FFFFFF, 0 6px 0 0 #FFFFFF;
     }
 
         .activity-table thead th:first-child {
@@ -235,7 +239,11 @@
 
     .activity-table .btn-primary {
         width: clamp(88px, 9vw, 110px);
+        max-width: 100%; /* never wider than its column */
         height: 28px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         padding: 0 10px;
         background-color: #B08D57;
         border-radius: 8px;
