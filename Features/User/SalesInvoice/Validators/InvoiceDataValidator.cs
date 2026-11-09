@@ -24,6 +24,12 @@ public sealed class InvoiceDataValidator
         out Data.Customer? customer, out List<Data.Customer>? suggestions)
         => TryResolveCustomer(customerCode, customerName, province, cityMunicipality, customerType, address, customerByCode, allCustomers,
         out customer, out suggestions, out _);
+
+    /// <summary>
+    /// Resolves the file's customer to one Customer row. A customer is one row per (Subd, Customer Code); how the subdistributor
+    /// identifies it (its own code and/or store name) lives in Customer.SubdCustomers, so <paramref name="allCustomers"/> must be
+    /// loaded with SubdCustomers included.
+    /// </summary>
     public static bool TryResolveCustomer(string customerCode, string customerName, string? province, string? cityMunicipality, string? customerType,
         string? address, IReadOnlyDictionary<string, Data.Customer> customerByCode, IEnumerable<Data.Customer> allCustomers,
         out Data.Customer? customer, out List<Data.Customer>? suggestions, out List<Data.Customer>? ambiguousCandidates)
@@ -44,11 +50,9 @@ public sealed class InvoiceDataValidator
                 return true;
             }
 
-            // STEP 1.5: Not a CustomerCode — the import may instead reference this
-            // customer's SubdCustCode (the subdistributor's own code for them).
+            // STEP 1.5: Not a CustomerCode — the import may instead reference the subdistributor's own code for this customer.
             var subdCodeMatches = allCustomersList
-                .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustCode) &&
-                            NormalizeCustomerLookup(c.SubdCustCode) == normalizedCode)
+                .Where(c => HasSubdCode(c, normalizedCode))
                 .ToList();
 
             if (TryCollapseToSingleLogicalCustomer(subdCodeMatches, out var collapsedFromCode))
@@ -63,20 +67,22 @@ public sealed class InvoiceDataValidator
                 {
                     var searchName = NormalizeCustomerLookup(StripCodePrefix(customerName));
 
+                    // Same code under several customers: the one whose name (company or subd name for THAT code) matches.
                     var narrowed = subdCodeMatches
                         .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == searchName ||
-                                    (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                                    NormalizeCustomerLookup(c.SubdCustName) == searchName))
+                                    c.SubdCustomers.Any(m =>
+                                        NormalizeCustomerLookup(m.SubdCustCode) == normalizedCode &&
+                                        NormalizeCustomerLookup(m.SubdCustName) == searchName))
                         .ToList();
 
                     if (narrowed.Count == 0)
                     {
-                        narrowed = subdCodeMatches.Where(c =>
+                        narrowed = subdCodeMatches.Where(c => c.SubdCustomers.Any(m =>
                         {
-                            if (string.IsNullOrWhiteSpace(c.SubdCustName)) return false;
-                            var sub = NormalizeCustomerLookup(c.SubdCustName);
+                            if (NormalizeCustomerLookup(m.SubdCustCode) != normalizedCode) return false;
+                            var sub = NormalizeCustomerLookup(m.SubdCustName);
                             return sub.Length >= 8 && searchName.EndsWith(sub);
-                        }).ToList();
+                        })).ToList();
                     }
 
                     if (TryCollapseToSingleLogicalCustomer(narrowed, out var collapsedNarrowed))
@@ -95,14 +101,13 @@ public sealed class InvoiceDataValidator
             }
         }
 
-        // STEP 1.9: The file has no customer code, only a name. If exactly one customer carries that name as its
-        // Subd customer name (an admin mapping, or one remembered from a confirmed import), use it before fuzzy name matching.
+        // STEP 1.9: The file has no customer code, only a name. If exactly one customer carries that name as a subd store
+        // name (an admin mapping, or one remembered from a confirmed import), use it before fuzzy name matching.
         if (candidates.Count == 0 && string.IsNullOrWhiteSpace(customerCode) && !string.IsNullOrWhiteSpace(customerName))
         {
             var searchSubdName = NormalizeCustomerLookup(customerName);
             var subdNameMatches = allCustomersList
-                .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                            NormalizeCustomerLookup(c.SubdCustName) == searchSubdName)
+                .Where(c => HasSubdName(c, NormalizeCustomerLookup, searchSubdName))
                 .ToList();
 
             if (TryCollapseToSingleLogicalCustomer(subdNameMatches, out var collapsedSubdName))
@@ -120,9 +125,8 @@ public sealed class InvoiceDataValidator
             candidates = allCustomersList
                 .Where(c => StripCodePrefix(c.CustomerName ?? string.Empty)
                                 .Equals(rawName, StringComparison.OrdinalIgnoreCase) ||
-                            (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                            StripCodePrefix(c.SubdCustName!)
-                                .Equals(rawName, StringComparison.OrdinalIgnoreCase)))
+                            c.SubdCustomers.Any(m => m.SubdCustName.Length > 0 &&
+                                StripCodePrefix(m.SubdCustName).Equals(rawName, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
             if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedRaw))
@@ -137,8 +141,7 @@ public sealed class InvoiceDataValidator
                 var normalizedSearchName = NormalizeCustomerLookup(customerName);
                 var exactFiltered = candidates
                     .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
-                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                                NormalizeCustomerLookup(c.SubdCustName!) == normalizedSearchName))
+                                HasSubdName(c, NormalizeCustomerLookup, normalizedSearchName))
                     .ToList();
 
                 if (TryCollapseToSingleLogicalCustomer(exactFiltered, out var collapsedExact))
@@ -157,8 +160,7 @@ public sealed class InvoiceDataValidator
                 var normalizedSearchName = NormalizeCustomerLookup(customerName);
                 candidates = allCustomersList
                     .Where(c => NormalizeCustomerLookup(c.CustomerName ?? string.Empty) == normalizedSearchName ||
-                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                                NormalizeCustomerLookup(c.SubdCustName!) == normalizedSearchName))
+                                HasSubdName(c, NormalizeCustomerLookup, normalizedSearchName))
                     .ToList();
 
                 if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedNormalized))
@@ -215,8 +217,7 @@ public sealed class InvoiceDataValidator
                 var compactSearch = NormalizeCustomerLookupCompact(customerName);
                 candidates = allCustomersList
                     .Where(c => NormalizeCustomerLookupCompact(c.CustomerName ?? string.Empty) == compactSearch ||
-                                (!string.IsNullOrWhiteSpace(c.SubdCustName) &&
-                                NormalizeCustomerLookupCompact(c.SubdCustName!) == compactSearch))
+                                HasSubdName(c, NormalizeCustomerLookupCompact, compactSearch))
                     .ToList();
 
                 if (TryCollapseToSingleLogicalCustomer(candidates, out var collapsedCompact))
@@ -244,9 +245,7 @@ public sealed class InvoiceDataValidator
                 }
                 // Count > 1 → fall through to Steps 3-6
             }
-            // ✅ Count > 1 from either 2.5 or 2.6 reaches here and continues to Steps 3-6
         }
-        // ✅ Steps 3-6 always reachable with any candidates > 1
 
         // STEP 3: Filter by Province
         if (!string.IsNullOrWhiteSpace(province))
@@ -319,14 +318,24 @@ public sealed class InvoiceDataValidator
         customer = null!;
         suggestions = candidates.Count > 0 ? candidates : null;
         var distinct = candidates
-            .GroupBy(c => ((c.CustomerCode ?? string.Empty).Trim().ToLowerInvariant(),
-                           (c.CustomerName ?? string.Empty).Trim().ToLowerInvariant(),
-                           c.SubDistributorId))
-            .Select(g => g.OrderBy(c => c.CustomerId).First())
+            .GroupBy(c => c.CustomerId)
+            .Select(g => g.First())
+            .OrderBy(c => c.CustomerId)
             .ToList();
         ambiguousCandidates = distinct.Count > 1 ? distinct : null;
         return false;
     }
+
+    // Does any of the customer's subd mappings carry this (normalized) subd customer code?
+    private static bool HasSubdCode(Data.Customer c, string normalizedCode) =>
+        normalizedCode.Length > 0 &&
+        c.SubdCustomers.Any(m => m.SubdCustCode.Length > 0 && NormalizeCustomerLookup(m.SubdCustCode) == normalizedCode);
+
+    // Does any of the customer's subd mappings carry this subd store name, compared with the given normalizer?
+    private static bool HasSubdName(Data.Customer c, Func<string, string> normalize, string normalizedName) =>
+        normalizedName.Length > 0 &&
+        c.SubdCustomers.Any(m => m.SubdCustName.Length > 0 && normalize(m.SubdCustName) == normalizedName);
+
     public static bool ResolveOrderType(
     string? orderType,
     decimal? netAmount,
@@ -957,6 +966,7 @@ public sealed class InvoiceDataValidator
         return dashIndex >= 0 ? value[(dashIndex + 3)..].Trim() : value.Trim();
     }
 
+    // Each customer is one row now, so a set of candidates is "one customer" only when it holds a single CustomerId.
     private static bool TryCollapseToSingleLogicalCustomer(List<Data.Customer> candidates, out Data.Customer? customer)
     {
         if (candidates.Count == 0)
@@ -966,14 +976,9 @@ public sealed class InvoiceDataValidator
         }
 
         var first = candidates[0];
-        var allSameLogicalCustomer = candidates.All(c =>
-            string.Equals(c.CustomerCode, first.CustomerCode, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(c.CustomerName, first.CustomerName, StringComparison.OrdinalIgnoreCase) &&
-            c.SubDistributorId == first.SubDistributorId);
-
-        if (allSameLogicalCustomer)
+        if (candidates.All(c => c.CustomerId == first.CustomerId))
         {
-            customer = candidates.OrderBy(c => c.CustomerId).First();
+            customer = first;
             return true;
         }
 

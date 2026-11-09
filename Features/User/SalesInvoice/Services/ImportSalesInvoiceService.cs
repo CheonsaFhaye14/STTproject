@@ -9,6 +9,7 @@ using STTproject.Models;
 using STTproject.Services;
 using STTproject.Features.Admin.ImportTemplate.DTOs;
 using STTproject.Features.Admin.ImportTemplate.Services;
+using SubdCustomerKey = STTproject.Features.Admin.Customers.Services.SubdCustomerKey;
 
 namespace STTproject.Features.User.SalesInvoice.Services;
 
@@ -206,9 +207,11 @@ public sealed class ImportSalesInvoiceService
 			return result;
 		}
 
-		// Load necessary reference data for lookups and validations
+		// Load necessary reference data for lookups and validations.
+		// A customer is one row per (Subd, Customer Code); how the subdistributor identifies it lives in SubdCustomers.
 		var customers = await context.Customers
 			.AsNoTracking()
+			.Include(customer => customer.SubdCustomers)
 			.Where(customer => customer.SubDistributorId == subDistributorId && customer.IsActive)
 			.ToListAsync(cancellationToken);
 
@@ -229,11 +232,6 @@ public sealed class ImportSalesInvoiceService
 		var uomLookup = uoms.ToLookup(uom => (uom.SubdItemId, Normalize(uom.UomName)));
 		var uomsBySubdItemId = uoms.Where(u => u.IsActive).ToLookup(u => u.SubdItemId);
 		var customerById = customers.ToDictionary(customer => customer.CustomerId);
-
-		// Every row of a customer group (same Customer Code and Name; each sibling row carries one Subd mapping) stands for the same
-		// customer. Invoices are always saved against the group's lowest CustomerId, whichever sibling matched the file, so the
-		// duplicate-invoice check sees the same customer on every import, including after a mapping row was added for it.
-		var customerAnchorById = BuildCustomerAnchors(customers);
 		var itemsUomById = uoms.ToDictionary(uom => uom.ItemsUomId);
 
 		// Pre-scan every sheet once to know which conversions each item actually uses,
@@ -251,8 +249,7 @@ public sealed class ImportSalesInvoiceService
 			uomsBySubdItemId,
 			knownConversionsBySubdItem,
 			customers,
-			subdItems,
-			customerAnchorById);
+			subdItems);
 
 		result.Rows.AddRange(parsedRows);
 
@@ -1008,8 +1005,7 @@ public sealed class ImportSalesInvoiceService
 		ILookup<int, ItemsUom> uomsBySubdItemId,
 		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem,
 		IEnumerable<Data.Customer> allCustomers,
-		IEnumerable<SubdItem> allSubdItems,
-		IReadOnlyDictionary<int, Data.Customer> customerAnchorById)
+		IEnumerable<SubdItem> allSubdItems)
 	{
 		// Reads and validates rows from the worksheet starting after the header row, returning a list of parsed invoice rows along with any issues found.
 		var rows = new List<ImportedInvoiceRow>();
@@ -1136,13 +1132,14 @@ public sealed class ImportSalesInvoiceService
 			{
 				if (customerAmbiguous is { Count: > 1 })
 				{
+					// Several different customers fit. Default to the lowest id and let the user pick on the results page.
 					customerCandidateIds = customerAmbiguous
-						.Select(c => AnchorOf(c, customerAnchorById).CustomerId)
+						.Select(c => c.CustomerId)
 						.Distinct()
 						.OrderBy(id => id)
 						.ToList();
-					resolvedCustomer = customerAnchorById[customerCandidateIds[0]];
-					if (customerCandidateIds.Count < 2) customerCandidateIds = null;   // every candidate was the same customer
+					resolvedCustomer = customerAmbiguous.First(c => c.CustomerId == customerCandidateIds[0]);
+					if (customerCandidateIds.Count < 2) customerCandidateIds = null;
 				}
 				else if (string.IsNullOrWhiteSpace(customerCode) && string.IsNullOrWhiteSpace(customerName))
 					AddRowError("Customer code or name is required.", "CustomerCode", code: ImportErrorTypes.CustomerMissing);
@@ -1157,10 +1154,6 @@ public sealed class ImportSalesInvoiceService
 						details: new Dictionary<string, string?> { ["CustomerCode"] = customerCode?.Trim(), ["CustomerName"] = customerName?.Trim() });
 				}
 			}
-
-			// Whichever sibling row matched, the invoice belongs to the customer group's anchor row.
-			if (resolvedCustomer is not null)
-				resolvedCustomer = AnchorOf(resolvedCustomer, customerAnchorById);
 
 			// ── Order Type Resolution ────────────────────────────────────────────
 			decimal? netAmountValue = null;
@@ -1866,19 +1859,6 @@ public sealed class ImportSalesInvoiceService
 		var key = Normalize(basis ?? string.Empty);
 		return includeUom ? $"{key}||{Normalize(row.UOM)}" : key;
 	}
-	/// <summary>Maps every active customer row to the lowest-id active row of its group (same Customer Code and Name).</summary>
-	private static Dictionary<int, Data.Customer> BuildCustomerAnchors(IEnumerable<Data.Customer> customers) =>
-		customers
-			.GroupBy(c => ((c.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(), (c.CustomerName ?? string.Empty).Trim().ToUpperInvariant()))
-			.SelectMany(g =>
-			{
-				var anchor = g.OrderBy(c => c.CustomerId).First();
-				return g.Select(c => (c.CustomerId, Anchor: anchor));
-			})
-			.ToDictionary(x => x.CustomerId, x => x.Anchor);
-
-	private static Data.Customer AnchorOf(Data.Customer customer, IReadOnlyDictionary<int, Data.Customer> anchors) =>
-		anchors.TryGetValue(customer.CustomerId, out var anchor) ? anchor : customer;
 
 	private static string BuildCustomerCandidatePart(IEnumerable<int> ids) =>
 		"?" + string.Join(",", ids.OrderBy(i => i));
@@ -1941,28 +1921,39 @@ public sealed class ImportSalesInvoiceService
 		foreach (var s in p.MergedCustomerSources) yield return s;
 	}
 
+	// Remembers "this file customer is that customer" by adding a SubdCustomer row to the chosen customer.
 	private async Task SaveCustomerMappingAsync(int subDistributorId, CustomerSource source, int customerId, int userId, CancellationToken cancellationToken)
 	{
 		await using var db = _contextFactory.CreateDbContext();
 
-		var chosen = await db.Customers.FirstOrDefaultAsync(
+		var chosen = await db.Customers.AsNoTracking().FirstOrDefaultAsync(
 			c => c.CustomerId == customerId && c.SubDistributorId == subDistributorId, cancellationToken);
 		if (chosen is null) return;
 
-		var code = string.IsNullOrWhiteSpace(source.Code) ? null : source.Code.Trim();
-		var name = string.IsNullOrWhiteSpace(source.Name) ? null : source.Name.Trim();
+		// Same rule as the customer screens and the migration: trimmed, "" when missing.
+		var code = SubdCustomerKey.Code(source.Code);
+		var name = SubdCustomerKey.Name(source.Name);
+		if (code.Length == 0 && name.Length == 0) return;
+		if (code.Length > SubdCustomerKey.CodeMaxLength || name.Length > SubdCustomerKey.NameMaxLength)
+		{
+			_logger.LogWarning("Customer mapping for '{Code}' / '{Name}' is too long to save.", code, name);
+			return;
+		}
 
-		// Rows that already carry this file customer. Same rule the import uses to resolve it:
-		// Subd code when the file has a code (Step 1.5), otherwise Subd name (Step 1.9).
-		var existing = await (code is not null
-				? db.Customers.Where(c => c.SubDistributorId == subDistributorId && c.SubdCustCode == code)
-				: db.Customers.Where(c => c.SubDistributorId == subDistributorId && c.SubdCustName == name))
-			.AsNoTracking()
-			.Select(c => new { c.CustomerCode, c.CustomerName, c.IsActive })
+		// Mappings that already carry this file customer. Same rule the import uses to resolve it:
+		// subd code when the file has a code (Step 1.5), otherwise subd name (Step 1.9).
+		var query = db.SubdCustomers.AsNoTracking()
+			.Where(m => m.Customer.SubDistributorId == subDistributorId);
+		query = code.Length > 0
+			? query.Where(m => m.SubdCustCode == code)
+			: query.Where(m => m.SubdCustName == name);
+
+		var existing = await query
+			.Select(m => new { m.CustomerId, m.Customer.IsActive })
 			.ToListAsync(cancellationToken);
 
-		// Already mapped to the chosen customer's group: nothing to do.
-		if (existing.Any(e => e.CustomerCode == chosen.CustomerCode && e.CustomerName == chosen.CustomerName)) return;
+		// Already mapped to the chosen customer: nothing to do.
+		if (existing.Any(e => e.CustomerId == chosen.CustomerId)) return;
 
 		// Mapped to a different active customer: that is an admin's mapping, never overwrite it from an import.
 		if (existing.Any(e => e.IsActive))
@@ -1971,36 +1962,14 @@ public sealed class ImportSalesInvoiceService
 			return;
 		}
 
-		var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone);
-
-		if (string.IsNullOrWhiteSpace(chosen.SubdCustCode) && string.IsNullOrWhiteSpace(chosen.SubdCustName))
+		db.SubdCustomers.Add(new SubdCustomer
 		{
-			// Fill the chosen row's blank mapping (same as FillBlankSubdMappingAsync).
-			chosen.SubdCustCode = code;
-			chosen.SubdCustName = name;
-			chosen.UpdatedDate = now;
-			chosen.UpdatedBy = userId;
-		}
-		else
-		{
-			// Add a sibling row to the chosen customer's group (same shape UpdateCustomerGroupAsync inserts).
-			db.Customers.Add(new Data.Customer
-			{
-				CustomerCode = chosen.CustomerCode,
-				CustomerName = chosen.CustomerName,
-				CustomerType = chosen.CustomerType,
-				SubDistributorId = chosen.SubDistributorId,
-				IsActive = chosen.IsActive,
-				AddressLine = chosen.AddressLine,
-				City = chosen.City,
-				Province = chosen.Province,
-				ZipCode = chosen.ZipCode,
-				SubdCustCode = code,
-				SubdCustName = name,
-				CreatedDate = now,
-				CreatedBy = userId
-			});
-		}
+			CustomerId = chosen.CustomerId,
+			SubdCustCode = code,
+			SubdCustName = name,
+			CreatedDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PhTimeZone),
+			CreatedBy = userId
+		});
 
 		try
 		{
@@ -2008,7 +1977,7 @@ public sealed class ImportSalesInvoiceService
 		}
 		catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
 		{
-			// Someone saved the same mapping at the same moment. Theirs stands.
+			// Someone saved the same mapping at the same moment, or it exists on an inactive customer. Theirs stands.
 			_logger.LogInformation("Customer mapping for '{Code}' / '{Name}' already exists.", code, name);
 		}
 	}

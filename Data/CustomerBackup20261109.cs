@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace STTproject.Data;
 
-public partial class TestCustomer
+public partial class CustomerBackup20261109
 {
     public int CustomerId { get; set; }
 
@@ -13,15 +13,9 @@ public partial class TestCustomer
 
     public string? CustomerType { get; set; }
 
+    public int SubDistributorId { get; set; }
+
     public bool IsActive { get; set; }
-
-    public string? AddressLine { get; set; }
-
-    public string? City { get; set; }
-
-    public string? Province { get; set; }
-
-    public int? ZipCode { get; set; }
 
     public DateTime CreatedDate { get; set; }
 
@@ -31,7 +25,15 @@ public partial class TestCustomer
 
     public int? UpdatedBy { get; set; }
 
-    public virtual User? CreatedByNavigation { get; set; }
+    public string? AddressLine { get; set; }
 
-    public virtual User? UpdatedByNavigation { get; set; }
+    public string? City { get; set; }
+
+    public string? Province { get; set; }
+
+    public int? ZipCode { get; set; }
+
+    public string? SubdCustCode { get; set; }
+
+    public string? SubdCustName { get; set; }
 }

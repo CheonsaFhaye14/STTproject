@@ -22,6 +22,61 @@ namespace STTproject.Features.Admin.Customers.Services
             _geographicDataService = geographicDataService;
         }
 
+        // ── Helpers ───────────────────────────────────────────────────────
+
+        private static CustomerDetailDto ToDetailDto(Customer c) => new()
+        {
+            CustomerId = c.CustomerId,
+            CustomerCode = c.CustomerCode,
+            CustomerName = c.CustomerName,
+            CustomerType = c.CustomerType,
+            SubDistributorId = c.SubDistributorId,
+            IsActive = c.IsActive,
+            AddressLine = c.AddressLine,
+            City = c.City,
+            Province = c.Province,
+            ZipCode = c.ZipCode,
+            CreatedDate = c.CreatedDate,
+            UpdatedDate = c.UpdatedDate,
+            CreatedBy = c.CreatedBy,
+            UpdatedBy = c.UpdatedBy,
+            Mappings = c.SubdCustomers
+                .OrderBy(m => m.SubdCustomerId)
+                .Select(m => new SubdMappingDto
+                {
+                    SubdCustomerId = m.SubdCustomerId,
+                    SubdCustCode = m.SubdCustCode,
+                    SubdCustName = m.SubdCustName
+                })
+                .ToList()
+        };
+
+        // Trims, applies the placeholder rule, drops blank pairs and repeats (first one wins).
+        private static List<SubdMappingDto> CleanMappings(IEnumerable<SubdMappingDto>? mappings)
+        {
+            var seen = new HashSet<string>();
+            var result = new List<SubdMappingDto>();
+
+            foreach (var m in mappings ?? Enumerable.Empty<SubdMappingDto>())
+            {
+                var code = SubdCustomerKey.Code(m.SubdCustCode);
+                var name = SubdCustomerKey.Name(m.SubdCustName);
+                if (code.Length == 0 && name.Length == 0) continue;
+                if (!seen.Add(SubdCustomerKey.Compare(code, name))) continue;
+
+                result.Add(new SubdMappingDto
+                {
+                    SubdCustomerId = m.SubdCustomerId,
+                    SubdCustCode = code,
+                    SubdCustName = name
+                });
+            }
+
+            return result;
+        }
+
+        // ── Users ─────────────────────────────────────────────────────────
+
         public async Task<string?> GetUserNameByIdAsync(int? userId)
         {
             if (userId == null) return null;
@@ -30,15 +85,17 @@ namespace STTproject.Features.Admin.Customers.Services
             return user?.FullName ?? user?.Username;
         }
 
+        // ── Create / update ───────────────────────────────────────────────
+
         public async Task<CustomerDetailDto?> CreateCustomerAsync(CustomerCreateDto dto)
         {
             await using var db = _dbFactory.CreateDbContext();
+            var now = NowPh();
+
             var entity = new Customer
             {
-                CustomerCode = dto.CustomerCode ?? string.Empty,
-                CustomerName = dto.CustomerName ?? string.Empty,
-                SubdCustCode = dto.SubdCustCode,
-                SubdCustName = dto.SubdCustName,
+                CustomerCode = dto.CustomerCode?.Trim() ?? string.Empty,
+                CustomerName = dto.CustomerName?.Trim() ?? string.Empty,
                 CustomerType = dto.CustomerType,
                 SubDistributorId = dto.SubDistributorId,
                 IsActive = dto.IsActive,
@@ -46,36 +103,44 @@ namespace STTproject.Features.Admin.Customers.Services
                 City = dto.City,
                 Province = dto.Province,
                 ZipCode = dto.ZipCode,
-                CreatedDate = NowPh(),
+                CreatedDate = now,
                 CreatedBy = dto.CreatedBy
             };
+
+            foreach (var m in CleanMappings(dto.Mappings))
+            {
+                entity.SubdCustomers.Add(new SubdCustomer
+                {
+                    SubdCustCode = m.SubdCustCode!,
+                    SubdCustName = m.SubdCustName!,
+                    CreatedDate = now,
+                    CreatedBy = dto.CreatedBy
+                });
+            }
+
             db.Customers.Add(entity);
             await db.SaveChangesAsync();
-            return new CustomerDetailDto
-            {
-                CustomerId = entity.CustomerId,
-                CustomerCode = entity.CustomerCode,
-                CustomerName = entity.CustomerName,
-                CustomerType = entity.CustomerType,
-                SubDistributorId = entity.SubDistributorId,
-                IsActive = entity.IsActive,
-                AddressLine = entity.AddressLine,
-                City = entity.City,
-                Province = entity.Province,
-                ZipCode = entity.ZipCode,
-                CreatedDate = entity.CreatedDate
-            };
+            return ToDetailDto(entity);
         }
 
+        public async Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto)
+            => await UpdateCustomerAsync(dto.CustomerId, dto);
+
+        // Saves the customer's fields and syncs its subd mappings (add / change / remove) in one transaction.
         public async Task<CustomerDetailDto?> UpdateCustomerAsync(int id, CustomerUpdateDto dto)
         {
             await using var db = _dbFactory.CreateDbContext();
-            var entity = await db.Customers.FindAsync(id);
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            var entity = await db.Customers
+                .Include(c => c.SubdCustomers)
+                .FirstOrDefaultAsync(c => c.CustomerId == id);
             if (entity == null) return null;
-            entity.CustomerCode = dto.CustomerCode ?? entity.CustomerCode;
-            entity.CustomerName = dto.CustomerName ?? entity.CustomerName;
-            entity.SubdCustCode = dto.SubdCustCode;
-            entity.SubdCustName = dto.SubdCustName;
+
+            var now = NowPh();
+
+            entity.CustomerCode = dto.CustomerCode?.Trim() ?? entity.CustomerCode;
+            entity.CustomerName = dto.CustomerName?.Trim() ?? entity.CustomerName;
             entity.CustomerType = dto.CustomerType;
             entity.SubDistributorId = dto.SubDistributorId;
             entity.IsActive = dto.IsActive;
@@ -83,24 +148,55 @@ namespace STTproject.Features.Admin.Customers.Services
             entity.City = dto.City;
             entity.Province = dto.Province;
             entity.ZipCode = dto.ZipCode;
-            entity.UpdatedDate = NowPh();
+            entity.UpdatedDate = now;
             entity.UpdatedBy = dto.UpdatedBy;
-            await db.SaveChangesAsync();
-            return new CustomerDetailDto
+
+            var incoming = CleanMappings(dto.Mappings);
+            var keepIds = incoming
+                .Where(m => m.SubdCustomerId > 0)
+                .Select(m => m.SubdCustomerId)
+                .ToHashSet();
+
+            // 1. Delete removed mappings first and save, so re-adding the same code/name
+            //    in this edit can't collide with the row being deleted.
+            var removed = entity.SubdCustomers.Where(m => !keepIds.Contains(m.SubdCustomerId)).ToList();
+            if (removed.Count > 0)
             {
-                CustomerId = entity.CustomerId,
-                CustomerCode = entity.CustomerCode,
-                CustomerName = entity.CustomerName,
-                CustomerType = entity.CustomerType,
-                SubDistributorId = entity.SubDistributorId,
-                IsActive = entity.IsActive,
-                AddressLine = entity.AddressLine,
-                City = entity.City,
-                Province = entity.Province,
-                ZipCode = entity.ZipCode,
-                CreatedDate = entity.CreatedDate,
-                UpdatedDate = entity.UpdatedDate
-            };
+                db.SubdCustomers.RemoveRange(removed);
+                await db.SaveChangesAsync();
+            }
+
+            // 2. Update changed mappings and add new ones.
+            foreach (var m in incoming)
+            {
+                if (m.SubdCustomerId > 0)
+                {
+                    var existing = entity.SubdCustomers.FirstOrDefault(x => x.SubdCustomerId == m.SubdCustomerId);
+                    if (existing == null) continue; // not this customer's mapping: ignore
+
+                    if (existing.SubdCustCode != m.SubdCustCode || existing.SubdCustName != m.SubdCustName)
+                    {
+                        existing.SubdCustCode = m.SubdCustCode!;
+                        existing.SubdCustName = m.SubdCustName!;
+                        existing.UpdatedDate = now;
+                        existing.UpdatedBy = dto.UpdatedBy;
+                    }
+                }
+                else
+                {
+                    entity.SubdCustomers.Add(new SubdCustomer
+                    {
+                        SubdCustCode = m.SubdCustCode!,
+                        SubdCustName = m.SubdCustName!,
+                        CreatedDate = now,
+                        CreatedBy = dto.UpdatedBy
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return ToDetailDto(entity);
         }
 
         public async Task ToggleCustomerStatusAsync(int id, bool isActive, int? updatedBy)
@@ -114,36 +210,24 @@ namespace STTproject.Features.Admin.Customers.Services
             await db.SaveChangesAsync();
         }
 
+        // ── Lists ─────────────────────────────────────────────────────────
+
         public async Task<IEnumerable<CustomerListDto>> GetAllAsync()
         {
             await using var db = _dbFactory.CreateDbContext();
 
-            var flat = db.Customers
+            return await db.Customers
                 .AsNoTracking()
-                .Select(c => new
+                .Select(c => new CustomerListDto
                 {
-                    c.CustomerId,
-                    c.CustomerCode,
-                    c.CustomerName,
-                    c.CustomerType,
-                    c.SubDistributorId,
-                    SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
-                    c.IsActive,
-                    c.CreatedDate
-                });
-
-            return await flat
-                .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
-                .Select(g => new CustomerListDto
-                {
-                    CustomerId = g.Min(c => c.CustomerId),
-                    CustomerCode = g.Key.CustomerCode,
-                    CustomerName = g.Key.CustomerName,
-                    SubDistributorId = g.Key.SubDistributorId,
-                    SubDistributorName = g.Select(c => c.SubDistributorName).FirstOrDefault(),
-                    CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
-                    IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
-                    CreatedDate = g.Min(c => c.CreatedDate)
+                    CustomerId = c.CustomerId,
+                    CustomerCode = c.CustomerCode,
+                    CustomerName = c.CustomerName,
+                    CustomerType = c.CustomerType,
+                    SubDistributorId = c.SubDistributorId,
+                    SubDistributorName = c.SubDistributor.SubdName,
+                    IsActive = c.IsActive,
+                    CreatedDate = c.CreatedDate
                 })
                 .ToListAsync();
         }
@@ -169,60 +253,45 @@ namespace STTproject.Features.Admin.Customers.Services
                         : c.CustomerType == customerType))
                 .Where(c => string.IsNullOrEmpty(status) ||
                     (status == "active" ? c.IsActive : !c.IsActive))
-                .Where(c => string.IsNullOrEmpty(search) ||
-                    c.CustomerName.Contains(search) ||
-                    c.CustomerCode.Contains(search) ||
-                    c.SubdCustCode != null && c.SubdCustCode.Contains(search) ||
-                    c.SubdCustName != null && c.SubdCustName.Contains(search) ||
-                    c.City != null && c.City.Contains(search) ||
-                    c.Province != null && c.Province.Contains(search));
+.Where(c => string.IsNullOrEmpty(search) ||
+    c.CustomerName.Contains(search) ||
+    c.CustomerCode.Contains(search) ||
+    c.City != null && c.City.Contains(search) ||
+    c.Province != null && c.Province.Contains(search) ||
+    c.SubdCustomers.Any(m => m.SubdCustCode.Contains(search) || m.SubdCustName.Contains(search)));
 
-            var flat = filtered.Select(c => new
+            var total = await filtered.CountAsync();
+
+            var projected = filtered.Select(c => new CustomerListDto
             {
-                c.CustomerId,
-                c.CustomerCode,
-                c.CustomerName,
-                c.CustomerType,
-                c.SubDistributorId,
-                SubDistributorName = c.SubDistributor != null ? c.SubDistributor.SubdName : null,
-                c.IsActive,
-                c.CreatedDate
+                CustomerId = c.CustomerId,
+                CustomerCode = c.CustomerCode,
+                CustomerName = c.CustomerName,
+                CustomerType = c.CustomerType,
+                SubDistributorId = c.SubDistributorId,
+                SubDistributorName = c.SubDistributor.SubdName,
+                IsActive = c.IsActive,
+                CreatedDate = c.CreatedDate
             });
 
-            var grouped = flat
-                .GroupBy(c => new { c.CustomerCode, c.CustomerName, c.SubDistributorId })
-                .Select(g => new CustomerListDto
-                {
-                    CustomerId = g.Min(c => c.CustomerId),
-                    CustomerCode = g.Key.CustomerCode,
-                    CustomerName = g.Key.CustomerName,
-                    SubDistributorId = g.Key.SubDistributorId,
-                    SubDistributorName = g.Select(c => c.SubDistributorName).FirstOrDefault(),
-                    CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
-                    IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
-                    CreatedDate = g.Min(c => c.CreatedDate)
-                });
-
-            var total = await grouped.CountAsync();
-
-            grouped = (sortColumn, sortAscending) switch
+            projected = (sortColumn, sortAscending) switch
             {
-                ("CustomerCode", true) => grouped.OrderBy(c => c.CustomerCode),
-                ("CustomerCode", false) => grouped.OrderByDescending(c => c.CustomerCode),
-                ("CustomerName", true) => grouped.OrderBy(c => c.CustomerName),
-                ("CustomerName", false) => grouped.OrderByDescending(c => c.CustomerName),
-                ("CustomerType", true) => grouped.OrderBy(c => c.CustomerType),
-                ("CustomerType", false) => grouped.OrderByDescending(c => c.CustomerType),
-                ("SubDistributor", true) => grouped.OrderBy(c => c.SubDistributorName),
-                ("SubDistributor", false) => grouped.OrderByDescending(c => c.SubDistributorName),
-                ("CreatedDate", false) => grouped.OrderBy(c => c.CreatedDate),
-                ("CreatedDate", true) => grouped.OrderByDescending(c => c.CreatedDate),
-                ("IsActive", false) => grouped.OrderBy(c => c.IsActive),
-                ("IsActive", true) => grouped.OrderByDescending(c => c.IsActive),
-                _ => grouped.OrderBy(c => c.CustomerName)
+                ("CustomerCode", true) => projected.OrderBy(c => c.CustomerCode),
+                ("CustomerCode", false) => projected.OrderByDescending(c => c.CustomerCode),
+                ("CustomerName", true) => projected.OrderBy(c => c.CustomerName),
+                ("CustomerName", false) => projected.OrderByDescending(c => c.CustomerName),
+                ("CustomerType", true) => projected.OrderBy(c => c.CustomerType),
+                ("CustomerType", false) => projected.OrderByDescending(c => c.CustomerType),
+                ("SubDistributor", true) => projected.OrderBy(c => c.SubDistributorName),
+                ("SubDistributor", false) => projected.OrderByDescending(c => c.SubDistributorName),
+                ("CreatedDate", false) => projected.OrderBy(c => c.CreatedDate),
+                ("CreatedDate", true) => projected.OrderByDescending(c => c.CreatedDate),
+                ("IsActive", false) => projected.OrderBy(c => c.IsActive),
+                ("IsActive", true) => projected.OrderByDescending(c => c.IsActive),
+                _ => projected.OrderBy(c => c.CustomerName)
             };
 
-            var items = await grouped
+            var items = await projected
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -230,23 +299,6 @@ namespace STTproject.Features.Admin.Customers.Services
             return (items, total);
         }
 
-        public async Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, IEnumerable<int>? excludeIds = null)
-        {
-            await using var db = _dbFactory.CreateDbContext();
-
-            var query = db.Customers.Where(c =>
-                c.CustomerCode == customerCode &&
-                c.SubDistributorId == subDistributorId);
-
-            if (excludeIds != null)
-            {
-                var idSet = excludeIds.ToHashSet();
-                if (idSet.Count > 0)
-                    query = query.Where(c => !idSet.Contains(c.CustomerId));
-            }
-
-            return await query.AnyAsync();
-        }
         public async Task<IEnumerable<SubDistributorDto>> GetSubDistributorsAsync(string? query = null)
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -278,229 +330,150 @@ namespace STTproject.Features.Admin.Customers.Services
             await using var db = _dbFactory.CreateDbContext();
             var entity = await db.Customers
                 .AsNoTracking()
-                .Include(c => c.SubDistributor)
+                .Include(c => c.SubdCustomers)
                 .FirstOrDefaultAsync(c => c.CustomerId == id);
 
-            if (entity == null) return null;
-
-            return new CustomerDetailDto
-            {
-                CustomerId = entity.CustomerId,
-                CustomerCode = entity.CustomerCode,
-                CustomerName = entity.CustomerName,
-                CustomerType = entity.CustomerType,
-                SubDistributorId = entity.SubDistributorId,
-                IsActive = entity.IsActive,
-                AddressLine = entity.AddressLine,
-                City = entity.City,
-                Province = entity.Province,
-                ZipCode = entity.ZipCode,
-                CreatedDate = entity.CreatedDate,
-                UpdatedDate = entity.UpdatedDate,
-                CreatedBy = entity.CreatedBy,
-                UpdatedBy = entity.UpdatedBy
-            };
+            return entity == null ? null : ToDetailDto(entity);
         }
 
-        public async Task<CustomerDetailDto?> UpdateCustomerAsync(CustomerUpdateDto dto)
-            => await UpdateCustomerAsync(dto.CustomerId, dto);
+        // ── Validation ────────────────────────────────────────────────────
 
-        public async Task<IEnumerable<SubdMappingDto>> GetCustomerGroupMappingsAsync(int customerId)
+        public async Task<bool> CustomerCodeExistsAsync(string customerCode, int subDistributorId, int? excludeCustomerId = null)
         {
             await using var db = _dbFactory.CreateDbContext();
+            var code = customerCode.Trim();
 
-            var anchor = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.CustomerId == customerId);
-            if (anchor == null) return Enumerable.Empty<SubdMappingDto>();
+            return await db.Customers.AnyAsync(c =>
+                c.CustomerCode == code &&
+                c.SubDistributorId == subDistributorId &&
+                (excludeCustomerId == null || c.CustomerId != excludeCustomerId));
+        }
 
-            return await db.Customers
+        // Returns the pairs that already belong to a DIFFERENT customer in this subdistributor.
+        // The database enforces the same rule (vw_SubdCustomerKey); this gives a readable message first.
+        public async Task<List<SubdMappingConflictDto>> FindMappingConflictsAsync(
+            int subDistributorId, IEnumerable<SubdMappingDto> mappings, int? excludeCustomerId = null)
+        {
+            var clean = CleanMappings(mappings);
+            if (clean.Count == 0) return new();
+
+            var codes = clean.Select(m => m.SubdCustCode!).Distinct().ToList();
+            var names = clean.Select(m => m.SubdCustName!).Distinct().ToList();
+
+            await using var db = _dbFactory.CreateDbContext();
+            var candidates = await db.SubdCustomers
                 .AsNoTracking()
-                .Where(c => c.CustomerCode == anchor.CustomerCode && c.CustomerName == anchor.CustomerName && c.SubDistributorId == anchor.SubDistributorId)
-                .OrderBy(c => c.CustomerId)
-                .Select(c => new SubdMappingDto
+                .Where(m => m.Customer.SubDistributorId == subDistributorId
+                            && (excludeCustomerId == null || m.CustomerId != excludeCustomerId)
+                            && codes.Contains(m.SubdCustCode)
+                            && names.Contains(m.SubdCustName))
+                .Select(m => new SubdMappingConflictDto
                 {
-                    CustomerId = c.CustomerId,
-                    SubDistributorId = c.SubDistributorId,
-                    SubdCustCode = c.SubdCustCode,
-                    SubdCustName = c.SubdCustName
+                    SubdCustCode = m.SubdCustCode,
+                    SubdCustName = m.SubdCustName,
+                    CustomerId = m.CustomerId,
+                    CustomerCode = m.Customer.CustomerCode,
+                    CustomerName = m.Customer.CustomerName
                 })
                 .ToListAsync();
+
+            // The query matches code and name separately; keep only exact pairs.
+            var wanted = clean.Select(m => SubdCustomerKey.Compare(m.SubdCustCode, m.SubdCustName)).ToHashSet();
+            return candidates
+                .Where(c => wanted.Contains(SubdCustomerKey.Compare(c.SubdCustCode, c.SubdCustName)))
+                .ToList();
         }
 
-        public async Task<(bool success, string? error)> UpdateCustomerGroupAsync(CustomerGroupUpdateDto dto)
-        {
-            await using var db = _dbFactory.CreateDbContext();
-            await using var tx = await db.Database.BeginTransactionAsync();
-
-            try
-            {
-                // The anchor row's scalar fields (CustomerCode, CustomerName, IsActive, address, etc.)
-                // must already have been saved via UpdateCustomerAsync before calling this — we read
-                // them back here as the source of truth to keep sibling rows in sync.
-                var anchor = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.CustomerId == dto.CustomerId);
-                if (anchor == null)
-                {
-                    await tx.RollbackAsync();
-                    return (false, "Customer not found.");
-                }
-
-                var siblings = await db.Customers
-                    .Where(c => dto.ExistingIds.Contains(c.CustomerId) && c.CustomerId != anchor.CustomerId)
-                    .ToListAsync();
-
-                var incomingIds = dto.Mappings
-                    .Where(m => m.CustomerId > 0 && m.CustomerId != dto.CustomerId)
-                    .Select(m => m.CustomerId)
-                    .ToHashSet();
-
-                // Sibling rows the user removed
-                var toRemove = siblings.Where(s => !incomingIds.Contains(s.CustomerId)).ToList();
-                if (toRemove.Count > 0)
-                    db.Customers.RemoveRange(toRemove);
-
-                var now = NowPh();
-
-                // Update surviving siblings — keep shared fields in sync with the anchor
-                foreach (var mapping in dto.Mappings.Where(m => m.CustomerId > 0 && m.CustomerId != dto.CustomerId))
-                {
-                    var entity = siblings.FirstOrDefault(s => s.CustomerId == mapping.CustomerId);
-                    if (entity == null) continue;
-
-                    entity.CustomerCode = anchor.CustomerCode;
-                    entity.CustomerName = anchor.CustomerName;
-                    entity.CustomerType = anchor.CustomerType;
-                    entity.IsActive = anchor.IsActive;
-                    entity.AddressLine = anchor.AddressLine;
-                    entity.City = anchor.City;
-                    entity.Province = anchor.Province;
-                    entity.ZipCode = anchor.ZipCode;
-                    entity.SubDistributorId = mapping.SubDistributorId;
-                    entity.SubdCustCode = mapping.SubdCustCode;
-                    entity.SubdCustName = mapping.SubdCustName;
-                    entity.UpdatedDate = now;
-                    entity.UpdatedBy = anchor.UpdatedBy;
-                }
-
-                // Insert newly added mapping rows
-                foreach (var mapping in dto.Mappings.Where(m => m.CustomerId <= 0))
-                {
-                    db.Customers.Add(new Customer
-                    {
-                        CustomerCode = anchor.CustomerCode,
-                        CustomerName = anchor.CustomerName,
-                        CustomerType = anchor.CustomerType,
-                        SubDistributorId = mapping.SubDistributorId,
-                        IsActive = anchor.IsActive,
-                        AddressLine = anchor.AddressLine,
-                        City = anchor.City,
-                        Province = anchor.Province,
-                        ZipCode = anchor.ZipCode,
-                        SubdCustCode = mapping.SubdCustCode,
-                        SubdCustName = mapping.SubdCustName,
-                        CreatedDate = now,
-                        CreatedBy = anchor.UpdatedBy
-                    });
-                }
-
-                await db.SaveChangesAsync();
-                await tx.CommitAsync();
-                return (true, null);
-            }
-            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
-                when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2601)
-            {
-                await tx.RollbackAsync();
-                return (false, "One of the entered Customer Code / Subd Customer Code combinations already exists for the selected subdistributor.");
-            }
-        }
+        // ── Import support ────────────────────────────────────────────────
 
         public async Task<ImportMatchResult> CheckImportDuplicateAsync(
-            string customerCode, string customerName, int subDistributorId,
-            string? subdCustCode, string? subdCustName)
+            string customerCode, int subDistributorId, string? subdCustCode, string? subdCustName)
         {
             await using var db = _dbFactory.CreateDbContext();
 
-            var candidates = await db.Customers
-                .Where(c => c.CustomerCode == customerCode &&
-                            c.CustomerName == customerName &&
-                            c.SubDistributorId == subDistributorId)
-                .Select(c => new { c.CustomerId, c.SubdCustCode, c.SubdCustName })
-                .ToListAsync();
+            var code = customerCode.Trim();
+            var customerId = await db.Customers
+                .Where(c => c.SubDistributorId == subDistributorId && c.CustomerCode == code)
+                .Select(c => (int?)c.CustomerId)
+                .FirstOrDefaultAsync();
 
-            var exact = candidates.FirstOrDefault(c =>
-                string.Equals(c.SubdCustCode ?? "", subdCustCode ?? "", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(c.SubdCustName ?? "", subdCustName ?? "", StringComparison.OrdinalIgnoreCase));
+            var sc = SubdCustomerKey.Code(subdCustCode);
+            var sn = SubdCustomerKey.Name(subdCustName);
 
-            if (exact != null)
-                return new ImportMatchResult(ImportMatchType.ExactDuplicate, exact.CustomerId);
+            // Row has no subd mapping: it can only match an existing customer.
+            if (sc.Length == 0 && sn.Length == 0)
+                return customerId == null
+                    ? new ImportMatchResult(ImportMatchType.None, null)
+                    : new ImportMatchResult(ImportMatchType.ExactDuplicate, customerId);
 
-            if (!string.IsNullOrWhiteSpace(subdCustCode) || !string.IsNullOrWhiteSpace(subdCustName))
-            {
-                var blank = candidates.FirstOrDefault(c =>
-                    string.IsNullOrWhiteSpace(c.SubdCustCode) && string.IsNullOrWhiteSpace(c.SubdCustName));
+            var owner = await db.SubdCustomers
+                .Where(m => m.Customer.SubDistributorId == subDistributorId
+                            && m.SubdCustCode == sc
+                            && m.SubdCustName == sn)
+                .Select(m => new { m.CustomerId, m.Customer.CustomerCode })
+                .FirstOrDefaultAsync();
 
-                if (blank != null)
-                    return new ImportMatchResult(ImportMatchType.FillableBlank, blank.CustomerId);
-            }
+            if (owner != null)
+                return owner.CustomerId == customerId
+                    ? new ImportMatchResult(ImportMatchType.ExactDuplicate, customerId)
+                    : new ImportMatchResult(ImportMatchType.MappingConflict, owner.CustomerId, owner.CustomerCode);
 
-            return new ImportMatchResult(ImportMatchType.None, null);
+            return customerId == null
+                ? new ImportMatchResult(ImportMatchType.None, null)
+                : new ImportMatchResult(ImportMatchType.AddMapping, customerId);
         }
 
-        public async Task<CustomerDetailDto?> FillBlankSubdMappingAsync(
-            int customerId, string? subdCustCode, string? subdCustName, int? updatedBy)
+        // Adds one subd mapping to an existing customer. Does nothing if it is blank or already there.
+        public async Task<CustomerDetailDto?> AddSubdMappingAsync(
+            int customerId, string? subdCustCode, string? subdCustName, int? createdBy)
         {
             await using var db = _dbFactory.CreateDbContext();
-            var entity = await db.Customers.FindAsync(customerId);
+            var entity = await db.Customers
+                .Include(c => c.SubdCustomers)
+                .FirstOrDefaultAsync(c => c.CustomerId == customerId);
             if (entity == null) return null;
 
-            entity.SubdCustCode = subdCustCode;
-            entity.SubdCustName = subdCustName;
-            entity.UpdatedDate = NowPh();
-            entity.UpdatedBy = updatedBy;
-            await db.SaveChangesAsync();
+            var sc = SubdCustomerKey.Code(subdCustCode);
+            var sn = SubdCustomerKey.Name(subdCustName);
+            var key = SubdCustomerKey.Compare(sc, sn);
 
-            return new CustomerDetailDto
+            if ((sc.Length > 0 || sn.Length > 0) &&
+                !entity.SubdCustomers.Any(m => SubdCustomerKey.Compare(m.SubdCustCode, m.SubdCustName) == key))
             {
-                CustomerId = entity.CustomerId,
-                CustomerCode = entity.CustomerCode,
-                CustomerName = entity.CustomerName,
-                CustomerType = entity.CustomerType,
-                SubDistributorId = entity.SubDistributorId,
-                IsActive = entity.IsActive,
-                AddressLine = entity.AddressLine,
-                City = entity.City,
-                Province = entity.Province,
-                ZipCode = entity.ZipCode,
-                CreatedDate = entity.CreatedDate,
-                UpdatedDate = entity.UpdatedDate
-            };
+                entity.SubdCustomers.Add(new SubdCustomer
+                {
+                    SubdCustCode = sc,
+                    SubdCustName = sn,
+                    CreatedDate = NowPh(),
+                    CreatedBy = createdBy
+                });
+                await db.SaveChangesAsync();
+            }
+
+            return ToDetailDto(entity);
         }
 
-        // Returns every row of a customer group (same Subd, Customer Code and Customer Name), untracked.
-        // The import uses this to preview what would change before anything is saved.
-        public async Task<List<Customer>> GetCustomersByKeyAsync(int subdistributorId, string customerCode, string customerName)
+        // The customer with this code in this subdistributor (0 or 1 row), untracked.
+        public async Task<List<Customer>> GetCustomersByKeyAsync(int subdistributorId, string customerCode)
         {
             await using var db = _dbFactory.CreateDbContext();
+            var code = customerCode.Trim();
             return await db.Customers
                 .AsNoTracking()
-                .Where(c => c.SubDistributorId == subdistributorId
-                            && c.CustomerCode == customerCode
-                            && c.CustomerName == customerName)
+                .Where(c => c.SubDistributorId == subdistributorId && c.CustomerCode == code)
                 .ToListAsync();
         }
 
-        // Applies the incoming address / city / province / zip / type to every row in the group.
-        // Blank or 0 incoming values are skipped (handled inside CustomerDetailsUpdate.Apply).
-        // Returns how many rows actually changed.
+        // Applies incoming address / city / province / zip / type. Blank or 0 values are skipped.
+        // Returns how many customers changed (0 or 1).
         public async Task<int> UpdateGroupDetailsAsync(
-            int subdistributorId, string customerCode, string customerName,
-            CustomerDetailsUpdate details, int userId)
+            int subdistributorId, string customerCode, CustomerDetailsUpdate details, int userId)
         {
             await using var db = _dbFactory.CreateDbContext();
+            var code = customerCode.Trim();
 
             var rows = await db.Customers
-                .Where(c => c.SubDistributorId == subdistributorId
-                            && c.CustomerCode == customerCode
-                            && c.CustomerName == customerName)
+                .Where(c => c.SubDistributorId == subdistributorId && c.CustomerCode == code)
                 .ToListAsync();
 
             var now = NowPh();
@@ -509,7 +482,6 @@ namespace STTproject.Features.Admin.Customers.Services
             foreach (var c in rows)
             {
                 if (details.Apply(c, commit: true).Count == 0) continue;
-
                 c.UpdatedDate = now;
                 c.UpdatedBy = userId;
                 changed++;

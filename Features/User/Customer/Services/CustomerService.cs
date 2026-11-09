@@ -39,7 +39,7 @@ public class CustomerService : ICustomerService
 
         var selected = subDistributors.First();
 
-        var customers = await GetGroupedCustomersAsync(context, selected.SubDistributorId, cancellationToken);
+        var customers = await GetCustomersAsync(context, selected.SubDistributorId, cancellationToken);
 
         var subdDto = subdDtos.First(s => s.SubDistributorId == selected.SubDistributorId);
 
@@ -64,62 +64,40 @@ public class CustomerService : ICustomerService
             return new List<CustomerInfoDto>();
         }
 
-        return await GetGroupedCustomersAsync(context, subDistributorId, cancellationToken);
+        return await GetCustomersAsync(context, subDistributorId, cancellationToken);
     }
 
-    // Pulls the flat customer rows for a subdistributor, then groups them by
-    // (CustomerCode, CustomerName) so every SubdCust mapping for the same logical
-    // customer lands together in one CustomerInfoDto.SubdCustomers list, instead
-    // of each mapping producing its own duplicate customer row.
-    private static async Task<List<CustomerInfoDto>> GetGroupedCustomersAsync(
+    // One row per customer; its subd mappings come from SubdCustomer.
+    private static async Task<List<CustomerInfoDto>> GetCustomersAsync(
         EntrielContext context,
         int subDistributorId,
         CancellationToken cancellationToken)
     {
-        var flat = await context.Customers
+        return await context.Customers
             .AsNoTracking()
             .Where(c => c.SubDistributorId == subDistributorId && c.IsActive)
-            .Select(c => new
+            .OrderBy(c => c.CustomerName)
+            .Select(c => new CustomerInfoDto
             {
-                c.CustomerId,
-                c.CustomerCode,
-                c.CustomerName,
-                c.CustomerType,
-                c.IsActive,
-                c.Province,
-                c.City,
-                c.AddressLine,
-                c.ZipCode,
-                c.SubdCustCode,
-                c.SubdCustName
-            })
-            .ToListAsync(cancellationToken);
-
-        return flat
-            .GroupBy(c => new { c.CustomerCode, c.CustomerName })
-            .Select(g => new CustomerInfoDto
-            {
-                CustomerId = g.Min(c => c.CustomerId),
-                CustomerCode = g.Key.CustomerCode,
-                CustomerName = g.Key.CustomerName,
-                CustomerType = g.Select(c => c.CustomerType).FirstOrDefault(),
-                IsActive = g.Select(c => c.IsActive).FirstOrDefault(),
-                Province = g.Select(c => c.Province).FirstOrDefault(),
-                City = g.Select(c => c.City).FirstOrDefault(),
-                AddressLine = g.Select(c => c.AddressLine).FirstOrDefault(),
-                ZipCode = g.Select(c => c.ZipCode).FirstOrDefault(),
-                SubdCustomers = g
-                    .Where(c => !string.IsNullOrWhiteSpace(c.SubdCustCode) || !string.IsNullOrWhiteSpace(c.SubdCustName))
-                    .Select(c => (Code: c.SubdCustCode ?? string.Empty, Name: c.SubdCustName ?? string.Empty))
-                    .Distinct()
-                    .Select(x => new SubdCustInfoDto
+                CustomerId = c.CustomerId,
+                CustomerCode = c.CustomerCode,
+                CustomerName = c.CustomerName,
+                CustomerType = c.CustomerType,
+                IsActive = c.IsActive,
+                Province = c.Province,
+                City = c.City,
+                AddressLine = c.AddressLine,
+                ZipCode = c.ZipCode,
+                SubdCustomers = c.SubdCustomers
+                    .OrderBy(m => m.SubdCustomerId)
+                    .Select(m => new SubdCustInfoDto
                     {
-                        SubdCustCode = x.Code,
-                        SubdCustName = x.Name
+                        SubdCustCode = m.SubdCustCode,
+                        SubdCustName = m.SubdCustName
                     })
                     .ToList()
             })
-            .OrderBy(c => c.CustomerName)
-            .ToList();
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
     }
 }

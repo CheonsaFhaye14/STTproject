@@ -49,11 +49,11 @@ public partial class User
 
     public virtual ICollection<SubDistributor> SubDistributorUpdatedByNavigations { get; set; } = new List<SubDistributor>();
 
+    public virtual ICollection<SubdCustomer> SubdCustomerCreatedByNavigations { get; set; } = new List<SubdCustomer>();
+
+    public virtual ICollection<SubdCustomer> SubdCustomerUpdatedByNavigations { get; set; } = new List<SubdCustomer>();
+
     public virtual ICollection<SubdItem> SubdItemCreatedByNavigations { get; set; } = new List<SubdItem>();
 
     public virtual ICollection<SubdItem> SubdItemUpdatedByNavigations { get; set; } = new List<SubdItem>();
-
-    public virtual ICollection<TestCustomer> TestCustomerCreatedByNavigations { get; set; } = new List<TestCustomer>();
-
-    public virtual ICollection<TestCustomer> TestCustomerUpdatedByNavigations { get; set; } = new List<TestCustomer>();
 }

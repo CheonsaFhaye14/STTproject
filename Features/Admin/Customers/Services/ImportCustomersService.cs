@@ -17,10 +17,10 @@ public sealed class ImportCustomersService
     private static readonly IReadOnlyDictionary<string, string[]> RequiredHeaderMap =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Customer Code"]  = new[] { "CustomerCode", "Customer Code", "code", "SHIPTOCODE", "Ship To Code" },
-            ["Customer Name"]  = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name","BILLTONAME" },
-            ["Province"]       = new[] { "Province", "Subd Address (Province)" },
-            ["City"]           = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)", "City / Municipality" },
+            ["Customer Code"] = new[] { "CustomerCode", "Customer Code", "code", "SHIPTOCODE", "Ship To Code" },
+            ["Customer Name"] = new[] { "CustomerName", "Customer Name", "name", "SHIPTONAME", "Ship To Name", "BILLTONAME" },
+            ["Province"] = new[] { "Province", "Subd Address (Province)" },
+            ["City"] = new[] { "City", "CITY/MUNICIPALITY", "municipality", "SUBD ADDRESS (CITY)", "City / Municipality" },
         };
 
     private static readonly IReadOnlyDictionary<string, string[]> OptionalHeaderMap =
@@ -28,9 +28,9 @@ public sealed class ImportCustomersService
         {
             ["Subd Cust Code"] = new[] { "SubdCustCode", "Subd Cust Code", "Subd Customer Code" },
             ["Subd Cust Name"] = new[] { "SubdCustName", "Subd Cust Name", "Subd Store Name" },
-            ["Address Line"]   = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)", "SUBD ADDRESS (BRGY)" },
-            ["Zip Code"]       = new[] { "ZipCode", "Zip Code", "zip" , "ZIP CODE (OPTIONAL)", "Zip Code (Optional)" },
-            ["Customer Type"]  = new[] { "CustomerType", "Customer Type", "type", "CUSTOMER TYPE (OPTIONAL)", "Customer Type (Optional)" }, 
+            ["Address Line"] = new[] { "AddressLine", "Address Line", "barangay", "SUBD ADDRESS (STREET/BRGY)", "Subd Address (Street/Brgy)", "SUBD ADDRESS (BRGY)" },
+            ["Zip Code"] = new[] { "ZipCode", "Zip Code", "zip", "ZIP CODE (OPTIONAL)", "Zip Code (Optional)" },
+            ["Customer Type"] = new[] { "CustomerType", "Customer Type", "type", "CUSTOMER TYPE (OPTIONAL)", "Customer Type (Optional)" },
         };
 
     private static readonly IReadOnlyDictionary<string, string> AliasLookup = BuildAliasLookup();
@@ -120,7 +120,7 @@ public sealed class ImportCustomersService
         var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? detection.HeaderRowNumber;
         var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        result.OriginalHeaders = detection.AllHeaderColumns.Select(h => h.Header).ToList(); 
+        result.OriginalHeaders = detection.AllHeaderColumns.Select(h => h.Header).ToList();
 
         for (int rowNumber = detection.HeaderRowNumber + 1; rowNumber <= lastRow; rowNumber++)
         {
@@ -158,8 +158,8 @@ public sealed class ImportCustomersService
             if (string.IsNullOrWhiteSpace(rowResult.CustomerCode) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerName) &&
                 string.IsNullOrWhiteSpace(rowResult.CustomerType) &&
-                string.IsNullOrWhiteSpace(rowResult.Province) && 
-                string.IsNullOrWhiteSpace(rowResult.City) )
+                string.IsNullOrWhiteSpace(rowResult.Province) &&
+                string.IsNullOrWhiteSpace(rowResult.City))
             {
                 continue;
             }
@@ -168,8 +168,6 @@ public sealed class ImportCustomersService
             {
                 CustomerCode = rowResult.CustomerCode,
                 CustomerName = rowResult.CustomerName,
-                SubdCustCode = rowResult.SubdCustCode,        
-                SubdCustName = rowResult.SubdCustName,      
                 CustomerType = rowResult.CustomerType,
                 SubDistributorId = subdistributorId,
                 IsActive = true,
@@ -188,19 +186,28 @@ public sealed class ImportCustomersService
                 rowResult.Issues.Add(msg);
             }
 
-            var dupCheck = await CustomerImportValidation.ValidateDuplicateAsync(
-                _customerService, rowResult.CustomerCode, rowResult.CustomerName, subdistributorId,
-                rowResult.SubdCustCode, rowResult.SubdCustName);
+            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode))
+            {
+                var dupCheck = await CustomerImportValidation.ValidateDuplicateAsync(
+                    _customerService, rowResult.CustomerCode, subdistributorId,
+                    rowResult.SubdCustCode, rowResult.SubdCustName);
 
-            if (dupCheck.Outcome == ImportDuplicateOutcome.ExactDuplicate)
-            {
-                rowResult.IsAlreadyImported = true;
-                rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
-            }
-            else if (dupCheck.Outcome == ImportDuplicateOutcome.FillableBlank)
-            {
-                rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
-                rowResult.Notes.Add("The existing row without a Subd mapping will be filled in with this Subd Customer Code / Store Name.");
+                switch (dupCheck.Outcome)
+                {
+                    case ImportDuplicateOutcome.ExactDuplicate:
+                        rowResult.IsAlreadyImported = true;
+                        rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
+                        break;
+
+                    case ImportDuplicateOutcome.AddMapping:
+                        rowResult.ExistingCustomerIdToUpdate = dupCheck.ExistingCustomerId;
+                        rowResult.Notes.Add("This Subd Customer Code / Store Name will be added to the existing customer.");
+                        break;
+
+                    case ImportDuplicateOutcome.MappingConflict:
+                        rowResult.Issues.Add(dupCheck.IssueMessage!);
+                        break;
+                }
             }
 
             // Cross-check the location against the geographic reference data — only when both are provided.
@@ -221,19 +228,17 @@ public sealed class ImportCustomersService
                 }
             }
 
-            // Preview updates to an existing customer group (same Subd, Customer Code and Customer Name).
+            // Preview updates to the existing customer (same Subd and Customer Code).
             // Read-only: nothing is saved until the user commits.
-            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode) && !string.IsNullOrWhiteSpace(rowResult.CustomerName))
+            if (!string.IsNullOrWhiteSpace(rowResult.CustomerCode))
             {
                 var existingGroup = await _customerService.GetCustomersByKeyAsync(
-                    subdistributorId, rowResult.CustomerCode, rowResult.CustomerName);
+                    subdistributorId, rowResult.CustomerCode);
 
                 if (existingGroup.Count > 0)
                 {
                     // The file row has no Subd mapping, so it can only update details.
-                    // Mark it as already existing so the commit never inserts a blank-mapping row.
-                    if (string.IsNullOrWhiteSpace(rowResult.SubdCustCode) &&
-                        string.IsNullOrWhiteSpace(rowResult.SubdCustName) &&
+                    if (SubdCustomerKey.IsBlank(rowResult.SubdCustCode, rowResult.SubdCustName) &&
                         !rowResult.IsAlreadyImported)
                     {
                         rowResult.IsAlreadyImported = true;
@@ -242,18 +247,6 @@ public sealed class ImportCustomersService
 
                     var details = new CustomerDetailsUpdate(
                         rowResult.AddressLine, rowResult.City, rowResult.Province, rowResult.ZipCode, rowResult.CustomerType);
-
-                    // A brand-new Subd mapping becomes another row of the same customer, so any detail
-                    // left blank in the file is copied from the customer's existing row.
-                    if (!rowResult.IsAlreadyImported && rowResult.ExistingCustomerIdToUpdate is null)
-                    {
-                        var source = existingGroup[0];
-                        if (string.IsNullOrWhiteSpace(rowResult.AddressLine)) rowResult.AddressLine = source.AddressLine;
-                        if (string.IsNullOrWhiteSpace(rowResult.City)) rowResult.City = source.City;
-                        if (string.IsNullOrWhiteSpace(rowResult.Province)) rowResult.Province = source.Province;
-                        if (string.IsNullOrWhiteSpace(rowResult.CustomerType)) rowResult.CustomerType = source.CustomerType;
-                        if (rowResult.ZipCode is null or 0) rowResult.ZipCode = source.ZipCode;
-                    }
 
                     var changes = existingGroup.SelectMany(c => details.Apply(c, commit: false)).Distinct().ToList();
                     if (changes.Count > 0)
@@ -275,10 +268,10 @@ public sealed class ImportCustomersService
         }
 
         foreach (var custGroup in result.Rows.GroupBy(r => new
-         {
-             Code = (r.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
-             Name = (r.CustomerName ?? string.Empty).Trim().ToUpperInvariant()
-         }))
+        {
+            Code = (r.CustomerCode ?? string.Empty).Trim().ToUpperInvariant(),
+            Name = (r.CustomerName ?? string.Empty).Trim().ToUpperInvariant()
+        }))
         {
             var groupRows = custGroup.OrderBy(r => r.RowNumber).ToList();
 
@@ -337,7 +330,7 @@ public sealed class ImportCustomersService
         int bestCandidateRowNumber = -1;
         string[] bestCandidateHeaders = Array.Empty<string>();
         List<string> bestCandidateMissing = new();
-        List<string> bestCandidateUnmatchedHeaders = new(); 
+        List<string> bestCandidateUnmatchedHeaders = new();
 
         for (int rowNumber = 1; rowNumber <= scanLimit; rowNumber++)
         {
@@ -362,7 +355,7 @@ public sealed class ImportCustomersService
 
                 if (AliasLookup.TryGetValue(normalized, out var canonicalKey))
                 {
-                    matchedHeaderTexts.Add(cell.GetString().Trim());  
+                    matchedHeaderTexts.Add(cell.GetString().Trim());
                     if (foundCanonicalKeys.Add(canonicalKey))
                     {
                         columnIndex[canonicalKey.Replace(" ", "")] = cell.Address.ColumnNumber;
@@ -423,21 +416,26 @@ public sealed class ImportCustomersService
         if (validRows.Count == 0) return 0;
 
         var committed = 0;
-        // Reuses the first-created customer for any later row that's an exact duplicate
-        // within this same commit batch, instead of inserting it again.
+
+        // Exact duplicate rows within this batch reuse the first row's result.
         var createdByDupKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // A customer is one row per (Subd, Customer Code). When several file rows create the same
+        // new customer with different subd mappings, the first row creates it and the rest add mappings.
+        var createdByCustomerCode = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var row in validRows)
         {
             var dupKey = $"{row.CustomerCode}|{row.CustomerName}|{row.SubdCustCode}|{row.SubdCustName}";
+            var codeKey = row.CustomerCode.Trim();
 
             try
             {
-                // Update the existing group's details first, so rows that are "already imported"
+                // Update the existing customer's details first, so rows that are "already imported"
                 // (which `continue` below) still get their details updated.
                 if (row.DetailsUpdate is not null && !row.IsDuplicateInFile)
                     await _customerService.UpdateGroupDetailsAsync(
-                        subdistributorId, row.CustomerCode, row.CustomerName, row.DetailsUpdate, userId);
+                        subdistributorId, row.CustomerCode, row.DetailsUpdate, userId);
 
                 if (row.IsDuplicateInFile && createdByDupKey.TryGetValue(dupKey, out var reusedId))
                 {
@@ -456,9 +454,17 @@ public sealed class ImportCustomersService
 
                 if (row.ExistingCustomerIdToUpdate is int existingId)
                 {
-                    var updated = await _customerService.FillBlankSubdMappingAsync(
+                    // Existing customer, new subd mapping.
+                    var updated = await _customerService.AddSubdMappingAsync(
                         existingId, row.SubdCustCode, row.SubdCustName, userId);
                     row.CustomerId = updated?.CustomerId ?? existingId;
+                }
+                else if (createdByCustomerCode.TryGetValue(codeKey, out var batchCustomerId))
+                {
+                    // Customer was created earlier in this commit: add this row's mapping to it.
+                    await _customerService.AddSubdMappingAsync(
+                        batchCustomerId, row.SubdCustCode, row.SubdCustName, userId);
+                    row.CustomerId = batchCustomerId;
                 }
                 else
                 {
@@ -466,8 +472,6 @@ public sealed class ImportCustomersService
                     {
                         CustomerCode = row.CustomerCode,
                         CustomerName = row.CustomerName,
-                        SubdCustCode = row.SubdCustCode,
-                        SubdCustName = row.SubdCustName,
                         CustomerType = row.CustomerType,
                         SubDistributorId = subdistributorId,
                         IsActive = true,
@@ -475,9 +479,16 @@ public sealed class ImportCustomersService
                         Province = row.Province,
                         City = row.City,
                         ZipCode = row.ZipCode,
-                        CreatedBy = userId
+                        CreatedBy = userId,
+                        Mappings = new List<SubdMappingDto>
+                        {
+                            new() { SubdCustCode = row.SubdCustCode, SubdCustName = row.SubdCustName }
+                        }
                     });
                     row.CustomerId = created?.CustomerId;
+
+                    if (row.CustomerId is int createdId)
+                        createdByCustomerCode[codeKey] = createdId;
                 }
 
                 if (row.CustomerId is int newId)
@@ -487,7 +498,7 @@ public sealed class ImportCustomersService
             }
             catch (Exception ex)
             {
-                row.Issues.Add($"Save failed: {ex.Message}");
+                row.Issues.Add($"Save failed: {ex.InnerException?.Message ?? ex.Message}");
                 Debug.WriteLine($"Error committing row {row.RowNumber}: {ex}");
                 row.IsSuccess = false;
             }
@@ -495,7 +506,7 @@ public sealed class ImportCustomersService
 
         return committed;
     }
-    
+
     // PHASE 3 — build a downloadable Excel report: original columns + an "Error" column, failed rows only.
     public byte[] GenerateErrorReportExcel(
         CustomerImportResult result,
@@ -503,23 +514,23 @@ public sealed class ImportCustomersService
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Errors");
-    
+
         var headers = result.OriginalHeaders.Count > 0
                 ? result.OriginalHeaders
                 : TemplateHeaders.ToList();
-    
+
         for (int i = 0; i < headers.Count; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
-    
+
         var errorColumn = headers.Count + 1;
         sheet.Cell(1, errorColumn).Value = "Error";
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#000000");
         sheet.Row(1).Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
         sheet.SheetView.FreezeRows(1);
-    
+
         List<(CustomerImportRowResult Row, string Error)> reportRows;
-    
+
         if (entries is null)
         {
             reportRows = result.Rows
@@ -532,14 +543,14 @@ public sealed class ImportCustomersService
             var errorByRow = entries
                 .GroupBy(e => e.RowNumber)
                 .ToDictionary(g => g.Key, g => string.Join("; ", g.Select(e => e.Message).Distinct()));
-    
+
             reportRows = result.Rows
                 .Where(r => errorByRow.ContainsKey(r.RowNumber))
                 .OrderBy(r => r.RowNumber)
                 .Select(r => (r, errorByRow[r.RowNumber]))
                 .ToList();
         }
-    
+
         int excelRow = 2;
         foreach (var (row, error) in reportRows)
         {
@@ -548,29 +559,29 @@ public sealed class ImportCustomersService
                 row.RawValues.TryGetValue(headers[i], out var value);
                 sheet.Cell(excelRow, i + 1).Value = value ?? string.Empty;
             }
-    
+
             var errorCell = sheet.Cell(excelRow, errorColumn);
             errorCell.Value = error;
             errorCell.Style.Font.FontColor = XLColor.FromHtml("#A32D2D");
             errorCell.Style.Font.Bold = true;
-    
+
             excelRow++;
         }
-    
+
         sheet.Columns().AdjustToContents();
-    
+
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
         return ms.ToArray();
     }
-    
+
     private static readonly string[] TemplateHeaders =
     {
         "SUBD CUSTOMER CODE", "SUBD STORE NAME", "ADDRESS LINE",
         "CITY / MUNICIPALITY", "PROVINCE", "SHIPTOCODE", "SHIPTONAME",
         "ZIP CODE (OPTIONAL)", "CUSTOMER TYPE (OPTIONAL)"
     };
-        
+
     public async Task<byte[]> GenerateTemplateExcelAsync()
     {
         using var workbook = new XLWorkbook();

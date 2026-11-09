@@ -17,9 +17,9 @@ public static class CustomerValidations
         return field.Required ? $"{field.Label} *" : field.Label;
     }
 
+    // excludeCustomerId: the customer being edited, so its own code doesn't count as a duplicate.
     public static async Task<Dictionary<string, string>> ValidateAddCustomerAsync(
-        Customer customer, IAdminCustomerService service, IEnumerable<int>? excludeIds = null
-    )
+        Customer customer, IAdminCustomerService service, int? excludeCustomerId = null)
     {
         var errors = new Dictionary<string, string>();
         if (customer.SubDistributorId <= 0)
@@ -37,16 +37,15 @@ public static class CustomerValidations
             errors[AddCustomer.customername.Key] = AddCustomer.customername.ErrorMessage;
         }
 
-        if (!string.IsNullOrWhiteSpace(customer.CustomerCode))
+        if (!string.IsNullOrWhiteSpace(customer.CustomerCode) && customer.SubDistributorId > 0)
         {
-            if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeIds))
+            if (await service.CustomerCodeExistsAsync(customer.CustomerCode, customer.SubDistributorId, excludeCustomerId))
             {
                 errors[AddCustomer.customercode.Key] = "This Customer Code already exists for the selected Subdistributor.";
             }
         }
         return errors;
     }
-
 }
 
 

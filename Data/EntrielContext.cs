@@ -21,7 +21,6 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
-    public virtual DbSet<CustomerMapping> CustomerMappings { get; set; }
 
     public virtual DbSet<DeletedSalesInvoice> DeletedSalesInvoices { get; set; }
 
@@ -49,6 +48,12 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
 
+    public virtual DbSet<MigBaselineInvoice> MigBaselineInvoices { get; set; }
+
+    public virtual DbSet<MigCustomerMap> MigCustomerMaps { get; set; }
+
+    public virtual DbSet<MigCustomerResolution> MigCustomerResolutions { get; set; }
+
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
     public virtual DbSet<SalesInvoiceDeletionBatch> SalesInvoiceDeletionBatches { get; set; }
@@ -57,11 +62,13 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<SubDistributor> SubDistributors { get; set; }
 
+    public virtual DbSet<SubdCustomer> SubdCustomers { get; set; }
+
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
-    public virtual DbSet<TestCustomer> TestCustomers { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
+
+    public virtual DbSet<VwSubdCustomerKey> VwSubdCustomerKeys { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
@@ -144,7 +151,7 @@ public partial class EntrielContext : DbContext
 
             entity.ToTable("Customer");
 
-            entity.HasIndex(e => new { e.CustomerCode, e.CustomerName, e.SubDistributorId, e.SubdCustCode, e.SubdCustName }, "UQ_Customer_Code_Name").IsUnique();
+            entity.HasIndex(e => new { e.SubDistributorId, e.CustomerCode }, "UQ_Customer_Subd_Code").IsUnique();
 
             entity.Property(e => e.AddressLine).HasMaxLength(255);
             entity.Property(e => e.City).HasMaxLength(100);
@@ -162,12 +169,6 @@ public partial class EntrielContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Province).HasMaxLength(100);
-            entity.Property(e => e.SubdCustCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.SubdCustName)
-                .HasMaxLength(200)
-                .IsUnicode(false);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CustomerCreatedByNavigations)
@@ -184,15 +185,26 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_Customer_UpdatedBy");
         });
 
-        modelBuilder.Entity<CustomerMapping>(entity =>
+        modelBuilder.Entity<CustomerBackup20261109>(entity =>
         {
-            entity.ToTable("CustomerMapping");
+            entity
+                .HasNoKey()
+                .ToTable("Customer_Backup_20261109");
 
-            entity.HasIndex(e => new { e.SubDistributorId, e.SubdCustCode }, "UX_CustomerMapping_Subd_SourceCode").IsUnique();
-
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())", "DF_CustomerMapping_CreatedDate")
-                .HasColumnType("datetime");
+            entity.Property(e => e.AddressLine).HasMaxLength(255);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.CustomerCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerId).ValueGeneratedOnAdd();
+            entity.Property(e => e.CustomerName)
+                .HasMaxLength(150)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerType)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Province).HasMaxLength(100);
             entity.Property(e => e.SubdCustCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -200,16 +212,6 @@ public partial class EntrielContext : DbContext
                 .HasMaxLength(200)
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.Customer).WithMany(p => p.CustomerMappings)
-                .HasForeignKey(d => d.CustomerId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CustomerMapping_Customer");
-
-            entity.HasOne(d => d.SubDistributor).WithMany(p => p.CustomerMappings)
-                .HasForeignKey(d => d.SubDistributorId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CustomerMapping_SubDistributor");
         });
 
         modelBuilder.Entity<DeletedSalesInvoice>(entity =>
@@ -540,6 +542,49 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_ItemsUomPriceHistory_ItemsUom");
         });
 
+        modelBuilder.Entity<MigBaselineInvoice>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("MigBaseline_Invoices");
+
+            entity.Property(e => e.Amount).HasColumnType("decimal(38, 2)");
+        });
+
+        modelBuilder.Entity<MigCustomerMap>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("MigCustomerMap");
+
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.CustomerCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerId).ValueGeneratedOnAdd();
+            entity.Property(e => e.Scode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("SCode");
+            entity.Property(e => e.Sname)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasColumnName("SName");
+        });
+
+        modelBuilder.Entity<MigCustomerResolution>(entity =>
+        {
+            entity.HasKey(e => e.CustomerId);
+
+            entity.ToTable("MigCustomerResolution");
+
+            entity.Property(e => e.CustomerId).ValueGeneratedNever();
+            entity.Property(e => e.Action)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Note).HasMaxLength(300);
+        });
+
         modelBuilder.Entity<SalesInvoice>(entity =>
         {
             entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1AE9FBEC78");
@@ -665,6 +710,37 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_SubDistributor_UpdatedBy");
         });
 
+        modelBuilder.Entity<SubdCustomer>(entity =>
+        {
+            entity.ToTable("SubdCustomer");
+
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())", "DF_SubdCustomer_Created")
+                .HasColumnType("datetime");
+            entity.Property(e => e.SubdCustCode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("", "DF_SubdCustomer_Code");
+            entity.Property(e => e.SubdCustName)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasDefaultValue("", "DF_SubdCustomer_Name");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.SubdCustomerCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("FK_SubdCustomer_CreatedBy");
+
+            entity.HasOne(d => d.Customer).WithMany(p => p.SubdCustomers)
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SubdCustomer_Customer");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.SubdCustomerUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_SubdCustomer_UpdatedBy");
+        });
+
         modelBuilder.Entity<SubdItem>(entity =>
         {
             entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656501717AC");
@@ -700,41 +776,6 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
         });
 
-        modelBuilder.Entity<TestCustomer>(entity =>
-        {
-            entity.HasKey(e => e.CustomerId).HasName("PK__TestCust__A4AE64D8C69B0AA2");
-
-            entity.ToTable("TestCustomer");
-
-            entity.HasIndex(e => new { e.CustomerCode, e.CustomerName }, "UQ_TestCustomer_Code_Name").IsUnique();
-
-            entity.Property(e => e.AddressLine).HasMaxLength(255);
-            entity.Property(e => e.City).HasMaxLength(100);
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.CustomerCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.CustomerName)
-                .HasMaxLength(150)
-                .IsUnicode(false);
-            entity.Property(e => e.CustomerType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.Province).HasMaxLength(100);
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.TestCustomerCreatedByNavigations)
-                .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK_TestCustomer_CreatedBy");
-
-            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.TestCustomerUpdatedByNavigations)
-                .HasForeignKey(d => d.UpdatedBy)
-                .HasConstraintName("FK_TestCustomer_UpdatedBy");
-        });
-
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C13EF7F33");
@@ -756,8 +797,24 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
             entity.Property(e => e.Username).HasMaxLength(50);
         });
+
+        modelBuilder.Entity<VwSubdCustomerKey>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("vw_SubdCustomerKey");
+
+            entity.Property(e => e.SubdCustCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SubdCustName)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+        });
         modelBuilder.HasSequence<int>("ImportBatchIdSequence");
+        modelBuilder.HasSequence<int>("ImportErrorEvidenceIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorIdSequence");
+        modelBuilder.HasSequence<int>("ImportFileIdSequence");
 
         OnModelCreatingPartial(modelBuilder);
     }

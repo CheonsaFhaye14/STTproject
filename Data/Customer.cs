@@ -33,17 +33,13 @@ public partial class Customer
 
     public int? ZipCode { get; set; }
 
-    public string? SubdCustCode { get; set; }
-
-    public string? SubdCustName { get; set; }
-
     public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual ICollection<CustomerMapping> CustomerMappings { get; set; } = new List<CustomerMapping>();
 
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 
     public virtual SubDistributor SubDistributor { get; set; } = null!;
+
+    public virtual ICollection<SubdCustomer> SubdCustomers { get; set; } = new List<SubdCustomer>();
 
     public virtual User? UpdatedByNavigation { get; set; }
 }

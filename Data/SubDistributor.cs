@@ -33,8 +33,6 @@ public partial class SubDistributor
 
     public virtual User? CreatedByNavigation { get; set; }
 
-    public virtual ICollection<CustomerMapping> CustomerMappings { get; set; } = new List<CustomerMapping>();
-
     public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();
 
     public virtual User? Encoder { get; set; }

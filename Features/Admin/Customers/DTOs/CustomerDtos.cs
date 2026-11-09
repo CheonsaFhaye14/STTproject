@@ -6,8 +6,6 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int CustomerId { get; set; }
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
-        public string? SubdCustCode { get; set; }
-        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -20,8 +18,6 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public int CustomerId { get; set; }
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
-        public string? SubdCustCode { get; set; }
-        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -33,14 +29,13 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? City { get; set; }
         public string? Province { get; set; }
         public int? ZipCode { get; set; }
+        public List<SubdMappingDto> Mappings { get; set; } = new();
     }
 
     public class CustomerCreateDto
     {
         public string? CustomerCode { get; set; }
         public string? CustomerName { get; set; }
-        public string? SubdCustCode { get; set; }
-        public string? SubdCustName { get; set; }
         public string? CustomerType { get; set; }
         public int SubDistributorId { get; set; }
         public bool IsActive { get; set; }
@@ -49,27 +44,33 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public string? Province { get; set; }
         public int? ZipCode { get; set; }
         public int? CreatedBy { get; set; }
-    }
 
-    public class CustomerGroupUpdateDto
-    {
-        public int CustomerId { get; set; }
-        public List<int> ExistingIds { get; set; } = new();
+        // How the subdistributor identifies this customer. Blank pairs are ignored.
         public List<SubdMappingDto> Mappings { get; set; } = new();
-    }
-
-    public class SubdMappingDto
-    {
-        public int CustomerId { get; set; }
-        public int SubDistributorId { get; set; }
-        public string? SubdCustCode { get; set; }
-        public string? SubdCustName { get; set; }
     }
 
     public class CustomerUpdateDto : CustomerCreateDto
     {
         public int CustomerId { get; set; }
         public int? UpdatedBy { get; set; }
+    }
+
+    // One SubdCustomer row. SubdCustomerId = 0 means new.
+    public class SubdMappingDto
+    {
+        public int SubdCustomerId { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
+    }
+
+    // A subd code/name pair that already belongs to another customer in the same subdistributor.
+    public class SubdMappingConflictDto
+    {
+        public string SubdCustCode { get; set; } = string.Empty;
+        public string SubdCustName { get; set; } = string.Empty;
+        public int CustomerId { get; set; }
+        public string CustomerCode { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
     }
 
     public class SubDistributorDto
@@ -213,8 +214,11 @@ namespace STTproject.Features.Admin.Customers.DTOs
         public PreparedCustomerGroup(List<CustomerImportRowResult> rows) => Rows = rows ?? new();
     }
 
-    public enum ImportMatchType { None, ExactDuplicate, FillableBlank }
-    public sealed record ImportMatchResult(ImportMatchType MatchType, int? ExistingCustomerId);
+    // ExactDuplicate   the customer already has this subd mapping (or the row has no mapping and the customer exists)
+    // AddMapping       the customer exists; this subd mapping is new and will be added to it
+    // MappingConflict  this subd mapping already belongs to a different customer in the same subdistributor
+    public enum ImportMatchType { None, ExactDuplicate, AddMapping, MappingConflict }
+    public sealed record ImportMatchResult(ImportMatchType MatchType, int? ExistingCustomerId, string? OwnerCustomerCode = null);
     public sealed record CustomerImportIssue(int RowNumber, string CustomerCode, string Message);
     public sealed record CustomerErrorReportEntry(int RowNumber, string ErrorType, string Message);
 }

@@ -48,7 +48,8 @@
             </ChildContent>
         </FormSection>
 
-        @if (!isViewMode || (isViewMode && (!string.IsNullOrWhiteSpace(Island) || !string.IsNullOrWhiteSpace(Province) ||
+        @if (!isViewMode || (isViewMode && (!string.IsNullOrWhiteSpace(Island) || !string.IsNullOrWhiteSpace(Province)
+        ||
         !string.IsNullOrWhiteSpace(City) || !string.IsNullOrWhiteSpace(AddressLine) || ZipCode.HasValue)))
         {
             <FormSection Icon="ti ti-map-pin" Title="Customer Address" Optional="true" Summary="@GetAddressSummary()"
@@ -95,15 +96,15 @@
             </FormSection>
         }
         @{
-            bool hasAnyPairData = SubdCustPairs.Any(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) ||
-    !string.IsNullOrWhiteSpace(p.SubdCustName));
+            var filledPairCount = SubdCustPairs.Count(p => !SubdCustomerKey.IsBlank(p.SubdCustCode, p.SubdCustName));
+            bool hasAnyPairData = filledPairCount > 0;
         }
 
         @if (!isViewMode || hasAnyPairData)
         {
             <FormSection Icon="ti ti-link" Title="Subd Customer Mapping" Optional="true"
-                         Summary="@(hasAnyPairData ? $"{SubdCustPairs.Count(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))} mapping(s) added" : "No mappings yet")"
-                         Expandable="true" IsExpanded="isEdit || hasAnyPairData">
+                         Summary="@(hasAnyPairData ? $"{filledPairCount} mapping(s) added" : "No mappings yet")" Expandable="true"
+                         IsExpanded="isEdit || hasAnyPairData">
                 <ChildContent>
                     <AddTable TItem="SubdCustPairInput" Items="SubdCustPairs"
                               Columns="@(new List<string> { "SubdCustCode", "SubdCustName" })"
@@ -170,87 +171,14 @@
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
-    private bool ShowSubdMapping { get; set; } = false;
-    private List<SubdCustPairInput> SubdCustPairs { get; set; } = new() { new SubdCustPairInput() };
-    private Dictionary<int, string> SubdPairErrors { get; set; } = new();
-    private string? SubdPairsGeneralError { get; set; }
-    private void AddSubdPair() => SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
+    [Parameter] public int? CustomerId { get; set; }
 
-    private void RemoveSubdPair(int idx)
-    {
-        if (SubdCustPairs.Count == 0 ||
-            SubdCustPairs.All(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName)))
-        {
-            SubdCustPairs.Add(new SubdCustPairInput { SubDistributorId = SubDistributorId });
-        }
-    }
-
-    private void ValidateSubdPairs()
-    {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        for (int i = 0; i < SubdCustPairs.Count; i++)
-        {
-            var pair = SubdCustPairs[i];
-            var hasCode = !string.IsNullOrWhiteSpace(pair.SubdCustCode);
-            var hasName = !string.IsNullOrWhiteSpace(pair.SubdCustName);
-
-            if (!hasCode && !hasName)
-                continue;
-
-            var code = (pair.SubdCustCode ?? string.Empty).Trim();
-            var name = (pair.SubdCustName ?? string.Empty).Trim();
-            var key = $"{code}|{name}".ToUpperInvariant();
-
-            if (!seen.Add(key))
-            {
-                SubdPairErrors[i] = "This Subd Customer Code / Store Name pair is already entered above.";
-            }
-        }
-    }
-
-    private static List<SubdCustPairInput> MergePartialPairs(List<SubdCustPairInput> pairs)
-    {
-        var result = new List<SubdCustPairInput>();
-        var codeOnly = new Queue<SubdCustPairInput>();
-        var nameOnly = new Queue<SubdCustPairInput>();
-
-        foreach (var pair in pairs)
-        {
-            var hasCode = !string.IsNullOrWhiteSpace(pair.SubdCustCode);
-            var hasName = !string.IsNullOrWhiteSpace(pair.SubdCustName);
-
-            if (pair.CustomerId.HasValue || (hasCode && hasName) || (!hasCode && !hasName))
-            {
-                result.Add(pair); // existing mapping, already complete, or fully blank — leave untouched
-                continue;
-            }
-
-            if (hasCode) codeOnly.Enqueue(pair);
-            else nameOnly.Enqueue(pair);
-        }
-
-        while (codeOnly.Count > 0 && nameOnly.Count > 0)
-        {
-            var codeRow = codeOnly.Dequeue();
-            var nameRow = nameOnly.Dequeue();
-            result.Add(new SubdCustPairInput
-            {
-                SubDistributorId = codeRow.SubDistributorId,
-                SubdCustCode = codeRow.SubdCustCode,
-                SubdCustName = nameRow.SubdCustName
-            });
-        }
-
-        result.AddRange(codeOnly);
-        result.AddRange(nameOnly);
-
-        return result;
-    }
-    public CustomerUpdateDto? PendingUpdateDto { get; private set; }
-
+    private bool isEdit => CustomerId.HasValue;
     private bool isViewMode = false;
+    private bool isSubmitting = false;
+    private int? CurrentUserId => UserContextService.UserId;
 
+    // ── Customer fields ───────────────────────────────────────────────
     private int SubDistributorId { get; set; }
     private string? SelectedSubDistributorName { get; set; }
     private List<STTproject.Features.Admin.Customers.DTOs.SubDistributorDto> SubDistributors { get; set; } = new();
@@ -268,26 +196,227 @@
     private List<string?> Provinces { get; set; } = new();
     private List<string> ExistingCustomerTypes { get; set; } = new();
 
-    // Audit fields (view mode only)
+    // ── Audit fields (view mode only) ─────────────────────────────────
     private DateTime CreatedDate { get; set; }
     private DateTime? UpdatedDate { get; set; }
-    private int? CreatedById { get; set; }
-    private int? UpdatedById { get; set; }
     private string? CreatedByName { get; set; }
     private string? UpdatedByName { get; set; }
-
-    private Dictionary<string, string> Errors { get; set; } = new();
-    private bool ShowValidationErrors { get; set; } = false;
-    private bool isSubmitting = false;
     private string? CreatedDateDisplay => CreatedDate.ToString("MMM d, yyyy hh:mm tt");
     private string? UpdatedDateDisplay => UpdatedDate?.ToString("MMM d, yyyy hh:mm tt");
-    [Parameter] public int? CustomerId { get; set; }
-    private bool isEdit => CustomerId.HasValue;
-    private int? CurrentUserId => UserContextService.UserId;
 
-    private string GetFieldError(string key) =>
-        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+    // ── Validation ────────────────────────────────────────────────────
+    private Dictionary<string, string> Errors { get; set; } = new();
+    private bool ShowValidationErrors { get; set; } = false;
+    private string GetFieldError(string key) => Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
 
+    // ── Subd mappings ─────────────────────────────────────────────────
+    // Each row is one SubdCustomer. SubdCustomerId is set for rows loaded from the database.
+    private sealed class SubdCustPairInput
+    {
+        public int? SubdCustomerId { get; set; }
+        public string? SubdCustCode { get; set; }
+        public string? SubdCustName { get; set; }
+    }
+
+    private List<SubdCustPairInput> SubdCustPairs { get; set; } = new() { new SubdCustPairInput() };
+    private Dictionary<int, string> SubdPairErrors { get; set; } = new();
+    private string? SubdPairsGeneralError { get; set; }
+
+    private void AddSubdPair() => SubdCustPairs.Add(new SubdCustPairInput());
+
+    // AddTable removes the row itself; this keeps one empty row available to type into.
+    private void RemoveSubdPair(int idx)
+    {
+        if (SubdCustPairs.Count == 0 ||
+            SubdCustPairs.All(p => !SubdCustomerKey.IsBlank(p.SubdCustCode, p.SubdCustName)))
+        {
+            SubdCustPairs.Add(new SubdCustPairInput());
+        }
+    }
+
+    // Non-blank rows as DTOs. A code-only or name-only row is a valid mapping on its own.
+    private List<SubdMappingDto> BuildMappings() =>
+        SubdCustPairs
+            .Where(p => !SubdCustomerKey.IsBlank(p.SubdCustCode, p.SubdCustName))
+            .Select(p => new SubdMappingDto
+            {
+                SubdCustomerId = p.SubdCustomerId ?? 0,
+                SubdCustCode = SubdCustomerKey.Code(p.SubdCustCode),
+                SubdCustName = SubdCustomerKey.Name(p.SubdCustName)
+            })
+            .ToList();
+
+    // Checks lengths, repeats within the form, and pairs already used by another customer.
+    private async Task ValidateSubdPairsAsync()
+    {
+        var rowByKey = new Dictionary<string, int>();
+
+        for (int i = 0; i < SubdCustPairs.Count; i++)
+        {
+            var pair = SubdCustPairs[i];
+            var code = SubdCustomerKey.Code(pair.SubdCustCode);
+            var name = SubdCustomerKey.Name(pair.SubdCustName);
+
+            if (code.Length == 0 && name.Length == 0)
+                continue;
+
+            if (code.Length > SubdCustomerKey.CodeMaxLength)
+            {
+                SubdPairErrors[i] = $"Subd Customer Code can be at most {SubdCustomerKey.CodeMaxLength} characters.";
+                continue;
+            }
+            if (name.Length > SubdCustomerKey.NameMaxLength)
+            {
+                SubdPairErrors[i] = $"Subd Store Name can be at most {SubdCustomerKey.NameMaxLength} characters.";
+                continue;
+            }
+
+            if (!rowByKey.TryAdd(SubdCustomerKey.Compare(code, name), i))
+                SubdPairErrors[i] = "This Subd Customer Code / Store Name pair is already entered above.";
+        }
+
+        if (SubdPairErrors.Count > 0 || SubDistributorId <= 0 || rowByKey.Count == 0)
+            return;
+
+        var conflicts = await AdminCustomerService.FindMappingConflictsAsync(SubDistributorId, BuildMappings(), CustomerId);
+        foreach (var c in conflicts)
+        {
+            if (rowByKey.TryGetValue(SubdCustomerKey.Compare(c.SubdCustCode, c.SubdCustName), out var idx))
+                SubdPairErrors[idx] = $"Already mapped to customer {c.CustomerCode} – {c.CustomerName}.";
+        }
+    }
+
+    // ── Load ──────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
+        ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
+        Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
+        Islands = (await GeographicDataService.GetAllIslandsAsync()).ToList();
+        CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
+
+        if (!isEdit) return;
+
+        isViewMode = true;
+        var customer = await AdminCustomerService.GetCustomerByIdAsync(CustomerId!.Value);
+        if (customer == null) return;
+
+        SubDistributorId = customer.SubDistributorId;
+        SelectedSubDistributorName = SubDistributors
+            .FirstOrDefault(s => s.SubDistributorId == customer.SubDistributorId)?.SubDistributorName;
+        CustomerCode = customer.CustomerCode;
+        CustomerName = customer.CustomerName;
+        CustomerType = customer.CustomerType ?? string.Empty;
+        IsActive = customer.IsActive;
+        City = customer.City;
+        Province = customer.Province;
+        ZipCode = customer.ZipCode;
+        AddressLine = customer.AddressLine;
+
+        CreatedDate = customer.CreatedDate;
+        UpdatedDate = customer.UpdatedDate;
+        CreatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.CreatedBy);
+        if (customer.UpdatedBy != null)
+            UpdatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.UpdatedBy);
+
+        if (!string.IsNullOrWhiteSpace(Province))
+            CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
+
+        SubdCustPairs = customer.Mappings.Count > 0
+            ? customer.Mappings.Select(m => new SubdCustPairInput
+            {
+                SubdCustomerId = m.SubdCustomerId,
+                SubdCustCode = m.SubdCustCode,
+                SubdCustName = m.SubdCustName
+            }).ToList()
+            : new List<SubdCustPairInput> { new SubdCustPairInput() };
+    }
+
+    private void EnableEdit() => isViewMode = false;
+
+    // ── Save (validate → confirm → SubmitAsync) ───────────────────────
+    private CustomerUpdateDto? PendingDto { get; set; }
+
+    private async Task CreateCustomer()
+    {
+        var customerToValidate = new STTproject.Data.Customer
+        {
+            SubDistributorId = SubDistributorId,
+            CustomerCode = CustomerCode ?? string.Empty,
+            CustomerName = CustomerName ?? string.Empty,
+            CustomerType = CustomerType,
+        };
+
+        Errors = await CustomerValidations.ValidateAddCustomerAsync(customerToValidate, AdminCustomerService, CustomerId);
+
+        SubdPairErrors.Clear();
+        SubdPairsGeneralError = null;
+        await ValidateSubdPairsAsync();
+
+        ShowValidationErrors = true;
+        if (Errors.Any() || SubdPairErrors.Any())
+            return;
+
+        PendingDto = new CustomerUpdateDto
+        {
+            CustomerId = CustomerId ?? 0,
+            CustomerCode = CustomerCode,
+            CustomerName = CustomerName,
+            CustomerType = CustomerType,
+            SubDistributorId = SubDistributorId,
+            IsActive = IsActive,
+            AddressLine = AddressLine,
+            City = City,
+            Province = Province,
+            ZipCode = ZipCode,
+            CreatedBy = CurrentUserId,
+            UpdatedBy = CurrentUserId,
+            Mappings = BuildMappings()
+        };
+
+        await OnRequestConfirm.InvokeAsync();
+    }
+
+    public async Task<(bool success, string? error)> SubmitAsync()
+    {
+        if (PendingDto == null) return (false, "No pending data.");
+
+        isSubmitting = true;
+        try
+        {
+            if (isEdit)
+            {
+                var updated = await AdminCustomerService.UpdateCustomerAsync(PendingDto);
+                if (updated == null) return (false, "Customer not found.");
+            }
+            else
+            {
+                await AdminCustomerService.CreateCustomerAsync(PendingDto);
+            }
+            return (true, null);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx
+                && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
+        {
+            // Someone saved the same code or mapping between validation and save.
+            var sqlMessage = ex.InnerException.Message;
+            if (sqlMessage.Contains("vw_SubdCustomerKey", StringComparison.OrdinalIgnoreCase))
+                SubdPairsGeneralError = "One of the Subd Customer Code / Store Name pairs is already mapped to another customer in this subdistributor.";
+            else
+                Errors[CustomerValidations.AddCustomer.customercode.Key] = "This Customer Code already exists for the selected Subdistributor.";
+
+            ShowValidationErrors = true;
+            await InvokeAsync(StateHasChanged);
+            return (false, "Duplicate customer or mapping.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // ── Summaries ─────────────────────────────────────────────────────
     private string GetCustomerInfoSummary()
     {
         var parts = new List<string>();
@@ -307,215 +436,7 @@
         return parts.Count > 0 ? string.Join(" • ", parts) : "Island, province, city, address";
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        SubDistributors = (await AdminCustomerService.GetSubDistributorsAsync()).ToList();
-        ExistingCustomerTypes = (await AdminCustomerService.GetCustomerTypesAsync()).ToList();
-        Provinces = (await GeographicDataService.GetAllProvincesAsync()).ToList();
-        Islands = (await GeographicDataService.GetAllIslandsAsync()).ToList();
-        CitiesMunicipalities = (await GeographicDataService.GetAllCitiesMunicipalitiesAsync()).ToList();
-
-        if (isEdit)
-        {
-            isViewMode = true;
-            ShowSubdMapping = true;
-            var customer = await AdminCustomerService.GetCustomerByIdAsync(CustomerId!.Value);
-            if (customer != null)
-            {
-                SubDistributorId = customer.SubDistributorId;
-                SelectedSubDistributorName = SubDistributors
-                    .FirstOrDefault(s => s.SubDistributorId == customer.SubDistributorId)?.SubDistributorName;
-                CustomerCode = customer.CustomerCode;
-                CustomerName = customer.CustomerName;
-                CustomerType = customer.CustomerType ?? string.Empty;
-                IsActive = customer.IsActive;
-                City = customer.City;
-                Province = customer.Province;
-                ZipCode = customer.ZipCode;
-                AddressLine = customer.AddressLine;
-
-                CreatedDate = customer.CreatedDate;
-                UpdatedDate = customer.UpdatedDate;
-                CreatedById = customer.CreatedBy;
-                UpdatedById = customer.UpdatedBy;
-                CreatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.CreatedBy);
-                if (customer.UpdatedBy != null)
-                    UpdatedByName = await AdminCustomerService.GetUserNameByIdAsync(customer.UpdatedBy);
-
-                if (!string.IsNullOrWhiteSpace(Province))
-                    CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
-
-                var mappings = (await AdminCustomerService.GetCustomerGroupMappingsAsync(CustomerId!.Value)).ToList();
-                SubdCustPairs = mappings.Count > 0
-                    ? mappings.Select(m => new SubdCustPairInput
-                    {
-                        CustomerId = m.CustomerId,
-                        SubDistributorId = m.SubDistributorId,
-                        SubdCustCode = m.SubdCustCode,
-                        SubdCustName = m.SubdCustName
-                    }).ToList()
-                    : new List<SubdCustPairInput> { new SubdCustPairInput { CustomerId = CustomerId, SubDistributorId = SubDistributorId }
-};
-                
-                OriginalGroupIds = mappings.Select(m => m.CustomerId).ToList();
-                if (!OriginalGroupIds.Contains(CustomerId!.Value))
-                    OriginalGroupIds.Add(CustomerId.Value);
-            }
-        }
-    }
-
-    private List<int> OriginalGroupIds { get; set; } = new();
-
-    private void EnableEdit() => isViewMode = false;
-
-    private async Task CreateCustomer()
-    {
-        var customerToValidate = new STTproject.Data.Customer
-        {
-            SubDistributorId = SubDistributorId,
-            CustomerCode = CustomerCode ?? string.Empty,
-            CustomerName = CustomerName ?? string.Empty,
-            CustomerType = CustomerType,
-        };
-
-        Errors = await CustomerValidations.ValidateAddCustomerAsync(
-            customerToValidate,
-            AdminCustomerService,
-            isEdit ? OriginalGroupIds : null);
-
-        SubdPairErrors.Clear();
-        SubdPairsGeneralError = null;
-        ValidateSubdPairs();
-
-        ShowValidationErrors = true;
-
-        if (Errors.Any() || SubdPairErrors.Any())
-            return;
-            
-        if (isEdit)
-        {
-            var anchorPair = SubdCustPairs.FirstOrDefault(p => p.CustomerId == CustomerId);
-
-            PendingUpdateDto = new CustomerUpdateDto
-            {
-                CustomerId = CustomerId!.Value,
-                CustomerCode = CustomerCode,
-                CustomerName = CustomerName,
-                SubdCustCode = anchorPair?.SubdCustCode,
-                SubdCustName = anchorPair?.SubdCustName,
-                CustomerType = CustomerType,
-                SubDistributorId = SubDistributorId,
-                IsActive = IsActive,
-                AddressLine = AddressLine,
-                City = City,
-                Province = Province,
-                ZipCode = ZipCode,
-                UpdatedBy = CurrentUserId
-            };
-
-            var candidatePairs = SubdCustPairs
-                .Where(p => p.CustomerId.HasValue || !string.IsNullOrWhiteSpace(p.SubdCustCode) ||
-!string.IsNullOrWhiteSpace(p.SubdCustName))
-                .ToList();
-
-            var mergedPairs = MergePartialPairs(candidatePairs);
-
-            PendingGroupUpdateDto = new CustomerGroupUpdateDto
-            {
-                CustomerId = CustomerId!.Value,
-                ExistingIds = OriginalGroupIds,
-                Mappings = mergedPairs
-                    .Select(p => new SubdMappingDto
-                    {
-                        CustomerId = p.CustomerId ?? 0,
-                        SubDistributorId = p.CustomerId.HasValue ? p.SubDistributorId : SubDistributorId,
-                        SubdCustCode = p.SubdCustCode,
-                        SubdCustName = p.SubdCustName
-                    }).ToList()
-            };
-        }
-        else
-        {
-            var candidatePairs = SubdCustPairs
-                .Where(p => !string.IsNullOrWhiteSpace(p.SubdCustCode) || !string.IsNullOrWhiteSpace(p.SubdCustName))
-                .ToList();
-
-            var mergedPairs = MergePartialPairs(candidatePairs);
-
-            PendingDtos = mergedPairs.Count == 0
-                ? new List<CustomerCreateDto> { BuildCreateDto(null, null) }
-                : mergedPairs.Select(p => BuildCreateDto(p.SubdCustCode, p.SubdCustName)).ToList();
-        }
-
-        await OnRequestConfirm.InvokeAsync();
-    }
-
-    private List<CustomerCreateDto>? PendingDtos { get; set; }
-    private CustomerCreateDto BuildCreateDto(string? subdCode, string? subdName) => new CustomerCreateDto
-    {
-        CustomerCode = CustomerCode,
-        CustomerName = CustomerName,
-        SubdCustCode = subdCode,
-        SubdCustName = subdName,
-        CustomerType = CustomerType,
-        SubDistributorId = SubDistributorId,
-        IsActive = IsActive,
-        AddressLine = AddressLine,
-        City = City,
-        Province = Province,
-        ZipCode = ZipCode,
-        CreatedBy = CurrentUserId
-    };
-
-    public async Task<(bool success, string? error)> SubmitAsync()
-    {
-        isSubmitting = true;
-        try
-        {
-            if (isEdit)
-            {
-                if (PendingUpdateDto == null || PendingGroupUpdateDto == null)
-                    return (false, "No pending update data.");
-
-                var anchorResult = await AdminCustomerService.UpdateCustomerAsync(PendingUpdateDto);
-                if (anchorResult == null)
-                    return (false, "Customer not found.");
-
-                var (success, error) = await AdminCustomerService.UpdateCustomerGroupAsync(PendingGroupUpdateDto);
-                if (!success)
-                {
-                    Errors[CustomerValidations.AddCustomer.customercode.Key] = error ?? "Update failed.";
-                    ShowValidationErrors = true;
-                    await InvokeAsync(StateHasChanged);
-                }
-                return (success, error);
-            }
-            else
-            {
-                if (PendingDtos == null || PendingDtos.Count == 0) return (false, "No pending data.");
-                foreach (var dto in PendingDtos)
-                {
-                    await AdminCustomerService.CreateCustomerAsync(dto);
-                }
-                return (true, null);
-            }
-        }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
-            when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx
-                && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
-        {
-            Errors[CustomerValidations.AddCustomer.customercode.Key] =
-                "One of the entered Customer Code / Subd Customer Code combinations already exists for the selected subdistributor.";
-            ShowValidationErrors = true;
-            await InvokeAsync(StateHasChanged);
-            return (false, "Duplicate customer mapping.");
-        }
-        finally
-        {
-            isSubmitting = false;
-        }
-    }
-
+    // ── Field handlers ────────────────────────────────────────────────
     private Task OnSubDistributorSelected(STTproject.Features.Admin.Customers.DTOs.SubDistributorDto? sd)
     {
         if (sd != null)
@@ -531,11 +452,13 @@
         CustomerType = selected;
         return Task.CompletedTask;
     }
+
     private async Task OnIslandSelected(string? selected)
     {
         Island = selected;
         await UpdateProvincesBasedOnIsland();
     }
+
     private async Task UpdateProvincesBasedOnIsland()
     {
         if (!string.IsNullOrWhiteSpace(Island))
@@ -548,6 +471,7 @@
             await InvokeAsync(StateHasChanged);
         }
     }
+
     private async Task OnProvinceSelected(string? selected)
     {
         Province = selected;
@@ -559,7 +483,6 @@
         try
         {
             CitiesMunicipalities = (await GeographicDataService.GetProvinceCitiesMunicipalitiesAsync(Province)).ToList();
-
         }
         catch (Exception)
         {
@@ -567,7 +490,7 @@
         }
 
         City = null;
-        Island = (await GeographicDataService.GetIslandByProvinceAsync(Province));
+        Island = await GeographicDataService.GetIslandByProvinceAsync(Province);
         ZipCode = null;
         await InvokeAsync(StateHasChanged);
     }
@@ -586,8 +509,8 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
-        Island = (await GeographicDataService.GetIslandByProvinceAsync(Province));
-        await UpdateZipCode(); // ← now Province is guaranteed to be set before this runs
+        Island = await GeographicDataService.GetIslandByProvinceAsync(Province);
+        await UpdateZipCode();
     }
 
     private async Task UpdateZipCode()
@@ -596,9 +519,7 @@
         {
             try
             {
-                Console.WriteLine($"[ZIP] Province='{Province}' City='{City}'");
                 ZipCode = await GeographicDataService.GetZipCodeAsync(Province, City);
-                Console.WriteLine($"[ZIP] Result={ZipCode}");
             }
             catch (Exception ex)
             {
@@ -619,13 +540,4 @@
             return onCancel.InvokeAsync();
         return Task.CompletedTask;
     }
-    private sealed class SubdCustPairInput
-    {
-        public int? CustomerId { get; set; }
-        public int SubDistributorId { get; set; }
-        public string? SubdCustCode { get; set; }
-        public string? SubdCustName { get; set; }
-    }
-    private CustomerGroupUpdateDto? PendingGroupUpdateDto { get; set; }
-
 }
