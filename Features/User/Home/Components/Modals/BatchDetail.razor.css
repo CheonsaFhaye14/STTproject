@@ -14,8 +14,11 @@
 .batch-details-modal {
     width: 100%;
     max-width: 1050px;
-    background: #ffffff;
-    border-radius: 20px;
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    background: #FFFFFF;
+    border-radius: 16px;
     overflow: hidden;
     border: 1px solid #E5E3DD;
     box-shadow: 0 12px 35px rgba(27, 27, 31, 0.16);
@@ -24,23 +27,12 @@
 
 /* HEADER */
 .modal-header {
+    flex: 0 0 auto;
     background: linear-gradient(135deg, #1B1B1F 0%, #26262B 100%);
-    padding: 20px 28px;
+    padding: 16px 24px;
     display: flex;
     align-items: center;
     gap: 14px;
-}
-
-.modal-header-icon {
-    flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #B08D57 0%, #8A6A34 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #FAFAF9;
 }
 
 .modal-header-text {
@@ -52,7 +44,7 @@
 .modal-header h4 {
     margin: 0;
     color: #FAFAF9;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.01em;
 }
@@ -60,88 +52,194 @@
 .modal-subtitle {
     margin: 0;
     color: #D8BE94;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
 }
 
+/* FILTERS: one aligned row, same look as Recent Activity */
+.modal-filters {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(200px, 2fr) minmax(130px, 1fr) minmax(160px, 1.4fr) minmax(150px, 1.2fr);
+    align-items: end;
+    gap: 8px 12px;
+    padding: 10px 24px 12px;
+    background: #F7F6F4;
+    border-bottom: 1px solid #E5E3DD;
+}
+
+.filter-group {
+    min-width: 0;
+}
+
+    /* Normalize the shared Input / Select inside the filter bar */
+    .filter-group ::deep .mb-1,
+    .filter-group ::deep .mb-2,
+    .filter-group ::deep .mb-3,
+    .filter-group ::deep .form-group {
+        margin: 0 !important;
+    }
+
+    .filter-group ::deep label {
+        display: block;
+        margin: 0 0 3px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.3;
+        color: #1B1B1F;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .filter-group ::deep input,
+    .filter-group ::deep select {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        height: 32px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        font-size: 13px;
+        box-sizing: border-box;
+    }
+
 /* BODY */
 .modal-body {
-    padding: 25px;
-    overflow-x: auto;
-    max-height: 70vh;
-    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 8px 24px 12px;
+    overflow: auto;
     color: #5F5E5A;
 }
 
-/* TABLE */
+/* RESULT BAR */
+.result-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 22px;
+    margin-bottom: 4px;
+}
+
+.result-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8A887F;
+}
+
+.btn-clear {
+    padding: 2px 12px;
+    background: transparent;
+    border: 1px solid #B08D57;
+    border-radius: 999px;
+    color: #8A6A34;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+    .btn-clear:hover {
+        background: #B08D57;
+        color: #FAFAF9;
+    }
+
+/* TABLE (compact, matches Recent Activity) */
 .activity-table {
     width: 100%;
-    height:15vh;
-    border-collapse: collapse;
-    background: #FFFFFF;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid #E5E3DD;
-    box-shadow: 0 0 0 1px #E5E3DD;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    table-layout: fixed;
 }
 
-    .activity-table thead {
-        background: #F7F6F4;
-    }
-
-    .activity-table th {
-        padding: 16px;
-        text-align: left;
-        font-size: 15px;
+    .activity-table thead th {
+        background: #d6d2c9;
+        padding: 8px 10px;
+        font-size: 13px;
         font-weight: 700;
+        text-align: center;
         color: #1B1B1F;
-        border-bottom: 1px solid #E5E3DD;
-        white-space: nowrap;
+        overflow-wrap: anywhere;
+        position: sticky;
+        top: 0;
+        z-index: 2;
     }
 
-    .activity-table td {
-        padding: 16px;
-        font-size: 14px;
-        color: #5F5E5A;
+        .activity-table thead th:first-child {
+            border-radius: 8px 0 0 8px;
+        }
+
+        .activity-table thead th:last-child {
+            border-radius: 0 8px 8px 0;
+        }
+
+    .activity-table tbody td {
+        background: #FFFFFF;
+        border-top: 1px solid #E5E3DD;
         border-bottom: 1px solid #E5E3DD;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: center;
         vertical-align: middle;
+        color: #5F5E5A;
+        overflow-wrap: anywhere;
     }
 
-    .activity-table tbody tr:hover {
-        background: #EFEDE7;
-        transition: 0.2s ease;
+        .activity-table tbody td:first-child {
+            border-left: 1px solid #E5E3DD;
+            border-radius: 8px 0 0 8px;
+        }
+
+        .activity-table tbody td:last-child {
+            border-right: 1px solid #E5E3DD;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .activity-table tbody td.empty-row {
+            border: 1px solid #E5E3DD;
+            border-radius: 8px;
+            color: #8A887F;
+        }
+
+    .activity-table tbody tr:hover td {
+        background: #FAF9F6;
     }
 
-    .activity-table tbody tr:last-child td {
-        border-bottom: none;
+    .activity-table .btn-primary {
+        width: clamp(88px, 9vw, 110px);
+        height: 28px;
+        padding: 0 10px;
+        background-color: #B08D57;
+        border-radius: 8px;
+        color: #2A1F0F;
+        border: none;
+        box-shadow: none;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
     }
 
-/* BUTTON */
-.btn-primary {
-    background: #B08D57;
-    color: #2A1F0F;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: 0.2s ease;
-    box-shadow: none;
-}
-
-    .btn-primary:hover {
-        background: #8A6A34;
-        color: #FAFAF9;
-        transform: translateY(-1px);
-    }
+        .activity-table .btn-primary:hover {
+            background-color: #8A6A34;
+            color: #FAFAF9;
+        }
 
 /* FOOTER */
 .modal-actions {
-    padding: 20px 25px;
+    flex: 0 0 auto;
+    padding: 12px 24px;
     display: flex;
     justify-content: flex-start;
     background: #FFFFFF;
+    border-top: 1px solid #E5E3DD;
 }
 
 /* CLOSE BUTTON */
@@ -149,8 +247,9 @@
     background: #B08D57;
     color: #F7F6F4;
     border: 1px solid #E5E3DD;
-    padding: 10px 22px;
-    border-radius: 20px;
+    padding: 7px 18px;
+    border-radius: 999px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: 0.2s ease;
@@ -160,6 +259,28 @@
         background: #F7F6F4;
         color: #1B1B1F;
     }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+    .modal-filters {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .filter-group.filter-search {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    .modal-filters {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .activity-table thead th,
+    .activity-table tbody td {
+        font-size: 0.75rem;
+    }
+}
 
 /* ANIMATION */
 @keyframes modalFade {

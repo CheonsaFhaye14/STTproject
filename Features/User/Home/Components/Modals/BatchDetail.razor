@@ -1,12 +1,71 @@
-﻿@using System.Linq
+﻿@using STTproject.Services
+@using STTproject.Features.User.Home.Components.Sections
+
 @if (Show)
 {
-    <div class="modal-overlay" tabindex="0" @onclick="async () => await OnClose.InvokeAsync()" @onkeydown="HandleKeyDown">
+    <div class="modal-overlay" tabindex="0" @onclick="CloseAsync" @onkeydown="HandleKeyDown">
         <div class="modal-box batch-details-modal" @onclick:stopPropagation="true">
             <div class="modal-header">
-                <h4>Batch Details: @BatchId</h4>
+                <div class="modal-header-text">
+                    <h4>Batch Details: @BatchId</h4>
+                    <p class="modal-subtitle">
+                        @SubdName · @BatchInvoices.Count @(BatchInvoices.Count == 1 ? "invoice" : "invoices")
+                    </p>
+                </div>
             </div>
+
+            <!-- FILTERS (outside the scroll area so they stay visible) -->
+            <div class="modal-filters">
+                <!-- Search -->
+                <div class="filter-group filter-search">
+                    <Input TValue="string" Label="Search"
+                           Placeholder="Invoice code or customer..."
+                           Value="@searchTerm" ValueChanged="OnSearchChanged" />
+                </div>
+
+                <!-- Order type -->
+                <div class="filter-group">
+                    <OrderTypeFilter @key="@($"order-{filterResetKey}")"
+                                     Value="@selectedOrderType" ValueChanged="OnOrderTypeChanged" />
+                </div>
+
+                <!-- Customer -->
+                <div class="filter-group">
+                    <Select @key="@($"customer-{filterResetKey}")"
+                            Label="Customer"
+                            Placeholder="All customers"
+                            TItem="FilterChoice"
+                            Items="customerOptions"
+                            ValueSelector="x => x.Value"
+                            TextSelector="x => x.Text"
+                            SelectedValue="@selectedCustomer"
+                            SelectedValueChanged="OnCustomerSelected" />
+                </div>
+
+                <!-- Sort -->
+                <div class="filter-group">
+                    <Select @key="@($"sort-{filterResetKey}")"
+                            Label="Sort by"
+                            Placeholder="Newest created"
+                            TItem="FilterChoice"
+                            Items="SortOptions"
+                            ValueSelector="x => x.Value"
+                            TextSelector="x => x.Text"
+                            SelectedValue="@sortBy"
+                            SelectedValueChanged="OnSortSelected" />
+                </div>
+            </div>
+
             <div class="modal-body">
+                <div class="result-bar">
+                    <span class="result-count">Showing @filteredInvoices.Count of @BatchInvoices.Count invoices</span>
+
+                    @if (HasActiveFilters)
+                    {
+                        <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
+                    }
+                </div>
+
                 <table class="activity-table">
                     <thead>
                         <tr>
@@ -19,11 +78,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (BatchInvoices.Any())
+                        @if (filteredInvoices.Count > 0)
                         {
-                            @foreach (var invoiceRow in BatchInvoices.OrderByDescending(i => i.CreatedDate))
+                            @foreach (var invoiceRow in filteredInvoices)
                             {
-                                <tr>
+                                <tr @key="invoiceRow.SalesInvoiceId">
                                     <td>@invoiceRow.InvoiceCode</td>
                                     <td>@invoiceRow.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
                                     <td>@invoiceRow.SubdName</td>
@@ -41,14 +100,17 @@
                         else
                         {
                             <tr>
-                                <td colspan="5">No invoices found for this batch.</td>
+                                <td colspan="6" class="empty-row">
+                                    @(HasActiveFilters ? "No invoices match your filters." : "No invoices found for this batch.")
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+
             <div class="modal-actions">
-                <button class="btn-secondary" @onclick="async () => await OnClose.InvokeAsync()">Close (Esc)</button>
+                <button class="btn-secondary" @onclick="CloseAsync">Close (Esc)</button>
             </div>
         </div>
     </div>

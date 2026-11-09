@@ -1,46 +1,95 @@
-﻿@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Forms
+﻿@using STTproject.Data
 @using STTproject.Services
-@using System.Linq
 @using STTproject.Features.User.Home.Components.Modals
 
 @inject IHomeService homeService
-@inject IUserContextService userContext
 @inject NavigationManager Navigation
 
 <div class="activity">
-    <h3>Recent Activity...</h3>
+    <div class="activity-top">
+        <h3>Recent Activity...</h3>
 
-    <!-- FILTERS -->
-    <div class="filters">
-        <!-- VIEW MODE TOGGLE - Combined button -->
-        <div class="filter-group view-toggle">
-            <button class="@(currentViewMode == "batch" ? "btn-toggle active" : "btn-toggle")"
-                    @onclick="ToggleViewMode">
-                @(currentViewMode == "batch" ? "Batch View" : "Invoice List")
+        <!-- VIEW MODE TOGGLE -->
+        <div class="view-toggle" role="group" aria-label="View mode">
+            <button type="button" class="btn-toggle @(IsBatchView ? "active" : "")"
+                    aria-pressed="@(IsBatchView ? "true" : "false")" @onclick="() => SetViewMode(BatchView)">
+                Batch View
+            </button>
+            <button type="button" class="btn-toggle @(!IsBatchView ? "active" : "")"
+                    aria-pressed="@(!IsBatchView ? "true" : "false")" @onclick="() => SetViewMode(FlatView)">
+                Invoice List
             </button>
         </div>
+    </div>
 
-        <div class="filter-group">
-            <label>SUB DISTRIBUTOR</label>
-            <select @bind="selectedSubdNameFilter">
-                <option value="">ALL</option>
-                @foreach (var subd in SubdList)
-                {
-                    <option value="@subd.SubdName">@subd.SubdName</option>
-                }
-            </select>
+    <!-- FILTERS -->
+    <div class="filters @(IsBatchView ? "filters-batch" : "filters-flat")">
+        <!-- Search -->
+        <div class="filter-group filter-search">
+            <Input TValue="string" Label="Search"
+                   Placeholder="@(IsBatchView ? "Batch, subdistributor, invoice code or customer..." : "Invoice code, customer or subdistributor...")"
+                   Value="@searchTerm" ValueChanged="OnSearchChanged" />
         </div>
 
+        <!-- Order type (invoice list only: a batch can mix invoices and credits) -->
+        @if (!IsBatchView)
+        {
+            <div class="filter-group">
+                <OrderTypeFilter @key="@($"order-{filterResetKey}")" Value="@selectedOrderType"
+                                 ValueChanged="OnOrderTypeChanged" />
+            </div>
+        }
+
+        <!-- Subdistributor -->
         <div class="filter-group">
-            <label>INVOICE DATE</label>
-            <InputDate @bind-Value="selectedDateFilter" TValue="System.DateOnly?" />
+            <AutoComplete Label="Subdistributor" @key="@($"subd-{filterResetKey}")" TItem="SubDistributor"
+                          Items="SubdList" ValueSelector="x => x.SubDistributorId.ToString()"
+                          TextSelector="x => x.SubdName ?? string.Empty" Placeholder="All subdistributors"
+                          SelectedValue="@(selectedSubDistributorId?.ToString())" SelectedItemChanged="OnSubdSelected" />
         </div>
 
+        <!-- Month -->
+        <div class="filter-group">
+            <Select @key="@($"month-{filterResetKey}")" Label="Sales Invoice Month" Placeholder="All months"
+                    TItem="FilterChoice" Items="MonthOptions" ValueSelector="x => x.Value" TextSelector="x => x.Text"
+                    SelectedValue="@(selectedMonth?.ToString() ?? "")" SelectedValueChanged="OnMonthSelected" />
+        </div>
+
+        <!-- Year -->
+        <div class="filter-group">
+            <Select @key="@($"year-{filterResetKey}")" Label="Sales Invoice Year" Placeholder="All years"
+                    TItem="FilterChoice" Items="yearOptions" ValueSelector="x => x.Value" TextSelector="x => x.Text"
+                    SelectedValue="@(selectedYear?.ToString() ?? "")" SelectedValueChanged="OnYearSelected" />
+        </div>
+
+        <!-- Sort -->
+        <div class="filter-group">
+            <Select @key="@($"sort-{filterResetKey}")" Label="Sort by" Placeholder="Newest first" TItem="FilterChoice"
+                    Items="SortOptions" ValueSelector="x => x.Value" TextSelector="x => x.Text" SelectedValue="@sortBy"
+                    SelectedValueChanged="OnSortSelected" />
+        </div>
+    </div>
+
+    <div class="result-bar">
+        <span class="result-count">
+            @if (IsBatchView)
+            {
+                @($"Showing {filteredBatchRows.Count} of {batchRows.Count} batches")
+            }
+            else
+            {
+                @($"Showing {filteredFlatRows.Count} of {flatRows.Count} invoices")
+            }
+        </span>
+
+        @if (HasActiveFilters)
+        {
+            <button type="button" class="btn-clear" @onclick="ClearFilters">Clear filters</button>
+        }
     </div>
 
     <!-- BATCH VIEW (Grouped View) -->
-    @if (currentViewMode == "batch")
+    @if (IsBatchView)
     {
         <div class="activity-table-wrapper">
             <table class="activity-table">
@@ -53,11 +102,11 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (FilteredBatchRows.Any())
+                    @if (filteredBatchRows.Count > 0)
                     {
-                        @foreach (var row in FilteredBatchRows)
+                        @foreach (var row in filteredBatchRows)
                         {
-                            <tr>
+                            <tr @key="row.BatchId">
                                 <td>@row.BatchId</td>
                                 <td>@row.SubdName</td>
                                 <td>
@@ -79,17 +128,18 @@
                     else
                     {
                         <tr>
-                            <td colspan="4">No sales invoice activity found.</td>
+                            <td colspan="4">
+                                @(HasActiveFilters ? "No batches match your filters." : "No sales invoice activity found.")
+                            </td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
     }
-
-    <!-- FLAT VIEW (Invoice List) -->
-    @if (currentViewMode == "flat")
+    else
     {
+        <!-- FLAT VIEW (Invoice List) -->
         <div class="activity-table-wrapper">
             <table class="activity-table">
                 <thead>
@@ -103,17 +153,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (FilteredFlatRows.Any())
+                    @if (filteredFlatRows.Count > 0)
                     {
-                        @foreach (var row in FilteredFlatRows)
+                        @foreach (var row in filteredFlatRows)
                         {
-                            <tr>
+                            <tr @key="row.SalesInvoiceId">
                                 <td>@row.InvoiceCode</td>
                                 <td>@row.SalesInvoiceDate.ToString("yyyy-MM-dd")</td>
                                 <td>@row.SubdName</td>
                                 <td>@row.CustomerName</td>
                                 <td>@row.CreatedDate.ToString("MMM d, yyyy hh:mm tt")</td>
-                                <td> <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
+                                <td>
+                                    <button class="btn-primary" @onclick="() => OpenInvoiceDetailsAsync(row)">View Details</button>
                                 </td>
                             </tr>
                         }
@@ -121,7 +172,9 @@
                     else
                     {
                         <tr>
-                            <td colspan="5">No sales invoice found.</td>
+                            <td colspan="6">
+                                @(HasActiveFilters ? "No invoices match your filters." : "No sales invoice found.")
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -131,8 +184,9 @@
 </div>
 
 <!-- MODALS -->
-<BatchDetail Show="showBatchDetailsModal" BatchId="@selectedBatchId" BatchInvoices="selectedBatchInvoices"
-             OnClose="CloseBatchDetails" OnViewInvoiceDetails="async (id) => await OpenInvoiceDetailsByIdAsync(id)" />
+<BatchDetail Show="showBatchDetailsModal" BatchId="@selectedBatchId" SubdName="@selectedBatchSubdName"
+             BatchInvoices="selectedBatchInvoices" OnClose="CloseBatchDetails"
+             OnViewInvoiceDetails="async (id) => await OpenInvoiceDetailsByIdAsync(id)" />
 
 <InvoiceDetail Show="showInvoiceDetailsModal" InvoiceCode="@selectedInvoiceCode" InvoiceDetails="selectedInvoiceDetails"
                OnClose="CloseInvoiceDetails" OnEdit="EditInvoiceDetails" />

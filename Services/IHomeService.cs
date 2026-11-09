@@ -67,9 +67,10 @@ public class HomeService : IHomeService
                 si.SubDistributorId,
                 si.CreatedDate,
                 si.SalesInvoiceDate,
+                si.SalesInvoiceCode,
+                CustomerName = si.Customer != null ? si.Customer.CustomerName : string.Empty,
                 si.SubDistributor.SubdName,
                 si.SubDistributor.SubdCode
-
             })
             .ToListAsync(cancellationToken);
 
@@ -85,7 +86,8 @@ public class HomeService : IHomeService
             .ToList();
 
         var rows = new List<HomeSalesInvoiceBatchRow>();
-        var batchNumber = 0;
+        // Counts batches per subd + created day, so two batches on the same day get unique names.
+        var batchesPerSubdDay = new Dictionary<(int SubdId, DateOnly Day), int>();
         int? previousSubdId = null;
         DateTime? previousCreatedDate = null;
         int? previousInvoiceId = null;
@@ -99,11 +101,20 @@ public class HomeService : IHomeService
 
             if (!(isSameSubd && isSameCreatedDate && isContinuousId))
             {
-                batchNumber++;
+                var createdDay = DateOnly.FromDateTime(invoice.CreatedDate);
+                var key = (invoice.SubDistributorId, createdDay);
+                var sequence = batchesPerSubdDay.TryGetValue(key, out var count) ? count + 1 : 1;
+                batchesPerSubdDay[key] = sequence;
+
+                var batchId = $"{createdDay:yyyyMMdd}-{invoice.SubdCode}";
+                if (sequence > 1)
+                {
+                    batchId += $"-{sequence}";
+                }
 
                 currentBatch = new HomeSalesInvoiceBatchRow
                 {
-                    BatchId = $"{DateOnly.FromDateTime(invoice.CreatedDate):yyyyMMdd}-{invoice.SubdCode}",
+                    BatchId = batchId,
                     SubDistributorId = invoice.SubDistributorId,
                     SubdName = invoice.SubdName,
                     SubdCode = invoice.SubdCode,
@@ -131,6 +142,14 @@ public class HomeService : IHomeService
                 }
 
                 currentBatch.LastSalesInvoiceId = invoice.SalesInvoiceId;
+
+                // Used by the Recent Activity search / month / year filters.
+                currentBatch.InvoiceDates.Add(invoice.SalesInvoiceDate);
+                currentBatch.InvoiceCodes.Add(invoice.SalesInvoiceCode);
+                if (!string.IsNullOrWhiteSpace(invoice.CustomerName))
+                {
+                    currentBatch.CustomerNames.Add(invoice.CustomerName);
+                }
             }
 
             previousSubdId = invoice.SubDistributorId;
@@ -188,8 +207,9 @@ public class HomeService : IHomeService
                 InvoiceCode = si.SalesInvoiceCode,
                 SalesInvoiceDate = si.SalesInvoiceDate,
                 CreatedDate = si.CreatedDate,
+                OrderType = si.OrderType ?? string.Empty,
                 SubdName = si.SubDistributor.SubdName,
-                CustomerName = si.Customer.CustomerName
+                CustomerName = si.Customer != null ? si.Customer.CustomerName : string.Empty
             })
             .ToListAsync(cancellationToken);
 
@@ -297,16 +317,19 @@ public class HomeService : IHomeService
         using var tempContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var invoices = await tempContext.SalesInvoices
             .AsNoTracking()
-            .Where(si => si.SubDistributor.EncoderId == userId)
+            // IsActive matches the batch view, so both views show the same invoices.
+            .Where(si => si.SubDistributor.EncoderId == userId && si.SubDistributor.IsActive)
             .Where(si => si.SalesInvoiceItems.Any())
             .OrderByDescending(si => si.CreatedDate)
             .ThenByDescending(si => si.SalesInvoiceId)
             .Select(si => new HomeSalesInvoiceFlatRow
             {
                 SalesInvoiceId = si.SalesInvoiceId,
+                SubDistributorId = si.SubDistributorId,
                 InvoiceCode = si.SalesInvoiceCode,
                 SalesInvoiceDate = si.SalesInvoiceDate,
                 CreatedDate = si.CreatedDate,
+                OrderType = si.OrderType ?? string.Empty,
                 SubdName = si.SubDistributor.SubdName,
                 CustomerName = si.Customer != null ? si.Customer.CustomerName : string.Empty
             })
@@ -444,6 +467,11 @@ public sealed class HomeSalesInvoiceBatchRow
     public DateOnly BatchCreatedDate { get; set; }
     public int FirstSalesInvoiceId { get; set; }
     public int LastSalesInvoiceId { get; set; }
+
+    // Per-invoice values for client-side filtering
+    public List<DateOnly> InvoiceDates { get; set; } = new();
+    public List<string> InvoiceCodes { get; set; } = new();
+    public List<string> CustomerNames { get; set; } = new();
 }
 
 public sealed class HomeSalesInvoiceBatchInvoiceRow
@@ -454,6 +482,7 @@ public sealed class HomeSalesInvoiceBatchInvoiceRow
     public string SubdName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; }
+    public string OrderType { get; set; } = string.Empty;
 }
 
 public sealed class HomeSalesInvoiceDetailRow
@@ -482,9 +511,11 @@ public sealed class HomeSalesInvoiceItemDetailRow
 public sealed class HomeSalesInvoiceFlatRow
 {
     public int SalesInvoiceId { get; set; }
+    public int SubDistributorId { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
     public DateOnly SalesInvoiceDate { get; set; }
     public DateTime CreatedDate { get; set; }
+    public string OrderType { get; set; } = string.Empty;
     public string SubdName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
 }
