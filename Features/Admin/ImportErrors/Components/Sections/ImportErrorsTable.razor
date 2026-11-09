@@ -218,7 +218,7 @@
                                                                     </td>
                                                                     <td @onclick:stopPropagation="true">
                                                                         <div class="clt-actions">
-<Button Title="Details" Variant="ButtonVariant.Secondary"
+                                                                            <Button Title="Details" Variant="ButtonVariant.Secondary"
                                                                                     OnClick="() => OnViewDetails.InvokeAsync(errorId)" />
                                                                         </div>
                                                                     </td>
@@ -238,7 +238,7 @@
                                                                         @file.UniqueErrors unique error@(file.UniqueErrors == 1 ? "" : "s") ·
                                                                         @file.Occurrences occurrence@(file.Occurrences == 1 ? "" : "s")
                                                                         <span class="ie-sub">@(file.PendingErrors > 0 ? $"{file.PendingErrors} pending" :
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              "None pending")</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      "None pending")</span>
                                                                         </td>
                                                                         <td @onclick:stopPropagation="true">
                                                                             <div class="clt-actions">
@@ -256,7 +256,7 @@
 
                                             <div class="clt-footer">
                                                 <span class="clt-footer-count">Showing @RowCount of @totalCount @(IsImportBatch ? "import files" :
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              "errors")</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      "errors")</span>
                                                     @if (totalPages > 1)
                                                     {
                                                         <div class="clt-pagination">
@@ -351,6 +351,8 @@
         !string.IsNullOrEmpty(SelectedStatus) ||
         (!IsImportBatch && !string.IsNullOrEmpty(SelectedErrorType)) ||
         SelectedSubDistributorId.HasValue;
+        
+    private readonly TaskCompletionSource lookupsReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     protected override async Task OnInitializedAsync()
     {
@@ -368,6 +370,10 @@
         {
             Console.WriteLine($"Error loading import errors: {ex.Message}");
             isLoading = false;
+        }
+        finally
+        {
+            lookupsReady.TrySetResult();
         }
     }
 
@@ -389,6 +395,7 @@
     {
         if (!firstRender) return;
 
+        await lookupsReady.Task; // the saved Problem and Subdistributor are only valid once their lists are known
         await RestoreDraftAsync();
         await LoadPageAsync();
     }
@@ -404,13 +411,13 @@
             var d = JsonSerializer.Deserialize<FilterDraft>(json);
             if (d is null) return;
 
-            _searchTerm = d.Search ?? string.Empty;   // the field, not the property: restoring must not start the search timer
+            _searchTerm = d.Search ?? string.Empty; // the field, not the property: restoring must not start the search timer
             statusErrors = d.StatusErrors ?? string.Empty;
             statusFiles = d.StatusFiles ?? string.Empty;
             SelectedErrorType = AllErrorTypes.Contains(d.ErrorType ?? string.Empty) ? d.ErrorType! : string.Empty;
             SelectedSubDistributorId = d.SubDistributorId.HasValue && SubDistributors.Any(x => x.Id == d.SubDistributorId.Value)
                 ? d.SubDistributorId : null;
-            filterResetKey++;   // the pickers read their selection again
+            filterResetKey++; // the pickers read their selection again
         }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or JsonException or InvalidOperationException)
         {
@@ -424,7 +431,8 @@
         {
             draftJs ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/salesinvoice.js");
 
-            var isDefault = string.IsNullOrWhiteSpace(_searchTerm) && string.IsNullOrEmpty(statusErrors) && string.IsNullOrEmpty(statusFiles)
+            var isDefault = string.IsNullOrWhiteSpace(_searchTerm) && string.IsNullOrEmpty(statusErrors) &&
+string.IsNullOrEmpty(statusFiles)
                 && string.IsNullOrEmpty(SelectedErrorType) && !SelectedSubDistributorId.HasValue;
             if (isDefault)
             {

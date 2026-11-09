@@ -285,16 +285,15 @@ namespace STTproject.Features.Admin.ImportErrors.Services
 
             var run = await _validator.ValidateAsync(bytes, err.SubDistributorId, userId, ct);
 
-            // Best effort: remember what the current template read for this file's affected rows. Never decides the result.
-            if (recordRows is { Count: > 0 } && sink is not null)
-                CollectRecheckedRows(detail, batchId, recordRows, run, sink);
-
             if (run.RowsRead == 0)
                 return Result(VerificationOutcome.Unverifiable,
                     "Entriel could not read any rows from that file with the current template, so nothing could be checked.");
 
             // 1. Is the same problem still reported? Same fingerprint rule the import log uses to decide two errors are the same.
             var issues = new List<VerificationIssueDto>();
+            // The rows this recheck still reports. A value read from such a row is the very value that is still wrong, so it is no proof of a fix.
+            var stillReportedRows = new HashSet<(string, int)>();
+            var stillReportedUnknown = false;
             foreach (var entry in run.Errors)
             {
                 var identity = entry.Identity ?? new ErrorIdentity(entry.ErrorMessage);
@@ -306,9 +305,16 @@ namespace STTproject.Features.Admin.ImportErrors.Services
                 var reason = "Still invalid: " + detail.Value;
 
                 if (evidence.Rows.Count == 0)
+                {
                     issues.Add(new VerificationIssueDto(null, null, null, reason + " (" + entry.Occurrences + " occurrences)"));
+                    stillReportedUnknown = true;     // which rows are still wrong is not known, so none of them can be called fixed
+                }
                 foreach (var r in evidence.Rows)
+                {
                     issues.Add(new VerificationIssueDto(r.Invoice, r.Sheet, r.RowNumber, reason));
+                    if (r.RowNumber.HasValue) stillReportedRows.Add((r.Sheet ?? string.Empty, r.RowNumber.Value));
+                    else stillReportedUnknown = true;
+                }
             }
             var stillInvalid = issues.Count;
 
@@ -318,6 +324,11 @@ namespace STTproject.Features.Admin.ImportErrors.Services
             var missing = expectedInvoices.Where(i => !present.Contains(i.Trim())).ToList();
             foreach (var m in missing)
                 issues.Add(new VerificationIssueDto(m, null, null, "Not found in this file, so it could not be checked."));
+
+            // Best effort: remember what the current template read for the affected rows it no longer reports. Never decides the result.
+            if (recordRows is { Count: > 0 } && sink is not null && !stillReportedUnknown)
+                CollectRecheckedRows(detail, batchId,
+                    recordRows.Where(row => !stillReportedRows.Contains((row.Sheet ?? string.Empty, row.RowNumber!.Value))).ToList(), run, sink);
 
             if (stillInvalid > 0)
                 return Result(VerificationOutcome.StillInvalid,
