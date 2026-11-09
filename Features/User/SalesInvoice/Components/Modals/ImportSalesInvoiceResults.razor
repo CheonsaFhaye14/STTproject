@@ -129,7 +129,7 @@
                                                 aria-hidden="true"></i></div>
                                                 <div class="sc-val">@totalRows</div>
                                                 <div class="sc-sub">@(UnreadSheets.Count == 0 ? $"{SheetRows.Count} sheets read" :
-                                                                                                                                                                                            $"{SheetRows.Count} of {AllSheets.Count} sheets read")</div>
+                                                                                                                                                                                                                                                                                                    $"{SheetRows.Count} of {AllSheets.Count} sheets read")</div>
                                                 </button>
                                                 @if (showSheetBreakdown)
                                                 {
@@ -1619,18 +1619,44 @@ i.SheetIndex))
         .ToList();
     }
 
+    // The card header already shows the sheet chip(s), so the pill only lists row numbers.
+    // If a card's rows come from more than one sheet, each group gets its sheet name so the numbers stay clear.
     private string FormatRowList(IReadOnlyList<SourceRowKey> rows)
     {
         if (rows == null || rows.Count == 0)
             return string.Empty;
 
-        if (rows.Count == 1)
-            return FormatSource(rows[0]);
+        var bySheet = rows
+            .Where(r => r.RowNumber > 0)
+            .GroupBy(r => r.SheetIndex)
+            .OrderBy(g => g.Key)
+            .ToList();
 
-        var tokens = rows.Select(RowTokenOf).ToList();
-        return $"Rows: {string.Join(", ", tokens.Take(tokens.Count - 1))} & {tokens[^1]}";
+        if (bySheet.Count == 0)
+            return string.Empty;
+
+        if (bySheet.Count == 1)
+        {
+            var nums = RowNumbersOf(bySheet[0]);
+            return nums.Count == 1 ? $"Row {nums[0]}" : $"Rows: {JoinRowNumbers(nums)}";
+        }
+
+        var parts = bySheet.Select(g => $"{SheetName(g.Key)} {JoinRowNumbers(RowNumbersOf(g))}");
+        return $"Rows: {string.Join(" · ", parts)}";
     }
 
+    private static List<string> RowNumbersOf(IEnumerable<SourceRowKey> rows) =>
+        rows.Select(r => r.RowNumber)
+            .Distinct()
+            .OrderBy(n => n)
+            .Select(n => n.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+
+    private static string JoinRowNumbers(List<string> nums) =>
+        nums.Count <= 1
+            ? string.Concat(nums)
+            : $"{string.Join(", ", nums.Take(nums.Count - 1))} & {nums[^1]}";
+        
     // One place for how a source row is shown: "Row 5" for a single-sheet file, "Sales!5" when several sheets were read.
     private string FormatSource(SourceRowKey key) =>
         ImportResult?.FormatSource(key) ?? (key.RowNumber > 0 ? $"Row {key.RowNumber}" : "File");
