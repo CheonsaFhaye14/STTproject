@@ -61,11 +61,17 @@ namespace STTproject.Features.Admin.Dashboard.DTOs
         /// <summary>Sum of Amount on OrderType = 'Invoice' lines.</summary>
         public decimal InvoiceAmount { get; set; }
 
-        /// <summary>Credit memo total as a positive number (stored negative in the database).</summary>
+        /// <summary>credit  total as a positive number (stored negative in the database).</summary>
         public decimal CreditAmount { get; set; }
 
         /// <summary>Number of SalesInvoice headers with OrderType = 'Invoice'.</summary>
         public int InvoiceCount { get; set; }
+
+        /// <summary>Number of SalesInvoice headers with OrderType = 'Credit'.</summary>
+        public int CreditCount { get; set; }
+
+        /// <summary>All SalesInvoice headers (invoices + credit) — matches the Sales Invoices page total.</summary>
+        public int TotalCount => InvoiceCount + CreditCount;
 
         public decimal NetAmount => InvoiceAmount - CreditAmount;
     }

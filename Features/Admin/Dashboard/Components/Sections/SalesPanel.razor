@@ -21,7 +21,8 @@
                     }
                     else
                     {
-                        <span class="chip">@selectedSubd.SubdCode</span> @selectedSubd.SubdName
+                        <span class="chip">@selectedSubd.SubdCode</span>
+                        @selectedSubd.SubdName
                         <text> · </text>
                         <button type="button" class="back" @onclick="ClearSubd">✕ Show all</button>
                     }
@@ -33,128 +34,150 @@
                     <button type="button" class="back" @onclick="() => SetMonth(null)">← Whole year</button>
                 }
                 <span class="ctl-select">
-                    <Select TItem="int"
-                            Items="years"
-                            ValueSelector="@(y => y.ToString())"
-                            TextSelector="@(y => y.ToString())"
-                            ShowPlaceholder="true"
-                            Placeholder="All years"
-                            SelectedValue="@(year?.ToString() ?? string.Empty)"
-                            SelectedValueChanged="OnYearChanged" />
+                    <Select TItem="int" Items="years" ValueSelector="@(y => y.ToString())"
+                            TextSelector="@(y => y.ToString())" ShowPlaceholder="true" Placeholder="All years"
+                            SelectedValue="@(year?.ToString() ?? string.Empty)" SelectedValueChanged="OnYearChanged" />
                 </span>
             </div>
         </div>
 
         <div class="stats">
-            <div class="stat"><div class="l">Total amount</div><div class="v">@DashFormat.Peso(totals.Net)</div></div>
-            <div class="stat"><div class="l">Invoice amount</div><div class="v">@DashFormat.Peso(totals.Invoice)</div></div>
-            <div class="stat"><div class="l">Credit memo amount</div><div class="v neg">−@DashFormat.Peso(totals.Credit)</div></div>
-            <div class="stat"><div class="l">No. of invoices</div><div class="v">@DashFormat.Number(totals.Count)</div></div>
-        </div>
-
-        <div class="pcard-head chart-head">
-            <div class="sec">@ChartTitle</div>
-            <div class="legend">
-                <span><i style="background:var(--gold)"></i>Total amount</span>
-                <span class="muted">@(year is null ? "Click a year to open it" : "Click a month to see only that month")</span>
+            <div class="stat">
+                <div class="l">Total amount</div>
+                <div class="v">@DashFormat.Peso(totals.Net)</div>
             </div>
-        </div>
-
-        <div class="body">
-            <div class="bar-chart">
-                <div class="plot">
-                    @foreach (var t in ticks)
-                    {
-                        <div class="gl" style="bottom:@DashFormat.Css(Pct(t))%"><span>@(t == 0 ? "0" : DashFormat.PesoShort(t))</span></div>
-                    }
+            <div class="stat">
+                <div class="l">Invoice amount</div>
+                <div class="v">@DashFormat.Peso(totals.Invoice)</div>
+            </div>
+            <div class="stat">
+                <div class="l">Credit amount</div>
+                <div class="v neg">−@DashFormat.Peso(totals.Credit)</div>
+            </div>
+            <div class="stat" title="Invoices and credit — same total as the Sales Invoices page">
+                <div class="l">No. of invoices</div>
+                <div class="v">@DashFormat.Number(totals.Count)</div>
+                <div class="s">@(DashFormat.Number(totals.InvoiceCount) + " invoices · " +
+                                                                                                                                                                DashFormat.Number(totals.CreditCount) + " credit")</div>
                 </div>
-                <div class="bars">
-                    @foreach (var b in bars)
-                    {
-                        var bar = b;
-                        <div class="bar-col @(bar.Future ? "future" : "") @(bar.Selected ? "sel" : "")"
-                             @onclick="() => OnBarClick(bar)">
-                            <div class="bar-area">
-                                @if (bar.Net > 0)
-                                {
-                                    <div class="bar" style="height:@DashFormat.Css(Pct(bar.Net))%">
-                                        @if (bar.Selected || year is null)
+            </div>
+
+            <div class="pcard-head chart-head">
+                <div class="sec">@ChartTitle</div>
+                <div class="legend">
+                    <span><i style="background:var(--gold)"></i>Total amount</span>
+                    <span class="muted">@(year is null ? "Click a year to open it" : "Click a month to see only that month")</span>
+                </div>
+            </div>
+
+            <div class="body">
+                <div class="bar-chart">
+                    <div class="plot">
+                        @foreach (var t in ticks)
+                        {
+                            <div class="gl" style="bottom:@DashFormat.Css(Pct(t))%"><span>@(t == 0 ? "0" :
+                                                                                                                                                                                                                                                            DashFormat.PesoShort(t))</span></div>
+                            }
+                        </div>
+                        <div class="bars">
+                            @foreach (var b in bars)
+                            {
+                                var bar = b;
+                                <div class="bar-col @(bar.Future ? "future" : "") @(bar.Selected ? "sel" : "")"
+                                     @onclick="() => OnBarClick(bar)">
+                                    <div class="bar-area">
+                                        @if (bar.Net > 0)
                                         {
-                                            <span class="bar-val">@DashFormat.PesoShort(bar.Net)</span>
+                                            <div class="bar" style="height:@DashFormat.Css(Pct(bar.Net))%">
+                                                @if (bar.Selected || year is null)
+                                                {
+                                                    <span class="bar-val">@DashFormat.PesoShort(bar.Net)</span>
+                                                }
+                                            </div>
+                                        }
+                                        @if (!bar.Future)
+                                        {
+                                            <div class="bar-tip">
+                                                <b>@bar.Title</b><br />
+                                                Invoices @DashFormat.Peso(bar.Invoice)<br />
+                                                Credits −@DashFormat.Peso(bar.Credit)<br />
+                                                <b>Total @DashFormat.Peso(bar.Net)</b>
+                                            </div>
                                         }
                                     </div>
-                                }
-                                @if (!bar.Future)
-                                {
-                                    <div class="bar-tip">
-                                        <b>@bar.Title</b><br />
-                                        Invoices @DashFormat.Peso(bar.Invoice)<br />
-                                        Credits −@DashFormat.Peso(bar.Credit)<br />
-                                        <b>Total @DashFormat.Peso(bar.Net)</b>
-                                    </div>
-                                }
-                            </div>
-                            <div class="bar-label">@bar.Label</div>
+                                    <div class="bar-label">@bar.Label</div>
+                                </div>
+                            }
                         </div>
-                    }
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    @* ================= RIGHT: by sub distributor ================= *@
-    <div class="card pcard">
-        <div class="pcard-head">
-            <div class="head-text">
-                <h3 class="pcard-title">By sub distributor</h3>
-                <div class="pcard-sub">Total amount · @(PeriodName + PeriodTag) · click a header to sort, a row to filter</div>
-            </div>
-        </div>
-        <div class="body" @ref="rankBody">
-            <table>
-                <colgroup><col style="width:34px"><col><col style="width:110px"><col style="width:70px"></colgroup>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th class="@SortClass("name")" @onclick='() => ToggleSort("name")'>Sub distributor <i>@SortArrow("name")</i></th>
-                        <th class="@SortClass("amount") num" @onclick='() => ToggleSort("amount", startDescending: true)'>Amount <i>@SortArrow("amount")</i></th>
-                        <th>Share</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @for (var i = 0; i < pageRows.Count; i++)
-                    {
-                        var r = pageRows[i];
-                        <tr class="click @(selectedSubdId == r.Subd.SubDistributorId ? "hl" : "") @(r.HasSales ? "" : "none")"
-                            title="@r.Subd.SubdName"
-                            @onclick="() => ToggleSubd(r.Subd.SubDistributorId)">
-                            <td class="muted">@(start + i + 1)</td>
-                            <td><span class="chip">@r.Subd.SubdCode</span> @r.Subd.SubdName</td>
-                            <td class="num">
-                                @if (r.HasSales)
+            @* ================= RIGHT: by sub distributor ================= *@
+            <div class="card pcard">
+                <div class="pcard-head">
+                    <div class="head-text">
+                        <h3 class="pcard-title">By sub distributor</h3>
+                        <div class="pcard-sub">Total amount · @(PeriodName + PeriodTag) · click a header to sort, a row to
+                            filter</div>
+                        </div>
+                    </div>
+                    <div class="body" @ref="rankBody">
+                        <table>
+                            <colgroup>
+                                <col style="width:34px">
+                                <col>
+                                <col style="width:110px">
+                                <col style="width:70px">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th class="@SortClass("name")" @onclick='() => ToggleSort("name")'>Sub distributor
+                                        <i>@SortArrow("name")</i>
+                                    </th>
+                                    <th class="@SortClass("amount") num"
+                                        @onclick='() => ToggleSort("amount", startDescending: true)'>Amount
+                                        <i>@SortArrow("amount")</i>
+                                    </th>
+                                    <th>Share</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < pageRows.Count; i++)
                                 {
-                                    <b>@DashFormat.PesoShort(r.Net)</b>
+                                    var r = pageRows[i];
+                                    <tr class="click @(selectedSubdId == r.Subd.SubDistributorId ? "hl" : "") @(r.HasSales ? "" : "none")"
+                                        title="@r.Subd.SubdName" @onclick="() => ToggleSubd(r.Subd.SubDistributorId)">
+                                        <td class="muted">@(start + i + 1)</td>
+                                        <td><span class="chip">@r.Subd.SubdCode</span> @r.Subd.SubdName</td>
+                                        <td class="num">
+                                            @if (r.HasSales)
+                                            {
+                                                <b>@DashFormat.PesoShort(r.Net)</b>
+                                            }
+                                            else
+                                            {
+                                                <span class="tag t-bad">No invoices</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (r.Net > 0 && maxRankNet > 0)
+                                            {
+                                                <div class="share"><i
+                                                    style="width:@DashFormat.Css(Math.Max(3, (double)(r.Net / maxRankNet) * 100))%"></i>
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
                                 }
-                                else
-                                {
-                                    <span class="tag t-bad">No invoices</span>
-                                }
-                            </td>
-                            <td>
-                                @if (r.Net > 0 && maxRankNet > 0)
-                                {
-                                    <div class="share"><i style="width:@DashFormat.Css(Math.Max(3, (double)(r.Net / maxRankNet) * 100))%"></i></div>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <DashPager Page="CurrentPage" Pages="TotalPages(rankRows.Count)" Shown="pageRows.Count" Total="rankRows.Count"
-                   Label="sub distributors" PageChanged="GoToPage" />
-    </div>
-</section>
+                            </tbody>
+                        </table>
+                    </div>
+                    <DashPager Page="CurrentPage" Pages="TotalPages(rankRows.Count)" Shown="pageRows.Count" Total="rankRows.Count"
+                               Label="sub distributors" PageChanged="GoToPage" />
+                </div>
+            </section>
 
 @code {
     [Parameter, EditorRequired] public SalesDashboardDto Data { get; set; } = new();
@@ -168,7 +191,7 @@
 
     // Derived (rebuilt by Recalculate)
     private List<int> years = new();
-    private (decimal Invoice, decimal Credit, decimal Net, int Count) totals;
+    private (decimal Invoice, decimal Credit, decimal Net, int Count, int InvoiceCount, int CreditCount) totals;
     private List<Bar> bars = new();
     private decimal chartMax = 1;
     private decimal[] ticks = Array.Empty<decimal>();
@@ -176,7 +199,8 @@
     private decimal maxRankNet;
     private SubdLookupDto? selectedSubd;
 
-    private record Bar(string Label, string Title, int? Year, int? Month, decimal Invoice, decimal Credit, bool Selected, bool Future)
+    private record Bar(string Label, string Title, int? Year, int? Month, decimal Invoice, decimal Credit, bool Selected,
+bool Future)
     {
         public decimal Net => Invoice - Credit;
     }
@@ -239,7 +263,7 @@
     {
         if (bar.Future) return;
         if (bar.Year is not null && year is null) { year = bar.Year; month = null; } // all years → open that year
-        else month = month == bar.Month ? null : bar.Month;                           // month toggles
+        else month = month == bar.Month ? null : bar.Month; // month toggles
         CurrentPage = 1;
         Recalculate();
     }
@@ -266,7 +290,8 @@
 
         // Totals for the period + selected sub distributor
         var scoped = InPeriod(Data.Months).Where(m => selectedSubdId is null || m.SubDistributorId == selectedSubdId).ToList();
-        totals = (scoped.Sum(m => m.InvoiceAmount), scoped.Sum(m => m.CreditAmount), scoped.Sum(m => m.NetAmount), scoped.Sum(m => m.InvoiceCount));
+        totals = (scoped.Sum(m => m.InvoiceAmount), scoped.Sum(m => m.CreditAmount), scoped.Sum(m => m.NetAmount),
+                  scoped.Sum(m => m.TotalCount), scoped.Sum(m => m.InvoiceCount), scoped.Sum(m => m.CreditCount));
 
         // Chart: one bar per year (all years) or per month (one year)
         var forSubd = Data.Months.Where(m => selectedSubdId is null || m.SubDistributorId == selectedSubdId).ToList();

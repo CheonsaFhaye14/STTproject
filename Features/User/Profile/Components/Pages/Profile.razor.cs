@@ -1,28 +1,25 @@
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Http;
-using STTproject.Features.User.Profile.Services;
-using STTproject.Services;
-using STTproject.Features.User.Profile.DTOS;
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
+using STTproject.Features.User.Profile.DTOS;
+using STTproject.Features.User.Profile.Services;
+using STTproject.Services;
 
 namespace STTproject.Features.User.Profile.Components.Pages;
 
 public partial class Profile
 {
-    private const string UserIdStateKey = "profile-user-id";
-
     [Inject]
     private IProfileService? ProfileService { get; set; }
 
     [Inject]
     private IDbContextFactory<EntrielContext>? DbContextFactory { get; set; }
 
+    // Same source of the logged-in user as the other pages (e.g. Admin.razor).
+    // Works on a full page load AND when opened from the sidebar inside a running
+    // circuit, where HttpContext (and its cookies) is not available.
     [Inject]
-    private IHttpContextAccessor? HttpContextAccessor { get; set; }
-
-    [Inject]
-    private PersistentComponentState? ApplicationState { get; set; }
+    private IUserContextService? UserContext { get; set; }
 
     private STTproject.Data.User? CurrentUser;
     private STTproject.Data.User? EditingUser;
@@ -31,31 +28,11 @@ public partial class Profile
     private bool IsLoading = true;
     private bool IsEditMode = false;
     private int? UserId;
-    private PersistingComponentStateSubscription? PersistingSubscription;
 
     protected override async Task OnInitializedAsync()
     {
-        if (ApplicationState != null)
-        {
-            if (!ApplicationState.TryTakeFromJson<int?>(UserIdStateKey, out var restoredUserId))
-            {
-                restoredUserId = HttpContextAccessor?.HttpContext?.Request.Cookies.TryGetValue(UserContextService.UserIdCookieName, out var cookieValue) == true &&
-                    int.TryParse(cookieValue, out var parsedUserId)
-                    ? parsedUserId
-                    : null;
-            }
-
-            UserId = restoredUserId;
-            PersistingSubscription = ApplicationState.RegisterOnPersisting(PersistUserState);
-        }
-
+        UserId = UserContext?.UserId;
         await LoadUserAsync();
-    }
-
-    private Task PersistUserState()
-    {
-        ApplicationState?.PersistAsJson(UserIdStateKey, UserId);
-        return Task.CompletedTask;
     }
 
     private async Task LoadUserAsync()
@@ -63,6 +40,8 @@ public partial class Profile
         try
         {
             IsLoading = true;
+            ErrorMessage = null;
+
             if (UserId.HasValue && ProfileService != null && DbContextFactory != null)
             {
                 var userId = UserId.Value;
@@ -81,19 +60,7 @@ public partial class Profile
 
                     if (CurrentUser != null)
                     {
-                        EditingUser = new STTproject.Data.User
-                        {
-                            UserId = CurrentUser.UserId,
-                            Username = CurrentUser.Username,
-                            FullName = CurrentUser.FullName,
-                            Email = CurrentUser.Email,
-                            Role = CurrentUser.Role,
-                            IsActive = CurrentUser.IsActive,
-                            CreatedDate = CurrentUser.CreatedDate,
-                            UpdatedDate = CurrentUser.UpdatedDate,
-                            Password = CurrentUser.Password
-                        };
-                        await InvokeAsync(StateHasChanged);
+                        EditingUser = CopyOf(CurrentUser);
                     }
                 }
             }
@@ -183,20 +150,22 @@ public partial class Profile
         ErrorMessage = null;
         if (CurrentUser != null)
         {
-            EditingUser = new STTproject.Data.User
-            {
-                UserId = CurrentUser.UserId,
-                Username = CurrentUser.Username,
-                FullName = CurrentUser.FullName,
-                Email = CurrentUser.Email,
-                Role = CurrentUser.Role,
-                IsActive = CurrentUser.IsActive,
-                CreatedDate = CurrentUser.CreatedDate,
-                UpdatedDate = CurrentUser.UpdatedDate,
-                Password = CurrentUser.Password
-            };
+            EditingUser = CopyOf(CurrentUser);
         }
     }
+
+    private static STTproject.Data.User CopyOf(STTproject.Data.User u) => new()
+    {
+        UserId = u.UserId,
+        Username = u.Username,
+        FullName = u.FullName,
+        Email = u.Email,
+        Role = u.Role,
+        IsActive = u.IsActive,
+        CreatedDate = u.CreatedDate,
+        UpdatedDate = u.UpdatedDate,
+        Password = u.Password
+    };
 
     private string GetInitials(string? fullName)
     {
@@ -220,10 +189,5 @@ public partial class Profile
     private string GetStatusClass(bool isActive)
     {
         return isActive ? "badge bg-success" : "badge bg-danger";
-    }
-
-    public void Dispose()
-    {
-        PersistingSubscription?.Dispose();
     }
 }

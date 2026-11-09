@@ -1,6 +1,9 @@
 /* Shared layout styles for both User and Admin shells */
+/* Exactly one screen tall: the window never scrolls, only .main-content does,
+   so the sidebar and top bar always stay in place. */
 .layout-container {
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;            /* mobile: ignores the browser address bar */
     display: flex;
     flex-direction: row;
     overflow: hidden;
@@ -14,12 +17,15 @@
     background: var(--app-dark);
     overflow: hidden;
     transition: width 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
-    min-height: 100vh;
+    height: 100%;
+    box-sizing: border-box;    /* padding stays inside the screen height */
+    flex-shrink: 0;
 }
 
 .sidebar.sidebar-open {
     width: 260px;
     padding: 25px 18px;
+    overflow-y: auto;          /* long menu scrolls inside the sidebar, not the page */
     opacity: 1;
     pointer-events: auto;
     border-right: 2px solid var(--app-accent);
@@ -168,6 +174,8 @@
         }
 .right-column {
     flex: 1;
+    min-width: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -175,6 +183,7 @@
 
 .main-content {
     flex: 1;
+    min-height: 0;             /* lets it shrink so its own scrollbar is used */
     padding: 30px;
     overflow-y: auto;
     background: var(--app-surface);
@@ -182,6 +191,9 @@
 
 .user-topbar {
     height: 60px;
+    flex-shrink: 0;            /* never squashed by the content below */
+    position: relative;
+    z-index: 20;
     padding: 0 20px;
     display: flex;
     align-items: center;
@@ -309,6 +321,7 @@
         width: min(280px, 85vw);
         max-height: 80vh;
         min-height: unset;
+        height: auto;              /* size to the menu, not the full screen */
         padding: 20px 16px;
         border-radius: 16px;
         border-right: none;

@@ -5,10 +5,6 @@
    ===================================================================== */
 
 .dash {
-    /* Space your layout takes outside this page: the dark top bar (~66px)
-       plus the padding AdminSideBar puts above and below the page content.
-       If the page still scrolls, raise this; if there's a gap at the bottom, lower it. */
-    --dash-top: 150px;
 
     --card: #FFFFFF; --line: #E6E2D8; --line-soft: #F0EDE6;
     --ink: #23212B; --ink-2: #6A6774; --muted: #9A97A2;
@@ -18,7 +14,9 @@
     --amber: #B7791F; --amber-soft: #F8EDD9;
     --slate: #4F6D8A; --slate-soft: #E4ECF3;
 
-    height: calc(100vh - var(--dash-top));
+    /* Fills <main class="main-content"> exactly (it has a fixed height once
+       layout-fixed.css is in layout-shared.css), so the page never scrolls. */
+    height: 100%;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -119,6 +117,7 @@
 .dash ::deep .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
 .dash ::deep .stat { background: #FCFBF9; border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; min-width: 0; }
 .dash ::deep .stat .l { font-size: 11px; color: var(--muted); font-weight: 600; }
+.dash ::deep .stat .s { font-size: 10.5px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash ::deep .stat .v { font-family: var(--dash-font); font-size: 18px; font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 /* ---------- Tables ---------- */

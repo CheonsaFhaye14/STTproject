@@ -20,7 +20,7 @@ namespace STTproject.Features.Admin.Dashboard.Services
         // SALES
         // One row per (sub distributor, year, month). Small enough to load once
         // (≈ subds × months) and filter in memory on the page.
-        // Credit memo amounts are stored negative, so:
+        // credit  amounts are stored negative, so:
         //   InvoiceAmount = sum of Invoice lines
         //   CreditAmount  = -(sum of Credit lines)   → shown as a positive number
         //   Net           = InvoiceAmount - CreditAmount
@@ -63,25 +63,47 @@ namespace STTproject.Features.Admin.Dashboard.Services
                 })
                 .ToListAsync();
 
+            // Every SalesInvoice header, invoices and credit counted separately.
             var counts = await db.SalesInvoices
                 .AsNoTracking()
-                .Where(s => s.OrderType != OrderTypeCredit)
-                .Select(s => new { s.SubDistributorId, s.SalesInvoiceDate.Year, s.SalesInvoiceDate.Month })
+                .Select(s => new
+                {
+                    s.SubDistributorId,
+                    s.SalesInvoiceDate.Year,
+                    s.SalesInvoiceDate.Month,
+                    IsCredit = s.OrderType == OrderTypeCredit ? 1 : 0
+                })
                 .GroupBy(s => new { s.SubDistributorId, s.Year, s.Month })
-                .Select(g => new { g.Key.SubDistributorId, g.Key.Year, g.Key.Month, Count = g.Count() })
+                .Select(g => new
+                {
+                    g.Key.SubDistributorId,
+                    g.Key.Year,
+                    g.Key.Month,
+                    Credits = g.Sum(x => x.IsCredit),
+                    All = g.Count()
+                })
                 .ToListAsync();
 
-            var countLookup = counts.ToDictionary(c => (c.SubDistributorId, c.Year, c.Month), c => c.Count);
+            var amountLookup = amounts.ToDictionary(a => (a.SubDistributorId, a.Year, a.Month));
+            var countLookup = counts.ToDictionary(c => (c.SubDistributorId, c.Year, c.Month));
 
-            var months = amounts
-                .Select(a => new SalesMonthDto
+            // Union of both: a month can have invoice headers but no lines (counted, ₱0),
+            // so rows aren't built from the amounts alone.
+            var months = amountLookup.Keys.Union(countLookup.Keys)
+                .Select(k =>
                 {
-                    SubDistributorId = a.SubDistributorId,
-                    Year = a.Year,
-                    Month = a.Month,
-                    InvoiceAmount = a.Invoice,
-                    CreditAmount = Math.Abs(a.Credit),
-                    InvoiceCount = countLookup.GetValueOrDefault((a.SubDistributorId, a.Year, a.Month))
+                    amountLookup.TryGetValue(k, out var a);
+                    countLookup.TryGetValue(k, out var c);
+                    return new SalesMonthDto
+                    {
+                        SubDistributorId = k.SubDistributorId,
+                        Year = k.Year,
+                        Month = k.Month,
+                        InvoiceAmount = a?.Invoice ?? 0m,
+                        CreditAmount = Math.Abs(a?.Credit ?? 0m),
+                        InvoiceCount = c is null ? 0 : c.All - c.Credits,
+                        CreditCount = c?.Credits ?? 0
+                    };
                 })
                 .ToList();
 
