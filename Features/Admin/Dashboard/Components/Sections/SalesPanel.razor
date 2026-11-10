@@ -58,14 +58,13 @@
                 <div class="l">No. of invoices</div>
                 <div class="v">@DashFormat.Number(totals.Count)</div>
                 <div class="s">@(DashFormat.Number(totals.InvoiceCount) + " invoices · " +
-                                                                                                                                                                DashFormat.Number(totals.CreditCount) + " credit")</div>
+                                                                                                                                                                                                        DashFormat.Number(totals.CreditCount) + " credit")</div>
                 </div>
             </div>
 
             <div class="pcard-head chart-head">
                 <div class="sec">@ChartTitle</div>
                 <div class="legend">
-                    <span><i style="background:var(--gold)"></i>Total amount</span>
                     <span class="muted">@(year is null ? "Click a year to open it" : "Click a month to see only that month")</span>
                 </div>
             </div>
@@ -76,7 +75,7 @@
                         @foreach (var t in ticks)
                         {
                             <div class="gl" style="bottom:@DashFormat.Css(Pct(t))%"><span>@(t == 0 ? "0" :
-                                                                                                                                                                                                                                                            DashFormat.PesoShort(t))</span></div>
+                                                                                                                                                                                                                                                                                                                            DashFormat.PesoShort(t))</span></div>
                             }
                         </div>
                         <div class="bars">
@@ -100,7 +99,7 @@
                                             <div class="bar-tip">
                                                 <b>@bar.Title</b><br />
                                                 Invoices @DashFormat.Peso(bar.Invoice)<br />
-                                                Credits −@DashFormat.Peso(bar.Credit)<br />
+                                                <div class="bar-tip-red">Credits −@DashFormat.Peso(bar.Credit)</div><br />
                                                 <b>Total @DashFormat.Peso(bar.Net)</b>
                                             </div>
                                         }

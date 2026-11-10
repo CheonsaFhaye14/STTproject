@@ -21,7 +21,6 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
-
     public virtual DbSet<DeletedSalesInvoice> DeletedSalesInvoices { get; set; }
 
     public virtual DbSet<DeletedSalesInvoiceItem> DeletedSalesInvoiceItems { get; set; }
@@ -48,12 +47,6 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
 
-    public virtual DbSet<MigBaselineInvoice> MigBaselineInvoices { get; set; }
-
-    public virtual DbSet<MigCustomerMap> MigCustomerMaps { get; set; }
-
-    public virtual DbSet<MigCustomerResolution> MigCustomerResolutions { get; set; }
-
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
     public virtual DbSet<SalesInvoiceDeletionBatch> SalesInvoiceDeletionBatches { get; set; }
@@ -67,8 +60,6 @@ public partial class EntrielContext : DbContext
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
-
-    public virtual DbSet<VwSubdCustomerKey> VwSubdCustomerKeys { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
@@ -183,35 +174,6 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CustomerUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_Customer_UpdatedBy");
-        });
-
-        modelBuilder.Entity<CustomerBackup20261109>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("Customer_Backup_20261109");
-
-            entity.Property(e => e.AddressLine).HasMaxLength(255);
-            entity.Property(e => e.City).HasMaxLength(100);
-            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
-            entity.Property(e => e.CustomerCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.CustomerId).ValueGeneratedOnAdd();
-            entity.Property(e => e.CustomerName)
-                .HasMaxLength(150)
-                .IsUnicode(false);
-            entity.Property(e => e.CustomerType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Province).HasMaxLength(100);
-            entity.Property(e => e.SubdCustCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.SubdCustName)
-                .HasMaxLength(200)
-                .IsUnicode(false);
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
         });
 
         modelBuilder.Entity<DeletedSalesInvoice>(entity =>
@@ -542,49 +504,6 @@ public partial class EntrielContext : DbContext
                 .HasConstraintName("FK_ItemsUomPriceHistory_ItemsUom");
         });
 
-        modelBuilder.Entity<MigBaselineInvoice>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("MigBaseline_Invoices");
-
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 2)");
-        });
-
-        modelBuilder.Entity<MigCustomerMap>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("MigCustomerMap");
-
-            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
-            entity.Property(e => e.CustomerCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.CustomerId).ValueGeneratedOnAdd();
-            entity.Property(e => e.Scode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("SCode");
-            entity.Property(e => e.Sname)
-                .HasMaxLength(200)
-                .IsUnicode(false)
-                .HasColumnName("SName");
-        });
-
-        modelBuilder.Entity<MigCustomerResolution>(entity =>
-        {
-            entity.HasKey(e => e.CustomerId);
-
-            entity.ToTable("MigCustomerResolution");
-
-            entity.Property(e => e.CustomerId).ValueGeneratedNever();
-            entity.Property(e => e.Action)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.Note).HasMaxLength(300);
-        });
-
         modelBuilder.Entity<SalesInvoice>(entity =>
         {
             entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1AE9FBEC78");
@@ -798,19 +717,6 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.Username).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<VwSubdCustomerKey>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_SubdCustomerKey");
-
-            entity.Property(e => e.SubdCustCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.SubdCustName)
-                .HasMaxLength(200)
-                .IsUnicode(false);
-        });
         modelBuilder.HasSequence<int>("ImportBatchIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorEvidenceIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorIdSequence");

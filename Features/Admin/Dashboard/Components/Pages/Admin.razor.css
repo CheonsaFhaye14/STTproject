@@ -204,7 +204,7 @@
     white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .1s;
 }
 .dash ::deep .bar-col:hover .bar-tip { opacity: 1; }
-
+.dash ::deep .bar-col:hover .bar-tip-red { color: #ff9393; }
 /* ---------- Records ---------- */
 /* Four compact tiles that share the card's height evenly — never scrolls */
 .dash ::deep .body.tiles { display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 8px; }
