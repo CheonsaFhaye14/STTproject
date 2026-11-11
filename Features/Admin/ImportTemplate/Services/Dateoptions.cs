@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
-/// <summary>Settings of a Date column: an optional regex that extracts the date text, and the format(s) it is read with.</summary>
 public sealed class DateOptions
 {
     public string? Pattern { get; set; }
@@ -19,7 +18,6 @@ public sealed class DateOptions
         catch (JsonException) { return new(); }
     }
 
-    /// <summary>Plain format string when there is no pattern (keeps old data identical), JSON otherwise. Null when both are blank.</summary>
     public static string? ToOptionsJson(string? format, string? pattern)
     {
         format = string.IsNullOrWhiteSpace(format) ? null : format.Trim();
@@ -37,7 +35,6 @@ public sealed class DateOptions
     public string[] Formats =>
         (Format ?? "").Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-    /// <summary>Validates the pattern. Returns null when fine. Used by the template validator.</summary>
     public string? Validate()
     {
         if (!string.IsNullOrWhiteSpace(Pattern))
@@ -48,7 +45,6 @@ public sealed class DateOptions
         return null;
     }
 
-    /// <summary>The one date-reading routine. The importer should call this too, so test and import never disagree.</summary>
     public bool TryRead(string text, out DateTime date, out string extracted, out string? error)
     {
         date = default;

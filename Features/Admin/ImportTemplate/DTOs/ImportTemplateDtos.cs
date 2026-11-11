@@ -1,14 +1,12 @@
 namespace STTproject.Features.Admin.ImportTemplate.DTOs;
 
-/// <summary>Allowed values, shared by dropdowns, the validator and the service.</summary>
+// Allowed values, shared by dropdowns, the validator and the service.
 public static class SheetMatchModes
 {
     public const string Any = "Any";
     public const string Exact = "Exact";
     public const string Contains = "Contains";
     public const string Position = "Position";
-
-    /// <summary>Find the sheet by its column headers, whatever the sheet is called.</summary>
     public const string Headers = "Headers";
     public const string Ignore = "Ignore";
     public static readonly string[] All = { Any, Exact, Contains, Position, Headers, Ignore };

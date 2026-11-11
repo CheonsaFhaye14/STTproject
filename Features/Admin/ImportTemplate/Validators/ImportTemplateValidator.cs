@@ -4,10 +4,7 @@ namespace STTproject.Features.Admin.ImportTemplate.Validators;
 
 public static class ImportTemplateValidator
 {
-    /// <summary>
-    /// Rejects scope combinations the import type doesn't allow. Several active templates may share a
-    /// scope; this only checks that the scope itself is valid for the type.
-    /// </summary>
+
     public static List<string> ValidateScope(string importType, int? subDistributorId, string? principal)
     {
         var def = ImportFieldRegistry.Get(importType);
@@ -25,11 +22,6 @@ public static class ImportTemplateValidator
         return new();
     }
 
-    /// <summary>
-    /// Required field groups one sheet doesn't cover on its own. The importer (WorkbookReader.Plan) reads every
-    /// matched sheet independently and refuses any that can't supply all required fields, so groups are NOT
-    /// pooled across sheets. An Ignore sheet is never read, so it has nothing to cover.
-    /// </summary>
     public static List<string> MissingRequiredGroups(ImportTemplateSheetEditDto sheet, string importType)
     {
         if (sheet.SheetMatchMode == SheetMatchModes.Ignore) return new();
@@ -41,7 +33,6 @@ public static class ImportTemplateValidator
         return ImportFieldRegistry.MissingRequired(importType, mapped);
     }
 
-    /// <summary>Everything a save requires: the structure of each sheet, plus whole-template required-group coverage.</summary>
     public static List<string> Validate(ImportTemplateEditDto dto)
     {
         var errors = ValidateStructure(dto);
@@ -49,10 +40,6 @@ public static class ImportTemplateValidator
         return errors;
     }
 
-    /// <summary>
-    /// Per-sheet required-group errors. Optional sheets count too: when such a sheet is present in a file the
-    /// importer reads it like any other, so it must be complete on its own.
-    /// </summary>
     public static List<string> RequiredGroupErrors(ImportTemplateEditDto dto)
     {
         var read = dto.Sheets.Where(s => s.SheetMatchMode != SheetMatchModes.Ignore).ToList();
@@ -72,10 +59,6 @@ public static class ImportTemplateValidator
         return errors;
     }
 
-    /// <summary>
-    /// Problems that make a template unusable or unreadable, but not an incomplete one. The Template Tester runs
-    /// this much, so an admin can try a half-built template against a real file. Saving needs <see cref="Validate"/>.
-    /// </summary>
     public static List<string> ValidateStructure(ImportTemplateEditDto dto)
     {
         var errors = new List<string>();
@@ -164,8 +147,6 @@ public static class ImportTemplateValidator
             return;
         }
 
-        // One mapping per field on a sheet (the database enforces this too: UX_ITC_Sheet_Field). Other headers
-        // for the same field are aliases of that one mapping, not extra mappings.
         var seenFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Normalized header (primary or alias, any column) -> the column and field that own it.

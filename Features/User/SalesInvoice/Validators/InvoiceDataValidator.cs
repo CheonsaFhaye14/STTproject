@@ -585,6 +585,11 @@ public sealed class InvoiceDataValidator
         return trimmed == "-" || trimmed == "–" || trimmed.Equals("n/a", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The file's own UOM text, bracketed part preferred ("Pack [CS]" → "CS"). No unit is ever guessed:
+    /// split quantity columns imply their unit themselves, and which spellings mean the same unit is up to
+    /// the admin's UOM synonym groups. The split-quantity parameters are kept only so existing callers compile.
+    /// </summary>
     public static bool ResolveUom(
         string? unitOfMeasure,
         out string resolvedUom,
@@ -593,44 +598,16 @@ public sealed class InvoiceDataValidator
         int? inBoxQuantity = null,
         int? dozenQuantity = null)
     {
-        if (!IsMissingUomValue(unitOfMeasure))
+        if (IsMissingUomValue(unitOfMeasure))
         {
-            if (TryExtractBracketedUom(unitOfMeasure, out var bracketedUom))
-            {
-                resolvedUom = NormalizeUom(bracketedUom);
-                return true;
-            }
-
-            resolvedUom = NormalizeUom(unitOfMeasure);
-            return true;
+            resolvedUom = string.Empty;
+            return false;
         }
 
-        if (caseQuantity.HasValue && caseQuantity.Value != 0)
-        {
-            resolvedUom = "CS";
-            return true;
-        }
-
-        if (pieceQuantity.HasValue && pieceQuantity.Value != 0)
-        {
-            resolvedUom = "PCS";
-            return true;
-        }
-
-        if (inBoxQuantity.HasValue && inBoxQuantity.Value != 0)
-        {
-            resolvedUom = "IB";
-            return true;
-        }
-
-        if (dozenQuantity.HasValue && dozenQuantity.Value != 0)
-        {
-            resolvedUom = "DZ";
-            return true;
-        }
-
-        resolvedUom = string.Empty;
-        return false;
+        resolvedUom = TryExtractBracketedUom(unitOfMeasure, out var bracketedUom)
+            ? NormalizeUom(bracketedUom)
+            : NormalizeUom(unitOfMeasure);
+        return true;
     }
 
     public static bool TryResolveUom(
@@ -689,6 +666,10 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
+    /// <summary>
+    /// A single Quantity column with its Unit of Measure. Split quantity columns (Case/Dozen/Piece/In-Box) are read
+    /// row by row in the import itself, so their parameters here are unused and kept only so existing callers compile.
+    /// </summary>
     public static bool TryResolveQuantity(
         int? quantity,
         string? unitOfMeasure,
@@ -704,55 +685,16 @@ public sealed class InvoiceDataValidator
         resolvedUom = string.Empty;
         resolvedField = default;
 
-        if (quantity.HasValue && quantity.Value != 0)
-        {
-            resolvedQuantity = quantity.Value;
-            resolvedUom = NormalizeUom(unitOfMeasure) ?? "PCS";
-            resolvedField = ImportField.Quantity;
-            return true;
-        }
-
-        // Use the implementation that can derive UOM from split-quantities when unitOfMeasure is missing
-        if (!ResolveUom(unitOfMeasure, out var uom, caseQuantity, pieceQuantity, inBoxQuantity, dozenQuantity))
-        {
+        if (!quantity.HasValue || quantity.Value == 0)
             return false;
-        }
 
+        if (!ResolveUom(unitOfMeasure, out var uom))
+            return false;
+
+        resolvedQuantity = quantity.Value;
         resolvedUom = uom;
-
-        if (string.Equals(uom, "CS", StringComparison.OrdinalIgnoreCase) &&
-            caseQuantity.HasValue && caseQuantity.Value != 0)
-        {
-            resolvedQuantity = caseQuantity.Value;
-            resolvedField = ImportField.CaseQuantity;
-            return true;
-        }
-
-        if (string.Equals(uom, "PCS", StringComparison.OrdinalIgnoreCase) &&
-            pieceQuantity.HasValue && pieceQuantity.Value != 0)
-        {
-            resolvedQuantity = pieceQuantity.Value;
-            resolvedField = ImportField.PieceQuantity;
-            return true;
-        }
-
-        if (string.Equals(uom, "IB", StringComparison.OrdinalIgnoreCase) &&
-            inBoxQuantity.HasValue && inBoxQuantity.Value != 0)
-        {
-            resolvedQuantity = inBoxQuantity.Value;
-            resolvedField = ImportField.InBoxQuantity;
-            return true;
-        }
-
-        if (string.Equals(uom, "DZ", StringComparison.OrdinalIgnoreCase) &&
-            dozenQuantity.HasValue && dozenQuantity.Value != 0)
-        {
-            resolvedQuantity = dozenQuantity.Value;
-            resolvedField = ImportField.DozenQuantity;
-            return true;
-        }
-
-        return false;
+        resolvedField = ImportField.Quantity;
+        return true;
     }
     public enum ImportField
     {
@@ -789,74 +731,6 @@ public sealed class InvoiceDataValidator
             return "Salesman values must be the same for all rows in the same invoice.";
 
         return string.Empty;
-    }
-
-    public static IEnumerable<string> GetUomSynonyms(string value)
-    {
-        value = UomParenRegex.Replace(value ?? string.Empty, string.Empty).Trim();
-        var normalized = Normalize(value);
-
-        switch (normalized)
-        {
-            case "cs":
-            case "case":
-            case "cases":
-                yield return "case";
-                yield return "cases";
-                yield return "cs";
-                yield break;
-            case "dz":
-            case "dozen":
-            case "dozens":
-                yield return "dozen";
-                yield return "dozens";
-                yield return "dz";
-                yield break;
-            case "pc":
-            case "pcs":
-            case "piece":
-            case "pieces":
-                yield return "piece";
-                yield return "pieces";
-                yield return "pc";
-                yield return "pcs";
-                yield break;
-            case "pckg":
-            case "package":
-            case "packages":
-                yield return "package";
-                yield return "packages";
-                yield return "pckg";
-                yield break;
-            case "pack":
-            case "pck":
-            case "packs":
-            case "pk":
-            case "pks":
-                yield return "pack";
-                yield return "packs";
-                yield return "pck";
-                yield return "pk";
-                yield return "pks";
-                yield break;
-            case "ib":
-            case "inbox":
-            case "innerbox":
-            case "bx":
-                yield return "innerbox";
-                yield return "inbox";
-                yield return "ib";
-                yield return "bx";
-                yield break;
-            case "tie":
-            case "ties":
-                yield return "tie";
-                yield return "ties";
-                yield break;
-            default:
-                yield return value.Trim();
-                yield break;
-        }
     }
 
     private static string Normalize(string value)
@@ -918,20 +792,6 @@ public sealed class InvoiceDataValidator
                 .Where(char.IsLetterOrDigit)
                 .ToArray());
     }
-    public static string NormalizeUomName(string value)
-    {
-        var normalized = Normalize(value);
-
-        return normalized switch
-        {
-            "cs" or "case" => "Case",
-            "dz" or "dozen" => "Dozen",
-            "pc" or "pcs" or "piece" => "Piece",
-            "pckg" or "package" => "Package",
-            "pck" or "pack" => value.Trim(),
-            _ => value.Trim()
-        };
-    }
     private static string NormalizeUom(string? value)
         => value?.Trim().ToUpperInvariant() ?? string.Empty;
 
@@ -986,8 +846,7 @@ public sealed class InvoiceDataValidator
         return false;
     }
 
-    private static readonly Regex BarcodePrefixRegex =
-        new(@"^\s*(?<code>\d{5,})\s+(?<rest>.+)$", RegexOptions.Compiled);
+    private static readonly Regex BarcodePrefixRegex = new(@"^\s*(?<code>\d{5,})\s+(?<rest>.+)$", RegexOptions.Compiled);
 
     private static string StripItemCodePrefix(string value, string? skuCode = null)
     {
@@ -1018,12 +877,7 @@ public sealed class InvoiceDataValidator
         return m.Success ? m.Groups["code"].Value : null;
     }
 
-    private static bool ResolveNameMatches(
-        List<Data.SubdItem> matches,
-        string rawName,
-        out Data.SubdItem? item,
-        out string? warning,
-        out List<Data.SubdItem>? ambiguousCandidates)
+    private static bool ResolveNameMatches(List<Data.SubdItem> matches, string rawName, out Data.SubdItem? item, out string? warning, out List<Data.SubdItem>? ambiguousCandidates)
     {
         warning = null;
         ambiguousCandidates = null;
@@ -1044,6 +898,5 @@ public sealed class InvoiceDataValidator
         warning = $"Item name '{rawName.Trim()}' matched {candidates.Count} records. Pick the right one.";
         return true;
     }
-    private static readonly Regex UomParenRegex =
-        new(@"\s*\(.*?\)\s*$", RegexOptions.Compiled);
+    private static readonly Regex UomParenRegex = new(@"\s*\(.*?\)\s*$", RegexOptions.Compiled);
 }

@@ -1,0 +1,585 @@
+@using STTproject.Shared.Components
+@using STTproject.Shared.Components.Buttons
+@using STTproject.Features.Admin.ImportTemplate.DTOs
+@using STTproject.Features.Admin.ImportTemplate.Services
+@using STTproject.Features.Admin.ImportTemplate.Validators
+@inject IUomSynonymService Synonyms
+@inject IImportTemplateService Templates
+@inject STTproject.Services.IUserContextService UserContext
+
+<Modal ShowModal="true" Width="980px" MaxWidth="96vw" MaxHeight="94vh" Title="UOM synonyms"
+       Subtitle="Spellings in one group mean the same unit when an import matches a file's UOM" OnClose="RequestClose">
+    <ChildContent>
+        @if (isLoading)
+        {
+            <p class="us-hint">Loading…</p>
+        }
+        else
+        {
+            <div class="us-body">
+
+                @* ── Left: scope rail ── *@
+                <nav class="us-rail" aria-label="Scope">
+                    <div class="us-rail-add">
+                        <AutoComplete TItem="SubDistributorOptionDto" @key="addKey" Placeholder="Open a subdistributor…"
+                                      Items="OtherSubds" ShowAllOnOpen="true" ValueSelector="s => s.SubDistributorId.ToString()"
+                                      TextSelector="s => s.Display" SelectedValueChanged="OnAddSubdAsync" />
+                    </div>
+
+                    <div class="us-rail-list">
+                        <button type="button" class="us-rail-item @(subdId is null ? "on" : "")"
+                                @onclick="() => RequestScopeAsync(null)">
+                            <span class="us-rail-text"><span class="us-rail-code">Global</span></span>
+                            <span class="us-rail-n">@globalCount</span>
+                        </button>
+
+                        <div class="us-rail-label">With changes</div>
+
+                        @foreach (var r in RailSubds)
+                        {
+                            var item = r;
+                            <button type="button" class="us-rail-item @(subdId == item.Subd.SubDistributorId ? "on" : "")"
+                                    title="@RailTitle(item)" @onclick="() => RequestScopeAsync(item.Subd.SubDistributorId)">
+                                <span class="us-rail-text">
+                                    <span class="us-rail-code">@item.Subd.SubdCode</span>
+                                    <span class="us-rail-name">@item.Subd.SubdName</span>
+                                </span>
+                                @if (item.Changes > 0)
+                                {
+                                    <span class="us-rail-badge">@item.Changes</span>
+                                }
+                                else
+                                {
+                                    <span class="us-rail-new">new</span>
+                                }
+                            </button>
+                        }
+                        @if (!RailSubds.Any())
+                        {
+                            <div class="us-rail-empty">None yet. Every subdistributor uses the global groups.</div>
+                        }
+                    </div>
+                </nav>
+
+                @* ── Right: the scope's groups ── *@
+                <section class="us-main">
+                    @{
+                        var activeGlobals = subdId is null ? new List<UomSynonymGroupEditDto>() : globals.Where(x =>
+                x.IsActive).ToList();
+                        var inheritedCount = activeGlobals.Count(Inherits);
+                    }
+
+                    <div class="us-section">
+                        <div class="us-section-text">
+                            <div class="us-title">@ScopeTitle</div>
+                            <div class="us-hint">
+                                @(subdId is null
+                                    ? $"{groups.Count} groups · apply to every subdistributor that doesn't opt out"
+                                    : $"{groups.Count} own · {inheritedCount} of {activeGlobals.Count} global inherited · switch a global group off, or click a spelling, to stop inheriting it")
+                            </div>
+                        </div>
+                        <Button Variant="ButtonVariant.Secondary" Title="+ New group" OnClick="AddGroup" />
+                    </div>
+
+                    @if (groups.Count == 0 && activeGlobals.Count == 0)
+                    {
+                        <div class="us-empty">
+                            @(subdId is null
+                                ? "No global groups yet. Until you add some, a file's UOM has to match the item's UOM name exactly (CS won't find Case)."
+                                : "No own groups and no active global groups. A file's UOM has to match the item's UOM name exactly.")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="us-list @(subdId is null ? "" : "subd")">
+                            <div class="us-row us-row-head">
+                                <span>Group</span>
+                                <span>Spellings in the file · first is tried first</span>
+                                @if (subdId is not null)
+                                {
+                                    <span>From</span>
+                                }
+                                <span>@(subdId is null ? "Active" : "On")</span>
+                                <span></span>
+                            </div>
+
+                            @foreach (var g in groups)
+                            {
+                                var conflicts = ConflictsOf(g).ToList();
+                                <div class="us-row @(g.Dto.IsActive ? "" : "off") @(string.IsNullOrWhiteSpace(g.Dto.GroupName) ? "unnamed" : "")"
+                                     @key="g.Dto.RowKey">
+                                    <div class="us-name" title="Click to rename">
+                                        <Input TValue="string" Placeholder="Group name" @bind-Value="g.Dto.GroupName"
+                                               @bind-Value:after="MarkDirty" />
+                                    </div>
+
+                                    <div class="us-spell">
+                                        <div class="us-chips">
+                                            @for (var i = 0; i < g.Dto.Spellings.Count; i++)
+                                            {
+                                                var idx = i;
+                                                var spelling = g.Dto.Spellings[i];
+                                                var clash = OtherOwner(g, spelling);
+                                                var replaces = g.Dto.IsActive ? GlobalOwner(spelling) : null;
+                                                <span
+                                                    class="us-chip @(subdId is null ? "" : "own") @(idx == 0 ? "first" : "") @(clash is not null ? "bad" : "")"
+                                                    title="@(clash is not null ? $"Also in {clash}" : replaces is not null ? $"Takes this over from the global group {replaces}" : idx == 0 ? "Tried first" : "Click to try this first")">
+                                                    <span class="us-chip-text" @onclick="() => MoveFirst(g, idx)">@spelling</span>
+                                                    @if (replaces is not null)
+                                                    {
+                                                        <i class="fa-solid fa-code-branch us-chip-note" aria-hidden="true"></i>
+                                                    }
+                                                    <button type="button" class="us-chip-x" aria-label="Remove @spelling"
+                                                            @onclick="() => RemoveSpelling(g, idx)">×</button>
+                                                </span>
+                                            }
+                                            @if (addingKey == g.Dto.RowKey || g.Dto.Spellings.Count == 0)
+                                            {
+                                                <span class="us-add">
+                                                    <Input TValue="string" Placeholder="Add, like ctn" @bind-Value="g.NewSpelling" />
+                                                    <Button Variant="ButtonVariant.IconAction" Icon="fa-solid fa-check"
+                                                            Tooltip="Add this spelling" OnClick="@(() => AddSpelling(g))" />
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="us-chip us-chip-add" @onclick="() => StartAdding(g)">+
+                                                    add</button>
+                                                }
+                                            </div>
+                                            @if (g.Error is not null)
+                                            {
+                                                <div class="us-error">@g.Error</div>
+                                            }
+                                            @foreach (var c in conflicts)
+                                            {
+                                                <div class="us-error">@c</div>
+                                            }
+                                        </div>
+
+                                        @if (subdId is not null)
+                                        {
+                                            <span class="us-badge own">own</span>
+                                        }
+
+                                        <label class="us-switch"
+                                               title="@(g.Dto.IsActive ? "Active" : "Inactive: imports ignore it, but its spellings stay reserved")">
+                                            <input type="checkbox" checked="@g.Dto.IsActive" @onchange="@(e => SetActive(g, e))"
+                                                   aria-label="Active" />
+                                            <span class="us-switch-track" aria-hidden="true"></span>
+                                        </label>
+
+                                        <span class="us-hover">
+                                            <Button Variant="ButtonVariant.IconActionDelete" Icon="fa-solid fa-trash"
+                                                    Tooltip="Delete this group" OnClick="@(() => DeleteGroup(g))" />
+                                        </span>
+                                    </div>
+                                }
+
+                                @foreach (var gg in activeGlobals)
+                                {
+                                    var isInherited = Inherits(gg);
+                                    <div class="us-row us-row-global @(isInherited ? "" : "off")" @key="gg.UomSynonymGroupId">
+                                        <span class="us-ro-name">@gg.GroupName</span>
+
+                                        <div class="us-chips">
+                                            @foreach (var sp in gg.Spellings)
+                                            {
+                                                var spelling = sp;
+                                                var taken = isInherited && OwnClaims(spelling);
+                                                var spellingOff = offSpellings.Contains((gg.UomSynonymGroupId, spelling));
+                                                if (!isInherited || taken)
+                                                {
+                                                    <span class="us-chip readonly @(taken ? "taken" : "")"
+                                                          title="@(taken ? "Taken over by one of this subdistributor's own groups" : "Not inherited")">@spelling</span>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="us-chip readonly us-chip-toggle @(spellingOff ? "x" : "")"
+                                                            title="@(spellingOff ? "Not inherited. Click to inherit it again." : "Click to stop inheriting this spelling")"
+                                                            @onclick="() => ToggleSpelling(gg, spelling)">@spelling</button>
+                                                }
+                                            }
+                                        </div>
+
+                                        <span class="us-badge">global</span>
+
+                                        <label class="us-switch"
+                                               title="@(isInherited ? "Inherited. Switch off to stop inheriting this group." : "Not inherited")">
+                                            <input type="checkbox" checked="@isInherited" @onchange="@(e => SetInherit(gg, e))"
+                                                   aria-label="Inherit @gg.GroupName" />
+                                            <span class="us-switch-track" aria-hidden="true"></span>
+                                        </label>
+
+                                        <span></span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (saveErrors.Count > 0)
+                        {
+                            <div class="alert alert-danger py-2 small mt-3 mb-0">
+                                <ul class="mb-0 ps-3">
+                                    @foreach (var e in saveErrors)
+                                    {
+                                        <li>@e</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </section>
+                </div>
+            }
+        </ChildContent>
+        <FooterContent>
+            @* Try it lives in the footer, so it never scrolls away. *@
+            <div class="us-foot">
+                <div class="us-try">
+                    <i class="fa-solid fa-flask us-try-icon" aria-hidden="true"></i>
+                    <div class="us-try-input">
+                        <Input TValue="string" Placeholder="Try a UOM, like CS (24s)" @bind-Value="tryText" />
+                    </div>
+                    <span class="us-muted">tries</span>
+                    @foreach (var s in CurrentMap().Expand(tryText))
+                    {
+                        <span class="us-chip readonly">@s</span>
+                    }
+                </div>
+                @if (savedMessage is not null)
+                {
+                    <span class="us-saved"><i class="fa-solid fa-check" aria-hidden="true"></i> @savedMessage</span>
+                }
+                <div class="us-foot-buttons">
+                    <Button Title="Close" OnClick="RequestClose" Variant="ButtonVariant.Secondary" />
+                    <Button Title="@(isSaving ? "Saving…" : "Save changes")" OnClick="SaveAsync" Disabled="@isSaving"
+                            Variant="ButtonVariant.Primary" />
+                </div>
+            </div>
+        </FooterContent>
+    </Modal>
+
+<ConfirmModal Show="confirm is not null" Title="Discard unsaved changes?" IconClass="fa-solid fa-triangle-exclamation"
+              Message="@(confirm == ConfirmKind.Close ? "Your changes to the UOM synonyms haven't been saved." : "Your changes here haven't been saved. Switching discards them.")"
+              YesLabel="Discard" NoLabel="Keep editing" OnYes="ConfirmDiscardAsync" OnNo="CancelConfirm" />
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private sealed class GroupVm
+    {
+        public required UomSynonymGroupEditDto Dto { get; init; }
+        public string NewSpelling { get; set; } = string.Empty;
+        public string? Error { get; set; }
+    }
+
+    private sealed record RailSubd(SubDistributorOptionDto Subd, int OwnGroups, int OptOuts)
+    {
+        public int Changes => OwnGroups + OptOuts;
+    }
+
+    private enum ConfirmKind { Close, Switch }
+
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool dirty;
+
+    // Null = Global.
+    private int? subdId;
+    private int? pendingScope;
+    private ConfirmKind? confirm;
+
+    private int globalCount;
+
+    // The one row whose "+ add" box is open. A new group with no spellings always shows its box.
+    private Guid? addingKey;
+    private int addKey;
+
+    private List<SubDistributorOptionDto> subds = new();
+    private List<UomSynonymSubdSummaryDto> summaries = new();
+    private List<GroupVm> groups = new();
+    private List<UomSynonymGroupEditDto> globals = new();
+    private List<int> deletedIds = new();
+
+    // Subdistributor scope: the global groups, and single spellings of them, it doesn't inherit.
+    private HashSet<int> offGroups = new();
+    private HashSet<(int GroupId, string Spelling)> offSpellings = new();
+
+    private List<string> saveErrors = new();
+    private string? savedMessage;
+    private string tryText = "CS (24s)";
+
+    protected override async Task OnInitializedAsync()
+    {
+        subds = await Templates.GetSubDistributorsAsync();
+        summaries = await Synonyms.GetSubdSummariesAsync();
+        await LoadScopeAsync(null);
+        isLoading = false;
+    }
+
+    // ── rail ─────────────────────────────────────────────────────────
+
+    // Subdistributors with their own groups or opt-outs, plus the one open now even if it has none yet.
+    private IEnumerable<RailSubd> RailSubds
+    {
+        get
+        {
+            var byId = summaries.ToDictionary(s => s.SubDistributorId);
+            return subds
+                .Where(s => byId.ContainsKey(s.SubDistributorId) || s.SubDistributorId == subdId)
+                .Select(s => byId.TryGetValue(s.SubDistributorId, out var sum)
+                    ? new RailSubd(s, sum.OwnGroups, sum.OptOuts)
+                    : new RailSubd(s, 0, 0));
+        }
+    }
+
+    private IEnumerable<SubDistributorOptionDto> OtherSubds
+    {
+        get
+        {
+            var shown = RailSubds.Select(r => r.Subd.SubDistributorId).ToHashSet();
+            return subds.Where(s => !shown.Contains(s.SubDistributorId));
+        }
+    }
+
+    private static string RailTitle(RailSubd r) =>
+        $"{r.Subd.Display}: {r.OwnGroups} own {(r.OwnGroups == 1 ? "group" : "groups")}, {r.OptOuts} global {(r.OptOuts == 1 ?
+"item" : "items")} not inherited";
+
+    private string ScopeTitle => subdId is int id
+        ? subds.FirstOrDefault(s => s.SubDistributorId == id)?.Display ?? "Subdistributor"
+        : "Global groups";
+
+    private async Task OnAddSubdAsync(string? value)
+    {
+        if (!int.TryParse(value, out var id)) return;
+        addKey++; // empty the box for the next search
+        await RequestScopeAsync(id);
+    }
+
+    // ── closing ──────────────────────────────────────────────────────
+
+    private async Task RequestClose()
+    {
+        if (dirty)
+        {
+            confirm = ConfirmKind.Close;
+            return;
+        }
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task ConfirmDiscardAsync()
+    {
+        var kind = confirm;
+        confirm = null;
+        dirty = false;
+
+        if (kind == ConfirmKind.Close)
+            await OnClose.InvokeAsync();
+        else
+            await LoadScopeAsync(pendingScope);
+    }
+
+    private void CancelConfirm()
+    {
+        confirm = null;
+        pendingScope = null;
+    }
+
+    // ── scope ────────────────────────────────────────────────────────
+
+    private async Task RequestScopeAsync(int? id)
+    {
+        if (id == subdId) return;
+
+        if (dirty)
+        {
+            pendingScope = id;
+            confirm = ConfirmKind.Switch;
+            return;
+        }
+
+        await LoadScopeAsync(id);
+    }
+
+    private async Task LoadScopeAsync(int? id)
+    {
+        var scope = await Synonyms.GetScopeAsync(id);
+        subdId = id;
+        groups = scope.Groups.Select(g => new GroupVm { Dto = g }).ToList();
+        globals = scope.GlobalGroups;
+        globalCount = id is null ? scope.Groups.Count : scope.GlobalGroups.Count;
+        offGroups = scope.Exclusions.Where(e => e.Spelling is null).Select(e => e.UomSynonymGroupId).ToHashSet();
+        offSpellings = scope.Exclusions.Where(e => e.Spelling is not null).Select(e => (e.UomSynonymGroupId,
+e.Spelling!)).ToHashSet();
+        deletedIds = new();
+        addingKey = null;
+        saveErrors = new();
+        savedMessage = null;
+        pendingScope = null;
+        dirty = false;
+    }
+
+    // ── editing ──────────────────────────────────────────────────────
+
+    private void MarkDirty()
+    {
+        dirty = true;
+        savedMessage = null;
+    }
+
+    private void SetActive(GroupVm g, ChangeEventArgs e)
+    {
+        g.Dto.IsActive = e.Value is true;
+        MarkDirty();
+    }
+
+    private void AddGroup()
+    {
+        var added = new GroupVm { Dto = new UomSynonymGroupEditDto() };
+        groups.Insert(0, added); // at the top, where it's seen without scrolling
+        addingKey = added.Dto.RowKey;
+        MarkDirty();
+    }
+
+    private void StartAdding(GroupVm g)
+    {
+        addingKey = g.Dto.RowKey;
+        g.Error = null;
+    }
+
+    private void DeleteGroup(GroupVm g)
+    {
+        groups.Remove(g);
+        if (g.Dto.UomSynonymGroupId != 0) deletedIds.Add(g.Dto.UomSynonymGroupId);
+        MarkDirty();
+    }
+
+    private void AddSpelling(GroupVm g)
+    {
+        var spelling = UomSynonymMap.Norm(g.NewSpelling);
+        g.Error = UomSynonymValidator.CheckSpelling(spelling);
+        if (g.Error is null && g.Dto.Spellings.Contains(spelling))
+            g.Error = $"\"{spelling}\" is already in this group.";
+        if (g.Error is not null) return;
+
+        g.Dto.Spellings.Add(spelling);
+        g.NewSpelling = string.Empty;
+        addingKey = g.Dto.RowKey; // stays open for the next spelling
+        MarkDirty();
+    }
+
+    private void RemoveSpelling(GroupVm g, int index)
+    {
+        g.Dto.Spellings.RemoveAt(index);
+        g.Error = null;
+        MarkDirty();
+    }
+
+    private void MoveFirst(GroupVm g, int index)
+    {
+        if (index == 0) return;
+        var spelling = g.Dto.Spellings[index];
+        g.Dto.Spellings.RemoveAt(index);
+        g.Dto.Spellings.Insert(0, spelling);
+        MarkDirty();
+    }
+
+    private bool Inherits(UomSynonymGroupEditDto gg) => !offGroups.Contains(gg.UomSynonymGroupId);
+
+    private void SetInherit(UomSynonymGroupEditDto gg, ChangeEventArgs e)
+    {
+        if (e.Value is true) offGroups.Remove(gg.UomSynonymGroupId);
+        else offGroups.Add(gg.UomSynonymGroupId);
+        MarkDirty();
+    }
+
+    private void ToggleSpelling(UomSynonymGroupEditDto gg, string spelling)
+    {
+        var key = (gg.UomSynonymGroupId, spelling);
+        if (!offSpellings.Remove(key)) offSpellings.Add(key);
+        MarkDirty();
+    }
+
+    // ── what the modal shows ─────────────────────────────────────────
+
+    private static string NameOf(UomSynonymGroupEditDto d) =>
+        string.IsNullOrWhiteSpace(d.GroupName) ? "an unnamed group" : d.GroupName.Trim();
+
+    // Another group in this scope (active or not) that already has the spelling.
+    private string? OtherOwner(GroupVm g, string spelling) =>
+        groups.Where(o => o != g && o.Dto.Spellings.Contains(spelling)).Select(o => NameOf(o.Dto)).FirstOrDefault();
+
+    // The inherited global group this subdistributor's spelling takes over.
+    private string? GlobalOwner(string spelling) =>
+        subdId is null ? null : globals
+            .Where(x => x.IsActive && Inherits(x) && x.Spellings.Contains(spelling)
+                        && !offSpellings.Contains((x.UomSynonymGroupId, spelling)))
+            .Select(NameOf).FirstOrDefault();
+
+    // Does one of this subdistributor's active groups take this spelling?
+    private bool OwnClaims(string spelling) =>
+        groups.Any(g => g.Dto.IsActive && g.Dto.Spellings.Contains(spelling));
+
+    private IEnumerable<string> ConflictsOf(GroupVm g) =>
+        g.Dto.Spellings
+            .Select(s => (s, owner: OtherOwner(g, s)))
+            .Where(x => x.owner is not null)
+            .Select(x => $"\"{x.s}\" is also in {x.owner}. A spelling can belong to only one group.");
+
+    // The same map an import would build, from what's on screen now.
+    private UomSynonymMap CurrentMap()
+    {
+        var own = groups.Where(g => g.Dto.IsActive).Select(g => (IEnumerable<string>)g.Dto.Spellings);
+
+        if (subdId is null)
+            return UomSynonymMap.Build(Array.Empty<IEnumerable<string>>(), own);
+
+        var inherited = globals.Where(x => x.IsActive && Inherits(x))
+            .Select(x => x.Spellings.Where(s => !offSpellings.Contains((x.UomSynonymGroupId, s))));
+        return UomSynonymMap.Build(own, inherited);
+    }
+
+    // ── save ─────────────────────────────────────────────────────────
+
+    private async Task SaveAsync()
+    {
+        if (isSaving) return;
+
+        savedMessage = null;
+        saveErrors = UomSynonymValidator.Validate(groups.Select(g => g.Dto).ToList());
+        if (saveErrors.Count > 0) return;
+
+        isSaving = true;
+        try
+        {
+            var result = await Synonyms.SaveScopeAsync(new UomSynonymScopeDto
+            {
+                SubDistributorId = subdId,
+                Groups = groups.Select(g => g.Dto).ToList(),
+                DeletedGroupIds = deletedIds.ToList(),
+                Exclusions = subdId is null
+                    ? new()
+                    : offGroups.Select(id => new UomSynonymExclusionDto(id))
+                        .Concat(offSpellings.Where(k => !offGroups.Contains(k.GroupId))
+                            .Select(k => new UomSynonymExclusionDto(k.GroupId, k.Spelling)))
+                        .ToList()
+            }, UserContext.UserId ?? 0);
+
+            if (!result.Success)
+            {
+                saveErrors = result.Errors;
+                return;
+            }
+
+            summaries = await Synonyms.GetSubdSummariesAsync();
+            await LoadScopeAsync(subdId);
+            savedMessage = "Saved. Imports checked from now on use these spellings.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

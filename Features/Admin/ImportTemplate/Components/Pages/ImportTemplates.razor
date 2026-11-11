@@ -4,9 +4,7 @@
 @using STTproject.Shared.Components.Buttons
 @inject NavigationManager Nav
 
-<LoadingOverlay Show="isLoading"
-                Title="Loading Templates…"
-                Subtitle="Please wait while we fetch the latest data."
+<LoadingOverlay Show="isLoading" Title="Loading Templates…" Subtitle="Please wait while we fetch the latest data."
                 IconClass="fa-solid fa-file-import" />
 
 <div style="@(isLoading ? "display:none;" : "")">
@@ -16,16 +14,26 @@
                 <h1 class="clt-page-title">Import Templates</h1>
                 <p class="clt-page-sub">Tell each import how to read a subdistributor's or principal's file.</p>
             </div>
-            <Button Title="New template" OnClick="@(() => Nav.NavigateTo("/admin/import-templates/new"))"
-                    Icon="fa-solid fa-plus" Variant="ButtonVariant.Primary" />
+            <div class="d-flex align-items-center gap-2">
+                <Button Title="UOM synonyms" Icon="fa-solid fa-ruler-combined" Variant="ButtonVariant.Secondary"
+                        OnClick="() => showSynonyms = true" />
+                <Button Title="New template" OnClick="@(() => Nav.NavigateTo("/admin/import-templates/new"))"
+                        Icon="fa-solid fa-plus" Variant="ButtonVariant.Primary" />
+            </div>
         </div>
 
         <ImportTemplatesTable OnLoaded="OnTableLoaded" />
     </div>
 </div>
 
+@if (showSynonyms)
+{
+    <UomSynonymsModal OnClose="() => showSynonyms = false" />
+}
+
 @code {
     private bool isLoading = true;
+    private bool showSynonyms;
 
     private async Task OnTableLoaded()
     {

@@ -59,6 +59,12 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<SubdItem> SubdItems { get; set; }
 
+    public virtual DbSet<UomSynonym> UomSynonyms { get; set; }
+
+    public virtual DbSet<UomSynonymExclusion> UomSynonymExclusions { get; set; }
+
+    public virtual DbSet<UomSynonymGroup> UomSynonymGroups { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -693,6 +699,72 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.SubdItemUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_SubdItem_UpdatedBy");
+        });
+
+        modelBuilder.Entity<UomSynonym>(entity =>
+        {
+            entity.ToTable("UomSynonym");
+
+            entity.HasIndex(e => e.UomSynonymGroupId, "IX_UomSynonym_GroupId");
+
+            entity.HasIndex(e => e.SynonymText, "UX_UomSynonym_Global")
+                .IsUnique()
+                .HasFilter("([SubDistributorId] IS NULL)");
+
+            entity.HasIndex(e => new { e.SubDistributorId, e.SynonymText }, "UX_UomSynonym_Subd")
+                .IsUnique()
+                .HasFilter("([SubDistributorId] IS NOT NULL)");
+
+            entity.Property(e => e.SynonymText).HasMaxLength(30);
+
+            entity.HasOne(d => d.UomSynonymGroup).WithMany(p => p.UomSynonyms)
+                .HasForeignKey(d => d.UomSynonymGroupId)
+                .HasConstraintName("FK_UomSynonym_Group");
+        });
+
+        modelBuilder.Entity<UomSynonymExclusion>(entity =>
+        {
+            entity.ToTable("UomSynonymExclusion");
+
+            entity.HasIndex(e => e.UomSynonymGroupId, "IX_UomSynonymExclusion_GroupId");
+
+            entity.HasIndex(e => e.UomSynonymId, "IX_UomSynonymExclusion_SynonymId");
+
+            entity.HasIndex(e => new { e.SubDistributorId, e.UomSynonymGroupId }, "UX_UomSynonymExclusion_Group")
+                .IsUnique()
+                .HasFilter("([UomSynonymId] IS NULL)");
+
+            entity.HasIndex(e => new { e.SubDistributorId, e.UomSynonymId }, "UX_UomSynonymExclusion_Spelling")
+                .IsUnique()
+                .HasFilter("([UomSynonymId] IS NOT NULL)");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.UomSynonymExclusions)
+                .HasForeignKey(d => d.SubDistributorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_UomSynonymExclusion_SubDistributor");
+
+            entity.HasOne(d => d.UomSynonymGroup).WithMany(p => p.UomSynonymExclusions)
+                .HasForeignKey(d => d.UomSynonymGroupId)
+                .HasConstraintName("FK_UomSynonymExclusion_Group");
+
+            entity.HasOne(d => d.UomSynonym).WithMany(p => p.UomSynonymExclusions)
+                .HasForeignKey(d => d.UomSynonymId)
+                .HasConstraintName("FK_UomSynonymExclusion_Synonym");
+        });
+
+        modelBuilder.Entity<UomSynonymGroup>(entity =>
+        {
+            entity.ToTable("UomSynonymGroup");
+
+            entity.HasIndex(e => e.SubDistributorId, "IX_UomSynonymGroup_SubDistributorId");
+
+            entity.Property(e => e.GroupName).HasMaxLength(50);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_UomSynonymGroup_IsActive");
+            entity.Property(e => e.Version).HasDefaultValue(1, "DF_UomSynonymGroup_Version");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.UomSynonymGroups)
+                .HasForeignKey(d => d.SubDistributorId)
+                .HasConstraintName("FK_UomSynonymGroup_SubDistributor");
         });
 
         modelBuilder.Entity<User>(entity =>

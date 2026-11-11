@@ -366,7 +366,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         try
         {
             t.IsActive = isActive;
-            t.Version++;                     // an edit session opened before this change must fail its version check
+            t.Version++;
             t.UpdatedDate = DateTime.UtcNow;
             t.UpdatedBy = userId;
             await ctx.SaveChangesAsync(ct);
@@ -475,7 +475,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         }
     }
 
-    /// <summary>Updates rows that already exist (keeping their ids, so past imports stay linked) and adds new ones.</summary>
+    //Updates rows that already exist (keeping their ids, so past imports stay linked) and adds new ones.
     private static void UpsertSheets(EntrielContext ctx, TemplateEntity entity, ImportTemplateEditDto dto)
     {
         for (int si = 0; si < dto.Sheets.Count; si++)
@@ -512,8 +512,8 @@ public sealed class ImportTemplateService : IImportTemplateService
                 if (col is null)
                 {
                     col = new ColumnEntity();
-                    entity.ImportTemplateColumns.Add(col);   // column belongs to the template...
-                    sheet.ImportTemplateColumns.Add(col);    // ...and to its sheet
+                    entity.ImportTemplateColumns.Add(col);
+                    sheet.ImportTemplateColumns.Add(col);
                 }
 
                 col.HeaderText = cd.HeaderText;
@@ -528,10 +528,8 @@ public sealed class ImportTemplateService : IImportTemplateService
         }
     }
 
-    /// <summary>
-    /// Makes the column's alias rows match the DTO: existing rows keep their ids, new ones are added,
-    /// rows no longer listed are deleted. The cleaning rule is not stored per alias; it belongs to the parent.
-    /// </summary>
+    // Makes the column's alias rows match the DTO: existing rows keep their ids, new ones are added,
+    // rows no longer listed are deleted. The cleaning rule is not stored per alias; it belongs to the parent.
     private static void SyncAliases(EntrielContext ctx, ColumnEntity col, List<ImportTemplateAliasEditDto> wanted)
     {
         var keepIds = wanted.Where(a => a.ImportTemplateColumnAliasId != 0)
@@ -597,9 +595,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         return exists ? null : "The selected subdistributor was not found or is inactive.";
     }
 
-    /// <summary>
-    /// Two active templates in the same scope can't share a name. Scope alone is no longer a conflict.
-    /// </summary>
+    // Two active templates in the same scope can't share a name. Scope alone is no longer a conflict.
     private static Task<bool> HasActiveNameConflictAsync(
         EntrielContext ctx, string importType, int? subDistributorId, string? principal,
         string templateName, int excludeId, CancellationToken ct)
@@ -614,10 +610,9 @@ public sealed class ImportTemplateService : IImportTemplateService
                            && t.ImportTemplateId != excludeId, ct);
     }
 
-    /// <summary>
-    /// A typed name is used as is (the conflict check handles clashes). A blank name gets a generated
-    /// one, with " (2)", " (3)" ... added so it never repeats a template already in this scope.
-    /// </summary>
+
+    // A typed name is used as is (the conflict check handles clashes).
+    // A blank name gets a generated one, with " (2)", " (3)" ... added so it never repeats a template already in this scope.
     private static async Task<string> ResolveTemplateNameAsync(
         EntrielContext ctx, string importType, int? subDistributorId, string? principal,
         string? requested, int excludeId, CancellationToken ct)
@@ -676,7 +671,7 @@ public sealed class ImportTemplateService : IImportTemplateService
         }
 
         var ids = await q
-            .OrderBy(t => t.SubDistributorId == null && t.Principal == null ? 1 : 0)   // scope-specific first
+            .OrderBy(t => t.SubDistributorId == null && t.Principal == null ? 1 : 0)
             .ThenBy(t => t.TemplateName)
             .ThenBy(t => t.ImportTemplateId)
             .Select(t => t.ImportTemplateId)

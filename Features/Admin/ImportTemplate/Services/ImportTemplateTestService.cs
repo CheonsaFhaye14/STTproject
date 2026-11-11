@@ -9,7 +9,6 @@ namespace STTproject.Features.Admin.ImportTemplate.Services;
 
 public enum TestVerdict { Passed, NeedsLook, Blocked }
 
-/// <summary>NotFound = the template sheet has no worksheet in the file (required or optional, see IsRequired).</summary>
 public enum TestSheetStatus { Passed, NeedsLook, Blocked, NotFound }
 
 public enum FieldState { Found, OptionalMissing, RequiredMissing, Ambiguous }
@@ -22,7 +21,6 @@ public enum IssueKind
     OptionalSheet, OptionalColumns, RowProblem
 }
 
-/// <summary>One thing the user should know about. Blocking issues stop the import; the rest are worth a look.</summary>
 public sealed class TemplateTestIssue
 {
     public IssueKind Kind { get; init; }
@@ -54,10 +52,8 @@ public sealed class TemplateTestResult
 {
     public List<string> Errors { get; } = new();
 
-    /// <summary>The template is incomplete (it couldn't be saved yet) but can still be tested.</summary>
     public List<string> Warnings { get; } = new();
 
-    /// <summary>Worth knowing, nothing to fix: worksheets the template doesn't use, hidden worksheets.</summary>
     public List<string> Notes { get; } = new();
     public List<TemplateTestSheet> Sheets { get; } = new();
 

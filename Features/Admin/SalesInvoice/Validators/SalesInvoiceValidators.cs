@@ -48,13 +48,7 @@ public static class SalesInvoiceValidator
 
     // ─── Shared header validation ────────────────────────────────────────────
 
-    private static void ValidateHeader(
-        string invoiceCode,
-        DateOnly invoiceDate,
-        int customerId,
-        int subDistributorId,
-        string orderType,
-        Dictionary<string, string> errors)
+    private static void ValidateHeader(string invoiceCode, DateOnly invoiceDate, int customerId, int subDistributorId, string orderType, Dictionary<string, string> errors)
     {
         if (string.IsNullOrWhiteSpace(invoiceCode))
             errors[Fields.InvoiceCode] = "Invoice code is required.";
@@ -80,10 +74,7 @@ public static class SalesInvoiceValidator
 
     // ─── Shared items validation ─────────────────────────────────────────────
 
-    private static void ValidateItems(
-        List<(int SubdItemId, int ItemsUomId, int Quantity, decimal Amount)> items,
-        string orderType,
-        Dictionary<string, string> errors)
+    private static void ValidateItems(List<(int SubdItemId, int ItemsUomId, int Quantity, decimal Amount)> items, string orderType, Dictionary<string, string> errors)
     {
         if (items.Count == 0)
         {
@@ -130,53 +121,6 @@ public static class SalesInvoiceValidator
         if (duplicates.Any())
             errors[Fields.Items] =
                 "Duplicate item and UOM combinations are not allowed.";
-    }  // ─── Single field helpers (for inline validation in UI) ──────────────────
-
-    public static string? ValidateInvoiceCode(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "Invoice code is required.";
-        if (value.Trim().Length > 50) return "Invoice code must not exceed 50 characters.";
-        return null;
     }
 
-    public static string? ValidateInvoiceDate(DateOnly? value)
-    {
-        if (value is null || value == default) return "Invoice date is required.";
-        if (value > DateOnly.FromDateTime(DateTime.Today)) return "Invoice date cannot be in the future.";
-        return null;
-    }
-
-    public static string? ValidateCustomer(int? value)
-        => value is null or <= 0 ? "Customer is required." : null;
-
-    public static string? ValidateSubDistributor(int? value)
-        => value is null or <= 0 ? "Sub distributor is required." : null;
-
-    public static string? ValidateOrderType(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "Order type is required.";
-        if (!ValidOrderTypes.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase))
-            return $"Order type must be one of: {string.Join(", ", ValidOrderTypes)}.";
-        return null;
-    }
-
-    public static string? ValidateQuantity(int? value)
-        => value is null or <= 0 ? "Quantity must be greater than zero." : null;
-
-    public static string? ValidateAmount(decimal? value, string? orderType)
-    {
-        if (value is null)
-            return "Amount is required.";
-
-        var isCredit =
-            string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase);
-
-        if (isCredit && value >= 0)
-            return "Amount must be negative for credit transactions.";
-
-        if (!isCredit && value < 0)
-            return "Amount cannot be negative for invoice transactions.";
-
-        return null;
-    }
 }

@@ -42,11 +42,11 @@ public static class ImportFieldRegistry
                 new("DozenQuantity",    "Dozen Quantity",     I, "Split column: UOM is implied (dozen)."),
                 new("PieceQuantity",    "Piece Quantity",     I, "Split column: UOM is implied (piece)."),
                 new("InBoxQuantity",    "In-Box Quantity",    I, "Split column: UOM is implied (inbox)."),
-                new("OrderType",        "Order Type",         T, "Invoice or Credit. Inferred if blank.", 
-                    new[] { "Invoice", "Credit" }),                
+                new("OrderType",        "Order Type",         T, "Invoice or Credit. Inferred if blank.",
+                    new[] { "Invoice", "Credit" }),
                 new("NetAmount",        "Net Amount",         D, "Used to infer Invoice/Credit from its sign."),
                 new("FreeItems",        "Free Items",         T, "Anything not listed here is treated as not free.",
-                    new[] { "Yes", "No" }),            
+                    new[] { "Yes", "No" }),
             },
             new[]
             {
@@ -56,7 +56,7 @@ public static class ImportFieldRegistry
                 new[] { "CustomerCode", "CustomerName" },
                 new[] { "SkuCode", "ItemName" },
                 new[] { "Quantity", "CaseQuantity", "DozenQuantity", "PieceQuantity", "InBoxQuantity" },
-            },    
+            },
             new[]
             {
                 new ImportDependency(new[] { "Quantity" }, new[] { "UnitOfMeasure" })
@@ -125,7 +125,6 @@ public static class ImportFieldRegistry
     public static bool IsValidField(string importType, string? fieldKey) =>
         GetField(importType, fieldKey) is not null;
 
-    /// <summary>Returns a message for each required group the template doesn't cover.</summary>
     public static List<string> MissingRequired(string importType, IEnumerable<string> mappedKeys)
     {
         var def = Get(importType);

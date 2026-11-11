@@ -10,10 +10,6 @@ public static class ImportRulePreview
             ? result
             : $"({error})";
 
-    /// <summary>
-    /// <paramref name="options"/> is the column's OptionsJson: a plain format string (legacy) or
-    /// JSON with an optional regex "pattern" and "format" (several formats separated by |).
-    /// </summary>
     public static string ApplyDate(string sample, string? options)
     {
         var opts = DateOptions.Parse(options);

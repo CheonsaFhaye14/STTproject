@@ -45,5 +45,9 @@ public partial class SubDistributor
 
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();
 
+    public virtual ICollection<UomSynonymExclusion> UomSynonymExclusions { get; set; } = new List<UomSynonymExclusion>();
+
+    public virtual ICollection<UomSynonymGroup> UomSynonymGroups { get; set; } = new List<UomSynonymGroup>();
+
     public virtual User? UpdatedByNavigation { get; set; }
 }

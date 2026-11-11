@@ -1,0 +1,547 @@
+/* Scoped to UomSynonymsModal. Colours follow the import template pages (.it-form tokens). */
+
+.us-body,
+.us-foot {
+    --us-sand: #F0E6CC;
+    --us-head: #F0EADB;
+    --us-line: #E3DCC8;
+    --us-input-line: #d8bfbf;
+    --us-accent: #A8884F;
+    --us-accent-soft: #eee2d4;
+    --us-ink: #171719;
+    --us-label: #3a3a33;
+    --us-muted: #8A8A92;
+    --us-red: #7c1d1d;
+    --us-red-bg: #f6d7da;
+    --us-green: #2F7D4F;
+
+    /* What's left of the screen after the modal's header, footer and padding. Content shorter than this
+       needs no scroll at all; only a long rail or a long list scrolls, each on its own. */
+    --us-fit: calc(94vh - 240px);
+
+    font-size: 13px;
+    color: var(--us-ink);
+}
+
+/* ── Inputs inside the shared Input / AutoComplete (same look as the template edit page) ── */
+.us-body ::deep input:not([type="checkbox"]),
+.us-foot ::deep input:not([type="checkbox"]) {
+    width: 100%;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--us-ink);
+    background: #fff;
+    border: 1px solid var(--us-input-line);
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.us-body ::deep input:not([type="checkbox"]):focus,
+.us-foot ::deep input:not([type="checkbox"]):focus {
+    outline: none;
+    border-color: var(--us-accent);
+    box-shadow: 0 0 0 3px rgba(168, 136, 79, 0.2);
+}
+
+.us-body ::deep .autocomplete-list {
+    border-color: var(--us-input-line);
+    border-radius: 8px;
+}
+
+/* ── Layout: rail | main ── */
+.us-body {
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: 16px;
+    height: var(--us-fit);
+    min-height: 320px;
+}
+
+/* Each side is a full-height column. Only the boxes' insides scroll, and only when they're full.
+   The rail's search sits outside its scrolling part, so its dropdown is never clipped. */
+.us-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.us-rail-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* ── Rail ── */
+.us-rail {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid var(--us-line);
+    border-radius: 10px;
+}
+
+.us-rail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.us-rail-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    font: inherit;
+    text-align: left;
+    color: var(--us-ink);
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.us-rail-item:hover { background: #f7f2e6; }
+
+.us-rail-item.on {
+    font-weight: 600;
+    background: var(--us-accent-soft);
+}
+
+.us-rail-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.us-rail-code { line-height: 1.3; }
+
+.us-rail-name {
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--us-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.us-rail-n {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--us-muted);
+}
+
+.us-rail-badge,
+.us-rail-new {
+    flex-shrink: 0;
+    padding: 0 7px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 18px;
+    border-radius: 999px;
+}
+
+.us-rail-badge {
+    color: #7a5a2b;
+    background: var(--us-accent-soft);
+}
+
+.us-rail-item.on .us-rail-badge { background: #fff; }
+
+.us-rail-new {
+    color: var(--us-muted);
+    border: 1px dashed var(--us-input-line);
+}
+
+.us-rail-label {
+    margin: 12px 10px 4px;
+    font-size: 11px;
+    color: var(--us-muted);
+}
+
+.us-rail-empty {
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--us-muted);
+}
+
+.us-rail-add { position: relative; }
+
+/* The dropdown floats over the rail list and may run into the main column; names stay on one line. */
+.us-rail ::deep .autocomplete-list {
+    width: 320px;
+    right: auto;
+    z-index: 1060;
+}
+
+.us-rail ::deep .autocomplete-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Main ── */
+.us-hint, .us-muted {
+    font-size: 12px;
+    color: var(--us-muted);
+}
+
+.us-section {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.us-section-text { min-width: 0; }
+
+.us-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.us-empty {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--us-label);
+    background: var(--us-sand);
+    border-radius: 10px;
+}
+
+/* ── Rows: name · spellings · (from) · on · delete ── */
+.us-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--us-line);
+    border-radius: 10px;
+}
+
+.us-row {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr) 40px 34px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+}
+
+.us-list.subd .us-row { grid-template-columns: 130px minmax(0, 1fr) 50px 40px 34px; }
+
+.us-row + .us-row { border-top: 1px solid var(--us-line); }
+
+.us-row:not(.us-row-head):hover,
+.us-row:not(.us-row-head):focus-within { background: #fdfaf3; }
+
+.us-row-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 5px 10px;
+    font-size: 11px;
+    color: var(--us-muted);
+    background: var(--us-head);
+    border-radius: 9px 9px 0 0;
+}
+
+.us-row.off { background: #faf8f3; }
+.us-row.off .us-name,
+.us-row.off .us-spell { opacity: 0.6; }
+
+/* Inherited global rows: name as text, chips can be switched off one by one. */
+.us-row-global { background: #fdfcf8; }
+.us-row-global.off .us-ro-name,
+.us-row-global.off .us-chips { opacity: 0.5; }
+
+.us-ro-name {
+    padding-left: 2px;
+    font-weight: 600;
+}
+
+.us-spell { min-width: 0; }
+
+.us-body ::deep .us-name input {
+    height: 28px;
+    padding: 0 8px;
+    font-weight: 600;
+    background: transparent;
+    border-color: transparent;
+}
+
+.us-row:hover ::deep .us-name input { border-color: var(--us-line); border-style: dashed; }
+.us-body ::deep .us-name input:focus { background: #fff; border-style: solid; }
+
+/* A new group shows its name box until it has a name. */
+.us-row.unnamed ::deep .us-name input { border-color: var(--us-input-line); border-style: solid; background: #fff; }
+
+/* Where a group comes from. */
+.us-badge {
+    justify-self: start;
+    padding: 1px 8px;
+    font-size: 11px;
+    color: #7a5a2b;
+    background: var(--us-accent-soft);
+    border-radius: 999px;
+}
+
+.us-badge.own {
+    color: #3b6d11;
+    background: #e7efe0;
+}
+
+/* ── Spelling chips ── */
+.us-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+}
+
+.us-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 4px 0 9px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    color: var(--us-ink);
+    background: #fff;
+    border: 1px solid var(--us-input-line);
+    border-radius: 999px;
+}
+
+.us-chip.readonly { padding: 0 9px; }
+
+.us-chip.first {
+    font-weight: 600;
+    background: var(--us-accent-soft);
+    border-color: var(--us-accent);
+}
+
+.us-chip.own:not(.first):not(.bad) { border-color: #b7cfa8; }
+
+.us-chip.bad {
+    color: var(--us-red);
+    background: var(--us-red-bg);
+    border-color: #d9a3aa;
+}
+
+.us-chip.taken {
+    color: var(--us-muted);
+    text-decoration: line-through;
+    background: transparent;
+}
+
+.us-chip-text { cursor: pointer; }
+
+.us-chip-note {
+    font-size: 10px;
+    color: var(--us-accent);
+}
+
+.us-chip-x {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--us-muted);
+    background: none;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.us-chip-x:hover {
+    color: var(--us-red);
+    background: var(--us-red-bg);
+}
+
+.us-chip-x,
+.us-chip-add,
+.us-hover { visibility: hidden; }
+
+.us-row:hover .us-chip-x,
+.us-row:focus-within .us-chip-x,
+.us-row:hover .us-chip-add,
+.us-row:focus-within .us-chip-add,
+.us-row:hover .us-hover,
+.us-row:focus-within .us-hover { visibility: visible; }
+
+/* Touch screens have no hover: always show them. */
+@media (hover: none) {
+    .us-chip-x,
+    .us-chip-add,
+    .us-hover { visibility: visible; }
+}
+
+.us-chip-add {
+    padding: 0 10px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--us-muted);
+    background: transparent;
+    border-style: dashed;
+    cursor: pointer;
+}
+
+.us-chip-add:hover { color: var(--us-ink); border-color: var(--us-accent); }
+
+/* An inherited spelling that can be switched off: a real button, styled as a chip. */
+.us-chip-toggle {
+    font: inherit;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.us-chip-toggle:hover { border-color: var(--us-accent); }
+
+.us-chip-toggle.x {
+    color: var(--us-muted);
+    text-decoration: line-through;
+    background: transparent;
+    border-style: dashed;
+}
+
+/* Add box at the end of the chip row. */
+.us-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.us-body ::deep .us-add input {
+    width: 100px;
+    height: 24px;
+    font-size: 12px;
+    border-style: dashed;
+    border-radius: 999px;
+}
+
+.us-error {
+    margin-top: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--us-red);
+    background: var(--us-red-bg);
+    border-radius: 8px;
+}
+
+/* ── Switch (same look as the template page's option switches) ── */
+.us-switch {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    cursor: pointer;
+}
+
+.us-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.us-switch-track {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--us-input-line);
+    transition: background 0.15s;
+}
+
+.us-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s;
+}
+
+.us-switch input:checked + .us-switch-track { background: var(--us-accent); }
+.us-switch input:checked + .us-switch-track::after { transform: translateX(14px); }
+
+.us-switch input:focus-visible + .us-switch-track {
+    outline: 2px solid var(--us-accent);
+    outline-offset: 2px;
+}
+
+/* ── Footer: Try it on the left, buttons on the right ── */
+.us-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    width: 100%;
+}
+
+.us-try {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    flex: 1 1 360px;
+    min-width: 0;
+}
+
+.us-try-icon { color: var(--us-accent); }
+
+.us-try-input { width: 200px; }
+
+.us-saved {
+    font-size: 12px;
+    color: var(--us-green);
+}
+
+.us-foot-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* ── Small screens: rail on top, everything flows ── */
+@media (max-width: 760px) {
+    .us-body { grid-template-columns: 1fr; height: auto; }
+    .us-list { overflow: visible; }
+
+    .us-rail-list { max-height: 140px; }
+
+    .us-rail {
+        padding-right: 0;
+        padding-bottom: 8px;
+        border-right: 0;
+        border-bottom: 1px solid var(--us-line);
+    }
+
+    .us-main { max-height: none; overflow: visible; }
+
+    .us-row { grid-template-columns: minmax(0, 1fr) 40px 34px; }
+    .us-list.subd .us-row { grid-template-columns: minmax(0, 1fr) 50px 40px 34px; }
+
+    .us-row .us-name,
+    .us-row .us-ro-name,
+    .us-row .us-spell,
+    .us-row .us-add,
+    .us-row-global .us-chips { grid-column: 1 / -1; }
+
+    .us-row-head { display: none; }
+}

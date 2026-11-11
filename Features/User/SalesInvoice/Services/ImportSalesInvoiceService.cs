@@ -22,11 +22,13 @@ public sealed class ImportSalesInvoiceService
 	private readonly ImportLogService _importLog;
 	private readonly ImportFileStore _importFiles;
 	private readonly ImportFileService? _importFileService;
+	private readonly IUomSynonymService _uomSynonyms;
 
 	public ImportSalesInvoiceService(
 		IDbContextFactory<EntrielContext> contextFactory,
 		ISalesInvoiceService salesInvoiceService,
 		IImportTemplateService templates,
+		IUomSynonymService uomSynonyms,
 		ImportLogService importLog,
 		ImportFileStore importFiles,
 		ILogger<ImportSalesInvoiceService> logger,
@@ -35,6 +37,7 @@ public sealed class ImportSalesInvoiceService
 		_contextFactory = contextFactory;
 		_salesInvoiceService = salesInvoiceService;
 		_templates = templates;
+		_uomSynonyms = uomSynonyms;
 		_importLog = importLog;
 		_importFiles = importFiles;
 		_importFileService = importFileService;
@@ -225,6 +228,22 @@ public sealed class ImportSalesInvoiceService
 						  where i.SubDistributorId == subDistributorId && i.IsActive
 						  select u).ToListAsync(cancellationToken);
 
+		// Which spellings mean the same unit: this subdistributor's own synonym groups first, then the global ones.
+		// If they can't be read, stop: carrying on without them would turn every "CS" into a false "UOM not found".
+		UomSynonymMap uomSynonyms;
+		try
+		{
+			uomSynonyms = await _uomSynonyms.GetMapAsync(subDistributorId, cancellationToken);
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException)
+		{
+			const string synonymsMessage = "UOM synonyms could not be loaded, so units can't be matched. Try again in a moment.";
+			await FailPreparationAsync(batchId, ImportErrorTypes.UnexpectedPrepareError, synonymsMessage,
+				new { Step = "UomSynonyms", Detail = ex.GetBaseException().Message }, cancellationToken);
+			result.AddError(0, string.Empty, synonymsMessage);
+			return result;
+		}
+
 		var customerByCode = BuildLookupDictionary(customers, customer => customer.CustomerCode, NormalizeCustomerLookup);
 		var customerByName = BuildLookupDictionary(customers, customer => customer.CustomerName, NormalizeCustomerLookup);
 		var subdItemsBySkuGroup = subdItems.ToLookup(item => Normalize(item.SubdItemCode ?? string.Empty));
@@ -237,7 +256,7 @@ public sealed class ImportSalesInvoiceService
 		// Pre-scan every sheet once to know which conversions each item actually uses,
 		// so the fallback in ReadRows can restrict itself to a confirmed match instead of a guess.
 		var knownConversionsBySubdItem = BuildKnownConversionsBySubdItem(
-			plan.Rows, subdItemsBySkuGroup, subdItems, uomLookup);
+			plan.Rows, subdItemsBySkuGroup, subdItems, uomLookup, uomSynonyms);
 
 		var parsedRows = ReadRows(
 			plan.Rows,
@@ -249,7 +268,8 @@ public sealed class ImportSalesInvoiceService
 			uomsBySubdItemId,
 			knownConversionsBySubdItem,
 			customers,
-			subdItems);
+			subdItems,
+			uomSynonyms);
 
 		result.Rows.AddRange(parsedRows);
 
@@ -454,7 +474,7 @@ public sealed class ImportSalesInvoiceService
 							if (!subdItemById.TryGetValue(candidateId, out var candidateItem)) continue;
 
 							List<ItemsUom>? candidateUoms = null;
-							foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(row.UOM))
+							foreach (var synonym in uomSynonyms.Expand(row.UOM))
 							{
 								if (InvoiceDataValidator.TryResolveUom(candidateItem.SubdItemId, synonym, uomLookup, out var m, out var mAmbiguous) && m is not null)
 								{ candidateUoms = mAmbiguous is { Count: > 1 } ? mAmbiguous : new List<ItemsUom> { m }; break; }
@@ -1005,7 +1025,8 @@ public sealed class ImportSalesInvoiceService
 		ILookup<int, ItemsUom> uomsBySubdItemId,
 		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem,
 		IEnumerable<Data.Customer> allCustomers,
-		IEnumerable<SubdItem> allSubdItems)
+		IEnumerable<SubdItem> allSubdItems,
+		UomSynonymMap uomSynonyms)
 	{
 		// Reads and validates rows from the worksheet starting after the header row, returning a list of parsed invoice rows along with any issues found.
 		var rows = new List<ImportedInvoiceRow>();
@@ -1266,7 +1287,7 @@ public sealed class ImportSalesInvoiceService
 						.OrderBy(c => c.SubdItemId));
 
 				foreach (var candidate in pool)
-					foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
+					foreach (var synonym in uomSynonyms.Expand(uomString))
 						if (InvoiceDataValidator.TryResolveUom(candidate.SubdItemId, synonym, uomLookup, out var matched, out var ambiguous)
 							&& matched is not null)
 							return (matched.ItemsUomId, ambiguous, candidate);
@@ -1402,7 +1423,7 @@ public sealed class ImportSalesInvoiceService
 						? (qty < 0 ? "Credit" : "Invoice")
 						: normalizedOrderType;
 
-					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
+					var normalizedUomName = uomLabel;
 					var (resolvedUomId, uomAmbiguousMatches, matchedItem) = ResolveUomWithMatches(normalizedUomName);
 					var rowItem = matchedItem ?? resolvedItem;
 					var finalUomName = normalizedUomName;
@@ -1785,7 +1806,8 @@ public sealed class ImportSalesInvoiceService
 		WorkbookRows source,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IEnumerable<SubdItem> allSubdItems,
-		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup)
+		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
+		UomSynonymMap uomSynonyms)
 	{
 		var result = new Dictionary<int, HashSet<int>>();
 
@@ -1801,7 +1823,7 @@ public sealed class ImportSalesInvoiceService
 
 		int? TryMatchConversion(SubdItem item, string uomString)
 		{
-			foreach (var synonym in InvoiceDataValidator.GetUomSynonyms(uomString))
+			foreach (var synonym in uomSynonyms.Expand(uomString))
 			{
 				if (InvoiceDataValidator.TryResolveUom(item.SubdItemId, synonym, uomLookup, out var matched, out _) && matched is not null)
 					return matched.ConversionToBase;
@@ -1838,7 +1860,7 @@ public sealed class ImportSalesInvoiceService
 				{
 					var cell = logicalRow.Cell(field);
 					if (cell is null || IsCellEffectivelyEmpty(cell)) return;
-					var normalizedUomName = InvoiceDataValidator.NormalizeUomName(uomLabel);
+					var normalizedUomName = uomLabel;
 					var conversion = TryMatchConversion(resolvedItem, normalizedUomName);
 					if (conversion.HasValue) Record(resolvedItem.SubdItemId, conversion.Value);
 				}

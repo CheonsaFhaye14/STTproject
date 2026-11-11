@@ -3,35 +3,26 @@ using STTproject.Features.Admin.ImportTemplate.DTOs;
 
 namespace STTproject.Features.Admin.ImportTemplate.Services;
 
-/// <summary>
-/// One matched template sheet after its header row and columns have been resolved against its worksheet.
-/// Resolution only: nothing here reads data rows, and nothing joins sheets together.
-/// </summary>
+// One matched template sheet after its header row and columns have been resolved against its worksheet.
 public sealed class ResolvedWorksheet
 {
     public ImportTemplateSheetEditDto TemplateSheet { get; init; } = default!;
     public WorksheetInspection Inspection { get; init; } = default!;
 
-    /// <summary>Null when the header row couldn't be found, or the sheet is empty.</summary>
+    // Null when the header row couldn't be found, or the sheet is empty.
     public int? HeaderRow { get; init; }
     public int HeaderRowCount { get; init; } = 1;
-
-    /// <summary>Null when <see cref="HeaderRow"/> is null.</summary>
     public ColumnResolution? Columns { get; init; }
 
-    /// <summary>
-    /// Why this sheet can't be read as configured: empty sheet, no header row, required columns missing,
-    /// ambiguous columns. Unprefixed; the caller adds the sheet label when it flattens them.
-    /// </summary>
+    // Why this sheet can't be read as configured: empty sheet, no header row, required columns missing,
+    // ambiguous columns. Unprefixed; the caller adds the sheet label when it flattens them.
     private readonly List<PlanError> _problems = new();
 
-    /// <summary>Same texts as before, read-only. Add through <see cref="AddProblem"/> so every problem has a kind.</summary>
     public IReadOnlyList<string> Problems => _problems.Select(p => p.Message).ToList();
 
     internal void AddProblem(PlanErrorKind kind, string message, object? detail = null) =>
         _problems.Add(new PlanError(kind, message, Inspection.SheetIndex, Inspection.Name, detail));
 
-    /// <summary><see cref="ProblemMessages"/> as typed errors: same sentences, each naming the sheet.</summary>
     public IEnumerable<PlanError> ProblemErrors =>
         _problems.Select(p => p with
         {

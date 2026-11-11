@@ -96,6 +96,8 @@ builder.Services.AddScoped<IUserService, UserServices>();
 builder.Services.AddScoped<IImportBatchDetailsService, ImportBatchDetailsService>();
 builder.Services.AddScoped<IImportErrorVerificationService, ImportErrorVerificationService>();
 builder.Services.AddScoped<IInvoiceFileValidator, SalesInvoiceFileValidator>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IUomSynonymService, UomSynonymService>();
 
 var app = builder.Build();
 
