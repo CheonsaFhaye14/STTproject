@@ -4,6 +4,7 @@
 @inject IJSRuntime JS
 @inject IImportErrorDetailsService DetailsData
 @inject IImportErrorVerificationService Verifier
+@using STTproject.Features.Admin.ImportTemplate.Components.Modals
 
 <LoadingOverlay Show="isLoading" Title="Loading error…" Subtitle="Please wait while we fetch the details."
                 IconClass="fa-solid fa-exclamation-triangle" />
@@ -49,19 +50,22 @@
                 <div class="ied-actions">
                     @if (pending)
                     {
-                        @if (ImportErrorGuidance.FixChoices(error.ErrorType).Count > 0)
+                        @if (ImportErrorGuidance.FixChoices(error.ErrorType).Count > 0 || OffersSynonyms)
                         {
-                            <Button Title="Fix" Variant="ButtonVariant.Primary" OnClick="Fix" Disabled="busy" />
+                            <Button Title="Fix" Variant="ButtonVariant.Primary" Icon="ti ti-tool" OnClick="Fix" Disabled="busy" />
                         }
                         @if (error.CanVerify)
                         {
-                            <Button Title="Verify" Variant="ButtonVariant.Secondary" OnClick="VerifyRowsAsync" Disabled="busy" />
+                            <Button Title="Verify" Variant="ButtonVariant.Secondary" Icon="ti ti-circle-check"
+                                    OnClick="VerifyRowsAsync" Disabled="busy" />
                         }
-                        <Button Title="Ignore" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = true" Disabled="busy" />
+                        <Button Title="Ignore" Variant="ButtonVariant.Muted" Icon="ti ti-eye-off"
+                                OnClick="() => showIgnore = true" Disabled="busy" />
                     }
                     else if (ignored)
                     {
-                        <Button Title="Reopen error" Variant="ButtonVariant.Secondary" OnClick="ReopenAsync" Disabled="busy" />
+                        <Button Title="Reopen error" Variant="ButtonVariant.Secondary" Icon="ti ti-rotate-2"
+                                OnClick="ReopenAsync" Disabled="busy" />
                     }
                 </div>
             </div>
@@ -74,233 +78,243 @@
             {
                 <div class="ied-note ied-note-gold" role="status">
                     <b>Verifying…</b>
-                    <span>Entriel is checking the affected rows against the latest upload and the current template. Nothing is imported or saved.</span>
-                </div>
-            }
-                    @if (error.Recurrence is { } rec)
-                    {
-                        <div class="ied-note ied-note-gold" role="note">
-                            <b>Returned</b>
-                            <span>@RecurrenceIntro(rec)</span>
-                            <span>
-                                Previous error:
-                                <button type="button" class="ied-link"
-                                        @onclick="() => OpenError(rec.PreviousImportErrorId)">#@rec.PreviousImportErrorId</button>
-                                · @RecurrenceDetail(rec)
-                            </span>
-                            <span>@RecurrenceBatch()</span>
-                        </div>
-                    }
-                    @if (resolved)
-                    {
-                        <div class="ied-note ied-note-ok">
-                            <b>@ResolvedTitle(auto)</b>
-                            <span>@ResolvedLine(auto)</span>
-                        </div>
-                    }
-                    @if (ignored)
-                    {
-                        <div class="ied-note ied-note-gray">
-                            <b>Ignored</b>
-                            <span>This error is out of the pending list but stays on record. You can reopen it any time.</span>
-                        </div>
-                    }
+                    <span>Entriel is checking the affected rows against the latest upload and the current template. Nothing is
+                        imported or saved.</span>
+                    </div>
+                }
+                @if (error.Recurrence is { } rec)
+                {
+                    <div class="ied-note ied-note-gold" role="note">
+                        <b>Returned</b>
+                        <span>@RecurrenceIntro(rec)</span>
+                        <span>
+                            Previous error:
+                            <button type="button" class="ied-link"
+                                    @onclick="() => OpenError(rec.PreviousImportErrorId)">#@rec.PreviousImportErrorId</button>
+                            · @RecurrenceDetail(rec)
+                        </span>
+                        <span>@RecurrenceBatch()</span>
+                    </div>
+                }
+                @if (resolved)
+                {
+                    <div class="ied-note ied-note-ok">
+                        <b>@ResolvedTitle(auto)</b>
+                        <span>@ResolvedLine(auto)</span>
+                    </div>
+                }
+                @if (ignored)
+                {
+                    <div class="ied-note ied-note-gray">
+                        <b>Ignored</b>
+                        <span>This error is out of the pending list but stays on record. You can reopen it any time.</span>
+                    </div>
+                }
 
-                    @* ---------- summary ---------- *@
-                    <p class="ied-summary">@SummaryText()</p>
+                @* ---------- summary ---------- *@
+                <p class="ied-summary">@SummaryText()</p>
 
-                    <div class="ied-two">
-                        @* ---------- what's wrong ---------- *@
-                        <section class="ied-card ied-sec">
-                            <h3>What's wrong</h3>
-                            <div class="ied-body">
-                                @if (error.Facts.Count > 0)
-                                {
-                                    @* Customer and unit-of-measure errors: each fact on its own line instead of one combined value. *@
-                                    <div class="ied-val ied-facts">
-                                        <dl>
-                                            @foreach (var fact in error.Facts)
-                                            {
-                                                <div><dt>@fact.Label</dt><dd>@fact.Value</dd></div>
-                                            }
-                                        </dl>
-                                        <small>@ValueSource()</small>
-                                    </div>
-                                }
-                                else if (!string.IsNullOrWhiteSpace(error.Value))
-                                {
-                                    <div class="ied-val">
-                                        @error.Value
-                                        <small>@ValueSource()</small>
-                                    </div>
-                                }
-                                @if (!ImportErrorGuidance.IsKnown(error.ErrorType))
-                                {
-                                    <p class="ied-what">@guide.What</p>
-                                }
-                                <div class="ied-q">
-                                    <h4>Why did this happen?</h4>
+                <div class="ied-two">
+                    @* ---------- what's wrong ---------- *@
+                    <section class="ied-card ied-sec">
+                        <h3>What's wrong</h3>
+                        <div class="ied-body">
+                            <ol class="ied-steps">
+                                <li class="ied-step">
+                                    <h4>Problem</h4>
+                                    @if (error.Facts.Count > 0)
+                                    {
+                                        @* Customer and unit-of-measure errors: each fact on its own line instead of one combined value. *@
+                                        <div class="ied-val ied-facts">
+                                            <dl>
+                                                @foreach (var fact in error.Facts)
+                                                {
+                                                    <div>
+                                                        <dt>@fact.Label</dt>
+                                                        <dd>@fact.Value</dd>
+                                                    </div>
+                                                }
+                                            </dl>
+                                            <small>@ValueSource()</small>
+                                        </div>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(error.Value))
+                                    {
+                                        <div class="ied-val">
+                                            @error.Value
+                                            <small>@ValueSource()</small>
+                                        </div>
+                                    }
+                                    @if (!ImportErrorGuidance.IsKnown(error.ErrorType))
+                                    {
+                                        <p class="ied-what">@guide.What</p>
+                                    }
+                                </li>
+                                <li class="ied-step">
+                                    <h4>Why it happened</h4>
                                     <p>@guide.Why</p>
-                                </div>
-                                <div class="ied-todo">
+                                </li>
+                                <li class="ied-step ied-step-fix">
                                     <h4>What to do</h4>
                                     <p>@guide.Todo</p>
-                                </div>
-                            </div>
-                        </section>
+                                </li>
+                            </ol>
+                        </div>
+                    </section>
 
-                        @* ---------- import history ---------- *@
-                        <section class="ied-card ied-sec">
-                            <div class="ied-sh">
-                                <h3>Import history</h3>
-                                <span class="ied-sub">@Plural(error.Batches.Count, "upload")</span>
-                            </div>
-                            @if (error.Batches.Count == 0)
-                            {
-                                <p class="ied-sub">No import batches are linked to this error.</p>
-                            }
-                            else
-                            {
-                                <div class="ied-body">
-                                    <ul class="ied-tl">
-                                        @foreach (var (g, gi) in error.UploadGroups.Select((g, gi) => (g, gi)))
-                                        {
-                                            if (g.AttemptCount == 1)
-                                            {
-                                                @BatchItem(g.Batches[0], false)
-                                            }
-                                            else
-                                            {
-                                                var groupIndex = gi;
-                                                var groupOpen = expandedGroups.Contains(gi);
-                                                <li>
-                                                    <i class="ied-dot"></i>
-                                                    <span>
-                                                        <b>@Date(g.LastUploadedAtPht) · @g.FileName</b>
-                                                        <span class="ied-chip">@Plural(g.AttemptCount, "upload attempt")</span>
-                                                        <span class="ied-sub">@GroupText(g)</span>
-                                                    </span>
-                                                    <span class="ied-ac">
-                                                        <Button Title="@(groupOpen ? "Hide attempts" : "Show attempts")"
-                                                                Variant="ButtonVariant.Secondary" OnClick="() => ToggleGroup(groupIndex)" />
-                                                    </span>
-                                                </li>
-                                                @if (groupOpen)
-                                                {
-                                                    @foreach (var attempt in g.Batches)
-                                                    {
-                                                        @BatchItem(attempt, true)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    </ul>
-                                </div>
-                            }
-                        </section>
-                    </div>
-
-                    @* ---------- ambiguous sheet: the sheets the file really has ---------- *@
-                    @if (IsAmbiguousSheet)
-                    {
-                        <section class="ied-card ied-sec ied-rows">
-                            <div class="ied-sh">
-                                <h3>Sheets in this file</h3>
-                                <span class="ied-sub">@SheetsHint()</span>
-                            </div>
-
-                            @if (sheetPreview is null)
-                            {
-                                <p class="ied-sub">No upload is linked to this error, so its sheets can't be shown.</p>
-                            }
-                            else if (sheetPreview.Problem is not null)
-                            {
-                                <p class="ied-sub">@sheetPreview.Problem</p>
-                            }
-                            else if (sheetPreview.Sheets.Count == 0)
-                            {
-                                <p class="ied-sub">This file has no sheets.</p>
-                            }
-                            else
-                            {
-                                <div class="ied-tabs" role="tablist" aria-label="Sheets in this file">
-                                    @for (var ti = 0; ti < sheetPreview.Sheets.Count; ti++)
+                    @* ---------- import history ---------- *@
+                    <section class="ied-card ied-sec">
+                        <div class="ied-sh">
+                            <h3>Import history</h3>
+                            <span class="ied-sub">@Plural(error.Batches.Count, "upload")</span>
+                        </div>
+                        @if (error.Batches.Count == 0)
+                        {
+                            <p class="ied-sub">No import batches are linked to this error.</p>
+                        }
+                        else
+                        {
+                            <div class="ied-body">
+                                <ul class="ied-tl">
+                                    @foreach (var (g, gi) in error.UploadGroups.Select((g, gi) => (g, gi)))
                                     {
-                                        var tabIndex = ti;
-                                        var tab = sheetPreview.Sheets[ti];
-                                        var named = SameText(tab.Name, AmbiguousSheetName);
-                                        var tabTitle = tab.Name + (named ? " (named in the error)" : string.Empty) + (tab.IsHidden ? " (hidden sheet)" : string.Empty);
-                                        <button type="button" role="tab"
-                                                class="@(tabIndex == ActiveSheet ? "ied-tab ied-tab-on" : "ied-tab")"
-                                                aria-selected="@(tabIndex == ActiveSheet ? "true" : "false")"
-                                                title="@tabTitle"
-                                                @onclick="() => selectedSheet = tabIndex">
-                                            @if (named) { <span class="ied-tab-flag" aria-hidden="true">●</span> }
-                                            <span class="ied-tab-name">@tab.Name</span>
-                                        </button>
-                                    }
-                                </div>
-
-                                foreach (var sh in sheetPreview.Sheets.Where((_, i) => i == ActiveSheet))
-                                {
-                                    <div class="ied-sheet">
-                                        <div class="ied-sheet-head">
-                                            <strong>@sh.Name</strong>
-                                            @if (SameText(sh.Name, AmbiguousSheetName))
-                                            {
-                                                <span class="ied-tag">Named in the error</span>
-                                            }
-                                            @if (sh.IsHidden)
-                                            {
-                                                <span class="ied-tag ied-tag-muted">Hidden</span>
-                                            }
-                                            <span class="ied-sub">@Plural(sh.RowCount, "row") · @Plural(sh.ColumnCount, "column")</span>
-                                        </div>
-
-                                        @if (sh.Rows.Count == 0)
+                                        if (g.AttemptCount == 1)
                                         {
-                                            <p class="ied-sub">This sheet is empty.</p>
+                                            @BatchItem(g.Batches[0], false)
                                         }
                                         else
                                         {
-                                            <div class="ied-rowscroll">
-                                                <table class="ied-table ied-sheetprev">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Row</th>
-                                                            @for (var ci = 0; ci < sh.ShownColumns; ci++)
-                                                            {
-                                                                <th>@ColumnLetter(ci)</th>
-                                                            }
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (var ri = 0; ri < sh.Rows.Count; ri++)
-                                                        {
-                                                            var row = sh.Rows[ri];
-                                                            <tr class="@(ri == 0 ? "ied-hdrrow" : null)">
-                                                                <td>@row.RowNumber</td>
-                                                                @foreach (var cell in row.Cells)
-                                                                {
-                                                                    <td title="@cell">@(string.IsNullOrEmpty(cell) ? "—" : cell)</td>
-                                                                }
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            @if (sh.ColumnCount > sh.ShownColumns)
+                                            var groupIndex = gi;
+                                            var groupOpen = expandedGroups.Contains(gi);
+                                            <li>
+                                                <i class="ied-dot"></i>
+                                                <span>
+                                                    <b>@Date(g.LastUploadedAtPht) · @g.FileName</b>
+                                                    <span class="ied-chip">@Plural(g.AttemptCount, "upload attempt")</span>
+                                                    <span class="ied-sub">@GroupText(g)</span>
+                                                </span>
+                                                <span class="ied-ac">
+                                                    <Button Title="@(groupOpen ? "Hide attempts" : "Show attempts")"
+                                                            Variant="ButtonVariant.Secondary" OnClick="() => ToggleGroup(groupIndex)" />
+                                                </span>
+                                            </li>
+                                            @if (groupOpen)
                                             {
-                                                <p class="ied-sub">@("Showing the first " + sh.ShownColumns + " of " + sh.ColumnCount + " columns.")</p>
+                                                @foreach (var attempt in g.Batches)
+                                                {
+                                                    @BatchItem(attempt, true)
+                                                }
                                             }
                                         }
-                                    </div>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </section>
+                </div>
+
+                @* ---------- ambiguous sheet: the sheets the file really has ---------- *@
+                @if (IsAmbiguousSheet)
+                {
+                    <section class="ied-card ied-sec ied-rows">
+                        <div class="ied-sh">
+                            <h3>Sheets in this file</h3>
+                            <span class="ied-sub">@SheetsHint()</span>
+                        </div>
+
+                        @if (sheetPreview is null)
+                        {
+                            <p class="ied-sub">No upload is linked to this error, so its sheets can't be shown.</p>
+                        }
+                        else if (sheetPreview.Problem is not null)
+                        {
+                            <p class="ied-sub">@sheetPreview.Problem</p>
+                        }
+                        else if (sheetPreview.Sheets.Count == 0)
+                        {
+                            <p class="ied-sub">This file has no sheets.</p>
+                        }
+                        else
+                        {
+                            <div class="ied-tabs" role="tablist" aria-label="Sheets in this file">
+                                @for (var ti = 0; ti < sheetPreview.Sheets.Count; ti++)
+                                {
+                                    var tabIndex = ti;
+                                    var tab = sheetPreview.Sheets[ti];
+                                    var named = SameText(tab.Name, AmbiguousSheetName);
+                                    var tabTitle = tab.Name + (named ? " (named in the error)" : string.Empty) + (tab.IsHidden ? " (hidden sheet)" : string.Empty);
+                                    <button type="button" role="tab" class="@(tabIndex == ActiveSheet ? "ied-tab ied-tab-on" : "ied-tab")"
+                                            aria-selected="@(tabIndex == ActiveSheet ? "true" : "false")" title="@tabTitle"
+                                            @onclick="() => selectedSheet = tabIndex">
+                                        @if (named)
+                                        {
+                                            <span class="ied-tab-flag" aria-hidden="true">●</span>
+                                        }
+                                        <span class="ied-tab-name">@tab.Name</span>
+                                    </button>
                                 }
+                            </div>
+
+                            foreach (var sh in sheetPreview.Sheets.Where((_, i) => i == ActiveSheet))
+                            {
+                                <div class="ied-sheet">
+                                    <div class="ied-sheet-head">
+                                        <strong>@sh.Name</strong>
+                                        @if (SameText(sh.Name, AmbiguousSheetName))
+                                        {
+                                            <span class="ied-tag">Named in the error</span>
+                                        }
+                                        @if (sh.IsHidden)
+                                        {
+                                            <span class="ied-tag ied-tag-muted">Hidden</span>
+                                        }
+                                        <span class="ied-sub">@Plural(sh.RowCount, "row") · @Plural(sh.ColumnCount, "column")</span>
+                                    </div>
+
+                                    @if (sh.Rows.Count == 0)
+                                    {
+                                        <p class="ied-sub">This sheet is empty.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="ied-rowscroll">
+                                            <table class="ied-table ied-sheetprev">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Row</th>
+                                                        @for (var ci = 0; ci < sh.ShownColumns; ci++)
+                                                        {
+                                                            <th>@ColumnLetter(ci)</th>
+                                                        }
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @for (var ri = 0; ri < sh.Rows.Count; ri++)
+                                                    {
+                                                        var row = sh.Rows[ri];
+                                                        <tr class="@(ri == 0 ? "ied-hdrrow" : null)">
+                                                            <td>@row.RowNumber</td>
+                                                            @foreach (var cell in row.Cells)
+                                                            {
+                                                                <td title="@cell">@(string.IsNullOrEmpty(cell) ? "—" : cell)</td>
+                                                            }
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        @if (sh.ColumnCount > sh.ShownColumns)
+                                        {
+                                            <p class="ied-sub">@("Showing the first " + sh.ShownColumns + " of " + sh.ColumnCount + " columns.")</p>
+                                        }
+                                    }
+                                </div>
                             }
-                        </section>
-                    }
-                    else
-                    {
+                        }
+                    </section>
+                }
+                else
+                {
                     @* ---------- rows to fix ---------- *@
                     <section class="ied-card ied-sec ied-rows">
                         <div class="ied-sh">
@@ -320,8 +334,8 @@
                             var numeric = cols.Where(c => IsNumericColumn(c, shown)).ToHashSet();
 
                             <div class="ied-tools">
-                                <input type="search" class="ied-search" placeholder="Search row, invoice or value"
-                                       value="@search" @oninput="OnSearch" aria-label="Search rows" />
+                                <input type="search" class="ied-search" placeholder="Search row, invoice or value" value="@search"
+                                       @oninput="OnSearch" aria-label="Search rows" />
                                 <label class="ied-xopt">
                                     <input type="checkbox" checked="@allColumns" @onchange="OnAllColumns" />
                                     <span>All Excel columns</span>
@@ -365,11 +379,14 @@
                                                     <td>
                                                         @if (r.IsReportedRow)
                                                         {
-                                                            <span class="@(problem == "missing" ? "ied-pv ied-missing-pv" : fixedNow ? "ied-pv ied-ok-pv" : "ied-pv")" title="@problem">@problem</span>
+                                                            <span
+                                                            class="@(problem == "missing" ? "ied-pv ied-missing-pv" : fixedNow ? "ied-pv ied-ok-pv" : "ied-pv")"
+                                                            title="@problem">@problem</span>
                                                         }
                                                         else
                                                         {
-                                                            <span class="@(problem == "missing" ? "ied-sub ied-missing" : "ied-sub")">@problem</span>
+                                                            <span
+                                                            class="@(problem == "missing" ? "ied-sub ied-missing" : "ied-sub")">@problem</span>
                                                         }
                                                     </td>
                                                     <td><span class="ied-st @st.Css" title="@st.Hint">@st.Text</span></td>
@@ -380,125 +397,169 @@
                                                     }
                                                     @foreach (var col in cols)
                                                     {
-                                                        <td class="@(numeric.Contains(col) ? "ied-num" : null)" title="@DataCell(r, col)">@CellValue(DataCell(r, col))</td>
-                                                    }
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                        <td class="@(numeric.Contains(col) ? "ied-num" : null)" title="@DataCell(r, col)">
+                                                            @CellValue(DataCell(r, col))</td>
+                                                        }
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
 
-                                <div class="ied-foot">
-                                    <span class="ied-sub">@("Showing " + shown.Count + " of " + filtered.Count + " rows")</span>
-                                    @if (filtered.Count > PageSize)
-                                    {
-                                        <Button Title="@(showAll ? "Show fewer" : "Show all " + filtered.Count + " rows")"
-                                                Variant="ButtonVariant.Secondary" OnClick="ToggleShowAll" />
-                                    }
-                                </div>
+                                    <div class="ied-foot">
+                                        <span class="ied-sub">@("Showing " + shown.Count + " of " + filtered.Count + " rows")</span>
+                                        @if (filtered.Count > PageSize)
+                                        {
+                                            <Button Title="@(showAll ? "Show fewer" : "Show all " + filtered.Count + " rows")"
+                                                    Variant="ButtonVariant.Secondary" OnClick="ToggleShowAll" />
+                                        }
+                                    </div>
+                                }
+                                @if (error.RowsTruncated)
+                                {
+                                    <p class="ied-sub">@TruncText()</p>
+                                }
                             }
-                            @if (error.RowsTruncated)
-                            {
-                                <p class="ied-sub">@TruncText()</p>
-                            }
-                        }
-                    </section>
+                        </section>
                     }
 
                     @* ---------- technical details ---------- *@
                     <section class="ied-card ied-sec ied-tech">
-                        <button type="button" class="ied-techhead" @onclick="ToggleTech" aria-expanded="@(showTech ? "true" : "false")">
+                        <button type="button" class="ied-techhead" @onclick="ToggleTech"
+                                aria-expanded="@(showTech ? "true" : "false")">
                             <span class="ied-chev">@(showTech ? "▾" : "▸")</span>
                             <span>Technical details</span>
                         </button>
                         @if (showTech)
                         {
                             <dl class="ied-techlist">
-                                <div><dt>Error code</dt><dd class="ied-mono">@error.ErrorType</dd></div>
-                                <div><dt>Error ID</dt><dd class="ied-mono">#@error.ImportErrorId</dd></div>
-                                <div><dt>Total across uploads</dt><dd>@Plural(error.Occurrences, "problem row") counted over @Plural(error.Batches.Count, "upload")</dd></div>
-                                <div><dt>First detected</dt><dd>@Date(error.FirstSeenAtPht)</dd></div>
-                                <div><dt>Last detected</dt><dd>@Date(error.LastSeenAtPht)</dd></div>
+                                <div>
+                                    <dt>Error code</dt>
+                                    <dd class="ied-mono">@error.ErrorType</dd>
+                                </div>
+                                <div>
+                                    <dt>Error ID</dt>
+                                    <dd class="ied-mono">#@error.ImportErrorId</dd>
+                                </div>
+                                <div>
+                                    <dt>Total across uploads</dt>
+                                    <dd>@Plural(error.Occurrences, "problem row") counted over @Plural(error.Batches.Count, "upload")
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>First detected</dt>
+                                    <dd>@Date(error.FirstSeenAtPht)</dd>
+                                </div>
+                                <div>
+                                    <dt>Last detected</dt>
+                                    <dd>@Date(error.LastSeenAtPht)</dd>
+                                </div>
                             </dl>
                         }
                     </section>
-                    }
-                </div>
+                }
             </div>
+        </div>
 
-            @if (showIgnore)
-            {
-                <Modal ShowModal="showIgnore" Width="480px" MaxWidth="100%" Title="Ignore this error"
-                       Subtitle="It leaves your pending list but stays on record. You can reopen it any time."
-                       OnClose="() => showIgnore = false">
-                    <ChildContent>
-                        <div class="ied-ctx"><b>@ImportErrorPresentation.Title(error?.ErrorType)</b><span>@error?.Value</span></div>
+        @if (showIgnore)
+        {
+            <Modal ShowModal="showIgnore" Width="480px" MaxWidth="100%" Title="Ignore this error?"
+                   Subtitle="Here's what happens next." OnClose="() => showIgnore = false">
+                <ChildContent>
+                    <div class="ied-ign">
+                        <div class="ied-ign-item">
+                            <i class="ti ti-list-check" aria-hidden="true"></i>
+                            <div>
+                                <b>Leaves your pending list</b>
+                                <span>Removes this row from your to-fix count</span>
+                            </div>
+                        </div>
+                        <div class="ied-ign-item">
+                            <i class="ti ti-archive" aria-hidden="true"></i>
+                            <div>
+                                <b>Stays on record</b>
+                                <span>Still visible in import history</span>
+                            </div>
+                        </div>
+                        <div class="ied-ign-item">
+                            <i class="ti ti-rotate-2" aria-hidden="true"></i>
+                            <div>
+                                <b>Reopen any time</b>
+                                <span>Use Reopen error on this page</span>
+                            </div>
+                        </div>
+                    </div>
+                </ChildContent>
+                <FooterContent>
+                    <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = false" />
+                    <Button Title="Ignore error" Variant="ButtonVariant.Primary" OnClick="IgnoreAsync" Disabled="busy" />
+                </FooterContent>
+            </Modal>
+        }
+
+        @if (showBatchPick)
+        {
+            <Modal ShowModal="showBatchPick" Width="760px" MaxWidth="100%" Title="Which file do you want to fix?"
+                   Subtitle="This error appeared in files with different import settings, so Entriel can't pick a template for you."
+                   OnClose="() => showBatchPick = false">
+                <ChildContent>
+                    <div class="ied-note ied-note-gold" style="margin-bottom:10px;text-align:left;">
+                        Fixing one file's template does not resolve this error for the other files. It stays pending until every
+                        affected file has been re-imported and passes validation.
+                    </div>
+                    <div class="ied-scroll" style="max-height:320px;">
+                        <table class="ied-table">
+                            <thead>
+                                <tr>
+                                    <th>Batch</th>
+                                    <th>Subdistributor</th>
+                                    <th>Import type</th>
+                                    <th>Uploaded</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in batchOptions)
+                                {
+                                    var id = o.ImportBatchId;
+                                    <tr>
+                                        <td>#@o.ImportBatchId</td>
+                                        <td>@(o.SubDistributorName ?? "—")</td>
+                                        <td>@o.ImportType</td>
+                                        <td>@Date(o.UploadedAtPht)</td>
+                                        <td><Button Title="Fix this template" Variant="ButtonVariant.Secondary"
+                                                        OnClick="() => ChooseBatchAsync(id)" Disabled="busy" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </ChildContent>
                     <FooterContent>
-                        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showIgnore = false" />
-                        <Button Title="Ignore error" Variant="ButtonVariant.Primary" OnClick="IgnoreAsync" Disabled="busy" />
+                        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showBatchPick = false" />
                     </FooterContent>
                 </Modal>
             }
 
-            @if (showBatchPick)
-            {
-                <Modal ShowModal="showBatchPick" Width="760px" MaxWidth="100%" Title="Which file do you want to fix?"
-                       Subtitle="This error appeared in files with different import settings, so Entriel can't pick a template for you."
-                       OnClose="() => showBatchPick = false">
-                    <ChildContent>
-                        <div class="ied-note ied-note-gold" style="margin-bottom:10px;text-align:left;">
-                            Fixing one file's template does not resolve this error for the other files. It stays pending until every
-                            affected file has been re-imported and passes validation.
-                        </div>
-                        <div class="ied-scroll" style="max-height:320px;">
-                            <table class="ied-table">
-                                <thead>
-                                    <tr>
-                                        <th>Batch</th>
-                                        <th>Subdistributor</th>
-                                        <th>Import type</th>
-                                        <th>Uploaded</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var o in batchOptions)
-                                    {
-                                        var id = o.ImportBatchId;
-                                        <tr>
-                                            <td>#@o.ImportBatchId</td>
-                                            <td>@(o.SubDistributorName ?? "—")</td>
-                                            <td>@o.ImportType</td>
-                                            <td>@Date(o.UploadedAtPht)</td>
-                                            <td><Button Title="Fix this template" Variant="ButtonVariant.Secondary"
-                                                            OnClick="() => ChooseBatchAsync(id)" Disabled="busy" /></td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </ChildContent>
-                        <FooterContent>
-                            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showBatchPick = false" />
-                        </FooterContent>
-                    </Modal>
-                }
-
             @if (showFix)
             {
                 <Modal ShowModal="showFix" Width="520px" MaxWidth="100%" Title="How do you want to fix this?"
-                       Subtitle="Pick one. When you are done, come back here and press Verify."
-                       OnClose="() => showFix = false">
+                       Subtitle="Pick one. When you are done, come back here and press Verify." OnClose="() => showFix = false">
                     <ChildContent>
-                        <div class="ied-choices">
+                        @* One click per row: the whole row is the button and goes straight to that fix. *@
+                        <div class="ied-actlist">
                             @foreach (var choice in ImportErrorGuidance.FixChoices(error?.ErrorType))
                             {
-                                var key = choice.Key;
-                                <div class="ied-choice">
-                                    <Button Title="@choice.Label" Variant="ButtonVariant.Secondary" OnClick="() => ChooseFixAsync(key)" />
-                                    <span class="ied-sub">@choice.Description</span>
-                                </div>
+                                @FixRow(choice.Key, choice.Label, choice.Description)
+                                @if (OffersSynonyms && choice.Key == ImportErrorGuidance.ChoiceMapping)
+                                {
+                                    @SynonymsChoice
+                                }
+                            }
+                            @if (OffersSynonyms && !ImportErrorGuidance.FixChoices(error?.ErrorType).Any(c => c.Key ==
+            ImportErrorGuidance.ChoiceMapping))
+                            {
+                                @SynonymsChoice
                             }
                         </div>
                     </ChildContent>
@@ -508,26 +569,32 @@
                 </Modal>
             }
 
-                        @if (showPick)
-                        {
-                            <Modal ShowModal="showPick" Width="480px" MaxWidth="100%" Title="Which template read this file?"
-                                   Subtitle="@("More than one active template could apply to batch #" + pickedBatchId + ". Pick the one its file uses.")"
-                                   OnClose="() => showPick = false">
-                                <ChildContent>
-                                    <div style="display:flex;flex-direction:column;gap:8px;">
-                                        @foreach (var o in pickOptions)
-                                        {
-                                            var id = o.ImportTemplateId;
-                                            <Button Title="@(o.TemplateName + (o.IsGlobalDefault ? " (global default)" : string.Empty))"
-                                                    Variant="ButtonVariant.Secondary" OnClick="() => OpenTemplate(id)" />
-                                        }
-                                    </div>
-                                </ChildContent>
-                                <FooterContent>
-                                    <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showPick = false" />
-                                </FooterContent>
-                            </Modal>
-                        }
+            @if (showPick)
+            {
+                <Modal ShowModal="showPick" Width="480px" MaxWidth="100%" Title="Which template read this file?"
+                       Subtitle="@("More than one active template could apply to batch #" + pickedBatchId + ". Pick the one its file uses.")"
+                       OnClose="() => showPick = false">
+                    <ChildContent>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            @foreach (var o in pickOptions)
+                            {
+                                var id = o.ImportTemplateId;
+                                <Button Title="@(o.TemplateName + (o.IsGlobalDefault ? " (global default)" : string.Empty))"
+                                        Variant="ButtonVariant.Secondary" OnClick="() => OpenTemplate(id)" />
+                            }
+                        </div>
+                    </ChildContent>
+                    <FooterContent>
+                        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="() => showPick = false" />
+                    </FooterContent>
+                </Modal>
+            }
+
+            @if (showSynonyms)
+            {
+                <UomSynonymsModal InitialSubDistributorId="@error?.SubDistributorId" InitialTryText="@UploadedUom"
+                                  OnSaved="() => synonymsSaved = true" OnClose="CloseSynonyms" />
+            }
 
 @code {
     [Parameter] public int ImportErrorId { get; set; }
@@ -550,8 +617,57 @@
     private bool showFix;
     private bool verifying;
 
+    // ---- Fix UOM synonyms (Unit of measure not mapped) ----
+    private const string ChoiceSynonyms = "UomSynonyms";
+    private bool showSynonyms;
+    private bool synonymsSaved;
+
+    private bool OffersSynonyms => string.Equals(error?.ErrorType, "UomNotFound", StringComparison.OrdinalIgnoreCase);
+
+    // The unit as the file had it, so the modal's Try it shows straight away whether a synonym now covers it.
+    private string? UploadedUom =>
+        error?.Facts.FirstOrDefault(f => string.Equals(f.Label, "Uploaded UOM", StringComparison.OrdinalIgnoreCase))?.Value
+        ?? error?.Value;
+
+    private RenderFragment SynonymsChoice => FixRow(ChoiceSynonyms, "Fix UOM synonyms",
+        "The file's unit is just another spelling of one the item already has (for example CS for Case). Add it as a synonym.");
+
+    // One row of the Fix window: icon, label, short description and a chevron. The whole row is clickable.
+    private RenderFragment FixRow(string key, string label, string? description) =>
+        @<button type="button" class="ied-act" disabled="@busy" @onclick="() => ChooseFixAsync(key)">
+            <span class="ied-act-icon" aria-hidden="true"><i class="@FixIcon(key)"></i></span>
+            <span class="ied-act-text">
+                <b>@label</b>
+                @if (!string.IsNullOrWhiteSpace(description))
+                {
+                    <span>@description</span>
+                }
+            </span>
+            <i class="fa-solid fa-chevron-right ied-act-chev" aria-hidden="true"></i>
+        </button>;
+
+    private static string FixIcon(string key) => key switch
+    {
+        ImportErrorGuidance.ChoiceMapping => "fa-solid fa-link",
+        ImportErrorGuidance.ChoiceReimport => "fa-solid fa-file-arrow-up",
+        ImportErrorGuidance.ChoiceTemplate => "fa-solid fa-table-columns",
+        ChoiceSynonyms => "fa-solid fa-right-left",
+        _ => "fa-solid fa-wrench"
+    };
+
+    private void CloseSynonyms()
+    {
+        showSynonyms = false;
+        if (!synonymsSaved) return;
+
+        synonymsSaved = false;
+        messageIsError = false;
+        message = "UOM synonyms saved. Press Verify to recheck the original file with them.";
+    }
+
     // Too many files to recheck at once: Verify then only checks the newest upload.
-    private bool RecheckTooManyFiles => error is not null && error.Batches.Count > ImportErrorVerificationService.MaxRecheckBatches;
+    private bool RecheckTooManyFiles => error is not null && error.Batches.Count >
+ImportErrorVerificationService.MaxRecheckBatches;
     private bool showBatchPick;
     private int pickedBatchId;
     private List<FixContextDto> batchOptions = new();
@@ -563,7 +679,8 @@
     // ---- Ambiguous sheet: show what the uploaded file really contains ----
     private ImportSheetPreviewDto? sheetPreview;
     private int selectedSheet;
-    private int ActiveSheet => sheetPreview is null || sheetPreview.Sheets.Count == 0 ? 0 : Math.Min(selectedSheet, sheetPreview.Sheets.Count - 1);
+    private int ActiveSheet => sheetPreview is null || sheetPreview.Sheets.Count == 0 ? 0 : Math.Min(selectedSheet,
+sheetPreview.Sheets.Count - 1);
     private bool IsAmbiguousSheet => ImportErrorGuidance.IsAmbiguousSheet(error?.ErrorType);
 
     // The error message names the sheet: Sheet "Sheet 1" fits "Summary", ... equally well
@@ -648,8 +765,10 @@
     private async Task Fix()
     {
         var choices = ImportErrorGuidance.FixChoices(error?.ErrorType);
-        if (choices.Count == 1) await ChooseFixAsync(choices[0].Key);
-        else if (choices.Count > 1) showFix = true;
+        var total = choices.Count + (OffersSynonyms ? 1 : 0);
+        if (total == 1 && choices.Count == 1) await ChooseFixAsync(choices[0].Key);
+        else if (total == 1) await ChooseFixAsync(ChoiceSynonyms);
+        else if (total > 1) showFix = true;
     }
 
     private async Task ChooseFixAsync(string key)
@@ -663,29 +782,40 @@
         {
             case ImportErrorGuidance.ChoiceReimport:
                 // A wrong subdistributor is a likely cause of "Ambiguous sheet", so the import window opens without one selected.
-                Nav.NavigateTo(ImportErrorGuidance.ReimportRoute(ImportErrorGuidance.IsAmbiguousSheet(error?.ErrorType) ? null : error?.SubDistributorId));
+                Nav.NavigateTo(ImportErrorGuidance.ReimportRoute(ImportErrorGuidance.IsAmbiguousSheet(error?.ErrorType) ? null :
+error?.SubDistributorId));
                 break;
             case ImportErrorGuidance.ChoiceMapping:
                 if (string.Equals(error?.ErrorType, "UomNotFound", StringComparison.OrdinalIgnoreCase))
                 {
                     // Opens Map Item with the subdistributor loaded, the item in edit mode and the Add UOM window open on the unit.
-                    string? Fact(string label) => error?.Facts.FirstOrDefault(f => string.Equals(f.Label, label, StringComparison.OrdinalIgnoreCase))?.Value;
-                    Nav.NavigateTo(ImportErrorGuidance.UomMappingRoute(error?.SubDistributorId, Fact("Item code"), Fact("Item name"), Fact("Uploaded UOM")));
+                    string? Fact(string label) => error?.Facts.FirstOrDefault(f => string.Equals(f.Label, label,
+StringComparison.OrdinalIgnoreCase))?.Value;
+                    Nav.NavigateTo(ImportErrorGuidance.UomMappingRoute(error?.SubDistributorId, Fact("Item code"), Fact("Item name"),
+Fact("Uploaded UOM")));
                 }
                 else if (string.Equals(error?.ErrorType, "SkuNotFound", StringComparison.OrdinalIgnoreCase))
                 {
                     // Map Item with the subdistributor selected and the file's item code and name already in its header.
                     string? RowFact(string key) => error?.LogicalRows.Where(r => r.IsReportedRow && r.Details != null)
                         .Select(r => r.Details!.TryGetValue(key, out var v) ? v : null).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
-                    var field = error?.LogicalRows.FirstOrDefault(r => r.IsReportedRow && !string.IsNullOrWhiteSpace(r.ProblemField))?.ProblemField;
-                    var code = RowFact("RowItemCode") ?? (string.Equals(field, "SkuCode", StringComparison.OrdinalIgnoreCase) ? error?.Value : null);
-                    var itemName = RowFact("RowItem") ?? (string.Equals(field, "ItemName", StringComparison.OrdinalIgnoreCase) ? error?.Value : null);
+                    var field = error?.LogicalRows.FirstOrDefault(r => r.IsReportedRow &&
+!string.IsNullOrWhiteSpace(r.ProblemField))?.ProblemField;
+                    var code = RowFact("RowItemCode") ?? (string.Equals(field, "SkuCode", StringComparison.OrdinalIgnoreCase) ? error?.Value
+: null);
+                    var itemName = RowFact("RowItem") ?? (string.Equals(field, "ItemName", StringComparison.OrdinalIgnoreCase) ?
+error?.Value : null);
                     Nav.NavigateTo(ImportErrorGuidance.ItemMappingRoute(error?.SubDistributorId, code, itemName));
                 }
                 else Nav.NavigateTo(ImportErrorGuidance.FixRoute(error?.ErrorType, ImportErrorId));
                 break;
             case ImportErrorGuidance.ChoiceTemplate:
                 await FixTemplateAsync();
+                break;
+            case ChoiceSynonyms:
+                message = null;
+                synonymsSaved = false;
+                showSynonyms = true;
                 break;
         }
     }
@@ -820,7 +950,6 @@
     private string RowsHint() =>
         allColumns ? "Every column from the Excel file" : "Row, invoice, problem and status";
 
-    // Errors judged on a whole invoice: the invoice's other rows are listed too (marked Context) so the admin can compare them.
     private bool ShowInvoiceFacts =>
         string.Equals(error?.ErrorType, "InvoiceInconsistent", StringComparison.OrdinalIgnoreCase)
         || string.Equals(error?.ErrorType, "InvoiceHeaderInvalid", StringComparison.OrdinalIgnoreCase);
@@ -828,7 +957,6 @@
     private static string? Fact(ImportErrorLogicalRowDto r, string key) =>
         r.Details != null && r.Details.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
 
-    // The row's invoice date: the importer's own value when it was kept, otherwise the Excel column that looks like the invoice date.
     private static string RowDate(ImportErrorLogicalRowDto r)
     {
         var fact = Fact(r, "RowInvoiceDate");
@@ -846,7 +974,6 @@
 
     private static string RowCustomer(ImportErrorLogicalRowDto r) => Fact(r, "RowCustomer") ?? string.Empty;
 
-    // The importer's reported rows, plus (for whole-invoice errors) the invoice's other rows. The search looks at what the table shows (and the Excel cells when they are shown).
     private List<ImportErrorLogicalRowDto> FilteredRows()
     {
         if (error is null) return new();
@@ -865,15 +992,16 @@
     }
 
     // Row-level proof that a reported row is fixed, from the newest evidence Entriel holds for it:
-    //  - a recheck that read a real value for the error's field with the current template (the value is the proof), or
-    //  - the newest upload that kept this row did not report it and holds a real value for the field.
+    // - a recheck that read a real value for the error's field with the current template (the value is the proof), or
+    // - the newest upload that kept this row did not report it and holds a real value for the field.
     // A row no later upload or recheck mentions is not treated as fixed.
     private static string? NowFixedValue(ImportErrorLogicalRowDto r)
     {
         if (r.HasCheckedValue && !string.IsNullOrWhiteSpace(r.CheckedValue)) return r.CheckedValue.Trim();
 
         var newest = r.Snapshots.FirstOrDefault();
-        if (newest is null || newest.IsReportedRow || !newest.HasProblemValue || string.IsNullOrWhiteSpace(newest.ProblemValue)) return null;
+        if (newest is null || newest.IsReportedRow || !newest.HasProblemValue || string.IsNullOrWhiteSpace(newest.ProblemValue))
+            return null;
         if (!r.Snapshots.Any(sn => sn.IsReportedRow)) return null;
         return newest.ProblemValue.Trim();
     }
@@ -891,7 +1019,6 @@
             : ("Not fixed", "ied-st-bad", error?.CorrectionNote ?? string.Empty);
     }
 
-    // What the Problem column shows: the error's value for a reported row, the row's own value of that field for a context row.
     private string ProblemText(ImportErrorLogicalRowDto r)
     {
         if (NowFixedValue(r) is { } now) return now;
@@ -906,10 +1033,9 @@
         r.Data?.FirstOrDefault(kv => kv.Key == header).Value ?? string.Empty;
 
     private static bool SameText(string? a, string? b) =>
-        !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+        !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) && string.Equals(a.Trim(), b.Trim(),
+StringComparison.OrdinalIgnoreCase);
 
-    // The Excel columns added by "All Excel columns". A column is left out when it only repeats what the table already shows:
-    // the invoice number (its value equals the row's invoice in every row), or the problem value (equals it in every reported row).
     private List<string> ExtraColumns(List<ImportErrorLogicalRowDto> rows)
     {
         if (error is null) return new();
@@ -935,7 +1061,8 @@
     private static bool IsNumericColumn(string header, List<ImportErrorLogicalRowDto> rows)
     {
         var values = rows.Select(r => DataCell(r, header).Trim()).Where(v => v.Length > 0).ToList();
-        return values.Count > 0 && values.All(v => decimal.TryParse(v, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _));
+        return values.Count > 0 && values.All(v => decimal.TryParse(v, System.Globalization.NumberStyles.Number,
+System.Globalization.CultureInfo.InvariantCulture, out _));
     }
 
     private static string CellValue(string value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
@@ -971,9 +1098,6 @@
 
     private Task ReopenAsync() => RunAsync(() => DetailsData.ReopenAsync(ImportErrorId), "Error reopened.");
 
-    // One Verify for every kind of fix. It checks the newest upload first (a corrected file), then rechecks the original file(s) with the
-    // current template and master data (a template or mapping fix). The error is resolved only when Entriel's own checks pass for every
-    // affected invoice. Either way the page reloads, so the rows show what the stored uploads prove, and a short note says how many are fixed.
     private async Task VerifyRowsAsync()
     {
         if (error is null || verifying) return;
@@ -1009,7 +1133,8 @@
 
             var total = ReportedRowCount();
             var fixedNow = FixedRowCount();
-            var resolvedNow = error is not null && ImportErrorPresentation.StatusKey(error.Status) == ImportErrorPresentation.Resolved;
+            var resolvedNow = error is not null && ImportErrorPresentation.StatusKey(error.Status) ==
+ImportErrorPresentation.Resolved;
 
             if (resolvedNow)
             {
@@ -1079,8 +1204,8 @@
         
     private bool IsRecheck => error is not null && ImportErrorPresentation.IsVerifiedByRecheck(error.ResolutionType);
 
-    // How the admin said they fixed it (from the Fix window), or null. Only used for errors verified by recheck or re-import.
-    private string? FixedVia => error is null || (!IsRecheck && !IsReimport) ? null : ImportErrorGuidance.FixChoiceName(error.ErrorType, error.FixChoice);
+    private string? FixedVia => error is null || (!IsRecheck && !IsReimport) ? null :
+ImportErrorGuidance.FixChoiceName(error.ErrorType, error.FixChoice);
 
     private string ResolvedTitle(bool auto) =>
         FixedVia is { } via ? "Fixed via " + via

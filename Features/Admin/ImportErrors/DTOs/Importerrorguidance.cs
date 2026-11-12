@@ -100,7 +100,7 @@ namespace STTproject.Features.Admin.ImportErrors.DTOs
                 : string.Equals(errorType, "SkuNotFound", StringComparison.OrdinalIgnoreCase)
                     ? "Open Map Item with this subdistributor selected, then add the item mapping or correct its code or name."
                 : string.Equals(errorType, "UomNotFound", StringComparison.OrdinalIgnoreCase)
-                    ? "Open Map Item, pick the subdistributor and item, and add or correct its unit of measure."
+                    ? "Open Map Item, Add or correct its unit of measure."
                     : "Open Map Item and correct the item mapping.";
 
         /// <summary>The subdistributor of an AmbiguousSheet error may be the wrong one, so a re-import must not preselect it.</summary>

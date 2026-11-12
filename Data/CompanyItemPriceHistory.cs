@@ -30,4 +30,6 @@ public partial class CompanyItemPriceHistory
     public virtual CompanyItem CompanyItem { get; set; } = null!;
 
     public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
+
+    public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 }

@@ -25,6 +25,20 @@ public partial class SalesInvoiceItem
 
     public int ItemsUomId { get; set; }
 
+    public int? BaseQuantity { get; set; }
+
+    public decimal? StockPriceUsed { get; set; }
+
+    public int? CompanyItemPriceHistoryId { get; set; }
+
+    public string? PriceSource { get; set; }
+
+    public DateTime? PricedAt { get; set; }
+
+    public decimal? BilledAmount { get; set; }
+
+    public virtual CompanyItemPriceHistory? CompanyItemPriceHistory { get; set; }
+
     public virtual ItemsUom ItemsUom { get; set; } = null!;
 
     public virtual SalesInvoice SalesInvoice { get; set; } = null!;

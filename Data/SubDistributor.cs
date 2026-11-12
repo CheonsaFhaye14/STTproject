@@ -41,6 +41,8 @@ public partial class SubDistributor
 
     public virtual ICollection<ImportTemplate> ImportTemplates { get; set; } = new List<ImportTemplate>();
 
+    public virtual ICollection<PriceRecalcRun> PriceRecalcRuns { get; set; } = new List<PriceRecalcRun>();
+
     public virtual ICollection<SalesInvoice> SalesInvoices { get; set; } = new List<SalesInvoice>();
 
     public virtual ICollection<SubdItem> SubdItems { get; set; } = new List<SubdItem>();

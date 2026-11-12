@@ -123,7 +123,11 @@ public sealed class SalesInvoiceUomOption
     public string UomName { get; init; } = string.Empty;
     public decimal Price { get; init; }
     public int? ConversionToBase { get; init; }
+    public int StockConvToBase { get; init; }
+    public decimal? StockPrice { get; init; }
+    public string? PriceIssue { get; init; }
 }
+
 public sealed class SalesInvoiceItemDropdownItem
 {
     public int SubdItemId { get; set; }

@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.SalesInvoice.DTOs;
-//TODO: Allow to select Items Uom with out price or conversion. 
+using STTproject.Features.Pricing;
+
 namespace STTproject.Features.Admin.SalesInvoice.Services;
 
 public class AdminSalesInvoiceService : IAdminSalesInvoiceService
@@ -70,7 +71,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             })
             .ToListAsync(cancellationToken);
     }
-    
+
     public async Task<List<(int Year, int Month)>> GetAvailableInvoiceMonthsAsync(
     CancellationToken cancellationToken = default)
     {
@@ -172,7 +173,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
         return (items, total);
     }
-    
+
     public async Task<List<string>> GetPrincipalsForDropdownAsync(
         CancellationToken cancellationToken = default)
     {
@@ -224,20 +225,8 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
                         ItemName = item.SubdItem.ItemName,
                         ItemsUomId = item.ItemsUomId,
                         UomName = item.ItemsUom.UomName,
-                        UomPrice = context.ItemsUomPriceHistories
-                                .Where(h =>
-                                    h.ItemsUomId == item.ItemsUomId &&
-                                    h.AppliedDate != null &&
-                                    h.AppliedDate <= si.SalesInvoiceDate.ToDateTime(TimeOnly.MaxValue))
-                                .OrderByDescending(h => h.AppliedDate)
-                                .Select(h => (decimal?)h.NewPrice)
-                                .FirstOrDefault()
-                            ?? context.ItemsUomPriceHistories
-                                .Where(h => h.ItemsUomId == item.ItemsUomId && h.AppliedDate != null)
-                                .OrderBy(h => h.AppliedDate)
-                                .Select(h => (decimal?)h.OldPrice)
-                                .FirstOrDefault()
-                            ?? item.ItemsUom.Price ?? 0m,
+                        UomPrice = item.Quantity != 0 ? item.Amount / item.Quantity : 0m,
+                        UnitPrice = item.Quantity != 0 ? item.Amount / item.Quantity : 0m,
                         Quantity = item.Quantity,
                         Amount = item.Amount
                     })
@@ -274,7 +263,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
         return await context.Customers
             .AsNoTracking()
-            .Where(c => c.IsActive)
+            .Where(c => c.IsActive && c.SubDistributorId == subDistributorId)
             .OrderBy(c => c.CustomerName)
             .Select(c => new SalesInvoiceCustomerDropdownItem
             {
@@ -287,77 +276,70 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
 
     public async Task<List<SalesInvoiceItemDropdownItem>> GetItemsForDropdownAsync(
     CancellationToken cancellationToken = default)
-{
-    await using var context = _contextFactory.CreateDbContext();
+    {
+        await using var context = _contextFactory.CreateDbContext();
 
-    return await context.SalesInvoiceItems
-        .AsNoTracking()
-        .Select(sii => new { sii.SubdItemId, sii.SubdItem.SubdItemCode, sii.SubdItem.ItemName })
-        .Distinct()
-        .OrderBy(x => x.SubdItemCode)
-        .Select(x => new SalesInvoiceItemDropdownItem
-        {
-            SubdItemId = x.SubdItemId,
-            SubdItemCode = x.SubdItemCode,
-            ItemName = x.ItemName
-        })
-        .ToListAsync(cancellationToken);
-}
+        return await context.SalesInvoiceItems
+            .AsNoTracking()
+            .Select(sii => new { sii.SubdItemId, sii.SubdItem.SubdItemCode, sii.SubdItem.ItemName })
+            .Distinct()
+            .OrderBy(x => x.SubdItemCode)
+            .Select(x => new SalesInvoiceItemDropdownItem
+            {
+                SubdItemId = x.SubdItemId,
+                SubdItemCode = x.SubdItemCode,
+                ItemName = x.ItemName
+            })
+            .ToListAsync(cancellationToken);
+    }
 
-public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
-    int subDistributorId,
-    DateOnly salesInvoiceDate,
-    CancellationToken cancellationToken = default)
-{
-    await using var context = _contextFactory.CreateDbContext();
+    public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
+        int subDistributorId,
+        DateOnly salesInvoiceDate,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
 
-    var invoiceDate = salesInvoiceDate.ToDateTime(TimeOnly.MinValue);
+        var items = await context.SubdItems
+            .AsNoTracking()
+            .Where(si => si.SubDistributorId == subDistributorId && si.IsActive)
+            .OrderBy(si => si.SubdItemCode)
+            .Select(si => new { si.SubdItemId, si.SubdItemCode, si.ItemName })
+            .ToListAsync(cancellationToken);
 
-    return await context.SubdItems
-        .AsNoTracking()
-        .Where(si =>
-            si.SubDistributorId == subDistributorId &&
-            si.IsActive)
-        .OrderBy(si => si.SubdItemCode)
-        .Select(si => new SalesInvoiceSubdItemDropdownItem
+        var prices = await InvoicePricing.LoadUomPricesAsync(
+            context, subDistributorId, salesInvoiceDate, items.Select(i => i.SubdItemId), cancellationToken);
+
+        var activeUomIds = await context.ItemsUoms.AsNoTracking()
+            .Where(u => u.IsActive && u.SubdItem.SubDistributorId == subDistributorId)
+            .Select(u => u.ItemsUomId)
+            .ToListAsync(cancellationToken);
+        var active = activeUomIds.ToHashSet();
+
+        var bySubdItem = prices.Values
+            .Where(p => active.Contains(p.ItemsUomId))
+            .ToLookup(p => p.SubdItemId);
+
+        return items.Select(si => new SalesInvoiceSubdItemDropdownItem
         {
             SubdItemId = si.SubdItemId,
             SubdItemCode = si.SubdItemCode,
             ItemName = si.ItemName,
-
-            Uoms = context.ItemsUoms
-                .Where(u =>
-                    u.SubdItemId == si.SubdItemId &&
-                    u.IsActive)
-                .Select(u => new SalesInvoiceUomOption
+            Uoms = bySubdItem[si.SubdItemId]
+                .OrderBy(p => p.ConversionToBase)
+                .Select(p => new SalesInvoiceUomOption
                 {
-                    ItemsUomId = u.ItemsUomId,
-                    UomName = u.UomName,
-
-                    Price = context.ItemsUomPriceHistories
-                            .Where(h =>
-                                h.ItemsUomId == u.ItemsUomId &&
-                                h.AppliedDate != null &&
-                                h.AppliedDate <= invoiceDate)
-                            .OrderByDescending(h => h.AppliedDate)
-                            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
-                            .Select(h => (decimal?)h.NewPrice)
-                            .FirstOrDefault()
-                        ?? context.ItemsUomPriceHistories
-                            .Where(h => h.ItemsUomId == u.ItemsUomId && h.AppliedDate != null)
-                            .OrderBy(h => h.AppliedDate)
-                            .Select(h => (decimal?)h.OldPrice)
-                            .FirstOrDefault()
-                        ?? u.Price ?? 0m,
-
-                    ConversionToBase = u.ConversionToBase ?? 1
+                    ItemsUomId = p.ItemsUomId,
+                    UomName = p.UomName,
+                    Price = p.UnitPrice,
+                    ConversionToBase = p.ConversionToBase,
+                    StockConvToBase = p.StockConvToBase,
+                    StockPrice = p.StockPrice,
+                    PriceIssue = p.Issue
                 })
-                .OrderBy(u => u.UomName)
                 .ToList()
-        })
-        .ToListAsync(cancellationToken);
-}
-    
+        }).ToList();
+    }
 
     // In AdminSalesInvoiceService:
     public async Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(
@@ -396,6 +378,16 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
             if (codeExists)
                 return SalesInvoiceResult.Duplicate($"Invoice code '{dto.SalesInvoiceCode}' already exists for this sub distributor.");
 
+            var lineKeys = dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity)).ToList();
+            var prices = await InvoicePricing.LoadUomPricesAsync(
+                context, dto.SubDistributorId, dto.SalesInvoiceDate, lineKeys.Select(k => k.SubdItemId), cancellationToken);
+
+            var (priced, priceError) = PriceItems(lineKeys, prices, IsCredit(dto.OrderType));
+            if (priceError is not null)
+                return SalesInvoiceResult.Failed(priceError);
+
+            var now = DateTime.UtcNow;
+
             var invoice = new STTproject.Data.SalesInvoice
             {
                 SalesInvoiceCode = dto.SalesInvoiceCode.Trim(),
@@ -406,13 +398,18 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                 SalesMan = dto.SalesMan?.Trim(),
                 CreatedDate = DateTime.UtcNow,
                 CreatedBy = createdByUserId,
-                SalesInvoiceItems = dto.Items.Select(i => new SalesInvoiceItem
+                SalesInvoiceItems = dto.Items.Select((i, idx) => new SalesInvoiceItem
                 {
                     SubdItemId = i.SubdItemId,
                     ItemsUomId = i.ItemsUomId,
                     Quantity = i.Quantity,
-                    Amount = i.Amount,
-                    CreatedDate = DateTime.UtcNow,
+                    Amount = priced![idx].Amount,
+                    BaseQuantity = priced[idx].BaseQuantity,
+                    StockPriceUsed = priced[idx].StockPrice,
+                    CompanyItemPriceHistoryId = priced[idx].HistoryId,
+                    PriceSource = "Manual",
+                    PricedAt = now,
+                    CreatedDate = now,
                     CreatedBy = createdByUserId
                 }).ToList()
             };
@@ -461,6 +458,16 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
             if (codeExists)
                 return SalesInvoiceResult.Duplicate($"Invoice code '{dto.SalesInvoiceCode}' already exists for this sub distributor.");
 
+            var lineKeys = dto.Items.Select(i => (i.SubdItemId, i.ItemsUomId, i.Quantity)).ToList();
+            var prices = await InvoicePricing.LoadUomPricesAsync(
+                context, dto.SubDistributorId, dto.SalesInvoiceDate, lineKeys.Select(k => k.SubdItemId), cancellationToken);
+
+            var (priced, priceError) = PriceItems(lineKeys, prices, IsCredit(dto.OrderType));
+            if (priceError is not null)
+                return SalesInvoiceResult.Failed(priceError);
+
+            var now = DateTime.UtcNow;
+
             existing.SalesInvoiceCode = dto.SalesInvoiceCode.Trim();
             existing.SalesInvoiceDate = dto.SalesInvoiceDate;
             existing.CustomerId = dto.CustomerId;
@@ -470,7 +477,6 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
             existing.UpdatedDate = DateTime.UtcNow;
             existing.UpdatedBy = updatedByUserId;
 
-            // Reconcile items: delete removed, update existing, add new
             var incomingIds = dto.Items
                 .Where(i => i.SalesInvoiceItemId > 0)
                 .Select(i => i.SalesInvoiceItemId)
@@ -482,8 +488,11 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
 
             context.SalesInvoiceItems.RemoveRange(toDelete);
 
-            foreach (var itemDto in dto.Items)
+            for (var idx = 0; idx < dto.Items.Count; idx++)
             {
+                var itemDto = dto.Items[idx];
+                var p = priced![idx];
+
                 if (itemDto.SalesInvoiceItemId > 0)
                 {
                     var existingItem = existing.SalesInvoiceItems
@@ -494,8 +503,13 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                         existingItem.SubdItemId = itemDto.SubdItemId;
                         existingItem.ItemsUomId = itemDto.ItemsUomId;
                         existingItem.Quantity = itemDto.Quantity;
-                        existingItem.Amount = itemDto.Amount;
-                        existingItem.UpdatedDate = DateTime.UtcNow;
+                        existingItem.Amount = p.Amount;
+                        existingItem.BaseQuantity = p.BaseQuantity;
+                        existingItem.StockPriceUsed = p.StockPrice;
+                        existingItem.CompanyItemPriceHistoryId = p.HistoryId;
+                        existingItem.PriceSource = "Manual";
+                        existingItem.PricedAt = now;
+                        existingItem.UpdatedDate = now;
                         existingItem.UpdatedBy = updatedByUserId;
                     }
                 }
@@ -506,8 +520,13 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                         SubdItemId = itemDto.SubdItemId,
                         ItemsUomId = itemDto.ItemsUomId,
                         Quantity = itemDto.Quantity,
-                        Amount = itemDto.Amount,
-                        CreatedDate = DateTime.UtcNow,
+                        Amount = p.Amount,
+                        BaseQuantity = p.BaseQuantity,
+                        StockPriceUsed = p.StockPrice,
+                        CompanyItemPriceHistoryId = p.HistoryId,
+                        PriceSource = "Manual",
+                        PricedAt = now,
+                        CreatedDate = now,
                         CreatedBy = updatedByUserId
                     });
                 }
@@ -695,9 +714,12 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
         await context.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO DeletedSalesInvoiceItem
                 (DeletedSalesInvoiceId, OriginalSalesInvoiceItemId, SubdItemId, ItemsUomId, Quantity, Amount,
-                 CreatedDate, CreatedBy, UpdatedDate, UpdatedBy)
+                BaseQuantity, StockPriceUsed, CompanyItemPriceHistoryId, PriceSource, PricedAt, BilledAmount,
+                CreatedDate, CreatedBy, UpdatedDate, UpdatedBy)
             SELECT d.DeletedSalesInvoiceId, sii.SalesInvoiceItemId, sii.SubdItemId, sii.ItemsUomId,
-                   sii.Quantity, sii.Amount, sii.CreatedDate, sii.CreatedBy, sii.UpdatedDate, sii.UpdatedBy
+                sii.Quantity, sii.Amount,
+                sii.BaseQuantity, sii.StockPriceUsed, sii.CompanyItemPriceHistoryId, sii.PriceSource, sii.PricedAt, sii.BilledAmount,
+                sii.CreatedDate, sii.CreatedBy, sii.UpdatedDate, sii.UpdatedBy
             FROM DeletedSalesInvoice d
             JOIN SalesInvoiceItem sii ON sii.SalesInvoiceId = d.OriginalSalesInvoiceId
             WHERE d.DeletionBatchId = {batchId}", ct);
@@ -822,13 +844,13 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
         // Sort
         Func<(DeletedBatchRaw Raw, DeletedBatchRow Row), object?> key = sortColumn switch
         {
-            "Type"           => x => x.Row.DeletionType,
+            "Type" => x => x.Row.DeletionType,
             "Subdistributor" => x => x.Row.SubdName,
-            "Period"         => x => (x.Raw.PeriodYear ?? 0) * 100 + (x.Raw.PeriodMonth ?? 0),
-            "Invoices"       => x => x.Row.InvoiceCount,
-            "DeletedBy"      => x => x.Row.DeletedByName ?? string.Empty,
-            "Status"         => x => x.Row.Status,
-            _                => x => x.Row.DeletedDate
+            "Period" => x => (x.Raw.PeriodYear ?? 0) * 100 + (x.Raw.PeriodMonth ?? 0),
+            "Invoices" => x => x.Row.InvoiceCount,
+            "DeletedBy" => x => x.Row.DeletedByName ?? string.Empty,
+            "Status" => x => x.Row.Status,
+            _ => x => x.Row.DeletedDate
         };
 
         var ascending = sortColumn is null or "DeletedDate" or "Period" ? !sortAscending : sortAscending;
@@ -1015,9 +1037,12 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
                 SET IDENTITY_INSERT SalesInvoiceItem ON;
                 INSERT INTO SalesInvoiceItem
                     (SalesInvoiceItemId, SalesInvoiceId, SubdItemId, ItemsUomId, Quantity, Amount,
+                    BaseQuantity, StockPriceUsed, CompanyItemPriceHistoryId, PriceSource, PricedAt, BilledAmount,
                     CreatedDate, CreatedBy, UpdatedDate, UpdatedBy)
                 SELECT i.OriginalSalesInvoiceItemId, d.OriginalSalesInvoiceId, i.SubdItemId, i.ItemsUomId,
-                    i.Quantity, i.Amount, i.CreatedDate, i.CreatedBy, i.UpdatedDate, i.UpdatedBy
+                    i.Quantity, i.Amount,
+                    i.BaseQuantity, i.StockPriceUsed, i.CompanyItemPriceHistoryId, i.PriceSource, i.PricedAt, i.BilledAmount,
+                    i.CreatedDate, i.CreatedBy, i.UpdatedDate, i.UpdatedBy
                 FROM DeletedSalesInvoiceItem i
                 JOIN DeletedSalesInvoice d ON d.DeletedSalesInvoiceId = i.DeletedSalesInvoiceId
                 WHERE d.DeletionBatchId = {deletionBatchId};
@@ -1044,4 +1069,33 @@ public async Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdow
         public int SubDistributorId { get; set; }
         public string SalesInvoiceCode { get; set; } = string.Empty;
     }
+    private sealed record PricedItem(int BaseQuantity, decimal StockPrice, int HistoryId, decimal Amount);
+
+    private static (List<PricedItem>? Lines, string? Error) PriceItems(
+        IReadOnlyList<(int SubdItemId, int ItemsUomId, int Quantity)> items,
+        IReadOnlyDictionary<int, UomPriceInfo> prices,
+        bool isCredit)
+    {
+        var lines = new List<PricedItem>(items.Count);
+
+        foreach (var (subdItemId, uomId, qty) in items)
+        {
+            if (!prices.TryGetValue(uomId, out var p) || p.SubdItemId != subdItemId)
+                return (null, "A selected unit of measure does not belong to its item or sub distributor.");
+
+            if (!p.IsPriced)
+                return (null, $"{p.SubdItemCode} ({p.UomName}): {p.Issue}. Fix the item mapping or company price first.");
+
+            lines.Add(new PricedItem(
+                p.BaseQuantityFor(qty),
+                p.StockPrice!.Value,
+                p.CompanyItemPriceHistoryId!.Value,
+                p.AmountFor(qty, isCredit)));
+        }
+
+        return (lines, null);
+    }
+
+    private static bool IsCredit(string orderType)
+        => string.Equals(orderType?.Trim(), "Credit", StringComparison.OrdinalIgnoreCase);
 }

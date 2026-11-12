@@ -266,6 +266,15 @@
 @code {
     [Parameter] public EventCallback OnClose { get; set; }
 
+    /// <summary>Raised after every successful save, so a caller (the import error page) can suggest Verify.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    /// <summary>Opens on this subdistributor instead of Global, when it exists and is active.</summary>
+    [Parameter] public int? InitialSubDistributorId { get; set; }
+
+    /// <summary>Pre-fills Try it, e.g. with the unit an import couldn't map.</summary>
+    [Parameter] public string? InitialTryText { get; set; }
+
     private sealed class GroupVm
     {
         public required UomSynonymGroupEditDto Dto { get; init; }
@@ -313,7 +322,10 @@
     {
         subds = await Templates.GetSubDistributorsAsync();
         summaries = await Synonyms.GetSubdSummariesAsync();
-        await LoadScopeAsync(null);
+        if (!string.IsNullOrWhiteSpace(InitialTryText)) tryText = InitialTryText.Trim();
+
+        var start = InitialSubDistributorId is int sid && subds.Any(s => s.SubDistributorId == sid) ? sid : (int?)null;
+        await LoadScopeAsync(start);
         isLoading = false;
     }
 
@@ -576,6 +588,7 @@ e.Spelling!)).ToHashSet();
             summaries = await Synonyms.GetSubdSummariesAsync();
             await LoadScopeAsync(subdId);
             savedMessage = "Saved. Imports checked from now on use these spellings.";
+            await OnSaved.InvokeAsync();
         }
         finally
         {

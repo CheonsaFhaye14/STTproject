@@ -2,8 +2,8 @@
 @using Microsoft.AspNetCore.Components.Web
 
 <span class="btn-tooltip-wrap" @onmousemove="OnMouseMove" @onmouseenter="OnMouseEnter" @onmouseleave="OnMouseLeave">
-    <button class="btn @VariantClass @(Active ? "is-active" : "")" @onclick="OnClick" disabled="@Disabled" type="@Type">        
-    @if (IconContent != null)
+    <button class="btn @VariantClass @(Active ? "is-active" : "")" @onclick="OnClick" disabled="@Disabled" type="@Type">
+        @if (IconContent != null)
         {
             <span class="btn-icon" aria-hidden="true">@IconContent</span>
         }
@@ -19,16 +19,14 @@
     
     @if (!string.IsNullOrWhiteSpace(Tooltip) && (isHovering || isFocused))
     {
-        <span class="btn-tooltip-bubble" role="tooltip"
-              style="left:@(mouseX + 14)px; top:@(mouseY + 18)px;">
+        <span class="btn-tooltip-bubble" role="tooltip" style="left:@(mouseX + 14)px; top:@(mouseY + 18)px;">
             @Tooltip
         </span>
     }
 </span>
 
 <style>
-    .btn
-    {
+    .btn {
         border: none;
         border-radius: 10px;
         padding: 10px 18px;
@@ -42,8 +40,7 @@
         -webkit-tap-highlight-color: transparent;
     }
 
-    .btn-primary
-    {
+    .btn-primary {
         background-color: var(--app-accent-strong) !important;
         color: var(--app-dark-deep) !important;
         border-radius: 10px;
@@ -51,15 +48,13 @@
         box-shadow: 0 2px 6px rgba(33, 26, 16, 0.16) !important;
     }
 
-    .btn-primary:hover
-    {
+    .btn-primary:hover {
         background-color: var(--app-accent) !important;
         color: var(--app-dark-deep) !important;
         transform: translateY(-1px);
     }
 
-    .btn-secondary
-    {
+    .btn-secondary {
         background-color: var(--app-surface) !important;
         color: var(--app-accent-dark) !important;
         border-radius: 10px;
@@ -67,30 +62,27 @@
         box-shadow: 0 2px 6px rgba(33, 26, 16, 0.08) !important;
     }
 
-    .btn-secondary:hover
-    {
+    .btn-secondary:hover {
         background-color: var(--app-accent) !important;
         color: var(--app-dark-deep) !important;
         border-color: var(--app-accent-strong) !important;
     }
 
-    .btn-Cancel
-    {
+    .btn-Cancel {
         background-color: var(--app-surface) !important;
         color: var(--app-accent-dark) !important;
         border-radius: 10px;
         border: 1px solid var(--app-border) !important;
         box-shadow: 0 2px 6px rgba(33, 26, 16, 0.08) !important;
     }
-    .btn-Cancel:hover
-    {
+
+    .btn-Cancel:hover {
         background-color: var(--app-accent) !important;
         color: var(--app-dark-deep) !important;
         border-color: var(--app-accent-strong) !important;
     }
 
-    .btn:disabled
-    {
+    .btn:disabled {
         background: #d8cbb0;
         color: #ffffff;
         cursor: not-allowed;
@@ -102,14 +94,12 @@
        after a click, since clicking also focuses the button. */
     .btn:focus,
     .btn:active,
-    .btn:active:focus
-    {
+    .btn:active:focus {
         outline: 2px solid var(--app-accent-strong);
         box-shadow: 0 2px 6px rgba(33, 26, 16, 0.16);
     }
 
-    .btn-icon
-    {
+    .btn-icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -118,16 +108,14 @@
         flex-shrink: 0;
     }
 
-    .btn-icon ::deep svg
-    {
+    .btn-icon ::deep svg {
         width: 100%;
         height: 100%;
         fill: currentColor;
     }
 
     /* ── Icon-only action button ── */
-    .icon-action-btn
-    {
+    .icon-action-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -141,56 +129,48 @@
         gap: 0;
     }
 
-        .icon-action-btn:hover:not(:disabled)
-        {
-            background: #F7F6F4;
-            color: #1B1B1F;
-            border-color: #B08D57;
-        }
+    .icon-action-btn:hover:not(:disabled) {
+        background: #F7F6F4;
+        color: #1B1B1F;
+        border-color: #B08D57;
+    }
 
-        .icon-action-btn:disabled
-        {
-            background: #F7F6F4;
-            color: #B8B6B2;
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+    .icon-action-btn:disabled {
+        background: #F7F6F4;
+        color: #B8B6B2;
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
-        .icon-action-btn i,
-        .icon-action-btn .btn-icon
-        {
-            width: 16px;
-            height: 16px;
-            font-size: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
+    .icon-action-btn i,
+    .icon-action-btn .btn-icon {
+        width: 16px;
+        height: 16px;
+        font-size: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-        .icon-action-btn .btn-icon ::deep svg
-        {
-            fill: currentColor;
-        }
+    .icon-action-btn .btn-icon ::deep svg {
+        fill: currentColor;
+    }
 
-    .edit-btn:hover:not(:disabled)
-    {
+    .edit-btn:hover:not(:disabled) {
         color: #8A6A34;
     }
 
-    .delete-btn:hover:not(:disabled)
-    {
+    .delete-btn:hover:not(:disabled) {
         color: #A33A3A;
     }
 
     /* ── Tooltip ── */
-    .btn-tooltip-wrap
-    {
+    .btn-tooltip-wrap {
         position: relative;
         display: inline-flex;
     }
 
-    .btn-tooltip-bubble
-    {
+    .btn-tooltip-bubble {
         position: fixed;
         background: var(--app-dark-deep, #211a10);
         color: #fff;
@@ -204,11 +184,24 @@
         pointer-events: none;
         z-index: 2147483647;
     }
-    .icon-action-btn.is-active
-    {
+
+    .icon-action-btn.is-active {
         background: #F3EBDD;
         color: #8A6A34;
         border-color: #B08D57;
+    }
+
+    .btn-muted {
+        background-color: #EAE7E3 !important;
+        color: #4F4943 !important;
+        border: 1px solid #E1DCD5 !important;
+        box-shadow: none !important;
+    }
+
+    .btn-muted:hover {
+        background-color: #DDD8D1 !important;
+        color: #2A2622 !important;
+        border-color: #D1CBC2 !important;
     }
 </style>
 
@@ -252,6 +245,7 @@
         ButtonVariant.IconAction => "icon-action-btn",
         ButtonVariant.IconActionEdit => "icon-action-btn edit-btn",
         ButtonVariant.IconActionDelete => "icon-action-btn delete-btn",
+        ButtonVariant.Muted => "btn-muted",
         _ => "btn-secondary"
     };
 }

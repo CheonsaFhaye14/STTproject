@@ -27,5 +27,17 @@ public partial class DeletedSalesInvoiceItem
 
     public int? UpdatedBy { get; set; }
 
+    public int? BaseQuantity { get; set; }
+
+    public decimal? StockPriceUsed { get; set; }
+
+    public int? CompanyItemPriceHistoryId { get; set; }
+
+    public string? PriceSource { get; set; }
+
+    public DateTime? PricedAt { get; set; }
+
+    public decimal? BilledAmount { get; set; }
+
     public virtual DeletedSalesInvoice DeletedSalesInvoice { get; set; } = null!;
 }

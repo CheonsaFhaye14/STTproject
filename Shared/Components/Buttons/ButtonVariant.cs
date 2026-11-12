@@ -1,12 +1,10 @@
-namespace STTproject.Shared.Components.Buttons
+public enum ButtonVariant
 {
-    public enum ButtonVariant
-    {
-        Cancel,
-        Secondary,
-        Primary,
-        IconAction,
-        IconActionEdit,
-        IconActionDelete
-    }
+    Cancel,
+    Secondary,
+    Primary,
+    Muted,
+    IconAction,
+    IconActionEdit,
+    IconActionDelete
 }

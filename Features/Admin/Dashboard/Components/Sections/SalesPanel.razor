@@ -57,8 +57,7 @@
             <div class="stat" title="Invoices and credit — same total as the Sales Invoices page">
                 <div class="l">No. of invoices</div>
                 <div class="v">@DashFormat.Number(totals.Count)</div>
-                <div class="s">@(DashFormat.Number(totals.InvoiceCount) + " invoices · " +
-                                                                                                                                                                                                        DashFormat.Number(totals.CreditCount) + " credit")</div>
+                <div class="s">@(DashFormat.Number(totals.InvoiceCount) + " invoices · " + DashFormat.Number(totals.CreditCount) + " credit")</div>
                 </div>
             </div>
 
@@ -75,7 +74,7 @@
                         @foreach (var t in ticks)
                         {
                             <div class="gl" style="bottom:@DashFormat.Css(Pct(t))%"><span>@(t == 0 ? "0" :
-                                                                                                                                                                                                                                                                                                                            DashFormat.PesoShort(t))</span></div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            DashFormat.PesoShort(t))</span></div>
                             }
                         </div>
                         <div class="bars">

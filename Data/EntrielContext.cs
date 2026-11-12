@@ -47,6 +47,10 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
 
+    public virtual DbSet<PriceRecalcLine> PriceRecalcLines { get; set; }
+
+    public virtual DbSet<PriceRecalcRun> PriceRecalcRuns { get; set; }
+
     public virtual DbSet<SalesInvoice> SalesInvoices { get; set; }
 
     public virtual DbSet<SalesInvoiceDeletionBatch> SalesInvoiceDeletionBatches { get; set; }
@@ -118,6 +122,8 @@ public partial class EntrielContext : DbContext
             entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1344EDBBD81");
 
             entity.ToTable("CompanyItemPriceHistory");
+
+            entity.HasIndex(e => new { e.CompanyItemId, e.PriceListType, e.EffectivityDateOnly }, "IX_CIPH_PriceLookup");
 
             entity.HasIndex(e => new { e.CompanyItemId, e.PriceListType, e.EffectivityDateOnly }, "UX_CompanyItemPriceHistory_Pending")
                 .IsUnique()
@@ -209,6 +215,12 @@ public partial class EntrielContext : DbContext
             entity.HasIndex(e => e.DeletedSalesInvoiceId, "IX_DSII_Invoice");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.BilledAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PriceSource)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.PricedAt).HasColumnType("datetime");
+            entity.Property(e => e.StockPriceUsed).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.DeletedSalesInvoice).WithMany(p => p.DeletedSalesInvoiceItems)
                 .HasForeignKey(d => d.DeletedSalesInvoiceId)
@@ -455,6 +467,10 @@ public partial class EntrielContext : DbContext
 
             entity.HasIndex(e => new { e.SubdItemId, e.UomName }, "UQ_ItemsUom_SubdItem_Uom").IsUnique();
 
+            entity.HasIndex(e => e.SubdItemId, "UX_ItemsUom_OneActiveStock")
+                .IsUnique()
+                .HasFilter("([IsStockUom]=(1) AND [IsActive]=(1))");
+
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())", "DF__ItemsUom__Create__18EBB532")
                 .HasColumnType("datetime");
@@ -508,6 +524,45 @@ public partial class EntrielContext : DbContext
                 .HasForeignKey(d => d.ItemsUomId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ItemsUomPriceHistory_ItemsUom");
+        });
+
+        modelBuilder.Entity<PriceRecalcLine>(entity =>
+        {
+            entity.HasKey(e => new { e.RunId, e.SalesInvoiceItemId });
+
+            entity.ToTable("PriceRecalcLine");
+
+            entity.Property(e => e.Issue)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.NewAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OldAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.StockPrice).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.Run).WithMany(p => p.PriceRecalcLines)
+                .HasForeignKey(d => d.RunId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__PriceReca__RunId__269AB60B");
+        });
+
+        modelBuilder.Entity<PriceRecalcRun>(entity =>
+        {
+            entity.HasKey(e => e.RunId).HasName("PK__PriceRec__A259D4DD29A8E9FA");
+
+            entity.ToTable("PriceRecalcRun");
+
+            entity.Property(e => e.AppliedAt).HasColumnType("datetime");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.NewTotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OldTotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UndoneAt).HasColumnType("datetime");
+
+            entity.HasOne(d => d.SubDistributor).WithMany(p => p.PriceRecalcRuns)
+                .HasForeignKey(d => d.SubDistributorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__PriceReca__SubDi__22CA2527");
         });
 
         modelBuilder.Entity<SalesInvoice>(entity =>
@@ -573,10 +628,20 @@ public partial class EntrielContext : DbContext
             entity.ToTable("SalesInvoiceItem");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.BilledAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.PriceSource)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.PricedAt).HasColumnType("datetime");
+            entity.Property(e => e.StockPriceUsed).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.CompanyItemPriceHistory).WithMany(p => p.SalesInvoiceItems)
+                .HasForeignKey(d => d.CompanyItemPriceHistoryId)
+                .HasConstraintName("FK_SalesInvoiceItem_PriceHistory");
 
             entity.HasOne(d => d.ItemsUom).WithMany(p => p.SalesInvoiceItems)
                 .HasForeignKey(d => d.ItemsUomId)
@@ -788,7 +853,6 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
             entity.Property(e => e.Username).HasMaxLength(50);
         });
-
         modelBuilder.HasSequence<int>("ImportBatchIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorEvidenceIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorIdSequence");

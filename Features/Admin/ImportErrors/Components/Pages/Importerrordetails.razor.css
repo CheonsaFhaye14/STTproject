@@ -63,7 +63,19 @@
 .ied-q:last-child { margin: 0; }
 .ied-q h4 { margin: 0 0 2px; font-size: 12px; color: #2A2622; }
 .ied-q p { margin: 0; font-size: 13px; line-height: 1.4; color: #4F4943; }
-
+/* What's wrong: vertical stepper (Problem, Why it happened, What to do) */
+.ied-steps { list-style: none; margin: 0; padding: 0 0 0 26px; }
+.ied-step { position: relative; padding-bottom: 14px; }
+.ied-step:last-child { padding-bottom: 0; }
+.ied-step::before { content: ""; position: absolute; left: -23px; top: 3px; box-sizing: content-box; width: 10px; height: 10px; border: 2px solid #fff; border-radius: 50%; background: #D9C9A8; }
+.ied-step:not(:last-child)::after { content: ""; position: absolute; left: -17px; top: 18px; bottom: -3px; width: 2px; background: #EFE9E2; }
+.ied-step-fix::before { background: #B08D57; }
+.ied-step h4 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6F665E; }
+.ied-step-fix h4 { color: #5A4420; }
+.ied-step p { margin: 0; font-size: 13px; line-height: 1.45; color: #4F4943; }
+.ied-step-fix p { color: #2A2622; }
+.ied-step .ied-val { margin-bottom: 0; }
+.ied-step .ied-what { margin: 8px 0 0; }
 /* import history */
 .ied-tl { list-style: none; margin: 0; padding: 0; }
 .ied-tl li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid #EFE9E2; font-size: 13px; }
@@ -91,6 +103,15 @@
 .ied-check { display: flex; align-items: flex-start; gap: 10px; text-align: left; font-size: 13px; line-height: 1.45; cursor: pointer; }
 .ied-check input { margin-top: 2px; accent-color: #B08D57; }
 .ied-err { margin-top: 8px; text-align: left; font-size: 12px; color: #8A3B2E; }
+
+/* Ignore modal: what happens next */
+.ied-ign { display: flex; flex-direction: column; text-align: left; }
+.ied-ign-item { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid #EFE9E2; }
+.ied-ign-item:first-child { border-top: 0; padding-top: 0; }
+.ied-ign-item:last-child { padding-bottom: 0; }
+.ied-ign-item i { margin-top: 1px; font-size: 18px; color: #6F5326; }
+.ied-ign-item b { display: block; font-size: 13px; font-weight: 600; color: #2A2622; }
+.ied-ign-item span { display: block; margin-top: 1px; font-size: 12px; line-height: 1.4; color: #6F665E; }
 
 @media (max-width: 1000px) { .ied-two { grid-template-columns: minmax(0, 1fr); } .ied-two > .ied-sec:last-child { contain: none; max-height: 260px; } }
 
@@ -152,8 +173,19 @@
 .ied-chev { display: inline-block; width: 12px; color: #6F5326; }
 .ied-ok-pv { background: #E0EEDF; color: #2B5530; }
 
-.ied-choices { display: grid; gap: 10px; }
-.ied-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; border: 1px solid #E6DFD6; border-radius: 10px; text-align: left; }
+/* Fix window: one bordered list, each row a single-click button */
+.ied-actlist { display: flex; flex-direction: column; border: 1px solid #E6DFD6; border-radius: 10px; overflow: hidden; text-align: left; }
+.ied-act { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border: 0; border-top: 1px solid #EFE9E2; background: #fff; font: inherit; text-align: left; color: #2A2622; cursor: pointer; transition: background .12s; }
+.ied-act:first-child { border-top: 0; }
+.ied-act:hover { background: #FAF6F0; }
+.ied-act:focus-visible { outline: 2px solid #B08D57; outline-offset: -2px; }
+.ied-act:disabled { opacity: .6; cursor: default; }
+.ied-act-icon { flex: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: #F1E6D3; color: #6F5326; font-size: 16px; }
+.ied-act-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ied-act-text b { font-size: 14px; font-weight: 600; color: #2A2622; }
+.ied-act-text span { font-size: 13px; line-height: 1.4; color: #6F665E; }
+.ied-act-chev { flex: none; font-size: 13px; color: #6F5326; transition: transform .12s; }
+.ied-act:hover .ied-act-chev { transform: translateX(2px); }
 
 /* Ambiguous sheet: the sheets the uploaded file really has */
 .ied-sheet { margin-bottom: 12px; padding: 8px 10px; border: 1px solid #EFE9E2; border-radius: 10px; }

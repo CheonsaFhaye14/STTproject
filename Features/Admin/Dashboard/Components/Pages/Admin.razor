@@ -33,73 +33,72 @@
                     <div class="kpi-label">Total sales · all time</div>
                     <div class="kpi-value">@DashFormat.PesoShort(allInvoice - allCredit)</div>
                     <div class="kpi-foot">
-                        <span>Invoices <b>@DashFormat.PesoShort(allInvoice)</b> · Credits <b
-                            class="neg">−@DashFormat.PesoShort(allCredit)</b></span>
-                        </div>
-                    </button>
+                        <span>Invoices @DashFormat.PesoShort(allInvoice) · Credits −@DashFormat.PesoShort(allCredit)</span>
+                    </div>
+                </button>
 
-                    <button type="button" class="card kpi @Sel("errors")" style="--accent:var(--red)"
-                            @onclick='() => panel = "errors"'>
-                        <div class="kpi-label">Pending import errors</div>
-                        <div class="kpi-value @(errors.PendingCount > 0 ? "neg" : "")">@DashFormat.Number(errors.PendingCount)</div>
-                        <div class="kpi-foot">
-                            @if (errors.NewThisWeek > 0)
-                            {
-                                <span class="delta bad">▲ @errors.NewThisWeek</span>
-                                <span>new this week · in @errors.Batches.Count batches</span>
-                            }
-                            else
-                            {
-                                <span>in @errors.Batches.Count batches</span>
-                            }
-                        </div>
-                    </button>
-
-                    <button type="button" class="card kpi @Sel("prices")" style="--accent:var(--slate)"
-                            @onclick='() => panel = "prices"'>
-                        <div class="kpi-label">Price increases pending</div>
-                        <div class="kpi-value">@prices.Count</div>
-                        <div class="kpi-foot">
-                            @if (overdueCount > 0)
-                            {
-                                <span class="delta bad">@overdueCount overdue</span>
-                            }
-                            <span>@(nextIncrease is null ? "nothing upcoming" : "next on " +
-                                                                                    DashFormat.DateShort(nextIncrease.Value))</span>
-                            </div>
-                        </button>
-
-                        <button type="button" class="card kpi @Sel("records")" style="--accent:var(--ink-2)"
-                                @onclick='() => panel = "records"'>
-                            <div class="kpi-label">Records</div>
-                            <div class="kpi-value">@DashFormat.Number(records.SubdsActive + records.SubdsInactive) <small>sub
-                                distributors</small></div>
-                                <div class="kpi-foot">
-                                    <span>@DashFormat.Number(records.CustomersActive + records.CustomersInactive) customers ·
-                                        @DashFormat.Number(records.CompanyItemsActive + records.CompanyItemsInactive) company items ·
-                                        @DashFormat.Number(records.SubdItemsActive + records.SubdItemsInactive) mapped</span>
-                                    </div>
-                                </button>
-                            </div>
-
-                            @* Panels stay mounted (only hidden) so each keeps its filters, sort and page. *@
-                            <div class="detail">
-                                <div class="panel-host @On("sales")">
-                                    <SalesPanel Data="sales" />
-                                </div>
-                                <div class="panel-host @On("errors")">
-                                    <ImportErrorsPanel Data="errors" />
-                                </div>
-                                <div class="panel-host @On("prices")">
-                                    <PriceIncreasesPanel Data="prices" />
-                                </div>
-                                <div class="panel-host @On("records")">
-                                    <RecordsPanel Data="records" />
-                                </div>
-                            </div>
+                <button type="button" class="card kpi @Sel("errors")" style="--accent:var(--red)"
+                        @onclick='() => panel = "errors"'>
+                    <div class="kpi-label">Pending import errors</div>
+                    <div class="kpi-value @(errors.PendingCount > 0 ? "neg" : "")">@DashFormat.Number(errors.PendingCount)</div>
+                    <div class="kpi-foot">
+                        @if (errors.NewThisWeek > 0)
+                        {
+                            <span class="delta bad">▲ @errors.NewThisWeek</span>
+                            <span>new this week · in @errors.Batches.Count batches</span>
+                        }
+                        else
+                        {
+                            <span>in @errors.Batches.Count batches</span>
                         }
                     </div>
-                }
+                </button>
+
+                <button type="button" class="card kpi @Sel("prices")" style="--accent:var(--slate)"
+                        @onclick='() => panel = "prices"'>
+                    <div class="kpi-label">Price increases pending</div>
+                    <div class="kpi-value">@prices.Count</div>
+                    <div class="kpi-foot">
+                        @if (overdueCount > 0)
+                        {
+                            <span class="delta bad">@overdueCount overdue</span>
+                        }
+                        <span>@(nextIncrease is null ? "nothing upcoming" : "next on " +
+                                                                                                                                                                                                                DashFormat.DateShort(nextIncrease.Value))</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="card kpi @Sel("records")" style="--accent:var(--ink-2)"
+                            @onclick='() => panel = "records"'>
+                        <div class="kpi-label">Records</div>
+                        <div class="kpi-value">@DashFormat.Number(records.SubdsActive + records.SubdsInactive) <small>sub
+                            distributors</small></div>
+                            <div class="kpi-foot">
+                                <span>@DashFormat.Number(records.CustomersActive + records.CustomersInactive) customers ·
+                                    @DashFormat.Number(records.CompanyItemsActive + records.CompanyItemsInactive) company items ·
+                                    @DashFormat.Number(records.SubdItemsActive + records.SubdItemsInactive) mapped</span>
+                                </div>
+                            </button>
+                        </div>
+
+                        @* Panels stay mounted (only hidden) so each keeps its filters, sort and page. *@
+                        <div class="detail">
+                            <div class="panel-host @On("sales")">
+                                <SalesPanel Data="sales" />
+                            </div>
+                            <div class="panel-host @On("errors")">
+                                <ImportErrorsPanel Data="errors" />
+                            </div>
+                            <div class="panel-host @On("prices")">
+                                <PriceIncreasesPanel Data="prices" />
+                            </div>
+                            <div class="panel-host @On("records")">
+                                <RecordsPanel Data="records" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
 
 @code {
     [Inject] private IUserContextService UserContext { get; set; } = default!;
