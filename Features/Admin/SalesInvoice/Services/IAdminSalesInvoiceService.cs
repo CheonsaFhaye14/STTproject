@@ -11,8 +11,8 @@ public interface IAdminSalesInvoiceService
         string? orderType,
         int? subDistributorId,
         string? principal,
-        int? month,     
-        int? year,       
+        int? month,
+        int? year,
         string sortColumn,
         bool sortAscending,
         CancellationToken cancellationToken = default);
@@ -37,7 +37,7 @@ public interface IAdminSalesInvoiceService
         CancellationToken cancellationToken = default);
     Task<List<string>> GetPrincipalsForDropdownAsync(CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceSubdItemDropdownItem>> GetSubdItemsForDropdownAsync(
-        int subDistributorId, 
+        int subDistributorId,
         DateOnly salesInvoiceDate,
         CancellationToken cancellationToken = default);
     Task<List<SalesInvoiceSubDistributorDropdownItem>> GetSubDistributorsAsync(CancellationToken cancellationToken = default);
@@ -78,4 +78,21 @@ public interface IAdminSalesInvoiceService
 
     Task<RestoreBatchResult> RestoreBatchAsync(
         int deletionBatchId, int restoredByUserId, CancellationToken ct = default);
+    // Recalculate amounts
+    Task<RecalcResult> RunRecalcAsync(
+        int subDistributorId, int year, int month, bool dryRun, int userId, CancellationToken ct = default);
+
+    Task<List<RecalcRunSummary>> GetAppliedRecalcRunsAsync(
+        int? subDistributorId, int take = 20, CancellationToken ct = default);
+
+    Task<RecalcUndoResult> UndoRecalcAsync(int runId, int userId, CancellationToken ct = default);
+
+    Task<(List<RecalcInvoiceChangeRow> Items, int Total)> GetRecalcInvoiceChangesAsync(
+    int runId, int page, int pageSize, string? search, CancellationToken ct = default);
+
+    Task<List<RecalcLineChangeRow>> GetRecalcInvoiceLinesAsync(
+        int runId, int salesInvoiceId, CancellationToken ct = default);
+
+    Task<List<RecalcIssueItemRow>> GetRecalcIssueItemsAsync(
+int runId, string issue, CancellationToken ct = default);
 }

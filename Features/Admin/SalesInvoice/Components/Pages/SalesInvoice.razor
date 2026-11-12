@@ -36,6 +36,10 @@
                                 <i class="fa-solid fa-trash-can-arrow-up"></i>
                                 <span>Deleted invoices</span>
                             </button>
+                            <button type="button" class="more-menu-item" role="menuitem" @onclick="OpenRecalc">
+                                <i class="fa-solid fa-calculator"></i>
+                                <span>Recalculate amounts</span>
+                            </button>
                             <hr class="more-menu-divider" />
                             <button type="button" class="more-menu-item more-menu-item--danger" role="menuitem"
                                     @onclick="OpenBatchDelete">
@@ -54,11 +58,10 @@
 
         <!-- Confirm create/update modal -->
         <ConfirmModal @ref="confirmModal" Show="showConfirmModal"
-                      Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")"
-                      Message="@(editInvoiceId.HasValue
-                                                                                                                                                                                ? "Are you sure you want to save changes to this sales invoice?"
-                                                                                                                                                                                : "Are you sure you want to create this sales invoice?")"
-                      OnYes="ConfirmSave" OnNo="CancelConfirm" />
+                      Title="@(editInvoiceId.HasValue ? "Confirm Update" : "Confirm Creation")" Message="@(editInvoiceId.HasValue
+                                 ? "Are you sure you want to save changes to this sales invoice? Amounts will be recalculated using the price on the invoice date."
+                                 : "Are you sure you want to create this sales invoice?")" OnYes="ConfirmSave"
+                      OnNo="CancelConfirm" />
 
         <ImportSalesInvoice Show="showImportModal" InitialSubDistributorId="Subd"
                             OnClose="@(() => showImportModal = false)" OnImportCompleted="OnImportCompletedAsync" />
@@ -69,8 +72,12 @@
             <AddSalesInvoice @ref="addInvoiceModal" SalesInvoiceId="editInvoiceId" onCancel="CancelAddModal"
                              OnRequestConfirm="OpenConfirmModal" />
         }
+
         <BatchDelete Show="showBatchDelete" SubDistributors="subDistributors" AvailableYears="availableYears"
                      OnClose="() => showBatchDelete = false" OnDeleted="OnImportCompletedAsync" />
+
+        <RecalculateAmounts Show="showRecalc" SubDistributors="recalcSubDistributors" AvailableYears="availableYears"
+                            OnClose="() => showRecalc = false" OnApplied="OnImportCompletedAsync" />
 
     </div>
 </div>
@@ -119,6 +126,12 @@
         showBatchDelete = true;
     }
 
+    private void OpenRecalc()
+    {
+        showMoreMenu = false;
+        showRecalc = true;
+    }
+
     // ── Open / close ──────────────────────────────────────────────────────────
 
     private void OpenAddModal()
@@ -154,6 +167,7 @@
                 await invoiceTable.LoadPageAsync();
         }
     }
+
     private bool showImportModal = false;
 
     private async Task OnImportCompletedAsync()
@@ -164,7 +178,9 @@
     }
 
     private bool showBatchDelete = false;
+    private bool showRecalc = false;
     private List<(int Id, string? Name)> subDistributors = new();
+    private List<SalesInvoiceSubDistributorDropdownItem> recalcSubDistributors = new();
     private List<int> availableYears = new();
 
     protected override async Task OnInitializedAsync()
@@ -178,6 +194,8 @@
         var subdTask = SalesInvoiceService.GetSubDistributorsAsync();
         var datesTask = SalesInvoiceService.GetAvailableInvoiceMonthsAsync();
         await Task.WhenAll(subdTask, datesTask);
+
+        recalcSubDistributors = subdTask.Result;
 
         subDistributors = subdTask.Result
             .Select(sd => (sd.SubDistributorId, (string?)sd.SubdName)).ToList();

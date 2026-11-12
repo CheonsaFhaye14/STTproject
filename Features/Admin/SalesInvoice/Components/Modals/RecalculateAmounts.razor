@@ -1,0 +1,795 @@
+@using STTproject.Features.Admin.SalesInvoice.DTOs
+@inject STTproject.Features.Admin.SalesInvoice.Services.IAdminSalesInvoiceService SalesInvoiceService
+@inject STTproject.Services.IUserContextService UserContextService
+
+<Modal ShowModal="Show" Width="980px" MaxWidth="100%" MaxHeight="94vh" Title="Recalculate Amounts" OnClose="Close">
+    <ChildContent>
+        <div class="rc-root @(HasPreview ? "full" : "")">
+
+            @* ── Main tabs ─────────────────────────────────────────────── *@
+            <div class="rc-tabs" role="tablist">
+                <button type="button" role="tab" class="rc-tab @(tab == "recalc" ? "on" : "")"
+                        @onclick='() => SetTab("recalc")'>Recalculate</button>
+                <button type="button" role="tab" class="rc-tab @(tab == "history" ? "on" : "")"
+                        @onclick='() => SetTab("history")'>Applied runs <span
+                    class="rc-tab-count">(@history.Count)</span></button>
+                </div>
+
+                @* ── Tab 1: Recalculate ────────────────────────────────────── *@
+                <section class="rc-section @(tab != "recalc" ? "rc-hidden" : "")">
+
+                    @if (!HasPreview)
+                    {
+                        <div class="rc-scope-form">
+                            <div class="rc-scope">
+                                <div class="rc-field">
+                                    <AutoComplete @key="@($"rc-subd-{resetKey}")" Label="Subdistributor" Required="true"
+                                                  Placeholder="Search subdistributor..." TItem="SalesInvoiceSubDistributorDropdownItem"
+                                                  Items="SubDistributors" ValueSelector="x => x.SubDistributorId.ToString()"
+                                                  TextSelector="x => x.SubdName ?? string.Empty" SelectedValue="@(subdId?.ToString())"
+                                                  SelectedItemChanged="OnSubdSelected" Disabled="@isBusy" />
+                                </div>
+                                <div class="rc-field">
+                                    <Select @key="@($"rc-year-{resetKey}")" Label="Year" Required="true" Placeholder="Select year"
+                                            TItem="Option" Items="YearOptions"
+                                            ValueSelector="x => x.Value" TextSelector="x => x.Text"
+                                            SelectedValue="@(year?.ToString() ?? "")" SelectedValueChanged="OnYearSelected"
+                                            Disabled="@isBusy" />
+                                </div>
+                                <div class="rc-field">
+                                    <Select @key="@($"rc-month-{resetKey}")" Label="Month" Required="true" Placeholder="Select month"
+                                            TItem="Option" Items="MonthOptions"
+                                            ValueSelector="x => x.Value" TextSelector="x => x.Text"
+                                            SelectedValue="@(month?.ToString() ?? "")" SelectedValueChanged="OnMonthSelected"
+                                            Disabled="@isBusy" />
+                                </div>
+                            </div>
+                            <p class="rc-note">Amounts are re-priced using current prices. Nothing is saved until you click
+                                <b>Apply</b>.</p>
+                            </div>
+                        }
+                else
+                        {
+                            <div class="rc-scopebar">
+                                <span>Recalculating</span>
+                                <b>@ScopeSummary</b>
+                                <button type="button" class="rc-btn small" disabled="@isBusy" @onclick="ChangePeriod">Change
+                                    period</button>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(message))
+                            {
+                                <div class="rc-msg @messageKind">@message</div>
+                            }
+
+                            @if (preview?.Run is { } run)
+                            {
+                                var diff = run.Difference;
+
+                                <div class="rc-result">
+
+                                    @* Totals *@
+                                    <div class="rc-sum">
+                                        <div class="rc-tot"><small>Current total</small><strong>@run.OldTotal.ToString("N2")</strong>
+                                        </div>
+                                        <div class="rc-arrow">→</div>
+                                        <div class="rc-tot new"><small>New total</small><strong>@run.NewTotal.ToString("N2")</strong>
+                                        </div>
+                                        <div class="rc-diff @(diff >= 0 ? "up" : "down")">@Sgn(diff)</div>
+                                    </div>
+
+                                    @* Result tabs + quick facts *@
+                                    <div class="rc-rbar">
+                                        <button type="button" class="rc-rtab @(rtab == "inv" ? "on" : "")"
+                                                @onclick='() => SetResultTab("inv")'>
+                                            Invoices <span>@invTotal.ToString("N0")</span>
+                                        </button>
+                                        <button type="button" class="rc-rtab @(rtab == "top" ? "on" : "")"
+                                                @onclick='() => SetResultTab("top")'>
+                                            Biggest changes
+                                        </button>
+                                        @if (preview.Issues.Any())
+                                        {
+                                            <button type="button" class="rc-rtab w @(rtab == "iss" ? "on" : "")"
+                                                    @onclick='() => SetResultTab("iss")'>
+                                                Can't be priced <span>@preview.Issues.Count.ToString("N0")</span>
+                                            </button>
+                                        }
+                                        <div class="rc-facts">
+                                            <span><b>@run.Lines.ToString("N0")</b> checked</span>
+                                            <span><b>@run.LinesChanged.ToString("N0")</b> will change</span>
+                                            @if (run.LinesUnpriced > 0)
+                                            {
+                                                <span class="un"
+                                                      @onclick='() => SetResultTab("iss")'><b>@run.LinesUnpriced.ToString("N0")</b> can't be
+                                                    priced</span>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @* ── Pane: Invoices affected ───────────────────── *@
+                                        <div class="rc-pane @(rtab != "inv" ? "rc-hidden" : "")">
+                                            <div class="rc-tools">
+                                                <input type="search" class="rc-search" placeholder="Search invoice or customer…"
+                                                       aria-label="Search invoices" @oninput="e => OnInvSearchChanged(e.Value?.ToString())" />
+                                            </div>
+
+                                            <div class="rc-tscroll">
+                                                @if (invLoading)
+                                                {
+                                                    <div class="rc-empty">Loading invoices…</div>
+                                                }
+                                                else if (!invoices.Any())
+                                                {
+                                                    <div class="rc-empty">@(string.IsNullOrWhiteSpace(invSearch) ? "No invoices change in this period." : "No invoices match")</div>
+                                                }
+                                                else
+                                                {
+                                                    <table class="rc-tbl">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Invoice</th>
+                                                                <th>Date</th>
+                                                                <th>Customer</th>
+                                                                <th>Type</th>
+                                                                <th class="n">Lines</th>
+                                                                <th class="n">Current</th>
+                                                                <th class="n">New</th>
+                                                                <th class="n">Difference</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var inv in invoices)
+                                                            {
+                                                                var row = inv;
+                                                                var open = expandedInvoiceId == row.SalesInvoiceId;
+
+                                                                <tr @key="row.SalesInvoiceId" class="rc-row @(open ? "rc-open" : "")"
+                                                                    @onclick="() => ToggleLines(row.SalesInvoiceId)">
+                                                                    <td><span class="car">▸</span><b>@row.SalesInvoiceCode</b></td>
+                                                                    <td class="muted">@row.SalesInvoiceDate.ToString("MMM d, yyyy")</td>
+                                                                    <td>@row.CustomerName</td>
+                                                                    <td>
+                                                                        <span class="rc-badge @(string.Equals(row.OrderType, "Credit", StringComparison.OrdinalIgnoreCase) ? "cr" : "inv")">@row.OrderType</span>
+                                                                    </td>
+                                                                    <td class="n">
+                                                                        @($"{row.LinesChanged:N0}/{row.Lines:N0}")
+                                                                        @if (row.LinesUnpriced > 0)
+                                                                        {
+                                                                            <span class="rc-badge w" title="@($"{row.LinesUnpriced:N0} line(s) can't be priced")">⚠</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td class="n">@row.OldTotal.ToString("N2")</td>
+                                                                    <td class="n">@row.NewTotal.ToString("N2")</td>
+                                                                    <td class="n @DiffClass(row.Difference)">@Sgn(row.Difference)</td>
+                                                                </tr>
+
+                                                                @if (open)
+                                                                {
+                                                                    <tr>
+                                                                        <td class="rc-subcell" colspan="8">
+                                                                            @if (linesLoading)
+                                                                            {
+                                                                                <div class="rc-muted-line">Loading lines…</div>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <table class="rc-tbl">
+                                                                                    <thead>
+                                                                                        <tr>
+                                                                                            <th>Item</th>
+                                                                                            <th>UOM</th>
+                                                                                            <th class="n">Qty</th>
+                                                                                            <th class="n">Price</th>
+                                                                                            <th class="n">Current</th>
+                                                                                            <th class="n">New</th>
+                                                                                            <th class="n">Difference</th>
+                                                                                        </tr>
+                                                                                    </thead>
+                                                                                    <tbody>
+                                                                                        @foreach (var l in expandedLines)
+                                                                                        {
+                                                                                            <tr>
+                                                                                                <td>@l.ItemCode <span class="muted">@l.ItemName</span></td>
+                                                                                                <td>@l.UomName</td>
+                                                                                                <td class="n">@l.Quantity</td>
+                                                                                                <td class="n">@(l.StockPrice?.ToString("N2") ?? "—")</td>
+                                                                                                <td class="n">@l.OldAmount.ToString("N2")</td>
+                                                                                                <td class="n">
+                                                                                                    @if (l.NewAmount is null)
+                                                                                                    {
+                                                                                                        <span class="rc-badge w">@(l.Issue ?? "Can't be priced")</span>
+                                                                                                    }
+                                                                                                    else
+                                                                                                    {
+                                                                                                        @l.NewAmount.Value.ToString("N2")
+                                                                                                    }
+                                                                                                </td>
+                                                                                                <td class="n @DiffClass(l.NewAmount is null ? 0 : l.Difference)">
+                                                                                                    @(l.NewAmount is null ? "—" : Sgn(l.Difference))
+                                                                                                </td>
+                                                                                            </tr>
+                                                                                        }
+                                                                                    </tbody>
+                                                                                </table>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                            </div>
+
+                                            <div class="rc-pagebar">
+                                                <span>
+                                                    @if (invTotal > 0)
+                                                    {
+                                                        @($"Showing {InvFirst:N0}–{InvLast:N0} of {invTotal:N0} invoices")
+                                                    }
+                                                    else
+                                                    {
+                                                        @("No invoices")
+                                                    }
+                                                </span>
+                                                <div class="sp">
+                                                    <button type="button" class="rc-btn small" disabled="@(invPage <= 1 || invLoading)"
+                                                            @onclick="() => GoToInvPage(invPage - 1)">‹ Prev</button>
+                                                    <span>@invPage / @Math.Max(1, InvTotalPages)</span>
+                                                    <button type="button" class="rc-btn small"
+                                                            disabled="@(invPage >= InvTotalPages || invLoading)"
+                                                            @onclick="() => GoToInvPage(invPage + 1)">Next ›</button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        @* ── Pane: Biggest changes by item ─────────────── *@
+                                        <div class="rc-pane @(rtab != "top" ? "rc-hidden" : "")">
+                                            <div class="rc-tscroll">
+                                                @if (!preview.TopChanges.Any())
+                                                {
+                                                    <div class="rc-empty">No item changes in this period.</div>
+                                                }
+                                                else
+                                                {
+                                                    <table class="rc-tbl">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Item</th>
+                                                                <th class="n">Lines</th>
+                                                                <th class="n">Current</th>
+                                                                <th class="n">New</th>
+                                                                <th class="n">Difference</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var c in preview.TopChanges)
+                                                            {
+                                                                <tr>
+                                                                    <td>@c.ItemCode - @c.ItemName</td>
+                                                                    <td class="n">@c.Lines.ToString("N0")</td>
+                                                                    <td class="n">@c.OldAmount.ToString("N2")</td>
+                                                                    <td class="n">@c.NewAmount.ToString("N2")</td>
+                                                                    <td class="n @DiffClass(c.Difference)">@Sgn(c.Difference)</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @* ── Pane: Can't be priced ─────────────────────── *@
+                                        @if (preview.Issues.Any())
+                                        {
+                                            <div class="rc-pane @(rtab != "iss" ? "rc-hidden" : "")">
+                                                <div class="rc-tscroll">
+                                                    <table class="rc-tbl">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Reason</th>
+                                                                <th class="n">Lines</th>
+                                                                <th class="n">Current amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var i in preview.Issues)
+                                                            {
+                                                                var issue = i;
+                                                                var open = expandedIssue == issue.Issue;
+
+                                                                <tr class="rc-row @(open ? "rc-open" : "")"
+                                                                    @onclick="() => ToggleIssue(issue.Issue)">
+                                                                    <td><span class="car">▸</span>@issue.Issue</td>
+                                                                    <td class="n">@issue.Lines.ToString("N0")</td>
+                                                                    <td class="n">@issue.Amount.ToString("N2")</td>
+                                                                </tr>
+
+                                                                @if (open)
+                                                                {
+                                                                    <tr>
+                                                                        <td class="rc-subcell" colspan="3">
+                                                                            @if (issueItemsLoading)
+                                                                            {
+                                                                                <div class="rc-muted-line">Loading items…</div>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <table class="rc-tbl">
+                                                                                    <thead>
+                                                                                        <tr>
+                                                                                            <th>Item</th>
+                                                                                            <th>Company item</th>
+                                                                                            <th>UOM on lines</th>
+                                                                                            <th>Active UOMs now</th>
+                                                                                            <th class="n">Lines</th>
+                                                                                            <th class="n">Invoices</th>
+                                                                                            <th class="n">Amount</th>
+                                                                                        </tr>
+                                                                                    </thead>
+                                                                                    <tbody>
+                                                                                        @foreach (var it in issueItems)
+                                                                                        {
+                                                                                            <tr>
+                                                                                                <td class="wrap">@it.SubdItemCode - @it.ItemName</td>
+                                                                                                <td>@it.CompanyItemCode</td>
+                                                                                                <td>
+                                                                                                    @it.UomName (@(it.ConversionToBase?.ToString() ?? "—"))
+                                                                                                    @if (!it.UomActive)
+                                                                                                    {
+                                                                                                        <span class="neg">inactive</span>
+                                                                                                    }
+                                                                                                </td>
+                                                                                                <td class="wrap">
+                                                                                                    @it.ActiveUoms
+                                                                                                    <small class="rc-m">@it.SampleInvoices</small>
+                                                                                                </td>
+                                                                                                <td class="n">@it.Lines.ToString("N0")</td>
+                                                                                                <td class="n">@it.Invoices.ToString("N0")</td>
+                                                                                                <td class="n">@it.Amount.ToString("N2")</td>
+                                                                                            </tr>
+                                                                                        }
+                                                                                    </tbody>
+                                                                                </table>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+
+                            @* ── Tab 2: Applied runs ───────────────────────────────────── *@
+                            <section class="rc-section history @(tab != "history" ? "rc-hidden" : "")">
+                                <div class="rc-pane flat">
+                                    @if (!history.Any())
+                                    {
+                                        <div class="rc-empty">No recalculations applied yet.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="rc-tscroll">
+                                            <table class="rc-tbl">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Run</th>
+                                                        <th>Subdistributor</th>
+                                                        <th>Period</th>
+                                                        <th>By</th>
+                                                        <th>Applied</th>
+                                                        <th class="n">Lines</th>
+                                                        <th class="n">Difference</th>
+                                                        <th>Status</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var h in history)
+                                                    {
+                                                        var row = h;
+                                                        <tr>
+                                                            <td>#@row.RunId</td>
+                                                            <td>@row.SubdName</td>
+                                                            <td>@row.Period</td>
+                                                            <td>@(row.CreatedByName ?? "—")</td>
+                                                            <td>@(row.AppliedAt?.ToString("MMM d, yyyy hh:mm tt") ?? "—")</td>
+                                                            <td class="n">@row.LinesChanged.ToString("N0")</td>
+                                                            <td class="n @DiffClass(row.Difference)">@Sgn(row.Difference)</td>
+                                                            <td>
+                                                                <span class="rc-badge @(row.UndoneAt.HasValue ? "u" : "a")">@(row.UndoneAt.HasValue
+                                                                                                                ? "Undone" : "Applied")</span>
+                                                                </td>
+                                                                <td>
+                                                                    @if (row.CanUndo)
+                                                                    {
+                                                                        <button type="button" class="rc-btn small" disabled="@isBusy"
+                                                                                @onclick="() => AskUndo(row)">Undo</button>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                    </div>
+                                    <p class="rc-note" style="margin-top:10px">Undo restores the old amounts. Lines edited since the run are
+                                        left as they are.</p>
+                                    </section>
+                                </div>
+                            </ChildContent>
+
+                            <FooterContent>
+                                @if (tab == "recalc")
+                                {
+                                    <span class="rc-hint">@Hint</span>
+                                }
+                                <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Close" Disabled="@isBusy" />
+                                @if (tab == "recalc")
+                                {
+                                    <Button Title="@(isBusy ? "Working…" : "Preview changes")" Variant="ButtonVariant.Secondary"
+                                            OnClick="PreviewAsync" Disabled="@(!ScopeComplete || isBusy || HasPreview)" />
+                                    <Button Title="Apply changes" Variant="ButtonVariant.Primary" OnClick="AskApply"
+                                            Disabled="@(isBusy || applied || preview?.Run is null || preview.Run.LinesChanged == 0)" />
+                                }
+                            </FooterContent>
+                        </Modal>
+
+<ConfirmModal Show="confirmApply" Title="Apply recalculation" Message="@applyMessage" OnYes="ApplyAsync"
+              OnNo="() => confirmApply = false" />
+
+                        <ConfirmModal Show="@(pendingUndo is not null)" Title="Undo recalculation" Message="@undoMessage" OnYes="UndoAsync"
+                                      OnNo="() => pendingUndo = null" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnApplied { get; set; }
+    [Parameter] public List<SalesInvoiceSubDistributorDropdownItem> SubDistributors { get; set; } = new();
+    [Parameter] public List<int> AvailableYears { get; set; } = new();
+
+    private record Option(string Value, string Text);
+
+    private int? subdId, year, month;
+    private int resetKey;
+    private bool isBusy, applied, confirmApply, historyLoaded;
+    private RecalcResult? preview;
+    private List<RecalcRunSummary> history = new();
+    private RecalcRunSummary? pendingUndo;
+    private string? message;
+    private string messageKind = "ok"; // ok | info | err
+    private string applyMessage = "", undoMessage = "";
+
+    // UI state
+    private string tab = "recalc"; // recalc | history
+    private string rtab = "inv"; // inv | top | iss
+
+    private bool HasPreview => preview?.Run is not null;
+    private bool ScopeComplete => subdId > 0 && year > 0 && month > 0;
+
+    private void SetTab(string value) => tab = value;
+    private void SetResultTab(string value) => rtab = value;
+
+    private static string Sgn(decimal v) => v.ToString("+#,##0.00;-#,##0.00;0.00");
+    private static string DiffClass(decimal v) => v > 0 ? "pos" : v < 0 ? "neg" : "";
+
+    private string Hint =>
+        applied ? "Done. You can undo this from “Applied runs”."
+        : HasPreview ? "Review the changes, then click Apply."
+        : ScopeComplete ? "Click “Preview changes” to see what would change."
+        : "Pick a subdistributor, year and month to begin.";
+
+    private List<Option> YearOptions =>
+        AvailableYears.Select(y => new Option(y.ToString(), y.ToString())).ToList();
+
+    private static readonly List<Option> MonthOptions =
+        Enumerable.Range(1, 12)
+            .Select(m => new Option(m.ToString(), new DateTime(2000, m, 1).ToString("MMMM")))
+            .ToList();
+
+    private string ScopeSummary => ScopeComplete
+        ? $"{SubDistributors.FirstOrDefault(s => s.SubDistributorId == subdId)?.SubdName} • {new DateTime(year!.Value,
+month!.Value, 1):MMMM yyyy}"
+        : "Choose a subdistributor, year and month";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !historyLoaded)
+        {
+            historyLoaded = true;
+            await LoadHistoryAsync();
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+        => history = await SalesInvoiceService.GetAppliedRecalcRunsAsync(subdId);
+
+    // Changing the scope invalidates any preview
+    private void ResetPreview()
+    {
+        preview = null;
+        applied = false;
+        message = null;
+        rtab = "inv";
+        expandedIssue = null;
+        issueItems = new();
+        ResetInvoices();
+    }
+
+    private void ChangePeriod() => ResetPreview();
+
+    private async Task OnSubdSelected(SalesInvoiceSubDistributorDropdownItem? sd)
+    {
+        subdId = sd is { SubDistributorId: > 0 } ? sd.SubDistributorId : null;
+        ResetPreview();
+        await LoadHistoryAsync();
+    }
+
+    private Task OnYearSelected(string? value)
+    {
+        year = int.TryParse(value, out var y) && y > 0 ? y : null;
+        ResetPreview();
+        return Task.CompletedTask;
+    }
+
+    private Task OnMonthSelected(string? value)
+    {
+        month = int.TryParse(value, out var m) && m > 0 ? m : null;
+        ResetPreview();
+        return Task.CompletedTask;
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (!ScopeComplete || UserContextService.UserId is not int userId) return;
+
+        isBusy = true;
+        ResetPreview();
+        try
+        {
+            var result = await SalesInvoiceService.RunRecalcAsync(
+                subdId!.Value, year!.Value, month!.Value, dryRun: true, userId);
+
+            if (!result.IsSuccess)
+            {
+                message = result.ErrorMessage;
+                messageKind = "err";
+                return;
+            }
+
+            preview = result;
+            ResetInvoices();
+            await LoadInvoicesAsync();
+            if (result.Run!.Lines == 0)
+            {
+                message = "No sales invoice lines in this period.";
+                messageKind = "info";
+            }
+            else if (result.Run.LinesChanged == 0)
+            {
+                message = "All amounts in this period are already correct.";
+                messageKind = "info";
+            }
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void AskApply()
+    {
+        if (preview?.Run is not { } run) return;
+
+        applyMessage = $"Update {run.LinesChanged:N0} line(s) for {ScopeSummary}? " +
+                       $"The total changes from {run.OldTotal:N2} to {run.NewTotal:N2}. " +
+                       "You can undo this later from Applied runs.";
+        confirmApply = true;
+    }
+
+    private async Task ApplyAsync()
+    {
+        confirmApply = false;
+        if (!ScopeComplete || UserContextService.UserId is not int userId) return;
+
+        isBusy = true;
+        try
+        {
+            var result = await SalesInvoiceService.RunRecalcAsync(
+                subdId!.Value, year!.Value, month!.Value, dryRun: false, userId);
+
+            if (!result.IsSuccess)
+            {
+                message = result.ErrorMessage;
+                messageKind = "err";
+                return;
+            }
+
+            preview = result; // show what was actually applied
+            applied = true;
+            message = $"Updated {result.Run!.LinesChanged:N0} line(s). New total: {result.Run.NewTotal:N2}.";
+            messageKind = "ok";
+
+            await LoadHistoryAsync();
+            if (OnApplied.HasDelegate) await OnApplied.InvokeAsync();
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void AskUndo(RecalcRunSummary run)
+    {
+        pendingUndo = run;
+        undoMessage = $"Undo run #{run.RunId} ({run.SubdName}, {run.Period})? " +
+                      "Lines edited since this run will be left as they are.";
+    }
+
+    private async Task UndoAsync()
+    {
+        var run = pendingUndo;
+        pendingUndo = null;
+        if (run is null || UserContextService.UserId is not int userId) return;
+
+        isBusy = true;
+        try
+        {
+            var result = await SalesInvoiceService.UndoRecalcAsync(run.RunId, userId);
+
+            messageKind = result.IsUndone ? "ok" : "err";
+            message = result.IsUndone
+                ? $"Run #{run.RunId} undone: {result.Restored:N0} line(s) restored" +
+                  (result.Skipped > 0 ? $", {result.Skipped:N0} skipped because they were edited since." : ".")
+                : result.ErrorMessage;
+
+            if (result.IsUndone)
+            {
+                preview = null;
+                applied = false;
+                await LoadHistoryAsync();
+                if (OnApplied.HasDelegate) await OnApplied.InvokeAsync();
+            }
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        subdId = year = month = null;
+        resetKey++;
+        tab = "recalc";
+        ResetPreview();
+        historyLoaded = false;
+        await OnClose.InvokeAsync();
+    }
+
+    // ── Invoices affected ────────────────────────────────────────────────────
+    private const int InvPageSize = 20;
+    private List<RecalcInvoiceChangeRow> invoices = new();
+    private List<RecalcLineChangeRow> expandedLines = new();
+    private int invPage = 1, invTotal;
+    private string? invSearch;
+    private int? expandedInvoiceId;
+    private bool invLoading, linesLoading;
+    private System.Threading.Timer? invSearchTimer;
+
+    private int InvTotalPages => (int)Math.Ceiling(invTotal / (double)InvPageSize);
+    private int InvFirst => (invPage - 1) * InvPageSize + 1;
+    private int InvLast => Math.Min(invPage * InvPageSize, invTotal);
+
+    private async Task LoadInvoicesAsync()
+    {
+        if (preview?.Run is null) return;
+
+        invLoading = true;
+        try
+        {
+            var (items, total) = await SalesInvoiceService.GetRecalcInvoiceChangesAsync(
+                preview.Run.RunId, invPage, InvPageSize, invSearch);
+            invoices = items;
+            invTotal = total;
+        }
+        finally
+        {
+            invLoading = false;
+        }
+    }
+
+    private void ResetInvoices()
+    {
+        invoices = new();
+        expandedLines = new();
+        expandedInvoiceId = null;
+        invPage = 1;
+        invTotal = 0;
+        invSearch = null;
+    }
+
+    private void OnInvSearchChanged(string? value)
+    {
+        invSearch = value;
+        invSearchTimer?.Dispose();
+        invSearchTimer = new System.Threading.Timer(_ =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                invPage = 1;
+                expandedInvoiceId = null;
+                await LoadInvoicesAsync();
+                StateHasChanged();
+            });
+        }, null, 400, Timeout.Infinite);
+    }
+
+    private async Task GoToInvPage(int page)
+    {
+        invPage = page;
+        expandedInvoiceId = null;
+        await LoadInvoicesAsync();
+    }
+
+    private async Task ToggleLines(int salesInvoiceId)
+    {
+        if (expandedInvoiceId == salesInvoiceId)
+        {
+            expandedInvoiceId = null;
+            return;
+        }
+
+        if (preview?.Run is null) return;
+
+        expandedInvoiceId = salesInvoiceId;
+        expandedLines = new();
+        linesLoading = true;
+        try
+        {
+            var lines = await SalesInvoiceService.GetRecalcInvoiceLinesAsync(preview.Run.RunId, salesInvoiceId);
+            if (expandedInvoiceId == salesInvoiceId) expandedLines = lines;
+        }
+        finally
+        {
+            linesLoading = false;
+        }
+    }
+
+    // ── Can't be priced: items per reason ───────────────────────────────────
+    private string? expandedIssue;
+    private List<RecalcIssueItemRow> issueItems = new();
+    private bool issueItemsLoading;
+
+    private async Task ToggleIssue(string issue)
+    {
+        if (expandedIssue == issue)
+        {
+            expandedIssue = null;
+            return;
+        }
+
+        if (preview?.Run is null) return;
+
+        expandedIssue = issue;
+        issueItems = new();
+        issueItemsLoading = true;
+        try
+        {
+            var items = await SalesInvoiceService.GetRecalcIssueItemsAsync(preview.Run.RunId, issue);
+            if (expandedIssue == issue) issueItems = items;
+        }
+        finally
+        {
+            issueItemsLoading = false;
+        }
+    }
+}

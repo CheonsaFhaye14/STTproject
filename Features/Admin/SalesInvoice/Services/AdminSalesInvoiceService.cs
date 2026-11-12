@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using STTproject.Data;
 using STTproject.Features.Admin.SalesInvoice.DTOs;
 using STTproject.Features.Pricing;
+using System.Data;
+using Microsoft.Data.SqlClient;
 
 namespace STTproject.Features.Admin.SalesInvoice.Services;
 
@@ -1069,6 +1071,281 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
         public int SubDistributorId { get; set; }
         public string SalesInvoiceCode { get; set; } = string.Empty;
     }
+    // ─── Recalculate amounts ─────────────────────────────────────────────────
+
+    public async Task<RecalcResult> RunRecalcAsync(
+        int subDistributorId, int year, int month, bool dryRun, int userId, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        context.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+
+        var from = new DateOnly(year, month, 1);
+        var to = from.AddMonths(1);
+
+        var runIdParam = new SqlParameter("@RunId", SqlDbType.Int) { Direction = ParameterDirection.Output };
+
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                @"EXEC dbo.sp_RecalculateInvoiceAmounts
+                      @SubDistributorId = @SubDistributorId,
+                      @FromDate         = @FromDate,
+                      @ToDate           = @ToDate,
+                      @DryRun           = @DryRun,
+                      @RunBy            = @RunBy,
+                      @RunId            = @RunId OUTPUT",
+                new object[]
+                {
+                    new SqlParameter("@SubDistributorId", SqlDbType.Int) { Value = subDistributorId },
+                    new SqlParameter("@FromDate", SqlDbType.Date) { Value = from.ToDateTime(TimeOnly.MinValue) },
+                    new SqlParameter("@ToDate",   SqlDbType.Date) { Value = to.ToDateTime(TimeOnly.MinValue) },
+                    new SqlParameter("@DryRun",   SqlDbType.Bit)  { Value = dryRun },
+                    new SqlParameter("@RunBy",    SqlDbType.Int)  { Value = userId },
+                    runIdParam
+                },
+                ct);
+
+            if (runIdParam.Value is not int runId)
+                return RecalcResult.Failed("The recalculation did not return a run.");
+
+            return await LoadRecalcRunAsync(context, runId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error recalculating amounts for {Subd} {Year}-{Month} (dry run: {DryRun})",
+                subDistributorId, year, month, dryRun);
+            return RecalcResult.Failed($"Unable to recalculate: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static async Task<RecalcResult> LoadRecalcRunAsync(EntrielContext context, int runId, CancellationToken ct)
+    {
+        var run = await context.PriceRecalcRuns.AsNoTracking()
+            .Where(r => r.RunId == runId)
+            .Select(r => new RecalcRunSummary
+            {
+                RunId = r.RunId,
+                SubDistributorId = r.SubDistributorId,
+                SubdName = r.SubDistributor.SubdName,
+                FromDate = r.FromDate,
+                IsDryRun = r.IsDryRun,
+                CreatedByName = context.Users
+                    .Where(u => u.UserId == r.CreatedBy)
+                    .Select(u => u.FullName ?? u.Username)
+                    .FirstOrDefault(),
+                CreatedAt = r.CreatedAt,
+                AppliedAt = r.AppliedAt,
+                UndoneAt = r.UndoneAt,
+                Lines = r.Lines ?? 0,
+                LinesChanged = r.LinesChanged ?? 0,
+                LinesUnpriced = r.LinesUnpriced ?? 0,
+                OldTotal = r.OldTotal ?? 0m,
+                NewTotal = r.NewTotal ?? 0m
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (run is null)
+            return RecalcResult.Failed("Recalculation run not found.");
+
+        var issues = await context.PriceRecalcLines.AsNoTracking()
+            .Where(l => l.RunId == runId && l.Issue != null)
+            .GroupBy(l => l.Issue!)
+            .Select(g => new RecalcIssueRow { Issue = g.Key, Lines = g.Count(), Amount = g.Sum(x => x.OldAmount) })
+            .OrderByDescending(x => x.Lines)
+            .ToListAsync(ct);
+
+        var changes = await (
+            from l in context.PriceRecalcLines.AsNoTracking()
+            join ci in context.CompanyItems.AsNoTracking() on l.CompanyItemId equals ci.CompanyItemId
+            where l.RunId == runId && l.NewAmount != null && l.NewAmount != l.OldAmount
+            group l by new { ci.ItemCode, ci.ItemName } into g
+            select new RecalcItemChangeRow
+            {
+                ItemCode = g.Key.ItemCode,
+                ItemName = g.Key.ItemName,
+                Lines = g.Count(),
+                OldAmount = g.Sum(x => x.OldAmount),
+                NewAmount = g.Sum(x => x.NewAmount ?? 0m)
+            }).ToListAsync(ct);
+
+        return new RecalcResult
+        {
+            IsSuccess = true,
+            Run = run,
+            Issues = issues,
+            TopChanges = changes.OrderByDescending(c => Math.Abs(c.Difference)).Take(15).ToList()
+        };
+    }
+
+    public async Task<List<RecalcRunSummary>> GetAppliedRecalcRunsAsync(
+        int? subDistributorId, int take = 20, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        var query = context.PriceRecalcRuns.AsNoTracking().Where(r => !r.IsDryRun);
+        if (subDistributorId > 0)
+            query = query.Where(r => r.SubDistributorId == subDistributorId);
+
+        return await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(take)
+            .Select(r => new RecalcRunSummary
+            {
+                RunId = r.RunId,
+                SubDistributorId = r.SubDistributorId,
+                SubdName = r.SubDistributor.SubdName,
+                FromDate = r.FromDate,
+                IsDryRun = r.IsDryRun,
+                CreatedByName = context.Users
+                    .Where(u => u.UserId == r.CreatedBy)
+                    .Select(u => u.FullName ?? u.Username)
+                    .FirstOrDefault(),
+                CreatedAt = r.CreatedAt,
+                AppliedAt = r.AppliedAt,
+                UndoneAt = r.UndoneAt,
+                Lines = r.Lines ?? 0,
+                LinesChanged = r.LinesChanged ?? 0,
+                LinesUnpriced = r.LinesUnpriced ?? 0,
+                OldTotal = r.OldTotal ?? 0m,
+                NewTotal = r.NewTotal ?? 0m
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<RecalcUndoResult> UndoRecalcAsync(int runId, int userId, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+        context.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+
+        var restored = new SqlParameter("@Restored", SqlDbType.Int) { Direction = ParameterDirection.Output };
+        var skipped = new SqlParameter("@Skipped", SqlDbType.Int) { Direction = ParameterDirection.Output };
+
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "EXEC dbo.sp_UndoInvoiceRecalc @RunId = @RunId, @RunBy = @RunBy, @Restored = @Restored OUTPUT, @Skipped = @Skipped OUTPUT",
+                new object[]
+                {
+                    new SqlParameter("@RunId", SqlDbType.Int) { Value = runId },
+                    new SqlParameter("@RunBy", SqlDbType.Int) { Value = userId },
+                    restored,
+                    skipped
+                },
+                ct);
+
+            return new RecalcUndoResult(true,
+                restored.Value is int r ? r : 0,
+                skipped.Value is int s ? s : 0);
+        }
+        catch (SqlException ex) when (ex.Number == 50200)
+        {
+            return new RecalcUndoResult(false, 0, 0, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error undoing recalculation run {RunId}", runId);
+            return new RecalcUndoResult(false, 0, 0, $"Unable to undo: {ex.GetBaseException().Message}");
+        }
+    }
+
+    public async Task<(List<RecalcInvoiceChangeRow> Items, int Total)> GetRecalcInvoiceChangesAsync(
+    int runId, int page, int pageSize, string? search, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        // One row per invoice in the run, keeping only invoices that change or can't be priced
+        var perInvoice = context.PriceRecalcLines.AsNoTracking()
+            .Where(l => l.RunId == runId)
+            .GroupBy(l => l.SalesInvoiceId)
+            .Select(g => new
+            {
+                SalesInvoiceId = g.Key,
+                Lines = g.Count(),
+                LinesChanged = g.Sum(x => x.NewAmount != null && x.NewAmount != x.OldAmount ? 1 : 0),
+                LinesUnpriced = g.Sum(x => x.NewAmount == null ? 1 : 0),
+                OldTotal = g.Sum(x => x.OldAmount),
+                NewTotal = g.Sum(x => x.NewAmount ?? x.OldAmount)
+            })
+            .Where(x => x.LinesChanged > 0 || x.LinesUnpriced > 0);
+
+        var query =
+            from x in perInvoice
+            join si in context.SalesInvoices.AsNoTracking() on x.SalesInvoiceId equals si.SalesInvoiceId
+            select new
+            {
+                x.SalesInvoiceId,
+                si.SalesInvoiceCode,
+                si.SalesInvoiceDate,
+                si.Customer.CustomerName,
+                si.Customer.CustomerCode,
+                si.OrderType,
+                x.Lines,
+                x.LinesChanged,
+                x.LinesUnpriced,
+                x.OldTotal,
+                x.NewTotal
+            };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(r =>
+                r.SalesInvoiceCode.Contains(term) ||
+                r.CustomerName.Contains(term) ||
+                r.CustomerCode.Contains(term));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(r => r.NewTotal - r.OldTotal > 0 ? r.NewTotal - r.OldTotal : r.OldTotal - r.NewTotal)
+            .ThenBy(r => r.SalesInvoiceDate)
+            .ThenBy(r => r.SalesInvoiceCode)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new RecalcInvoiceChangeRow
+            {
+                SalesInvoiceId = r.SalesInvoiceId,
+                SalesInvoiceCode = r.SalesInvoiceCode,
+                SalesInvoiceDate = r.SalesInvoiceDate,
+                CustomerName = r.CustomerCode + " – " + r.CustomerName,
+                OrderType = r.OrderType,
+                Lines = r.Lines,
+                LinesChanged = r.LinesChanged,
+                LinesUnpriced = r.LinesUnpriced,
+                OldTotal = r.OldTotal,
+                NewTotal = r.NewTotal
+            })
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
+    public async Task<List<RecalcLineChangeRow>> GetRecalcInvoiceLinesAsync(
+        int runId, int salesInvoiceId, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        return await (
+            from l in context.PriceRecalcLines.AsNoTracking()
+            join sii in context.SalesInvoiceItems.AsNoTracking() on l.SalesInvoiceItemId equals sii.SalesInvoiceItemId
+            where l.RunId == runId && l.SalesInvoiceId == salesInvoiceId
+            orderby sii.SubdItem.SubdItemCode
+            select new RecalcLineChangeRow
+            {
+                SalesInvoiceItemId = l.SalesInvoiceItemId,
+                ItemCode = sii.SubdItem.SubdItemCode,
+                ItemName = sii.SubdItem.ItemName,
+                UomName = sii.ItemsUom.UomName,
+                Quantity = sii.Quantity,
+                StockPrice = l.StockPrice,
+                OldAmount = l.OldAmount,
+                NewAmount = l.NewAmount,
+                Issue = l.Issue
+            })
+            .ToListAsync(ct);
+    }
+
     private sealed record PricedItem(int BaseQuantity, decimal StockPrice, int HistoryId, decimal Amount);
 
     private static (List<PricedItem>? Lines, string? Error) PriceItems(
@@ -1096,6 +1373,81 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
         return (lines, null);
     }
 
+    public async Task<List<RecalcIssueItemRow>> GetRecalcIssueItemsAsync(
+        int runId, string issue, CancellationToken ct = default)
+    {
+        await using var context = _contextFactory.CreateDbContext();
+
+        // Line-level rows for this issue (issue lists are small, so group in memory)
+        var lines = await (
+            from l in context.PriceRecalcLines.AsNoTracking()
+            join sii in context.SalesInvoiceItems.AsNoTracking() on l.SalesInvoiceItemId equals sii.SalesInvoiceItemId
+            join si in context.SalesInvoices.AsNoTracking() on l.SalesInvoiceId equals si.SalesInvoiceId
+            where l.RunId == runId && l.Issue == issue
+            select new
+            {
+                sii.SubdItemId,
+                sii.SubdItem.SubdItemCode,
+                sii.SubdItem.ItemName,
+                CompanyItemCode = sii.SubdItem.CompanyItem.ItemCode,
+                sii.ItemsUomId,
+                sii.ItemsUom.UomName,
+                sii.ItemsUom.ConversionToBase,
+                UomActive = sii.ItemsUom.IsActive,
+                l.SalesInvoiceId,
+                si.SalesInvoiceCode,
+                l.OldAmount
+            })
+            .ToListAsync(ct);
+
+        if (lines.Count == 0)
+            return new List<RecalcIssueItemRow>();
+
+        // Current active UOMs of those items, to compare against the one the lines use
+        var subdItemIds = lines.Select(x => x.SubdItemId).Distinct().ToList();
+        var activeUoms = await context.ItemsUoms.AsNoTracking()
+            .Where(u => subdItemIds.Contains(u.SubdItemId) && u.IsActive)
+            .Select(u => new { u.SubdItemId, u.UomName, u.ConversionToBase, u.IsStockUom })
+            .ToListAsync(ct);
+
+        var activeBySubdItem = activeUoms
+            .GroupBy(u => u.SubdItemId)
+            .ToDictionary(
+                g => g.Key,
+                g => string.Join(", ", g.OrderBy(u => u.ConversionToBase)
+                    .Select(u => $"{u.UomName} ({u.ConversionToBase}{(u.IsStockUom ? ", stock" : "")})")));
+
+        return lines
+            .GroupBy(x => new
+            {
+                x.SubdItemId,
+                x.SubdItemCode,
+                x.ItemName,
+                x.CompanyItemCode,
+                x.ItemsUomId,
+                x.UomName,
+                x.ConversionToBase,
+                x.UomActive
+            })
+            .Select(g => new RecalcIssueItemRow
+            {
+                SubdItemCode = g.Key.SubdItemCode,
+                ItemName = g.Key.ItemName,
+                CompanyItemCode = g.Key.CompanyItemCode,
+                UomName = g.Key.UomName,
+                ConversionToBase = g.Key.ConversionToBase,
+                UomActive = g.Key.UomActive,
+                ActiveUoms = activeBySubdItem.TryGetValue(g.Key.SubdItemId, out var a) ? a : "(none)",
+                Lines = g.Count(),
+                Invoices = g.Select(x => x.SalesInvoiceId).Distinct().Count(),
+                Amount = g.Sum(x => x.OldAmount),
+                SampleInvoices = string.Join(", ", g.Select(x => x.SalesInvoiceCode).Distinct().OrderBy(c => c).Take(5))
+                                 + (g.Select(x => x.SalesInvoiceId).Distinct().Count() > 5 ? ", …" : "")
+            })
+            .OrderByDescending(r => Math.Abs(r.Amount))
+            .ThenBy(r => r.SubdItemCode)
+            .ToList();
+    }
     private static bool IsCredit(string orderType)
         => string.Equals(orderType?.Trim(), "Credit", StringComparison.OrdinalIgnoreCase);
 }

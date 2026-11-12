@@ -240,3 +240,100 @@ public sealed class DeletedInvoiceDetailRow
 }
 
 public record RestoreBatchResult(bool IsRestored, int RestoredCount, string? ErrorMessage = null);
+
+// ─── Recalculate amounts ─────────────────────────────────────────────────────
+
+public sealed class RecalcRunSummary
+{
+    public int RunId { get; init; }
+    public int SubDistributorId { get; init; }
+    public string SubdName { get; init; } = "—";
+    public DateOnly FromDate { get; init; }
+    public bool IsDryRun { get; init; }
+    public string? CreatedByName { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public DateTime? AppliedAt { get; init; }
+    public DateTime? UndoneAt { get; init; }
+    public int Lines { get; init; }
+    public int LinesChanged { get; init; }
+    public int LinesUnpriced { get; init; }
+    public decimal OldTotal { get; init; }
+    public decimal NewTotal { get; init; }
+
+    public decimal Difference => NewTotal - OldTotal;
+    public string Period => FromDate.ToString("MMMM yyyy");
+    public bool CanUndo => AppliedAt.HasValue && !UndoneAt.HasValue;
+}
+
+public sealed class RecalcIssueRow
+{
+    public string Issue { get; init; } = string.Empty;
+    public int Lines { get; init; }
+    public decimal Amount { get; init; }
+}
+
+public sealed class RecalcItemChangeRow
+{
+    public string ItemCode { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public int Lines { get; init; }
+    public decimal OldAmount { get; init; }
+    public decimal NewAmount { get; init; }
+    public decimal Difference => NewAmount - OldAmount;
+}
+
+public sealed class RecalcResult
+{
+    public bool IsSuccess { get; init; }
+    public string? ErrorMessage { get; init; }
+    public RecalcRunSummary? Run { get; init; }
+    public List<RecalcIssueRow> Issues { get; init; } = new();
+    public List<RecalcItemChangeRow> TopChanges { get; init; } = new();
+
+    public static RecalcResult Failed(string msg) => new() { IsSuccess = false, ErrorMessage = msg };
+}
+
+public record RecalcUndoResult(bool IsUndone, int Restored, int Skipped, string? ErrorMessage = null);
+public sealed class RecalcInvoiceChangeRow
+{
+    public int SalesInvoiceId { get; init; }
+    public string SalesInvoiceCode { get; init; } = string.Empty;
+    public DateOnly SalesInvoiceDate { get; init; }
+    public string CustomerName { get; init; } = string.Empty;
+    public string OrderType { get; init; } = string.Empty;
+    public int Lines { get; init; }
+    public int LinesChanged { get; init; }
+    public int LinesUnpriced { get; init; }
+    public decimal OldTotal { get; init; }
+    public decimal NewTotal { get; init; }
+    public decimal Difference => NewTotal - OldTotal;
+}
+
+public sealed class RecalcLineChangeRow
+{
+    public int SalesInvoiceItemId { get; init; }
+    public string ItemCode { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public string UomName { get; init; } = string.Empty;
+    public int Quantity { get; init; }
+    public decimal? StockPrice { get; init; }
+    public decimal OldAmount { get; init; }
+    public decimal? NewAmount { get; init; }
+    public string? Issue { get; init; }
+    public decimal Difference => (NewAmount ?? OldAmount) - OldAmount;
+}
+
+public sealed class RecalcIssueItemRow
+{
+    public string SubdItemCode { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public string CompanyItemCode { get; init; } = string.Empty;
+    public string UomName { get; init; } = string.Empty;
+    public int? ConversionToBase { get; init; }
+    public bool UomActive { get; init; }
+    public string ActiveUoms { get; init; } = string.Empty;   // e.g. "Piece (1), Case (30, stock)"
+    public int Lines { get; init; }
+    public int Invoices { get; init; }
+    public decimal Amount { get; init; }
+    public string SampleInvoices { get; init; } = string.Empty;
+}
