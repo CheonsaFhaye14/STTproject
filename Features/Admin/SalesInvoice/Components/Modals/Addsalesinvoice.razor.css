@@ -1,0 +1,331 @@
+/* Scoped styles for AddSalesInvoice.razor (content only; Modal and FormSection chrome is untouched) */
+
+/* Two-column field layout */
+.inv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20px;
+    padding-bottom: 8px;
+    align-items: start; /* stops Salesman from being pushed down by the taller Order Type cell */
+}
+
+.inv-full {
+    grid-column: 1 / -1;
+}
+
+.inv-hint {
+    display: block;
+    margin-top: 5px;
+    font-size: 12.5px;
+    color: #6e675d;
+}
+
+/* Order type toggle (Invoice / Credit) */
+.order-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid #e2dacb;
+    border-radius: 8px;
+    background: #faf7f1;
+}
+
+.order-toggle .order-toggle-btn {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 30px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: #6e675d;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.order-toggle .order-toggle-btn:hover:not(:disabled):not(.active) {
+    background: #f3e9d6;
+}
+
+.order-toggle .order-toggle-btn.active {
+    background: #9a7640;
+    color: #fff;
+}
+
+.order-toggle .order-toggle-btn.active.credit {
+    background: #a3402a;
+}
+
+.order-toggle-btn:disabled {
+    cursor: default;
+    opacity: .75;
+}
+
+.order-toggle-btn:focus-visible {
+    outline: 2px solid #9a7640;
+    outline-offset: 1px;
+}
+
+/* Items: plain section, not a card */
+.inv-items {
+    margin-top: 24px;
+}
+
+.inv-items-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.inv-items-head h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.inv-items-head span {
+    font-size: 13px;
+    color: #6e675d;
+}
+
+.inv-locked {
+    padding: 14px;
+    border-radius: 8px;
+    background: #f3e9d6;
+    color: #7d5f31;
+    font-size: 13.5px;
+}
+
+/* Footer total (left side; buttons stay on the right) */
+.inv-total {
+    margin-right: auto;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.inv-total small {
+    font-size: 12.5px;
+    color: #6e675d;
+}
+
+.inv-total strong {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+}
+
+.inv-total.neg strong {
+    color: #a3402a;
+}
+
+@media (max-width: 720px) {
+    .inv-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Items grid (replaces AddTable) */
+.inv-lines {
+    border: 1px solid #e2dacb;
+    border-radius: 10px;
+}
+
+.inv-line {
+    display: grid;
+    grid-template-columns: minmax(240px, 3fr) minmax(120px, 1.2fr) 108px 84px 96px 34px;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border-top: 1px solid #e2dacb;
+}
+
+.inv-line-head {
+    align-items: center;
+    padding: 9px 12px;
+    border-top: 0;
+    border-radius: 10px 10px 0 0;
+    background: #f1ebdf;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #6e675d;
+}
+
+.inv-num {
+    padding-top: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.inv-line-head .inv-num {
+    padding-top: 0;
+}
+
+.inv-amt {
+    font-weight: 600;
+}
+
+.inv-amt.neg {
+    color: #a3402a;
+}
+
+.inv-line-error {
+    grid-column: 1 / -1;
+    margin-top: -4px;
+    font-size: 12.5px;
+    color: #b3261e;
+}
+
+.inv-empty {
+    padding: 24px;
+    text-align: center;
+    color: #6e675d;
+    border-top: 1px solid #e2dacb;
+}
+
+/* Quantity stepper */
+.inv-step {
+    display: grid;
+    grid-template-columns: 30px 1fr 30px;
+    height: 34px;
+    border: 1px solid #e2dacb;
+    border-radius: 8px;
+    background: #faf7f1;
+    overflow: hidden;
+}
+
+.inv-step:has(.inv-qty:only-child) {
+    grid-template-columns: 1fr;
+}
+
+.inv-lines .inv-step-btn {
+    appearance: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.inv-lines .inv-step-btn:hover:not(:disabled) {
+    background: #f3e9d6;
+}
+
+.inv-lines .inv-qty {
+    min-width: 0;
+    width: 100%;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    text-align: center;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.inv-qty::-webkit-outer-spin-button,
+.inv-qty::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.inv-lines .inv-remove {
+    appearance: none;
+    width: 34px;
+    height: 34px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: #6e675d;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.inv-lines .inv-remove:hover:not(:disabled) {
+    background: #fbe9e7;
+    color: #b3261e;
+}
+
+.inv-add {
+    margin-top: 12px;
+    height: 38px;
+    padding: 0 16px;
+    border: 1.5px dashed #9a7640;
+    border-radius: 8px;
+    background: transparent;
+    color: #7d5f31;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.inv-add:hover:not(:disabled) {
+    background: #f3e9d6;
+}
+
+.inv-items {
+    padding-bottom: 12px;
+}
+
+@media (max-width: 720px) {
+    .inv-line {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .inv-cell-item {
+        grid-column: 1 / -1;
+    }
+
+    .inv-line-head {
+        display: none;
+    }
+
+    .inv-num {
+        text-align: left;
+    }
+}
+
+/* Smaller text for the item and UOM autocompletes (input and dropdown list) */
+.inv-ac ::deep * {
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.inv-ac ::deep li,
+.inv-ac ::deep [role="option"] {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* Let the item list be wider than the narrow input so names wrap less */
+.inv-cell-item ::deep ul,
+.inv-cell-item ::deep [role="listbox"] {
+    min-width: 360px;
+}
+
+/* Same control height as the stepper so every cell in a row lines up */
+.inv-ac ::deep input {
+    height: 34px;
+    min-height: 0;
+    box-sizing: border-box;
+}

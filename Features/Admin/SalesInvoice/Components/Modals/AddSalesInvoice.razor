@@ -14,97 +14,174 @@
         <FormSection Icon="ti ti-file-invoice" Title="Invoice Information" Summary="@GetInvoiceInfoSummary()"
                      Expandable="true" IsExpanded="true">
             <ChildContent>
-                <div class="form-group">
-                    <AutoComplete Label="Subdistributor" Placeholder="Search subdistributor..."
-                                  TItem="SalesInvoiceSubDistributorDropdownItem" Required="true" Items="SubDistributors"
-                                  ValueSelector="x => x.SubDistributorId.ToString()"
-                                  TextSelector="x => x.SubdName ?? string.Empty" SelectedValue="@(SubDistributorId.ToString())"
-                                  SelectedItemChanged="OnSubDistributorSelected" Disabled="@isViewMode"
-                                  ShowError="@ShowValidationErrors"
-                                  ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)" />
-                </div>
+                <div class="inv-grid">
+                    <div class="form-group inv-full">
+                        <AutoComplete Label="Subdistributor" Placeholder="Type to search subdistributor..."
+                                      TItem="SalesInvoiceSubDistributorDropdownItem" Required="true" Items="SubDistributors"
+                                      ValueSelector="x => x.SubDistributorId.ToString()"
+                                      TextSelector="x => x.SubdName ?? string.Empty"
+                                      SelectedValue="@(SubDistributorId.ToString())"
+                                      SelectedItemChanged="OnSubDistributorSelected" Disabled="@isViewMode"
+                                      ShowError="@ShowValidationErrors"
+                                      ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.SubDistributor)" />
+                    </div>
 
-                <div class="form-group">
-                    <Input Label="Invoice Code" Required="true" @bind-Value="SalesInvoiceCode" Disabled="@isViewMode"
-                           Placeholder="Enter invoice code..." ShowError="@ShowValidationErrors"
-                           ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)" />
-                </div>
+                    <div class="form-group inv-full">
+                        <AutoComplete @key="@($"cust-{SubDistributorId}")" Label="Customer"
+                                      Placeholder="@(SubDistributorId == 0 ? "Choose a subdistributor first" : "Search by code or name...")"
+                                      TItem="SalesInvoiceCustomerDropdownItem" Required="true" Items="Customers"
+                                      ValueSelector="x => x.CustomerId.ToString()"
+                                      TextSelector='x => $"{x.CustomerCode} – {x.CustomerName}"'
+                                      SelectedValue="@(CustomerId.ToString())" SelectedItemChanged="OnCustomerSelected"
+                                      Disabled="@(isViewMode || SubDistributorId == 0)" ShowError="@ShowValidationErrors"
+                                      ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.Customer)" />
+                        @if (!isViewMode && SubDistributorId == 0)
+                        {
+                            <span class="inv-hint">Customers load after you pick a subdistributor.</span>
+                        }
+                    </div>
 
-                <div class="form-group">
-                    <label>Invoice Date <span class="required-asterisk">*</span></label>
-                    <input type="date" @bind="SalesInvoiceDate" @bind:after="OnInvoiceDateChanged"
-                           disabled="@isViewMode" />
-                    @if (ShowValidationErrors &&
-                    !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)))
+                    <div class="form-group">
+                        <Input Label="Invoice Code" Required="true" @bind-Value="SalesInvoiceCode"
+                               Disabled="@isViewMode" Placeholder="e.g. INV-2026-0142" ShowError="@ShowValidationErrors"
+                               ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.InvoiceCode)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Invoice Date <span class="required-asterisk">*</span></label>
+                        <input type="date" @bind="SalesInvoiceDate" @bind:after="OnInvoiceDateChanged"
+                               max="@DateTime.Today.ToString("yyyy-MM-dd")" disabled="@isViewMode" />
+                        @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)))
+                        {
+                            <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label>Order Type <span class="required-asterisk">*</span></label>
+                        <div class="order-toggle" role="group" aria-label="Order type">
+                            @foreach (var type in OrderTypeOptions)
+                            {
+                                var t = type;
+                                <button type="button"
+                                        class="order-toggle-btn @(OrderType == t ? "active" : "") @(t == "Credit" ? "credit" : "")"
+                                        aria-pressed="@(OrderType == t ? "true" : "false")" disabled="@isViewMode"
+                                        @onclick="() => OnOrderTypeSelected(t)">@t</button>
+                            }
+                        </div>
+                        <span class="inv-hint">
+                            @(OrderType == "Credit" ? "Credit: amounts are saved as negative." : OrderType == "Invoice" ? "Invoice: amounts are positive." : "Choose Invoice or Credit.")
+                        </span>
+                        @if (ShowValidationErrors &&
+                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.OrderType)))
+                        {
+                            <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.OrderType)</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <Input Label="Salesman (optional)" @bind-Value="SalesMan" Disabled="@isViewMode"
+                               Placeholder="Enter salesman name" />
+                    </div>
+                </div>
+            </ChildContent>
+        </FormSection>
+
+        @* Items: plain section (no FormSection card) *@
+        <div class="inv-items">
+            <div class="inv-items-head">
+                <h3>Items</h3>
+                <span>@GetItemsSummary()</span>
+            </div>
+
+            @if (SubDistributorId == 0 && !isEdit)
+            {
+                <div class="inv-locked">Pick a subdistributor above to start adding items.</div>
+            }
+            else
+            {
+                <div class="inv-lines" @key="tableKey">
+                    <div class="inv-line inv-line-head">
+                        <div>Item</div>
+                        <div>UOM</div>
+                        <div>Qty</div>
+                        <div class="inv-num">Unit Price</div>
+                        <div class="inv-num">Amount</div>
+                        <div></div>
+                    </div>
+
+                    @if (LineItems.Count == 0)
                     {
-                        <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.InvoiceDate)</span>
+                        <div class="inv-empty">No items yet. Select “+ Add item” to begin.</div>
+                    }
+
+                    @foreach (var line in LineItems)
+                    {
+                        var current = line;
+                        var rowError = GetLineError(LineItems.IndexOf(current));
+                        <div class="inv-line" @key="current">
+                            <div class="inv-cell inv-cell-item inv-ac">
+                                <AutoComplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
+                                              Placeholder="Search SKU / item..." Disabled="@isViewMode"
+                                              ValueSelector="x => x.SubdItemId.ToString()"
+                                              TextSelector='x => $"{x.SubdItemCode} - {x.ItemName}"'
+                                              SelectedValue="@(current.SubdItemId == 0 ? string.Empty : current.SubdItemId.ToString())"
+                                              SelectedItemChanged="@(item => OnRowItemSelected(current, item))" />
+                            </div>
+                            <div class="inv-cell inv-ac">
+                                <AutoComplete @key="@($"uom-{current.SubdItemId}")" TItem="SalesInvoiceUomOption"
+                                              Items="current.AvailableUoms" Placeholder="Select UOM" ShowAllOnOpen="true"
+                                              Disabled="@(isViewMode || !current.AvailableUoms.Any())"
+                                              ValueSelector="x => x.ItemsUomId.ToString()"
+                                              TextSelector='x => x.PriceIssue is null ? x.UomName : $"{x.UomName} (no price)"'
+                                              SelectedValue="@(current.SelectedUomId == 0 ? string.Empty : current.SelectedUomId.ToString())"
+                                              SelectedItemChanged="@(uom => OnRowUomSelected(current, uom))" />
+                            </div>
+                            <div class="inv-cell">
+                                <div class="inv-step">
+                                    @if (!isViewMode)
+                                    {
+                                        <button type="button" class="inv-step-btn" aria-label="Decrease quantity"
+                                                disabled="@isSubmitting" @onclick="() => ChangeQty(current, -1)">−</button>
+                                    }
+                                    <input type="number" min="1" class="inv-qty" aria-label="Quantity" value="@current.Quantity"
+                                           disabled="@(isViewMode || isSubmitting)" @onchange="e => OnQtyChanged(current, e)" />
+                                    @if (!isViewMode)
+                                    {
+                                        <button type="button" class="inv-step-btn" aria-label="Increase quantity"
+                                                disabled="@isSubmitting" @onclick="() => ChangeQty(current, 1)">+</button>
+                                    }
+                                </div>
+                            </div>
+                            <div class="inv-num">@current.UnitPrice.ToString("N2")</div>
+                            <div class="inv-num inv-amt @(current.Amount < 0 ? "neg" : "")">@current.Amount.ToString("N2")</div>
+                            <div class="inv-cell">
+                                @if (!isViewMode)
+                                {
+                                    <button type="button" class="inv-remove" title="Remove item" aria-label="Remove item"
+                                            disabled="@isSubmitting" @onclick="() => RemoveLine(current)">×</button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(rowError))
+                            {
+                                <div class="inv-line-error">@rowError</div>
+                            }
+                        </div>
                     }
                 </div>
 
-                <div class="form-group">
-                    <AutoComplete @key="@($"cust-{SubDistributorId}")" Label="Customer" Placeholder="Search customer..."
-                                  TItem="SalesInvoiceCustomerDropdownItem" Required="true" Items="Customers"
-                                  ValueSelector="x => x.CustomerId.ToString()"
-                                  TextSelector='x => $"{x.CustomerCode} – {x.CustomerName}"'
-                                  SelectedValue="@(CustomerId.ToString())" SelectedItemChanged="OnCustomerSelected"
-                                  Disabled="@isViewMode" ShowError="@ShowValidationErrors"
-                                  ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.Customer)" />
-                </div>
+                @if (!isViewMode)
+                {
+                    <button type="button" class="inv-add" disabled="@isSubmitting" @onclick="AddLine">+ Add item</button>
+                }
 
-                <div class="form-group">
-                    <Select Label="Order Type" Required="true" Items="@OrderTypeOptions" SelectedValue="@OrderType"
-                            SelectedValueChanged="OnOrderTypeSelected" Placeholder="-- Select Order Type --"
-                            Disabled="@isViewMode"
-                            ShowError="@(ShowValidationErrors && !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.OrderType)))"
-                            ErrorText="@GetFieldError(SalesInvoiceValidator.Fields.OrderType)" />
-                </div>
-
-                <div class="form-group">
-                    <Input Label="Salesman" @bind-Value="SalesMan" Disabled="@isViewMode"
-                           Placeholder="Enter salesman..." />
-                </div>
-            </ChildContent>
-        </FormSection>
-
-        <FormSection Icon="ti ti-clipboard-list" Title="Items" Summary="@GetItemsSummary()" Expandable="true"
-                     IsExpanded="true">
-            <ChildContent>
-                <AddTable @key="tableKey" TItem="LineItemModel" Items="LineItems" Columns="LineColumns"
-                          ColumnLabels="LineColumnLabels" EditableColumns="LineEditableColumns"
-                          TemplateColumns="LineTemplateColumns" ColumnInputTypes="LineColumnInputTypes"
-                          DisplayValueSelector="GetLineDisplayValue" OnCellChanged="HandleLineCellChanged"
-                          ViewMode="isViewMode" Disabled="isSubmitting" AddButtonVisible="!isViewMode"
-                          AddTableButtonText="+ Add item" OnAdd="AddLine" RemoveButtonVisible="!isViewMode"
-                          RemoveButtonDisabled="isSubmitting" OnRemove="HandleLineRemoved" ShowError="true"
-                          ErrorSelector="@(idx => GetLineError(idx))"
-                          GeneralErrorText="@GetFieldError(SalesInvoiceValidator.Fields.Items)">
-                    <CellTemplate Context="cell">
-                        @if (cell.Column == nameof(LineItemModel.ItemSearchText))
-                        {
-                            <AutoComplete TItem="SalesInvoiceSubdItemDropdownItem" Items="SubdItems"
-                                          Placeholder="Search SKU / item..." ValueSelector="x => x.SubdItemId.ToString()"
-                                          TextSelector='x => $"{x.SubdItemCode} - {x.ItemName}"'
-                                          SelectedValue="@(cell.Item.SubdItemId == 0 ? string.Empty : cell.Item.SubdItemId.ToString())"
-                                          SelectedItemChanged="@(item => OnRowItemSelected(cell.Item, item))" />
-                        }
-                        else if (cell.Column == nameof(LineItemModel.UomName))
-                        {
-                            <AutoComplete @key="@($"uom-{cell.Item.SubdItemId}")" TItem="SalesInvoiceUomOption"
-                                          Items="cell.Item.AvailableUoms" Placeholder="Select UOM" ShowAllOnOpen="true"
-                                          Disabled="@(!cell.Item.AvailableUoms.Any())" ValueSelector="x => x.ItemsUomId.ToString()"
-                                          TextSelector='x => x.PriceIssue is null ? x.UomName : $"{x.UomName} (no price)"'
-                                          SelectedValue="@(cell.Item.SelectedUomId == 0 ? string.Empty : cell.Item.SelectedUomId.ToString())"
-                                          SelectedItemChanged="@(uom => OnRowUomSelected(cell.Item, uom))" />
-                                          
-                        }
-                    </CellTemplate>
-                </AddTable>
-
-                <div style="text-align:right; margin-top:.5rem">
-                    <strong>Total: @LineItems.Sum(l => l.Amount).ToString("N2")</strong>
-                </div>
-            </ChildContent>
-        </FormSection>
+                @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidator.Fields.Items)))
+                {
+                    <span class="error-text">@GetFieldError(SalesInvoiceValidator.Fields.Items)</span>
+                }
+            }
+        </div>
 
         @if (isViewMode)
         {
@@ -134,6 +211,10 @@
     </ChildContent>
 
     <FooterContent>
+        <span class="inv-total @(LineItems.Sum(l => l.Amount) < 0 ? "neg" : "")">
+            <small>Total</small>
+            <strong>@LineItems.Sum(l => l.Amount).ToString("N2")</strong>
+        </span>
         @if (isEdit && isViewMode)
         {
             <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
@@ -477,8 +558,10 @@
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(SelectedSubDistributorName)) parts.Add(SelectedSubDistributorName!);
         if (!string.IsNullOrWhiteSpace(SalesInvoiceCode)) parts.Add(SalesInvoiceCode!);
+        parts.Add(SalesInvoiceDate.ToString("MMM d, yyyy"));
         if (!string.IsNullOrWhiteSpace(SelectedCustomerName)) parts.Add(SelectedCustomerName!);
         if (!string.IsNullOrWhiteSpace(OrderType)) parts.Add(OrderType!);
+        if (!string.IsNullOrWhiteSpace(SalesMan)) parts.Add(SalesMan!);
         return parts.Count > 0 ? string.Join(" • ", parts) : "Subdistributor, code, date, customer, order type";
     }
 
@@ -487,67 +570,35 @@
 
     private Task OnOrderTypeSelected(string? value)
     {
+        if (isViewMode) return Task.CompletedTask;
         OrderType = value;
         OnOrderTypeChanged();
         return Task.CompletedTask;
     }
 
-    // ── AddTable configuration ────────────────────────────────────────────────
-    private static readonly List<string> LineColumns = new()
-    {
-        nameof(LineItemModel.ItemSearchText), nameof(LineItemModel.UomName),
-        nameof(LineItemModel.Quantity), nameof(LineItemModel.UnitPrice), nameof(LineItemModel.Amount)
-    };
-
-    // Only Qty is a plain editable cell; Item and UOM are autocompletes via CellTemplate
-    private static readonly List<string> LineEditableColumns = new() { nameof(LineItemModel.Quantity) };
-
-    private static readonly List<string> LineTemplateColumns = new()
-    {
-        nameof(LineItemModel.ItemSearchText), nameof(LineItemModel.UomName)
-    };
-
-    private static readonly Dictionary<string, string> LineColumnLabels = new()
-    {
-        [nameof(LineItemModel.ItemSearchText)] = "Item",
-        [nameof(LineItemModel.UomName)] = "UOM",
-        [nameof(LineItemModel.Quantity)] = "Qty",
-        [nameof(LineItemModel.UnitPrice)] = "Unit Price",
-        [nameof(LineItemModel.Amount)] = "Amount"
-    };
-
-    private static readonly Dictionary<string, string> LineColumnInputTypes = new()
-    {
-        [nameof(LineItemModel.Quantity)] = "number"
-    };
-
-    private string? GetLineDisplayValue(LineItemModel line, string column) => column switch
-    {
-        nameof(LineItemModel.UnitPrice) => line.UnitPrice.ToString("N2"),
-        nameof(LineItemModel.Amount) => line.Amount.ToString("N2"),
-        _ => null
-    };
-
+    // ── Line item helpers ─────────────────────────────────────────────────────
     private Task AddLine()
     {
         LineItems.Add(new LineItemModel());
         return Task.CompletedTask;
     }
 
-    private Task HandleLineRemoved(int idx)
+    private void RemoveLine(LineItemModel line)
     {
+        LineItems.Remove(line);
         tableKey++; // re-creates rows so autocompletes don't keep a removed row's text
-        return Task.CompletedTask;
     }
 
-    private async Task HandleLineCellChanged((LineItemModel Item, string Column) args)
+    private void ChangeQty(LineItemModel line, int delta)
     {
-        if (args.Column == nameof(LineItemModel.Quantity))
-        {
-            if (args.Item.Quantity < 1) args.Item.Quantity = 1;
-            RecalcLine(args.Item);
-            await InvokeAsync(StateHasChanged);
-        }
+        line.Quantity = Math.Max(1, line.Quantity + delta);
+        RecalcLine(line);
+    }
+
+    private void OnQtyChanged(LineItemModel line, ChangeEventArgs e)
+    {
+        line.Quantity = int.TryParse(e.Value?.ToString(), out var q) && q >= 1 ? q : 1;
+        RecalcLine(line);
     }
 
     private Task OnRowItemSelected(LineItemModel line, SalesInvoiceSubdItemDropdownItem? item)
