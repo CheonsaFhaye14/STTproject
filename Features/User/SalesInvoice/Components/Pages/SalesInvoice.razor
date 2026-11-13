@@ -21,10 +21,8 @@
 
 @rendermode InteractiveServer
 
-<LoadingOverlay Show="isDownloadingTemplate"
-                Title="Downloading Excel Template…"
-                Subtitle="Please wait while we prepare the template for download."
-                IconClass="fa-solid fa-upload" />
+<LoadingOverlay Show="isDownloadingTemplate" Title="Downloading Excel Template…"
+                Subtitle="Please wait while we prepare the template for download." IconClass="fa-solid fa-upload" />
 
 <LoadingOverlay Show="isLoading" Title="Loading Data…" Subtitle="Please wait while we load all the data."
                 IconClass="fa-solid fa-file-invoice" />
@@ -44,14 +42,20 @@
     <div class="top-buttons">
         <button class="btn-primary" @onclick="DownloadTemplate" disabled="@(invoice.SubdistributorId <= 0)">
             <span class="btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                    d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2H5Z" />
+                </svg>
             </span>
             <span>Download Template</span>
         </button>
         <button class="btn-primary" type="button" @onclick="@(() => showImportSalesInvoiceModal = true)"
                 disabled="@(invoice.SubdistributorId <= 0)">
             <span class="btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                    d="M14 2a2 2 0 0 1 2 2v6h4a1 1 0 0 1 .8 1.6l-7 8a1 1 0 0 1-1.6 0l-7-8A1 1 0 0 1 4 10h4V4a2 2 0 0 1 2-2h4Zm-1 2h-2v8H7.6L12 15.2 16.4 12H15V4Zm-1 13v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3h2Z" />
+                </svg>
             </span>
             <span>Import</span>
         </button>
@@ -71,68 +75,67 @@
 }
 
 
-    <ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
-                  OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
+<ConfirmModal Show="showCommitConfirmModal" Title="Commit Invoice" Message="Commit this invoice to the database?"
+              OnYes="ConfirmCommitInvoice" OnNo="CancelCommitInvoice" />
 
-    <ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
-                  OnErrorConfirm="CloseErrorModal" />
+<ConfirmModal Show="showErrorModal" Title="Error" ErrorMessage="@errorMessage" ShowError="true"
+              OnErrorConfirm="CloseErrorModal" />
 
-    <ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
-                  Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
-                  OnNo="CancelAddItemsConfirm" />
+<ConfirmModal Show="showAddItemsConfirmModal" Title="Save Items"
+              Message="@($"Add {addItemsConfirmCount} item(s) to the invoice?")" OnYes="ConfirmAddItems"
+              OnNo="CancelAddItemsConfirm" />
 
-    <ConfirmModal Show="showAddItemsErrorModal" Title="Save Items" ShowError="true"
-                  ErrorMessage="Please add at least one item before saving." OnErrorConfirm="CloseAddItemsErrorModal" />
+<ConfirmModal Show="showAddItemsErrorModal" Title="Save Items" ShowError="true"
+              ErrorMessage="Please add at least one item before saving." OnErrorConfirm="CloseAddItemsErrorModal" />
 
-    <ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
-                  OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
+<ConfirmModal Show="showEditItemsConfirmModal" Title="Save Changes" Message="@editItemsConfirmMessage"
+              OnYes="ConfirmEditItems" OnNo="CancelEditItemsConfirm" />
 
-    <ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
-                  Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
+<ConfirmModal Show="showClearConfirmModal" Title="Clear Draft"
+              Message="Clear all unsaved changes for this sub-distributor?" OnYes="ConfirmClearDraft" OnNo="CancelClearConfirm" />
 
-    <ImportSalesInvoice Show="showImportSalesInvoiceModal"
-                     SubDistributorId="invoice.SubdistributorId"
-                     OnClose="@(() => showImportSalesInvoiceModal = false)"
-                     OnImportCompleted="HandleImportSalesInvoiceCompletedAsync" />
+<ImportSalesInvoice Show="showImportSalesInvoiceModal" SubDistributorId="invoice.SubdistributorId"
+                    OnClose="@(() => showImportSalesInvoiceModal = false)" OnImportCompleted="HandleImportSalesInvoiceCompletedAsync" />
                      
-    <InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
-                   OnDraftChanged="PersistDraftAsync" Customers="customers"
-                   SelectedSubdistributorId="invoice.SubdistributorId" CurrentInvoiceId="currentInvoiceId" />
+<InvoiceHeader Invoice="invoice" IsSaved="isSaved" OnSaveClick="SaveDraft" OnEditClick="EnableEdit"
+               OnDraftChanged="PersistDraftAsync" Customers="customers" SelectedSubdistributorId="invoice.SubdistributorId"
+               CurrentInvoiceId="currentInvoiceId" />
 
+@if (isSaved)
+{
+    <div class="item-actions">
+        <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
+        <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
+    </div>
+}
+
+<AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
+                 OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                 AvailableUoms="availableUoms" UomPrices="uomPrices" SelectedSubdistributorId="invoice.SubdistributorId"
+                 HeaderIsSaved="isSaved" InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnAddItemsBeforeSave"
+                 OnDraftChanged="PersistDraftAsync" IsCredit="IsCreditInvoice" />
+
+<EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
+                  OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
+                  UomPrices="uomPrices" IsCredit="IsCreditInvoice" InvoiceDate="invoice.InvoiceDate"
+                  OnBeforeSave="OnEditItemsBeforeSave" />
+
+<InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
+                   AvailableUoms="availableUoms" />
+
+
+
+<div class="commit-actions">
+    <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
+            disabled="@(invoice.SubdistributorId <= 0)">
+        Clear Draft
+    </button>
     @if (isSaved)
     {
-        <div class="item-actions">
-            <button class="btn-primary" @onclick="OpenAddItemsModal">Add Items (F3)</button>
-            <button class="btn-primary" @onclick="OpenEditItemsModal" disabled="@(!items.Any())">Edit Items (F4)</button>
-        </div>
+        <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
+        <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
     }
-
-    <AddInvoiceItems @ref="addItemsModalRef" ShowModal="showAddItemsModal" OnSaveModalItems="OnModalItemsSaved"
-                     OnCancelModal="CloseAddItemsModal" Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-                     AvailableUoms="availableUoms" SelectedSubdistributorId="invoice.SubdistributorId" HeaderIsSaved="isSaved"
-                     InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnAddItemsBeforeSave" OnDraftChanged="PersistDraftAsync"
-                     IsCredit="@(string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))" />
-
-    <EditInvoiceItems @ref="editItemsModalRef" ShowModal="showEditItemsModal" OnSaveEditedItems="OnEditedItemsSaved"
-                      OnCancelModal="CloseEditItemsModal" Items="items" AvailableItems="subdItems" AvailableUoms="availableUoms"
-                      InvoiceDate="invoice.InvoiceDate" OnBeforeSave="OnEditItemsBeforeSave" />
-
-    <InvoiceItemsTable Items="items" ItemsChanged="OnItemsChanged" AvailableItems="subdItems"
-                       AvailableUoms="availableUoms" />
-
-
-
-    <div class="commit-actions">
-        <button class="btn-secondary" type="button" @onclick="ShowClearConfirmModal"
-                disabled="@(invoice.SubdistributorId <= 0)">
-            Clear Draft
-        </button>
-        @if (isSaved)
-        {
-            <button class="btn-primary" @onclick="ShowCommitInvoiceConfirm">Commit Invoice (Ctrl+S)</button>
-            <span class="shortcut-hint">Commit saves the invoice header and all items to the database.</span>
-        }
-    </div>
+</div>
 
 
 

@@ -8,6 +8,8 @@ using STTproject.Features.User.SalesInvoice.Services;
 using STTproject.Models;
 using STTproject.Services;
 using System.Text.Json;
+using STTproject.Features.Pricing;
+
 namespace STTproject.Features.User.SalesInvoice.Components.Pages;
 
 public partial class SalesInvoice
@@ -49,6 +51,8 @@ public partial class SalesInvoice
             isSaved = true;
         }
 
+        await LoadUomPricesAsync();
+        RepriceItems();
         await PersistDraftAsync();
     }
 
@@ -154,8 +158,7 @@ public partial class SalesInvoice
 
                 if (existingItem != null)
                 {
-                    existingItem.Quantity += savedItem.Quantity;
-                    existingItem.Amount += savedItem.Amount;
+                    existingItem.Quantity += savedItem.Quantity;   // amount is re-priced below
                 }
                 else
                 {
@@ -166,6 +169,7 @@ public partial class SalesInvoice
             }
         }
 
+        RepriceItems();
         showAddItemsModal = false;
         await PersistDraftAsync();
     }
@@ -173,6 +177,7 @@ public partial class SalesInvoice
     async Task OnEditedItemsSaved(List<InputItemModel> editedItems)
     {
         items = editedItems;
+        RepriceItems();
         showEditItemsModal = false;
         await PersistDraftAsync();
     }
@@ -315,9 +320,12 @@ public partial class SalesInvoice
         invoice = draft.Invoice;
         items = draft.Items ?? new List<InputItemModel>();
         AssignLineItemIds(items);
+        await LoadUomPricesAsync();
+        RepriceItems();
         isSaved = draft.IsSaved;
         currentInvoiceId = draft.CurrentInvoiceId;
         StateHasChanged();
+
 
         if (addItemsModalRef is not null)
         {
@@ -505,6 +513,13 @@ public partial class SalesInvoice
         if (!items.Any())
         {
             errorMessage = "Add at least one item before committing the invoice.";
+            showErrorModal = true;
+            return;
+        }
+        var unpriced = items.FirstOrDefault(i => i.PriceIssue is not null);
+        if (unpriced is not null)
+        {
+            errorMessage = $"Line {unpriced.LineItemId} ({unpriced.ItemCode}) has no price: {unpriced.PriceIssue}";
             showErrorModal = true;
             return;
         }
@@ -800,6 +815,9 @@ public partial class SalesInvoice
                 }
             }
 
+            await LoadUomPricesAsync();
+            RepriceItems();
+
             isInitialDataReady = true;
             await TryRestoreDraftOnceAsync();
 
@@ -829,6 +847,8 @@ public partial class SalesInvoice
         var pageData = await salesInvoiceService.GetPageDataAsync(s.SubDistributorId);
         subdItems = pageData.SubdItems;
         availableUoms = pageData.ItemUoms;
+        await LoadUomPricesAsync();
+        RepriceItems();
         await PersistDraftAsync();
     }
 
@@ -864,12 +884,17 @@ public partial class SalesInvoice
                 .OrderBy(name => name)
                 .ToList();
 
-            // Price keyed by SkuCode + UOM — needs the item code, not just SubdItemId, so join against subdItems.
+            var todayPrices = await salesInvoiceService.GetUomPricesAsync(
+                invoice.SubdistributorId, DateOnly.FromDateTime(DateTime.Today), subdItems.Select(i => i.SubdItemId));
+
             var priceRows = availableUoms
+                .Where(u => u.IsActive)
                 .Join(subdItems,
                     uom => uom.SubdItemId,
                     item => item.SubdItemId,
-                    (uom, item) => (SkuCode: item.SubdItemCode ?? string.Empty, Uom: uom.UomName, Price: uom.Price ?? 0m))
+                    (uom, item) => (SkuCode: item.SubdItemCode ?? string.Empty,
+                                    Uom: uom.UomName,
+                                    Price: todayPrices.TryGetValue(uom.ItemsUomId, out var p) && p.IsPriced ? p.UnitPrice : 0m))
                 .Where(p => !string.IsNullOrWhiteSpace(p.SkuCode) && !string.IsNullOrWhiteSpace(p.Uom))
                 .ToList();
 
@@ -910,5 +935,38 @@ public partial class SalesInvoice
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             Convert.ToBase64String(bytes));
     }
-}
+    // ── Pricing (company price on the invoice date x UOM conversion) ────────
+    private Dictionary<int, UomPriceInfo> uomPrices = new();
 
+    private bool IsCreditInvoice =>
+        string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase);
+
+    private async Task LoadUomPricesAsync()
+    {
+        if (invoice.SubdistributorId <= 0 || invoice.InvoiceDate == default || !subdItems.Any())
+        {
+            uomPrices = new();
+            return;
+        }
+
+        uomPrices = await salesInvoiceService.GetUomPricesAsync(
+            invoice.SubdistributorId, invoice.InvoiceDate, subdItems.Select(i => i.SubdItemId));
+    }
+
+    private void RepriceItems()
+    {
+        foreach (var item in items)
+        {
+            if (uomPrices.TryGetValue(item.ItemsUomId, out var p) && p.SubdItemId == item.SubdItemId && p.IsPriced)
+            {
+                item.Amount = p.AmountFor(item.Quantity, IsCreditInvoice);
+                item.PriceIssue = null;
+            }
+            else
+            {
+                item.Amount = 0m;
+                item.PriceIssue = p?.Issue ?? "This unit of measure is not available for this item.";
+            }
+        }
+    }
+}

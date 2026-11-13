@@ -51,7 +51,7 @@
                                             @onkeydown="HandleUomKeyDown" @onblur="HandleUomBlur">
                                         @foreach (var uom in GetSellableUoms(SelectedItem))
                                         {
-                                            <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                            <option value="@uom.ItemsUomId">@GetUomOptionLabel(uom)</option>
                                         }
                                     </select>
                                     @if (!string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.EditItem.Uom.Key)))

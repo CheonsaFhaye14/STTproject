@@ -1,21 +1,32 @@
 using Microsoft.EntityFrameworkCore;
 using STTproject.Models;
 using STTproject.Data;
+using STTproject.Features.Pricing;
+
 namespace STTproject.Services;
 
 public interface ISalesInvoiceService
 {
     Task<SalesInvoicePageData> GetPageDataAsync(int subDistributorId, CancellationToken cancellationToken = default);
+
     Task<bool> InvoiceNumberExistsAsync(string invoiceNumber, string orderType, int subDistributorId,
-    int customerId, string? salesMan, int currentInvoiceId = 0, CancellationToken cancellationToken = default);    Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
+        int customerId, string? salesMan, int currentInvoiceId = 0, CancellationToken cancellationToken = default);
+
+    Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default);
+
     Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
         List<InputItemModel> items,
         int currentInvoiceId,
         int currentUserId,
         CancellationToken cancellationToken = default);
+
     Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default);
+
     Task<string> GetCustomerAddressAsync(int customerId, CancellationToken cancellationToken = default);
+
+    Task<Dictionary<int, UomPriceInfo>> GetUomPricesAsync(
+        int subDistributorId, DateOnly invoiceDate, IEnumerable<int> subdItemIds, CancellationToken ct = default);
 }
 
 public sealed class SalesInvoiceService : ISalesInvoiceService
@@ -45,11 +56,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             .Where(i => i.SubDistributorId == subDistributorId && i.IsActive)
             .OrderBy(i => i.SubdItemCode)
             .ToListAsync(cancellationToken);
-
-        var subdItemIds = subdItems
-            .Select(s => s.SubdItemId)
-            .Distinct()
-            .ToList();
 
         var itemUoms = await context.ItemsUoms
             .AsNoTracking()
@@ -83,11 +89,80 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             x.SalesMan == sm && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
     }
 
+    // ─── Pricing ─────────────────────────────────────────────────────────────
+    // Company price on the invoice date × (UOM conversion ÷ stock conversion),
+    // the same rule as the admin pages and sp_RecalculateInvoiceAmounts.
+
+    public async Task<Dictionary<int, UomPriceInfo>> GetUomPricesAsync(
+        int subDistributorId, DateOnly invoiceDate, IEnumerable<int> subdItemIds, CancellationToken ct = default)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        return await InvoicePricing.LoadUomPricesAsync(context, subDistributorId, invoiceDate, subdItemIds, ct);
+    }
+
     public async Task<decimal> ResolveUomPriceAsync(int itemsUomId, DateOnly invoiceDate, CancellationToken cancellationToken = default)
     {
-        await using var context = _contextFactory.CreateDbContext();
-        return await ResolveUomPriceAsync(context, itemsUomId, invoiceDate, cancellationToken);
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var uom = await context.ItemsUoms.AsNoTracking()
+            .Where(u => u.ItemsUomId == itemsUomId)
+            .Select(u => new { u.SubdItemId, u.SubdItem.SubDistributorId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (uom is null) return 0m;
+
+        var prices = await InvoicePricing.LoadUomPricesAsync(
+            context, uom.SubDistributorId, invoiceDate, new[] { uom.SubdItemId }, cancellationToken);
+
+        return prices.TryGetValue(itemsUomId, out var p) && p.IsPriced ? p.UnitPrice : 0m;
     }
+
+    /// <summary>
+    /// Prices every line server-side (the browser's amounts are never trusted).
+    /// Returns the price list used, or an error for the first line that cannot be priced.
+    /// </summary>
+    private static async Task<(Dictionary<int, UomPriceInfo>? Prices, string? Error)> PriceItemsAsync(
+        EntrielContext context, InputInvoiceModel invoice, List<InputItemModel> items, CancellationToken ct)
+    {
+        var isCredit = string.Equals(invoice.OrderType?.Trim(), "Credit", StringComparison.OrdinalIgnoreCase);
+
+        var prices = await InvoicePricing.LoadUomPricesAsync(
+            context, invoice.SubdistributorId, invoice.InvoiceDate, items.Select(i => i.SubdItemId).Distinct(), ct);
+
+        foreach (var item in items)
+        {
+            if (!prices.TryGetValue(item.ItemsUomId, out var p) || p.SubdItemId != item.SubdItemId)
+                return (null, $"{item.ItemCode}: the unit of measure does not belong to this item.");
+
+            if (!p.IsPriced)
+                return (null, $"{item.ItemCode} ({p.UomName}): {p.Issue}.");
+
+            item.Amount = p.AmountFor(item.Quantity, isCredit);
+            item.PriceIssue = null;
+        }
+
+        return (prices, null);
+    }
+
+    private static SalesInvoiceItem ToEntity(
+        InputItemModel i, int salesInvoiceId, UomPriceInfo p, int userId, DateTime now) => new()
+        {
+            SalesInvoiceId = salesInvoiceId,
+            SubdItemId = i.SubdItemId,
+            ItemsUomId = i.ItemsUomId,
+            Quantity = i.Quantity,
+            Amount = i.Amount,
+            BaseQuantity = p.BaseQuantityFor(i.Quantity),
+            StockPriceUsed = p.StockPrice,
+            CompanyItemPriceHistoryId = p.CompanyItemPriceHistoryId,
+            PriceSource = "Manual",
+            PricedAt = now,
+            CreatedBy = userId,
+            UpdatedBy = userId,
+            CreatedDate = now,
+            UpdatedDate = now
+        };
+
+    // ─── Save ────────────────────────────────────────────────────────────────
 
     public async Task<SaveInvoiceResult> SaveInvoiceAsync(
         InputInvoiceModel invoice,
@@ -116,9 +191,10 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 InvoiceId = currentInvoiceId,
                 ErrorMessage = "Invoice data is missing."
             };
-            
         }
+
         invoice.SalesManName = NormalizeSalesMan(invoice.SalesManName) ?? string.Empty;
+
         if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
         {
             return new SaveInvoiceResult
@@ -127,7 +203,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 InvoiceId = currentInvoiceId,
                 ErrorMessage = "Invoice number is required."
             };
-            
         }
 
         if (invoice.InvoiceDate == default)
@@ -139,7 +214,6 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 ErrorMessage = "Invoice date is required."
             };
         }
-
 
         if (string.IsNullOrWhiteSpace(invoice.OrderType))
         {
@@ -176,9 +250,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             };
         }
 
-        // Allow negative amounts when the invoice OrderType is Credit (returns).
-        var invalidItem = items.FirstOrDefault(i => i.SubdItemId <= 0 || i.ItemsUomId <= 0 || i.Quantity <= 0 ||
-            (!string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase) && i.Amount < 0));
+        // Amounts are recalculated below, so only the structure is checked here.
+        var invalidItem = items.FirstOrDefault(i => i.SubdItemId <= 0 || i.ItemsUomId <= 0 || i.Quantity <= 0);
         if (invalidItem is not null)
         {
             return new SaveInvoiceResult
@@ -191,13 +264,22 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
 
         try
         {
-            await NormalizeItemAmountsAsync(context, invoice, items, cancellationToken);
+            var (prices, priceError) = await PriceItemsAsync(context, invoice, items, cancellationToken);
+            if (priceError is not null)
+            {
+                return new SaveInvoiceResult
+                {
+                    IsSaved = false,
+                    InvoiceId = currentInvoiceId,
+                    ErrorMessage = priceError
+                };
+            }
 
             var duplicateExists = await context.SalesInvoices.AnyAsync(x =>
                 x.SalesInvoiceCode == invoice.InvoiceNumber && x.OrderType == invoice.OrderType &&
                 x.SubDistributorId == invoice.SubdistributorId && x.CustomerId == invoice.CustomerId &&
                 x.SalesMan == invoice.SalesManName && x.SalesInvoiceId != currentInvoiceId, cancellationToken);
-                
+
             if (duplicateExists)
             {
                 return new SaveInvoiceResult
@@ -220,6 +302,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 };
             }
 
+            var now = DateTime.Now;
+
             if (currentInvoiceId == 0)
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -236,25 +320,15 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                         SalesMan = NormalizeSalesMan(invoice.SalesManName),
                         CreatedBy = currentUserId,
                         UpdatedBy = currentUserId,
-                        CreatedDate = DateTime.Now,
-                        UpdatedDate = DateTime.Now,
+                        CreatedDate = now,
+                        UpdatedDate = now,
                     };
 
                     context.SalesInvoices.Add(salesInvoice);
                     await context.SaveChangesAsync(cancellationToken);
 
-                    context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
-                    {
-                        SalesInvoiceId = salesInvoice.SalesInvoiceId,
-                        SubdItemId = i.SubdItemId,
-                        ItemsUomId = i.ItemsUomId,
-                        Quantity = i.Quantity,
-                        Amount = i.Amount,
-                        CreatedBy = currentUserId,
-                        UpdatedBy = currentUserId,
-                        CreatedDate = DateTime.Now,
-                        UpdatedDate = DateTime.Now
-                    }));
+                    context.SalesInvoiceItems.AddRange(items.Select(i =>
+                        ToEntity(i, salesInvoice.SalesInvoiceId, prices![i.ItemsUomId], currentUserId, now)));
 
                     await context.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
@@ -303,7 +377,7 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                 existing.SubDistributorId = invoice.SubdistributorId;
                 existing.SalesMan = NormalizeSalesMan(invoice.SalesManName);
                 existing.UpdatedBy = currentUserId;
-                existing.UpdatedDate = DateTime.Now;
+                existing.UpdatedDate = now;
 
                 var existingItems = await context.SalesInvoiceItems
                     .Where(x => x.SalesInvoiceId == currentInvoiceId)
@@ -314,18 +388,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
                     context.SalesInvoiceItems.RemoveRange(existingItems);
                 }
 
-                context.SalesInvoiceItems.AddRange(items.Select(i => new SalesInvoiceItem
-                {
-                    SalesInvoiceId = currentInvoiceId,
-                    SubdItemId = i.SubdItemId,
-                    ItemsUomId = i.ItemsUomId,
-                    Quantity = i.Quantity,
-                    Amount = i.Amount,
-                    CreatedBy = currentUserId,
-                    UpdatedBy = currentUserId,
-                    CreatedDate = DateTime.Now,
-                    UpdatedDate = DateTime.Now
-                }));
+                context.SalesInvoiceItems.AddRange(items.Select(i =>
+                    ToEntity(i, currentInvoiceId, prices![i.ItemsUomId], currentUserId, now)));
 
                 await context.SaveChangesAsync(cancellationToken);
                 await updateTransaction.CommitAsync(cancellationToken);
@@ -362,87 +426,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
         }
     }
 
-    private async Task NormalizeItemAmountsAsync(
-        EntrielContext context,
-        InputInvoiceModel invoice,
-        List<InputItemModel> items,
-        CancellationToken cancellationToken)
-    {
-        var priceCache = new Dictionary<int, decimal>();
+    // ─── Read ────────────────────────────────────────────────────────────────
 
-        foreach (var item in items)
-        {
-            if (item.ItemsUomId <= 0 || item.Quantity <= 0)
-            {
-                continue;
-            }
-
-            if (!priceCache.TryGetValue(item.ItemsUomId, out var unitPrice))
-            {
-                unitPrice = await ResolveUomPriceAsync(context, item.ItemsUomId, invoice.InvoiceDate, cancellationToken);
-                priceCache[item.ItemsUomId] = unitPrice;
-            }
-
-            item.Amount = unitPrice * item.Quantity;
-
-            // If invoice is a Credit, store the amount as negative.
-            if (string.Equals(invoice.OrderType, "Credit", StringComparison.OrdinalIgnoreCase))
-            {
-                item.Amount = -Math.Abs(item.Amount);
-            }
-        }
-    }
-
-    private static async Task<decimal> ResolveUomPriceAsync(
-        EntrielContext context,
-        int itemsUomId,
-        DateOnly invoiceDate,
-        CancellationToken cancellationToken)
-    {
-        var currentPrice = await context.ItemsUoms
-            .AsNoTracking()
-            .Where(u => u.ItemsUomId == itemsUomId)
-            .Select(u => (decimal?)u.Price)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (!currentPrice.HasValue)
-        {
-            return 0m;
-        }
-
-        var invoiceCutoff = invoiceDate.ToDateTime(TimeOnly.MaxValue);
-
-        // Latest applied change on or before the invoice date — what was actually
-        // charged on that date, if a change had already taken effect by then.
-        var historicalPrice = await context.ItemsUomPriceHistories
-            .AsNoTracking()
-            .Where(h => h.ItemsUomId == itemsUomId
-                && h.AppliedDate != null
-                && h.AppliedDate <= invoiceCutoff)
-            .OrderByDescending(h => h.AppliedDate)
-            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
-            .Select(h => (decimal?)h.NewPrice)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (historicalPrice.HasValue)
-        {
-            return historicalPrice.Value;
-        }
-
-        // No applied change on or before the invoice date. If this UOM has any
-        // applied history at all, the invoice predates it — use the OldPrice of
-        // the earliest applied row (the price before any recorded change), not
-        // today's live price, which may have moved since.
-        var earliestKnownPrice = await context.ItemsUomPriceHistories
-            .AsNoTracking()
-            .Where(h => h.ItemsUomId == itemsUomId && h.AppliedDate != null)
-            .OrderBy(h => h.AppliedDate)
-            .ThenBy(h => h.ItemsUomPriceHistoryId)
-            .Select(h => (decimal?)h.OldPrice)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return earliestKnownPrice ?? currentPrice.Value;
-    }
     public async Task<(InputInvoiceModel? Invoice, List<InputItemModel> Items)?> GetInvoiceByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
     {
         await using var context = _contextFactory.CreateDbContext();
@@ -523,25 +508,10 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
     {
         var parts = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(customer.AddressLine))
-        {
-            parts.Add(customer.AddressLine);
-        }
-
-        if (!string.IsNullOrWhiteSpace(customer.City))
-        {
-            parts.Add(customer.City);
-        }
-
-        if (!string.IsNullOrWhiteSpace(customer.Province))
-        {
-            parts.Add(customer.Province);
-        }
-
-        if (customer.ZipCode.HasValue)
-        {
-            parts.Add(customer.ZipCode.Value.ToString());
-        }
+        if (!string.IsNullOrWhiteSpace(customer.AddressLine)) parts.Add(customer.AddressLine);
+        if (!string.IsNullOrWhiteSpace(customer.City)) parts.Add(customer.City);
+        if (!string.IsNullOrWhiteSpace(customer.Province)) parts.Add(customer.Province);
+        if (customer.ZipCode.HasValue) parts.Add(customer.ZipCode.Value.ToString());
 
         return string.Join(", ", parts);
     }

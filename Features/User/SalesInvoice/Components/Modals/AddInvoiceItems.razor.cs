@@ -6,6 +6,7 @@ using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;
 using STTproject.Shared.Helper;
+using STTproject.Features.Pricing;
 
 namespace STTproject.Features.User.SalesInvoice.Components.Modals;
 
@@ -47,7 +48,19 @@ public partial class AddInvoiceItems
     [Parameter] public DateOnly InvoiceDate { get; set; }
     [Parameter] public EventCallback OnDraftChanged { get; set; }
     [Parameter] public bool IsCredit { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UomPriceInfo> UomPrices { get; set; } = new Dictionary<int, UomPriceInfo>();
 
+    private UomPriceInfo? CurrentPrice =>
+        CurrentUom is not null && UomPrices.TryGetValue(CurrentUom.ItemsUomId, out var p) ? p : null;
+
+    private void RefreshDraftAmount()
+    {
+        var p = CurrentPrice;
+        CurrentUnitPrice = p is { IsPriced: true } ? p.UnitPrice : null;
+        NewItem.Amount = p is { IsPriced: true } && NewItem.Quantity > 0
+            ? p.AmountFor(NewItem.Quantity, IsCredit)
+            : 0m;
+    }
     private string SelectedPrincipal { get; set; } = string.Empty;
     private string SelectedPPG { get; set; } = string.Empty;
 
@@ -102,7 +115,8 @@ public partial class AddInvoiceItems
             SelectedPPG = string.Empty;
         }
 
-        await UpdateCurrentUnitPriceAsync();
+        RefreshDraftAmount();
+        await Task.CompletedTask;
     }
 
     private Task OnPrincipalChanged(ChangeEventArgs e)
@@ -199,14 +213,17 @@ public partial class AddInvoiceItems
         CurrentSubdItem = AvailableItems.FirstOrDefault(i =>
             i.SubdItemId == NewItem.SubdItemId && i.SubDistributorId == SelectedSubdistributorId);
         CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == NewItem.ItemsUomId);
-        if (CurrentUom != null)
+        RefreshDraftAmount();
+
+        foreach (var queued in modalItems)
         {
-            CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
-            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
+            if (UomPrices.TryGetValue(queued.ItemsUomId, out var qp) && qp.IsPriced)
+                queued.Amount = qp.AmountFor(queued.Quantity, IsCredit);
         }
         ShowValidationErrors = false;
         skipNextSkuBlurValidation = false;
         ValidationErrors.Clear();
+        await Task.CompletedTask;
     }
 
     private void OnSkuChanged(string sku)
@@ -292,29 +309,29 @@ SelectedSubdistributorId);
         return Task.CompletedTask;
     }
 
-    private async Task OnUomChanged(ChangeEventArgs e)
+    private Task OnUomChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int uomId))
         {
             NewItem.ItemsUomId = uomId;
             CurrentUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
-
-            if (CurrentSubdItem != null && CurrentUom != null)
-            {
-                CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
-                NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
-                NewItem.UomName = CurrentUom.UomName;
-            }
-            else
-            {
-                CurrentUnitPrice = null;
-            }
+            NewItem.UomName = CurrentUom?.UomName ?? string.Empty;
+            RefreshDraftAmount();
         }
 
         RevalidateIfNeeded();
-        _ = OnDraftChanged.InvokeAsync();
+        return OnDraftChanged.InvokeAsync();
     }
 
+    private string GetNormalPriceDisplay()
+    {
+        if (CurrentUom is null) return string.Empty;
+
+        var p = CurrentPrice;
+        return p is { IsPriced: true }
+            ? FormatHelper.FormatPrice(p.UnitPrice)
+            : $"No price: {p?.Issue ?? "not available"}";
+    }
     private void OnQuantityInput(ChangeEventArgs e)
     {
         if (!int.TryParse(e.Value?.ToString(), out var quantity))
@@ -326,10 +343,7 @@ SelectedSubdistributorId);
         }
 
         NewItem.Quantity = quantity;
-        if (CurrentUom != null && CurrentUnitPrice.HasValue)
-        {
-            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
-        }
+        RefreshDraftAmount();
         RevalidateIfNeeded();
         _ = OnDraftChanged.InvokeAsync();
     }
@@ -345,10 +359,13 @@ SelectedSubdistributorId);
             return;
         }
 
-        var selectedUom = CurrentUom!;
-        CurrentUnitPrice ??= await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
-        var lineTotalPrice = NewItem.Quantity * CurrentUnitPrice.Value;
-        var signedLineAmount = IsCredit ? -Math.Abs(lineTotalPrice) : lineTotalPrice;
+        var price = CurrentPrice;
+        if (price is null || !price.IsPriced)
+        {
+            ValidationErrors[SalesInvoiceValidation.AddItem.Uom.Key] =
+                $"No price for this unit of measure: {price?.Issue ?? "not available"}.";
+            return;
+        }
 
         var resolvedItemName = CurrentSubdItem?.ItemName ?? NewItem.ItemName;
 
@@ -361,7 +378,7 @@ SelectedSubdistributorId);
         if (existingItem != null)
         {
             existingItem.Quantity += NewItem.Quantity;
-            existingItem.Amount += signedLineAmount;
+            existingItem.Amount = price.AmountFor(existingItem.Quantity, IsCredit);   // priced once, not summed
         }
         else
         {
@@ -371,8 +388,9 @@ SelectedSubdistributorId);
                 ItemName = resolvedItemName,
                 SubdItemId = NewItem.SubdItemId,
                 ItemsUomId = NewItem.ItemsUomId,
+                UomName = CurrentUom?.UomName ?? string.Empty,
                 Quantity = NewItem.Quantity,
-                Amount = signedLineAmount // Amount based on rules
+                Amount = price.AmountFor(NewItem.Quantity, IsCredit)
             });
         }
 
@@ -485,7 +503,8 @@ SelectedSubdistributorId);
             UomName = source.UomName,
             Quantity = source.Quantity,
             Amount = source.Amount,
-            LineItemId = source.LineItemId
+            LineItemId = source.LineItemId,
+            PriceIssue = source.PriceIssue
         };
     }
 
@@ -644,29 +663,6 @@ SelectedSubdistributorId);
         return Task.CompletedTask;
     }
 
-    private string GetNormalPriceDisplay()
-    {
-        return CurrentUom is null
-            ? string.Empty
-            : FormatHelper.FormatPrice(CurrentUnitPrice ?? CurrentUom.Price ?? 0m);
-    }
-    
-    private async Task UpdateCurrentUnitPriceAsync()
-    {
-        if (CurrentUom is null)
-        {
-            CurrentUnitPrice = null;
-            return;
-        }
-
-        CurrentUnitPrice = await salesInvoiceService.ResolveUomPriceAsync(CurrentUom.ItemsUomId, InvoiceDate);
-
-        if (NewItem.ItemsUomId == CurrentUom.ItemsUomId && NewItem.Quantity > 0)
-        {
-            NewItem.Amount = CurrentUnitPrice.Value * NewItem.Quantity;
-        }
-    }
-
     private void ValidateDraft()
     {
         ValidationErrors = SalesInvoiceValidation.ValidateAddItemDraft(NewItem, CurrentSubdItem, CurrentUom);
@@ -695,4 +691,3 @@ SelectedSubdistributorId);
     }
 
 }
-

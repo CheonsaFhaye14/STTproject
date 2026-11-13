@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using STTproject.Features.Pricing;
 using STTproject.Features.User.SalesInvoice.Validators;
 using STTproject.Models;
 using STTproject.Data;
+
 namespace STTproject.Features.User.SalesInvoice.Components.Modals;
 
 public partial class EditInvoiceItems
@@ -17,6 +19,8 @@ public partial class EditInvoiceItems
     [Parameter] public List<SubdItem> AvailableItems { get; set; } = new();
     [Parameter] public List<ItemsUom> AvailableUoms { get; set; } = new();
     [Parameter] public DateOnly InvoiceDate { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UomPriceInfo> UomPrices { get; set; } = new Dictionary<int, UomPriceInfo>();
+    [Parameter] public bool IsCredit { get; set; }
 
     private ElementReference itemNameSelectRef;
     private ElementReference uomSelectRef;
@@ -40,7 +44,7 @@ public partial class EditInvoiceItems
             ? editableItems[selectedItemIndex]
             : null;
 
-    protected override async Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
         if (ShowModal && !wasShown)
         {
@@ -64,7 +68,7 @@ public partial class EditInvoiceItems
 
         if (ShowModal && editableItems.Any())
         {
-            await RecalculateAmountsAsync();
+            RecalculateAmounts();
         }
     }
 
@@ -82,18 +86,56 @@ public partial class EditInvoiceItems
         }
     }
 
+    // ── Pricing ──────────────────────────────────────────────────────────────
+
     private IEnumerable<ItemsUom> GetSellableUoms(InputItemModel item)
     {
-        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == item.ItemsUomId);
-        if (selectedUom is null)
+        // Active UOMs of this item, plus the line's current one so it still displays if it was deactivated
+        return AvailableUoms
+            .Where(u => u.SubdItemId == item.SubdItemId && (u.IsActive || u.ItemsUomId == item.ItemsUomId))
+            .OrderBy(u => u.ConversionToBase);
+    }
+
+    private string GetUomOptionLabel(ItemsUom uom)
+    {
+        if (!uom.IsActive) return $"{uom.UomName} (inactive)";
+        var priced = UomPrices.TryGetValue(uom.ItemsUomId, out var p) && p.IsPriced;
+        return priced ? uom.UomName : $"{uom.UomName} (no price)";
+    }
+
+    private void RepriceLine(InputItemModel item)
+    {
+        if (item.Quantity > 0
+            && UomPrices.TryGetValue(item.ItemsUomId, out var p)
+            && p.SubdItemId == item.SubdItemId
+            && p.IsPriced)
         {
-            return Enumerable.Empty<ItemsUom>();
+            item.Amount = p.AmountFor(item.Quantity, IsCredit);
+            item.PriceIssue = null;
+            return;
         }
 
-        return AvailableUoms
-            .Where(u => u.SubdItemId == selectedUom.SubdItemId)
-            .OrderBy(u => u.UomName);
+        item.Amount = 0m;
+
+        if (item.Quantity <= 0)
+        {
+            item.PriceIssue = null;
+            return;
+        }
+
+        UomPrices.TryGetValue(item.ItemsUomId, out var info);
+        item.PriceIssue = info?.Issue ?? "This unit of measure is not available for this item.";
     }
+
+    private void RecalculateAmounts()
+    {
+        foreach (var item in editableItems)
+        {
+            RepriceLine(item);
+        }
+    }
+
+    // ── Field handlers ───────────────────────────────────────────────────────
 
     private string GetItemNameOptionLabel(InputItemModel item)
     {
@@ -111,57 +153,35 @@ public partial class EditInvoiceItems
         }
     }
 
-    private async Task OnUomChanged(ChangeEventArgs e)
+    private Task OnUomChanged(ChangeEventArgs e)
     {
         var item = SelectedItem;
-        if (item is null)
+        if (item is null || !int.TryParse(e.Value?.ToString(), out var uomId))
         {
-            return;
-        }
-
-        if (!int.TryParse(e.Value?.ToString(), out var uomId))
-        {
-            return;
+            return Task.CompletedTask;
         }
 
         item.ItemsUomId = uomId;
-        var selectedUom = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId);
-
-        if (selectedUom != null)
-        {
-            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(selectedUom.ItemsUomId, InvoiceDate);
-            item.Amount = unitPrice * item.Quantity;
-            item.UomName = selectedUom.UomName;
-        }
+        item.UomName = AvailableUoms.FirstOrDefault(u => u.ItemsUomId == uomId)?.UomName ?? string.Empty;
+        RepriceLine(item);
 
         uomEnterPrimed = false;
         ValidateDraft();
+        return Task.CompletedTask;
     }
 
-    private async Task OnQuantityInput(ChangeEventArgs e)
+    private Task OnQuantityInput(ChangeEventArgs e)
     {
         var item = SelectedItem;
         if (item is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        if (!int.TryParse(e.Value?.ToString(), out var quantity))
-        {
-            item.Quantity = 0;
-            ValidateDraft();
-            return;
-        }
-
-        item.Quantity = quantity;
-
-        if (quantity > 0)
-        {
-            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(item.ItemsUomId, InvoiceDate);
-            item.Amount = unitPrice * item.Quantity;
-        }
-
+        item.Quantity = int.TryParse(e.Value?.ToString(), out var quantity) ? quantity : 0;
+        RepriceLine(item);
         ValidateDraft();
+        return Task.CompletedTask;
     }
 
     private void RemoveSelectedItem()
@@ -187,6 +207,8 @@ public partial class EditInvoiceItems
             selectedItemIndex = editableItems.Count - 1;
         }
     }
+
+    // ── Keyboard flow ────────────────────────────────────────────────────────
 
     private async Task HandleItemNameKeyDown(KeyboardEventArgs e)
     {
@@ -328,7 +350,6 @@ public partial class EditInvoiceItems
         if (e.Key == "Enter")
         {
             await SaveModal();
-            return;
         }
     }
 
@@ -340,9 +361,10 @@ public partial class EditInvoiceItems
         }
     }
 
+    // ── Save / close ─────────────────────────────────────────────────────────
+
     private async Task SaveModal()
     {
-        // Only validate if there are items to save
         if (editableItems.Any())
         {
             ValidateDraft();
@@ -351,11 +373,18 @@ public partial class EditInvoiceItems
             {
                 return;
             }
+
+            var unpriced = editableItems.FirstOrDefault(i => i.PriceIssue is not null);
+            if (unpriced is not null)
+            {
+                selectedItemIndex = editableItems.IndexOf(unpriced);
+                ValidationErrors[SalesInvoiceValidation.EditItem.Uom.Key] = $"No price: {unpriced.PriceIssue}";
+                return;
+            }
         }
 
         var mergedItems = MergeMatchingItems(editableItems);
 
-        // Trigger confirmation before saving
         if (OnBeforeSave.HasDelegate)
         {
             await OnBeforeSave.InvokeAsync(mergedItems);
@@ -407,15 +436,19 @@ public partial class EditInvoiceItems
             SubdItemId = source.SubdItemId,
             ItemName = source.ItemName,
             ItemsUomId = source.ItemsUomId,
+            UomName = source.UomName,
             Quantity = source.Quantity,
             Amount = source.Amount,
-            LineItemId = source.LineItemId
+            LineItemId = source.LineItemId,
+            PriceIssue = source.PriceIssue
         };
     }
 
+    // Amounts are summed here, but the page re-prices every line after saving,
+    // so a merged line is always priced once from its total quantity.
     public static List<InputItemModel> MergeMatchingItems(IEnumerable<InputItemModel> source)
     {
-        var merged = source
+        return source
             .Where(item => item.Quantity > 0)
             .GroupBy(item => new
             {
@@ -433,37 +466,33 @@ public partial class EditInvoiceItems
                     SubdItemId = first.SubdItemId,
                     ItemName = first.ItemName,
                     ItemsUomId = first.ItemsUomId,
+                    UomName = first.UomName,
                     Quantity = group.Sum(x => x.Quantity),
                     Amount = group.Sum(x => x.Amount),
                     LineItemId = first.LineItemId
                 };
             })
             .ToList();
-
-        return merged;
     }
 
     public int GetDeletedItemCount()
     {
-        return Items.Where(item =>
+        return Items.Count(item =>
             !editableItems.Any(e =>
                 e.SubdItemId == item.SubdItemId &&
-                e.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
-            )
-        ).Count();
+                e.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)));
     }
 
     public int GetModifiedItemCount()
     {
-        return editableItems.Where(item =>
+        return editableItems.Count(item =>
         {
             var originalItem = Items.FirstOrDefault(i =>
                 i.SubdItemId == item.SubdItemId &&
-                i.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase)
-            );
+                i.ItemCode.Equals(item.ItemCode, StringComparison.OrdinalIgnoreCase));
             return originalItem != null &&
                    (item.Quantity != originalItem.Quantity || item.ItemsUomId != originalItem.ItemsUomId);
-        }).Count();
+        });
     }
 
     private void ValidateDraft()
@@ -471,24 +500,8 @@ public partial class EditInvoiceItems
         ValidationErrors = SalesInvoiceValidation.ValidateEditItemDraft(SelectedItem, SelectedItem != null);
     }
 
-    private async Task RecalculateAmountsAsync()
-    {
-        foreach (var item in editableItems)
-        {
-            if (item.ItemsUomId <= 0 || item.Quantity <= 0)
-            {
-                continue;
-            }
-
-            var unitPrice = await salesInvoiceService.ResolveUomPriceAsync(item.ItemsUomId, InvoiceDate);
-            item.Amount = unitPrice * item.Quantity;
-        }
-    }
-
     private string GetFieldError(string fieldKey)
     {
         return ValidationErrors.TryGetValue(fieldKey, out var message) ? message : string.Empty;
     }
-
 }
-

@@ -36,8 +36,8 @@
 
                     <div class="form-group">
                         <label>PPG</label>
-                        <select @ref="PPGSelect" @onchange="OnPPGChanged" value="@SelectedPPG"
-                              @onkeydown="HandlePPGKeyDown" @onblur="HandlePPGBlur">
+                        <select @ref="PPGSelect" @onchange="OnPPGChanged" value="@SelectedPPG" @onkeydown="HandlePPGKeyDown"
+                                @onblur="HandlePPGBlur">
                             <option value="">-- All PPG --</option>
                             @foreach (var cat in AvailablePPG)
                             {
@@ -76,14 +76,16 @@
                     <div class="form-group">
                         <label>@SalesInvoiceValidation.AddItem.Uom.Label<span class="required-asterisk"> *</span></label>
                         <select @ref="UomSelect" value="@NewItem.ItemsUomId" @onchange="OnUomChanged"
-                                disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown" @onblur="HandleDraftFieldBlur">
+                                disabled="@(CurrentSubdItem == null)" @onkeydown="HandleUomKeyDown"
+                                @onblur="HandleDraftFieldBlur">
                             <option value="0">-- Select --</option>
                             @if (CurrentSubdItem != null)
                             {
                                 @foreach (ItemsUom uom in AvailableUoms.Where(u => u.SubdItemId == CurrentSubdItem.SubdItemId &&
-                                                    u.IsActive))
+                        u.IsActive))
                                 {
-                                    <option value="@uom.ItemsUomId">@uom.UomName</option>
+                                    var priced = UomPrices.TryGetValue(uom.ItemsUomId, out var up) && up.IsPriced;
+                                    <option value="@uom.ItemsUomId">@(priced ? uom.UomName : $"{uom.UomName} (no price)")</option>
                                 }
                             }
                         </select>
@@ -95,82 +97,84 @@
                     </div>
 
                     <div class="form-group">
-                        <label>@SalesInvoiceValidation.AddItem.Quantity.Label<span class="required-asterisk"> *</span></label>
-                        <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
-                               disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
-                        )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
-                               @onblur="HandleDraftFieldBlur" />
-                        @if (ShowValidationErrors &&
-                                                                                                                                                                                                                                                                    !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                        <label>@SalesInvoiceValidation.AddItem.Quantity.Label<span class="required-asterisk">
+                            *</span></label>
+                            <input @ref="QuantityInput" type="number" min="1" value="@NewItem.Quantity"
+                                   disabled="@(CurrentSubdItem == null)" onbeforeinput="if (event.data && (event.data.includes('-') 
+                            )) event.preventDefault();" @oninput="OnQuantityInput" @onkeydown="HandleQuantityKeyDown"
+                                   @onblur="HandleDraftFieldBlur" />
+                            @if (ShowValidationErrors &&
+                                                                                                                                                                                                                                                                        !string.IsNullOrWhiteSpace(GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)))
+                            {
+                                <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Price</label>
+                        <input value="@GetNormalPriceDisplay()" disabled />
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn-primary" @onclick="AddItemToQueue"
+                                disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || !HeaderIsSaved)">Add</button>
+                        <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel (Esc)</button>
+                        <button type="button" class="btn-primary" @onclick="SaveModal">Save items (Ctrl+S)</button>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(SaveErrorMessage))
+                    {
+                        <div class="error-text" style="margin-top: 8px;">@SaveErrorMessage</div>
+                    }
+
+                    <div class="modal-help"><i class="fa-regular fa-lightbulb"></i>Press Enter after typing quantity to add the
+                        item quickly.</div>
+
+                        @if (modalItems.Any())
                         {
-                            <span class="error-text">@GetFieldError(SalesInvoiceValidation.AddItem.Quantity.Key)</span>
+                            <div class="modal-queue">
+                                <div class="queue-heading">
+                                    <h5>Queued items<span class="queue-count">@modalItems.Count</span></h5>
+                                    <span class="queue-subtotal">@FormatHelper.FormatPrice(@modalItems.Sum(i => i.Amount))</span>
+                                </div>
+                                <div class="queue-table-wrap">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>SKU</th>
+                                                <th>Name</th>
+                                                <th>UOM</th>
+                                                <th class="num">Qty</th>
+                                                <th class="num">Line Amount</th>
+                                                <th class="col-remove"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var queuedItem in modalItems)
+                                            {
+                                                <tr>
+                                                    <td class="mono">@queuedItem.ItemCode</td>
+                                                    <td>@queuedItem.ItemName</td>
+                                                    <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
+                                                    </td>
+                                                    <td class="num">@queuedItem.Quantity</td>
+                                                    <td class="num">@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
+                                                    <td class="col-remove">
+                                                        <button type="button" class="btn-icon-remove" title="Remove"
+                                                                @onclick="() => RemoveQueuedItem(queuedItem)">
+                                                            <i class="fa-solid fa-trash-can"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         }
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Price</label>
-                    <input value="@GetNormalPriceDisplay()" disabled />
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn-primary" @onclick="AddItemToQueue"
-                            disabled="@(CurrentSubdItem == null || NewItem.ItemsUomId == 0 || !HeaderIsSaved)">Add</button>
-                    <button type="button" class="btn-secondary" @onclick="CancelModal">Cancel (Esc)</button>
-                    <button type="button" class="btn-primary" @onclick="SaveModal">Save items (Ctrl+S)</button>
-                </div>
-
-                @if (!string.IsNullOrWhiteSpace(SaveErrorMessage))
-                {
-                    <div class="error-text" style="margin-top: 8px;">@SaveErrorMessage</div>
-                }
-
-                <div class="modal-help"><i class="fa-regular fa-lightbulb"></i>Press Enter after typing quantity to add the item quickly.</div>
-
-                @if (modalItems.Any())
-                {
-                    <div class="modal-queue">
-                        <div class="queue-heading">
-                            <h5>Queued items<span class="queue-count">@modalItems.Count</span></h5>
-                            <span class="queue-subtotal">@FormatHelper.FormatPrice(@modalItems.Sum(i => i.Amount))</span>
-                        </div>
-                        <div class="queue-table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Name</th>
-                                        <th>UOM</th>
-                                        <th class="num">Qty</th>
-                                        <th class="num">Line Amount</th>
-                                        <th class="col-remove"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var queuedItem in modalItems)
-                                    {
-                                        <tr>
-                                            <td class="mono">@queuedItem.ItemCode</td>
-                                            <td>@queuedItem.ItemName</td>
-                                            <td>@(AvailableUoms.FirstOrDefault(u => u.ItemsUomId == queuedItem.ItemsUomId)?.UomName)
-                                            </td>
-                                            <td class="num">@queuedItem.Quantity</td>
-                                            <td class="num">@FormatHelper.FormatPrice(@queuedItem.Amount)</td>
-                                            <td class="col-remove">
-                                                <button type="button" class="btn-icon-remove" title="Remove"
-                                                        @onclick="() => RemoveQueuedItem(queuedItem)">
-                                                    <i class="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                }
-                </div>
             </div>
-        </div>
-    }
+        }
 

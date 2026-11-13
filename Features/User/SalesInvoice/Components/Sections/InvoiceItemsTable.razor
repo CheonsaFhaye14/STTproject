@@ -24,7 +24,16 @@
                         <td>@item.ItemName</td>
                         <td>@GetUomName(item)</td>
                         <td>@item.Quantity</td>
-                        <td>@FormatHelper.FormatPrice(@item.Amount)</td>
+                        <td title="@item.PriceIssue">
+                            @if (string.IsNullOrEmpty(item.PriceIssue))
+                            {
+                                @FormatHelper.FormatPrice(item.Amount)
+                            }
+                            else
+                            {
+                                <span style="color:#c0392b;font-weight:600">No price</span>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
