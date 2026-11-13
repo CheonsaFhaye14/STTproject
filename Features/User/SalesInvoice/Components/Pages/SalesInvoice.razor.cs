@@ -153,6 +153,7 @@ public partial class SalesInvoice
                 var existingItem = items.FirstOrDefault(item =>
                     item.SubdItemId == savedItem.SubdItemId &&
                     item.ItemsUomId == savedItem.ItemsUomId &&
+                    item.IsFreeItem == savedItem.IsFreeItem &&
                     item.ItemCode.Equals(savedItem.ItemCode, StringComparison.OrdinalIgnoreCase) &&
                     item.ItemName.Equals(savedItem.ItemName, StringComparison.OrdinalIgnoreCase));
 
@@ -957,6 +958,13 @@ public partial class SalesInvoice
     {
         foreach (var item in items)
         {
+            if (item.IsFreeItem)
+            {
+                item.Amount = 0m;
+                item.PriceIssue = null;
+                continue;
+            }
+
             if (uomPrices.TryGetValue(item.ItemsUomId, out var p) && p.SubdItemId == item.SubdItemId && p.IsPriced)
             {
                 item.Amount = p.AmountFor(item.Quantity, IsCreditInvoice);

@@ -16,5 +16,9 @@ namespace STTproject.Models
         public List<SourceRowKey> SourceRows { get; set; } = new();
         public List<int>? LineItemIds { get; set; } = new();
         public string? PriceIssue { get; set; }
+        public bool IsFreeItem { get; set; }
+        public decimal? BilledAmount { get; set; }
+        public string? PriceSource { get; set; }
+
     }
 }

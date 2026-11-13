@@ -559,6 +559,9 @@ public sealed class ImportSalesInvoiceService
 						UomName = uom.UomName,
 						Quantity = absoluteQuantity,
 						Amount = unitPrice * absoluteQuantity,
+						BilledAmount = row.NetAmount.HasValue ? Math.Abs(row.NetAmount.Value) : null,   // sign follows the order type later
+						IsFreeItem = row.IsFreeItem,
+						PriceSource = "Import",
 						SourceRowNumber = row.RowNumber,
 						SourceSheetIndex = row.SheetIndex,
 						SourceRows = new List<SourceRowKey> { row.Source }
@@ -576,6 +579,34 @@ public sealed class ImportSalesInvoiceService
 					result.PreparedInvoices.Add(preparedInvoice);
 					continue;
 				}
+				// ── Company price on the invoice date (same rule as the save) ─────────
+				// Lines whose item or UOM still needs a decision are left to the save, which prices whatever was picked.
+				var invoicePrices = await _salesInvoiceService.GetUomPricesAsync(
+					subDistributorId, firstRow.InvoiceDate, items.Select(e => e.Item.SubdItemId).Distinct(), cancellationToken);
+				var reportedPriceIssues = new HashSet<int>();
+
+				foreach (var (line, isFree) in items)
+				{
+					if (isFree) { line.Amount = 0m; continue; }
+
+					if (invoicePrices.TryGetValue(line.ItemsUomId, out var linePrice) && linePrice.IsPriced)
+					{
+						line.Amount = linePrice.AmountFor(line.Quantity, false);   // credit sign is applied when lines are aggregated
+						continue;
+					}
+
+					line.Amount = 0m;
+					if (preparedInvoice.ItemChoices.Any(c => c.LineItemId == line.LineItemId)) continue;
+					if (!reportedPriceIssues.Add(line.ItemsUomId)) continue;
+
+					var source = line.SourceRows.FirstOrDefault();
+					var reason = linePrice?.Issue ?? "no company price on the invoice date";
+					var msg = $"SKU '{line.ItemCode}' ({line.UomName}) can't be priced: {reason}.";
+					preparedInvoice.Issues.Add(new ImportSalesInvoiceIssue(
+						source.RowNumber, invoiceNumber, msg, string.Empty, firstRowCustomerValue, "UOM", SheetIndex: source.SheetIndex));
+					result.AddError(source, invoiceNumber, msg, "UOM", value: line.ItemCode, context: line.UomName);
+				}
+
 				preparedInvoice.RawItems = items;
 				preparedInvoice.Items = BuildAggregatedItems(items, preparedInvoice.Invoice?.OrderType);
 
@@ -902,6 +933,10 @@ public sealed class ImportSalesInvoiceService
 				UomName = g.Key.UomName,
 				Quantity = g.Sum(e => e.Item.Quantity),
 				Amount = g.Sum(e => e.Item.Amount),
+				// The file's own amounts for these rows; null when the file has no Net Amount for any of them.
+				BilledAmount = g.Any(e => e.Item.BilledAmount.HasValue) ? g.Sum(e => e.Item.BilledAmount ?? 0m) : null,
+				IsFreeItem = g.Key.IsFreeItem,
+				PriceSource = "Import",
 				SourceRowNumber = g.Min(e => e.Item.SourceRowNumber),
 				SourceSheetIndex = SingleSheetOrNull(g.SelectMany(e => e.Item.SourceRows)),
 				SourceRows = g.SelectMany(e => e.Item.SourceRows).Distinct().OrderBy(k => k.SheetIndex).ThenBy(k => k.RowNumber).ToList(),
@@ -910,7 +945,11 @@ public sealed class ImportSalesInvoiceService
 			.ToList();
 
 		if (string.Equals(orderType, "Credit", StringComparison.OrdinalIgnoreCase))
-			foreach (var it in aggregated) it.Amount = -Math.Abs(it.Amount);
+			foreach (var it in aggregated)
+			{
+				it.Amount = -Math.Abs(it.Amount);
+				if (it.BilledAmount.HasValue) it.BilledAmount = -Math.Abs(it.BilledAmount.Value);
+			}
 
 		return aggregated;
 	}
@@ -1394,12 +1433,17 @@ public sealed class ImportSalesInvoiceService
 							SkuCandidateIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
 							UomFallbackWarning: uomFallbackWarning,
 							UomReviewCandidateIds: uomReviewCandidateIds,
-							CustomerCandidateIds: customerCandidateIds));
+							CustomerCandidateIds: customerCandidateIds,
+							NetAmount: netAmountValue));
 					}
 				}
 			}
 			else
 			{
+				// One Net Amount covers the whole Excel row, so with split quantity columns it goes on the first
+				// emitted line only; giving it to every line would count it twice.
+				var netAmountUsed = false;
+
 				void TryEmitSplitRow(string field, string uomLabel, string errorField)
 				{
 					var cell = logicalRow.Cell(field);
@@ -1481,7 +1525,9 @@ public sealed class ImportSalesInvoiceService
 						SkuCandidateIds: ambiguousCandidates?.Select(c => c.SubdItemId).ToList(),
 						UomFallbackWarning: null,
 						UomReviewCandidateIds: uomReviewCandidateIds,
-						CustomerCandidateIds: customerCandidateIds));
+						CustomerCandidateIds: customerCandidateIds,
+						NetAmount: netAmountUsed ? null : netAmountValue));
+					netAmountUsed = true;
 				}
 
 				TryEmitSplitRow("CaseQuantity", "case", "CaseQuantity");

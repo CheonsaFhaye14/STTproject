@@ -203,7 +203,9 @@ public sealed record ImportedInvoiceRow(int RowNumber, string InvoiceCode, DateO
     string SalesManName, string SkuCode, string ItemName, string UOM, int Quantity, string? Province, string? CityMunicipality, string? CustomerType, string? AddressLine,
     int ResolvedCustomerId, string ResolvedCustomerCode, string ResolvedCustomerName, int ResolvedSubdItemId, string ResolvedSubdItemCode, int ResolvedItemsUomId,
     bool IsFreeItem, string? AmbiguousItemWarning = null, string? UomFallbackWarning = null, List<int>? UomReviewCandidateIds = null,
-    List<int>? CustomerCandidateIds = null, List<int>? SkuCandidateIds = null, int LineId = 0, int SheetIndex = 0)
+    List<int>? CustomerCandidateIds = null, List<int>? SkuCandidateIds = null, int LineId = 0, int SheetIndex = 0,
+    // The subdistributor's own line amount (Net Amount column), when the template maps one. Stored as SalesInvoiceItem.BilledAmount.
+    decimal? NetAmount = null)
 {
     public SourceRowKey Source => new(SheetIndex, RowNumber);
 }

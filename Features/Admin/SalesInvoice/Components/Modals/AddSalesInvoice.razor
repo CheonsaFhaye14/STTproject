@@ -30,7 +30,7 @@
                         <AutoComplete @key="@($"cust-{SubDistributorId}")" Label="Customer"
                                       Placeholder="@(SubDistributorId == 0 ? "Choose a subdistributor first" : "Search by code or name...")"
                                       TItem="SalesInvoiceCustomerDropdownItem" Required="true" Items="Customers"
-                                      ValueSelector="x => x.CustomerId.ToString()"
+                                     ValueSelector="x => x.CustomerId.ToString()"
                                       TextSelector='x => $"{x.CustomerCode} – {x.CustomerName}"'
                                       SelectedValue="@(CustomerId.ToString())" SelectedItemChanged="OnCustomerSelected"
                                       Disabled="@(isViewMode || SubDistributorId == 0)" ShowError="@ShowValidationErrors"

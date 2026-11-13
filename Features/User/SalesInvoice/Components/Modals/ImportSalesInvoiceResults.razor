@@ -129,7 +129,7 @@
                                                 aria-hidden="true"></i></div>
                                                 <div class="sc-val">@totalRows</div>
                                                 <div class="sc-sub">@(UnreadSheets.Count == 0 ? $"{SheetRows.Count} sheets read" :
-                                                                                                                                                                                                                                                                                                    $"{SheetRows.Count} of {AllSheets.Count} sheets read")</div>
+                                                                                                                                                                                                                                                                                                                                                                                                            $"{SheetRows.Count} of {AllSheets.Count} sheets read")</div>
                                                 </button>
                                                 @if (showSheetBreakdown)
                                                 {
@@ -520,6 +520,14 @@
                                                                         <span class="ch">@prep.Invoice.InvoiceDate.ToString("MMM d, yyyy")</span>
                                                                         <span class="ch">@prep.Invoice.CustomerCode - @prep.Invoice.CustomerName</span>
                                                                         <span class="ch">@(prep.Items?.Count ?? 0) item@(prep.Items?.Count == 1 ? "" : "s")</span>
+                                                                        @if (InvoiceAmountDiff(prep) is { } amt)
+                                                                        {
+                                                                            <span class="ch ch-diff @DiffClass(amt.Diff)"
+                                                                                  title="@($"{DiffLabel(amt.Diff, amt.File)} · company ₱{amt.Company:N2} vs file ₱{amt.File:N2}")">
+                                                                                <i class="ti @DiffIcon(amt.Diff)" aria-hidden="true"></i>
+                                                                                ₱@Math.Abs(amt.Diff).ToString("N2")@(amt.Diff != 0m && amt.File != 0m ? $" ({Percent(amt.Diff, amt.File)})" : "")
+                                                                            </span>
+                                                                        }
                                                                         @if (SheetBadge(card) is { } sheetBadge)
                                                                         {
                                                                             <span class="ch ch-sheet" title="@sheetBadge.Tip">
@@ -681,6 +689,7 @@
                                                 
                                                             @if (prep.Items != null && prep.Items.Count > 0)
                                                             {
+                                                                var showBilled = prep.Items.Any(i => i.BilledAmount.HasValue);
                                                                 <div class="itbl-wrap">
                                                                     <table class="itbl">
                                                                         <colgroup>
@@ -689,6 +698,10 @@
                                                                             <col />
                                                                             <col style="width:52px" />
                                                                             <col style="width:44px" />
+                                                                            @if (showBilled)
+                                                                            {
+                                                                                <col style="width:96px" />
+                                                                            }
                                                                             <col style="width:96px" />
                                                                         </colgroup>
                                                                         <thead>
@@ -698,6 +711,10 @@
                                                                                 <th>Item name</th>
                                                                                 <th class="r">UOM</th>
                                                                                 <th class="r">Qty</th>
+                                                                                @if (showBilled)
+                                                                                {
+                                                                                    <th class="r" title="Net Amount from the file">File amount</th>
+                                                                                }
                                                                                 <th class="r">Amount</th>
                                                                             </tr>
                                                                         </thead>
@@ -721,6 +738,10 @@
                                                                                     </td>
                                                                                     <td class="r">@it.UomName</td>
                                                                                     <td class="r">@it.Quantity</td>
+                                                                                    @if (showBilled)
+                                                                                    {
+                                                                                        <td class="r">@(it.BilledAmount is decimal billed ? $"₱{billed:N2}" : "—")</td>
+                                                                                    }
                                                                                     <td class="r">₱@it.Amount.ToString("N2")</td>
                                                                                 </tr>
                                                                             }
@@ -728,6 +749,10 @@
                                                                         <tfoot>
                                                                             <tr class="itbl-total-row">
                                                                                 <td colspan="5" class="r"><strong>Total</strong></td>
+                                                                                @if (showBilled)
+                                                                                {
+                                                                                    <td class="r"><strong>₱@prep.Items.Sum(i => i.BilledAmount ?? 0m).ToString("N2")</strong></td>
+                                                                                }
                                                                                 <td class="r"><strong>₱@prep.Items.Sum(i => i.Amount).ToString("N2")</strong></td>
                                                                             </tr>
                                                                         </tfoot>
@@ -878,73 +903,174 @@
 
                         @* ── Modal footer ── *@
                         <div class="modal-footer-ent">
-                            @if (!ReadOnly && ImportResult != null && ImportResult.PreparedInvoices != null &&
-                        ImportResult.PreparedInvoices.Count > 0)
+                            @if (BuildAmountTotals() is { } totals)
                             {
-                                <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
-                                    <i class="ti ti-send" aria-hidden="true"></i>
-                                    Commit selected (@GetSelectedInvoiceCount())
-                                </button>
-                            }
-                            <button type="button" class="btn-close-modal" @onclick="OnClose">Close</button>
+                                <div class="amt-wrap">
+                                    <button type="button" class="amt-btn @(showMonthTotals ? "open" : "")" aria-haspopup="dialog"
+                                            aria-expanded="@showMonthTotals" @onclick="() => showMonthTotals = !showMonthTotals">
+                                        <span class="amt-ico" aria-hidden="true">₱</span>
+                                        <span>Amount summary</span>
+                                        @if (totals.HasFile)
+                                        {
+                                            <span class="amt-hint @DiffClass(totals.Diff)">@DiffHint(totals.Diff, totals.File)</span>
+                                        }
+                                        <i class="ti ti-chevron-up chev @(showMonthTotals ? "open" : "")" aria-hidden="true"></i>
+                                    </button>
+
+                                    @if (showMonthTotals)
+                                    {
+                                        <div class="sc-backdrop" @onclick="() => showMonthTotals = false"></div>
+                                        <div class="amt-panel" role="dialog" aria-label="Amount summary">
+                                            <div class="amt-head">
+                                                <span>Amount summary</span>
+                                                <span class="amt-head-sub">@totals.Invoices.ToString("N0") invoice@(totals.Invoices == 1 ? "" : "s")</span>
+                                            </div>
+
+                                            <div class="amt-verdict">
+                                                @if (totals.HasFile)
+                                                {
+                                                    <div class="amt-verdict-main @DiffClass(totals.Diff)">@DiffHeadline(totals.Diff)</div>
+                                                    <div class="amt-verdict-sub">@DiffSubline(totals.Diff, totals.File)</div>
+                                                    <div class="amt-bar" aria-hidden="true">
+                                                        <span class="amt-bar-file" style="width:@BarWidth(totals.File, totals.Company, true)"></span>
+                                                        <span class="amt-bar-co" style="width:@BarWidth(totals.File, totals.Company, false)"></span>
+                                                    </div>
+                                                    <div class="amt-legend">
+                                                        <span><span class="amt-sw amt-sw-co"></span>Company
+                                                            <b>₱@totals.Company.ToString("N2")</b></span>
+                                                            <span><span class="amt-sw amt-sw-file"></span>File
+                                                                <b>₱@totals.File.ToString("N2")</b></span>
+                                                            </div>
+                                                        }
+                                                else
+                                                        {
+                                                            <div class="amt-verdict-main">₱@totals.Company.ToString("N2")</div>
+                                                            <div class="amt-verdict-sub">Company amount. The file has no Net Amount to compare with.</div>
+                                                        }
+                                                    </div>
+
+                                                    <div class="amt-table-wrap">
+                                                        <table class="amt-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Month</th>
+                                                                    <th class="r">Invoices</th>
+                                                                    <th class="r">Company</th>
+                                                                    @if (totals.HasFile)
+                                                                    {
+                                                                        <th class="r">File</th>
+                                                                        <th class="r">Diff</th>
+                                                                    }
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var m in totals.Months)
+                                                                {
+                                                                    <tr>
+                                                                        <td>@m.Month.ToString("MMM yyyy")</td>
+                                                                        <td class="r">@m.Invoices.ToString("N0")</td>
+                                                                        <td class="r">₱@m.Company.ToString("N2")</td>
+                                                                        @if (totals.HasFile)
+                                                                        {
+                                                                            <td class="r">₱@m.File.ToString("N2")</td>
+                                                                            <td class="r amt-num @DiffClass(m.Diff)">@SignedAmount(m.Diff)</td>
+                                                                        }
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                            @if (totals.Months.Count > 1)
+                                                            {
+                                                                <tfoot>
+                                                                    <tr>
+                                                                        <td>Total</td>
+                                                                        <td class="r">@totals.Invoices.ToString("N0")</td>
+                                                                        <td class="r">₱@totals.Company.ToString("N2")</td>
+                                                                        @if (totals.HasFile)
+                                                                        {
+                                                                            <td class="r">₱@totals.File.ToString("N2")</td>
+                                                                            <td class="r amt-num @DiffClass(totals.Diff)">@SignedAmount(totals.Diff)</td>
+                                                                        }
+                                                                    </tr>
+                                                                </tfoot>
+                                                            }
+                                                        </table>
+                                                    </div>
+
+                                                    @if (totals.HasFile)
+                                                    {
+                                                        <div class="amt-note">Diff = company − file. Lines with no file amount count as ₱0 on the file side.</div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    @if (!ReadOnly && ImportResult != null && ImportResult.PreparedInvoices != null &&
+                                ImportResult.PreparedInvoices.Count > 0)
+                                    {
+                                        <button type="button" class="btn-commit" disabled="@(!CanCommit)" @onclick="OpenCommitConfirmModal">
+                                            <i class="ti ti-send" aria-hidden="true"></i>
+                                            Commit selected (@GetSelectedInvoiceCount())
+                                        </button>
+                                    }
+                                    <button type="button" class="btn-close-modal" @onclick="OnClose">Close</button>
+                                </div>
+
+                            </div>
                         </div>
+                    }
 
-                    </div>
-                </div>
-            }
-
-            @if (showDownloadModal)
-            {
-                var downloadTypes = GetDistinctErrorMessages();
-                var previewCount = BuildReportEntries(downloadScopeAll ? null : downloadErrorType)
-                    .Select(e => e.Source).Distinct().Count();
-                <div class="modal-overlay" style="z-index:1100;">
-                    <div class="modal-box" style="max-width:460px;">
-                        <div class="modal-header-ent">
-                            <div class="mh-left">
-                                <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
-                                <div>
-                                    <div class="mh-title">Download error report</div>
-                                    <div class="mh-sub">Includes every original column from your file</div>
+                    @if (showDownloadModal)
+                    {
+                        var downloadTypes = GetDistinctErrorMessages();
+                        var previewCount = BuildReportEntries(downloadScopeAll ? null : downloadErrorType)
+                            .Select(e => e.Source).Distinct().Count();
+                        <div class="modal-overlay" style="z-index:1100;">
+                            <div class="modal-box" style="max-width:460px;">
+                                <div class="modal-header-ent">
+                                    <div class="mh-left">
+                                        <div class="mh-icon"><i class="ti ti-download" aria-hidden="true"></i></div>
+                                        <div>
+                                            <div class="mh-title">Download error report</div>
+                                            <div class="mh-sub">Includes every original column from your file</div>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
+                                        <i class="ti ti-x" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <div class="modal-body-ent">
+                                    <label style="display:block;margin-bottom:8px;">
+                                        <input type="radio" name="dl-scope" checked="@downloadScopeAll"
+                                               @onchange="() => downloadScopeAll = true" />
+                                        All errors
+                                    </label>
+                                    <label style="display:block;margin-bottom:8px;">
+                                        <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
+                                               @onchange="() => downloadScopeAll = false" />
+                                        Only a specific error
+                                    </label>
+                                    @if (!downloadScopeAll)
+                                    {
+                                        <select value="@downloadErrorType" @onchange="e => downloadErrorType = e.Value?.ToString()">
+                                            <option value="">-- select error --</option>
+                                            @foreach (var t in downloadTypes)
+                                            {
+                                                <option value="@t.Message">@t.Message (@t.Count)</option>
+                                            }
+                                        </select>
+                                    }
+                                    <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
+                                </div>
+                                <div class="modal-footer-ent">
+                                    <button type="button" class="btn-commit"
+                                            disabled="@(!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))" @onclick="ConfirmDownload">
+                                        <i class="ti ti-download" aria-hidden="true"></i> Download
+                                    </button>
+                                    <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
                                 </div>
                             </div>
-                            <button type="button" class="mh-close" @onclick="CloseDownloadModal" aria-label="Close">
-                                <i class="ti ti-x" aria-hidden="true"></i>
-                            </button>
                         </div>
-                        <div class="modal-body-ent">
-                            <label style="display:block;margin-bottom:8px;">
-                                <input type="radio" name="dl-scope" checked="@downloadScopeAll"
-                                       @onchange="() => downloadScopeAll = true" />
-                                All errors
-                            </label>
-                            <label style="display:block;margin-bottom:8px;">
-                                <input type="radio" name="dl-scope" checked="@(!downloadScopeAll)"
-                                       @onchange="() => downloadScopeAll = false" />
-                                Only a specific error
-                            </label>
-                            @if (!downloadScopeAll)
-                            {
-                                <select value="@downloadErrorType" @onchange="e => downloadErrorType = e.Value?.ToString()">
-                                    <option value="">-- select error --</option>
-                                    @foreach (var t in downloadTypes)
-                                    {
-                                        <option value="@t.Message">@t.Message (@t.Count)</option>
-                                    }
-                                </select>
-                            }
-                            <p class="hint-text" style="margin-top:12px;">@previewCount row(s) will be exported.</p>
-                        </div>
-                        <div class="modal-footer-ent">
-                            <button type="button" class="btn-commit"
-                                    disabled="@(!downloadScopeAll && string.IsNullOrEmpty(downloadErrorType))" @onclick="ConfirmDownload">
-                                <i class="ti ti-download" aria-hidden="true"></i> Download
-                            </button>
-                            <button type="button" class="btn-close-modal" @onclick="CloseDownloadModal">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-            }
+                    }
 
 <ConfirmModal Show="showCommitConfirmModal" Title="Commit selected invoices"
               Message="@($"Commit {GetSelectedInvoiceCount()} selected invoice(s)?")" OnYes="ConfirmCommit" OnNo="CancelCommit"
@@ -984,6 +1110,7 @@
     private InvoiceSortMode sortMode = InvoiceSortMode.RowAscending;
     private int? selectedSheetFilter;
     private bool showSheetBreakdown;
+    private bool showMonthTotals;
 
     private enum InvoiceSortMode { RowAscending, InvoiceNumber, InvoiceDateAscending, InvoiceDateDescending }
     private enum InvoiceCardFilter { SuccessOnly, ErrorOnly, WarningOnly }
@@ -1020,6 +1147,7 @@
             wasShown = true;
             selectedSheetFilter = null;
             showSheetBreakdown = false;
+            showMonthTotals = false;
             hasCommitted = false;
             commitError = null;
             customerChoiceError = null;
@@ -2312,4 +2440,96 @@ null;
     private bool CardFooterGood(InvoiceCardViewModel c) =>
         !ReadOnly && (c.Prepared?.IsSaved == true || IsReady(c));
 
+
+    // ── Company amount vs file amount ─────────────────────────────────────
+    // Every difference is company − file, and percents are against the file amount.
+    private sealed record MonthAmountTotal(DateOnly Month, int Invoices, decimal File, decimal Company)
+    {
+        public decimal Diff => Company - File;
+    }
+
+    private sealed record AmountTotals(bool HasFile, int Invoices, decimal File, decimal Company, List<MonthAmountTotal>
+Months)
+    {
+        public decimal Diff => Company - File;
+    }
+    private static (decimal File, decimal Company, decimal Diff)? InvoiceAmountDiff(PreparedInvoice prep)
+    {
+        if (prep.Items is not { Count: > 0 } items || !items.Any(i => i.BilledAmount.HasValue)) return null;
+        var file = items.Sum(i => i.BilledAmount ?? 0m);
+        var company = items.Sum(i => i.Amount);
+        return (file, company, company - file);
+    }
+
+    private AmountTotals? BuildAmountTotals()
+    {
+        var invoices = ImportResult?.PreparedInvoices?
+            .Where(p => p.Invoice != null && p.Items is { Count: > 0 })
+            .ToList();
+        if (invoices is not { Count: > 0 }) return null;
+
+        var hasFile = invoices.Any(p => p.Items.Any(i => i.BilledAmount.HasValue));
+
+        var months = invoices
+            .GroupBy(p => new DateOnly(p.Invoice!.InvoiceDate.Year, p.Invoice.InvoiceDate.Month, 1))
+            .OrderBy(g => g.Key)
+            .Select(g => new MonthAmountTotal(
+                g.Key,
+                g.Count(),
+                g.Sum(p => p.Items.Sum(i => i.BilledAmount ?? 0m)),
+                g.Sum(p => p.Items.Sum(i => i.Amount))))
+            .ToList();
+
+        return new AmountTotals(hasFile, invoices.Count, months.Sum(m => m.File), months.Sum(m => m.Company), months);
+    }
+
+    private static string Percent(decimal diff, decimal file) =>
+        file != 0m ? Math.Abs(diff / file).ToString("P0") : string.Empty;
+
+    /// <summary>Card chip: "Company lower ₱233.45 (56%)", "Company higher ₱18.20 (4%)" or "Matches file".</summary>
+    private static string DiffLabel(decimal diff, decimal file)
+    {
+        if (diff == 0m) return "Matches file";
+        var pct = Percent(diff, file);
+        return $"Company {(diff > 0 ? "higher" : "lower")} ₱{Math.Abs(diff):N2}{(pct.Length > 0 ? $" ({pct})" : "")}";
+    }
+
+    /// <summary>Footer button tag: "Company −13%", "Company +4%" or "Matches".</summary>
+    private static string DiffHint(decimal diff, decimal file)
+    {
+        if (diff == 0m) return "Matches";
+        var pct = Percent(diff, file);
+        return pct.Length > 0 ? $"Company {(diff > 0 ? "+" : "−")}{pct}" : $"Company {(diff > 0 ? "higher" : "lower")}";
+    }
+
+    private static string DiffHeadline(decimal diff) =>
+        diff == 0m ? "Company matches the file" : $"Company {(diff > 0 ? "higher" : "lower")} by ₱{Math.Abs(diff):N2}";
+
+    private static string DiffSubline(decimal diff, decimal file)
+    {
+        if (diff == 0m) return "The company price equals the file's Net Amount.";
+        var pct = Percent(diff, file);
+        return pct.Length > 0
+            ? $"{pct} {(diff > 0 ? "above" : "below")} the file's Net Amount"
+            : $"{(diff > 0 ? "Above" : "Below")} the file's Net Amount";
+    }
+
+    private static string SignedAmount(decimal diff) =>
+        diff == 0m ? "₱0.00" : $"{(diff > 0 ? "+" : "−")}₱{Math.Abs(diff):N2}";
+
+    /// <summary>Bar widths: the larger of the two amounts fills the bar.</summary>
+    private static string BarWidth(decimal file, decimal company, bool forFile)
+    {
+        var max = Math.Max(Math.Abs(file), Math.Abs(company));
+        if (max == 0m) return "0%";
+        var value = Math.Abs(forFile ? file : company) / max * 100m;
+        return value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+
+    private static string DiffIcon(decimal diff) =>
+        diff == 0m ? "ti-check" : diff > 0 ? "ti-arrow-up-right" : "ti-arrow-down-right";
+
+    // Red when the company is lower than the file, amber when higher, green when equal.
+    private static string DiffClass(decimal diff) =>
+        diff == 0m ? "diff-zero" : diff > 0 ? "diff-up" : "diff-down";
 }

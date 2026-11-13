@@ -23,7 +23,7 @@
                         <div class="rc-scope-form">
                             <div class="rc-scope">
                                 <div class="rc-field">
-                                    <AutoComplete @key="@($"rc-subd-{resetKey}")" Label="Subdistributor" Required="true"
+                                   <AutoComplete @key="@($"rc-subd-{resetKey}")" Label="Subdistributor" Required="true"
                                                   Placeholder="Search subdistributor..." TItem="SalesInvoiceSubDistributorDropdownItem"
                                                   Items="SubDistributors" ValueSelector="x => x.SubDistributorId.ToString()"
                                                   TextSelector="x => x.SubdName ?? string.Empty" SelectedValue="@(subdId?.ToString())"

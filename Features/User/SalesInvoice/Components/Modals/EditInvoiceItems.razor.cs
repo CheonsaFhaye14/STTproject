@@ -105,6 +105,13 @@ public partial class EditInvoiceItems
 
     private void RepriceLine(InputItemModel item)
     {
+        if (item.IsFreeItem)
+        {
+            item.Amount = 0m;
+            item.PriceIssue = null;
+            return;
+        }
+
         if (item.Quantity > 0
             && UomPrices.TryGetValue(item.ItemsUomId, out var p)
             && p.SubdItemId == item.SubdItemId
@@ -440,7 +447,10 @@ public partial class EditInvoiceItems
             Quantity = source.Quantity,
             Amount = source.Amount,
             LineItemId = source.LineItemId,
-            PriceIssue = source.PriceIssue
+            PriceIssue = source.PriceIssue,
+            IsFreeItem = source.IsFreeItem,
+            BilledAmount = source.BilledAmount,
+            PriceSource = source.PriceSource
         };
     }
 
@@ -454,6 +464,7 @@ public partial class EditInvoiceItems
             {
                 item.SubdItemId,
                 item.ItemsUomId,
+                item.IsFreeItem,
                 ItemCode = item.ItemCode.ToUpperInvariant(),
                 ItemName = item.ItemName.ToUpperInvariant()
             })
@@ -469,7 +480,10 @@ public partial class EditInvoiceItems
                     UomName = first.UomName,
                     Quantity = group.Sum(x => x.Quantity),
                     Amount = group.Sum(x => x.Amount),
-                    LineItemId = first.LineItemId
+                    LineItemId = first.LineItemId,
+                    IsFreeItem = first.IsFreeItem,
+                    BilledAmount = group.Any(x => x.BilledAmount.HasValue) ? group.Sum(x => x.BilledAmount ?? 0m) : null,
+                    PriceSource = first.PriceSource
                 };
             })
             .ToList();

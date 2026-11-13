@@ -133,6 +133,13 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             if (!prices.TryGetValue(item.ItemsUomId, out var p) || p.SubdItemId != item.SubdItemId)
                 return (null, $"{item.ItemCode}: the unit of measure does not belong to this item.");
 
+            if (item.IsFreeItem)
+            {
+                item.Amount = 0m;          // free goods carry no amount, priced or not
+                item.PriceIssue = null;
+                continue;
+            }
+
             if (!p.IsPriced)
                 return (null, $"{item.ItemCode} ({p.UomName}): {p.Issue}.");
 
@@ -154,7 +161,8 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             BaseQuantity = p.BaseQuantityFor(i.Quantity),
             StockPriceUsed = p.StockPrice,
             CompanyItemPriceHistoryId = p.CompanyItemPriceHistoryId,
-            PriceSource = "Manual",
+            PriceSource = i.IsFreeItem ? "Free" : (i.PriceSource ?? "Manual"),
+            BilledAmount = i.BilledAmount,
             PricedAt = now,
             CreatedBy = userId,
             UpdatedBy = userId,
@@ -470,11 +478,13 @@ public sealed class SalesInvoiceService : ISalesInvoiceService
             {
                 SubdItemId = sii.SubdItemId,
                 ItemCode = sii.SubdItem.SubdItemCode,
-                ItemName = sii.SubdItem.ItemName,
+                ItemName = sii.PriceSource == "Free" ? sii.SubdItem.ItemName + " (Free)" : sii.SubdItem.ItemName,
                 ItemsUomId = sii.ItemsUomId,
                 UomName = sii.ItemsUom != null ? sii.ItemsUom.UomName : string.Empty,
                 Quantity = sii.Quantity,
-                Amount = sii.Amount
+                Amount = sii.Amount,
+                IsFreeItem = sii.PriceSource == "Free",
+                BilledAmount = sii.BilledAmount
             })
             .ToListAsync(cancellationToken);
 
