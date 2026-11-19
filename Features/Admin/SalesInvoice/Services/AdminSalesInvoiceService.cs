@@ -1346,7 +1346,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .ToListAsync(ct);
     }
 
-    private sealed record PricedItem(int BaseQuantity, decimal StockPrice, int HistoryId, decimal Amount);
+    private sealed record PricedItem(decimal BaseQuantity, decimal StockPrice, int HistoryId, decimal Amount);
 
     private static (List<PricedItem>? Lines, string? Error) PriceItems(
         IReadOnlyList<(int SubdItemId, int ItemsUomId, int Quantity)> items,

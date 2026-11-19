@@ -4,9 +4,11 @@ using Microsoft.JSInterop;
 using STTproject.Data;
 using STTproject.Features.User.MapItem.Components.Sections;
 using STTproject.Features.User.MapItem.DTOs;
+using STTproject.Features.User.MapItem.Services;
 using STTproject.Features.User.MapItem.Validators;
 using STTproject.Models;
 using STTproject.Services;
+using STTproject.Shared.Components.Forms;
 using STTproject.Shared.Helper;
 using PricingStructure = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructure;
 using PricingStructureResolver = STTproject.Features.Admin.PriceIncrease.DTOs.PricingStructureResolver;
@@ -41,6 +43,40 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private decimal? modalApplicableStockPrice;
         private string? modalPriceListLabel;
         private string? modalReferenceNote;
+
+        // Finds the company stock UOM among the item's units (built-in spellings + this subd's UOM synonyms). Cached per subd.
+        private UomNameMatcher uomMatcher = UomNameMatcher.BuiltInOnly;
+        private int uomMatcherSubdId;
+
+        private async Task<UomNameMatcher> GetUomMatcherAsync()
+        {
+            if (selectedSubdId == 0) return UomNameMatcher.BuiltInOnly;
+            if (uomMatcherSubdId != selectedSubdId)
+            {
+                try
+                {
+                    uomMatcher = await mapItemService.GetUomNameMatcherAsync(selectedSubdId);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"UOM synonyms failed to load: {ex.GetBaseException().Message}");
+                    uomMatcher = UomNameMatcher.BuiltInOnly;
+                }
+                uomMatcherSubdId = selectedSubdId;
+            }
+            return uomMatcher;
+        }
+
+        private string? SelectedCompanyStockUomName =>
+            selectedCompanyItemId is int id ? companyItemsForDropdown.FirstOrDefault(i => i.CompanyItemId == id)?.StockUomName : null;
+
+        /// <summary>Marks the entry that is the company stock UOM (page marker only, not saved).</summary>
+        private void MarkStockEntries(UomNameMatcher matcher)
+        {
+            var stock = SelectedCompanyStockUomName;
+            foreach (var (name, e) in uomEntries)
+                e.IsStockUom = e.IsActive && e.Conversion == 1m && matcher.IsStockUom(selectedSubdId, name, stock);   // a stock-named bundle (B1T1, 2) isn't the stock UOM
+        }
 
         private (decimal? Price, string? List, string? Note) ResolveStockReference(CompanyItemDropdownItem? ci)
         {
@@ -128,6 +164,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 modalCompanyItemName = ci?.ItemName;
                 modalStockUomName = ci?.StockUomName;
                 (modalApplicableStockPrice, modalPriceListLabel, modalReferenceNote) = ResolveStockReference(ci);
+                await GetUomMatcherAsync();
             }
             else
             {
@@ -199,7 +236,27 @@ namespace STTproject.Features.User.MapItem.Components.Pages
         private readonly SemaphoreSlim mapTablesLoadLock = new(1, 1);
         private readonly SemaphoreSlim onParametersSetLock = new(1, 1);
         private List<SubDistributor> subdList = new();
-        private ElementReference subdSelectRef;
+        private AutoComplete<SubDistributor>? subdAutoComplete;
+
+        /// <summary>Text shown and searched in the sub distributor picker: code and full name.</summary>
+        private static string SubdText(SubDistributor s) =>
+            string.IsNullOrWhiteSpace(s.SubdCode) ? s.SubdName : $"{s.SubdCode} - {s.SubdName}";
+
+        private async Task OnSubdPickedAsync(string? value)
+        {
+            var id = int.TryParse(value, out var parsed) ? parsed : 0;
+            if (id == selectedSubdId) return;
+
+            selectedSubdId = id;
+            await OnSubdChangedAsync();
+        }
+
+        private async Task FocusItemCodeAsync()
+        {
+            if (selectedSubdId == 0) return;
+            await Task.Delay(10);
+            if (mapItemInputHeader is not null) await mapItemInputHeader.FocusItemCodeAsync();
+        }
         private int selectedSubdId;
         private string locationText = "---";
         private List<string> principals = new();
@@ -487,7 +544,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 catch (JSDisconnectedException) { isPageLoading = false; return; }
                 catch (JSException) { isPageLoading = false; return; }
 
-                await subdSelectRef.FocusAsync();
+                if (subdAutoComplete is not null) await subdAutoComplete.GetInputRef().FocusAsync();
 
                 if (shouldHydrateClientStateAfterRender && !hasHydratedClientState && userContext.UserId.HasValue)
                 {
@@ -616,13 +673,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
         private async Task HandleSubdKeyDown(KeyboardEventArgs e)
         {
-            if (e.Key == "Enter" || (e.Key == "Tab" && !e.ShiftKey))
+            // Enter is handled by the picker (OnConfirmed); Tab moves on to the item code.
+            if (e.Key == "Tab" && !e.ShiftKey)
             {
-                await Task.Delay(10);
-                if (mapItemInputHeader is not null)
-                {
-                    await mapItemInputHeader.FocusItemCodeAsync();
-                }
+                await FocusItemCodeAsync();
             }
         }
 
@@ -917,13 +971,13 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             var existingNormalized = existingList
                 .ToDictionary(
                     u => NormalizeBaseUomName(u.UomName),
-                    u => (Conversion: u.ConversionToBase, Price: u.Price),
+                    u => u.ConversionToBase,
                     StringComparer.OrdinalIgnoreCase);
 
             var currentNormalized = currentEntries
                 .ToDictionary(
                     e => NormalizeBaseUomName(e.Key),
-                    e => (Conversion: e.Value.Conversion, Price: e.Value.Price ?? 0m),
+                    e => e.Value.Conversion,
                     StringComparer.OrdinalIgnoreCase);
 
             if (existingNormalized.Count != currentNormalized.Count)
@@ -937,7 +991,7 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     return false;
                 }
 
-                if (existing.Conversion != current.Conversion || existing.Price != current.Price)
+                if (existing != current)
                 {
                     return false;
                 }
@@ -1055,9 +1109,19 @@ namespace STTproject.Features.User.MapItem.Components.Pages
 
                         if (string.IsNullOrWhiteSpace(addDraftJson) && !uomEntries.Any())
                         {
+                            // Conversions are relative to the company stock UOM, so a new item starts with that unit at 1
+                            // (a convenience: the item can drop it, the stock UOM is always 1 with or without a row).
+                            var startName = string.IsNullOrWhiteSpace(selectedItem.StockUomName)
+                                ? BaseUomName
+                                : selectedItem.StockUomName.Trim();
                             uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase)
                             {
-                                [BaseUomName] = new UomEntry { Conversion = 1, Price = null }
+                                [startName] = new UomEntry
+                                {
+                                    Conversion = 1m,
+                                    IsActive = true,
+                                    IsStockUom = !string.IsNullOrWhiteSpace(selectedItem.StockUomName)
+                                }
                             };
                         }
                     }
@@ -1107,12 +1171,17 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             }
 
             return string.Join(", ", uomEntries
-                .OrderBy(entry => entry.Value.Conversion)
+                .Where(entry => entry.Value.IsActive)
+                .OrderByDescending(entry => entry.Value.IsStockUom)
+                .ThenByDescending(entry => entry.Value.Conversion)
                 .Select(entry =>
                 {
-                    var conversionStr = entry.Value.Conversion == 1 ? "" : $" ({entry.Value.Conversion})";
+                    var conversionStr = entry.Value.Conversion is decimal c
+                        ? $" ({Math.Round(c, 6).ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)})"
+                        : " (no conversion)";
+                    var stockStr = entry.Value.IsStockUom ? " [stock]" : "";
                     var priceStr = entry.Value.Price.HasValue ? $" - {entry.Value.Price.Value:N2}" : "";
-                    return $"{entry.Key}{conversionStr}{priceStr}";
+                    return $"{entry.Key}{conversionStr}{stockStr}{priceStr}";
                 }));
         }
 
@@ -1125,13 +1194,19 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 return;
             }
 
-            if (!uomEntries.Any() || (SelectedCompanyItemRequiresStockUom && !uomEntries.Any(x => x.Value.Price.HasValue)))
+            // The company stock UOM needn't be one of the units (it is always 1); every priced unit needs a conversion.
+            var conversionMissing = SelectedCompanyItemRequiresStockUom
+                && uomEntries.Any(x => x.Value.IsActive && x.Value.Conversion is not > 0);
+
+            if (!uomEntries.Any() || conversionMissing)
             {
                 modalTitle = IsEditingItem ? "Update Item" : "Add Item";
                 modalMessage = string.Empty;
                 pendingConfirmAction = IsEditingItem ? ConfirmActionKind.Update : ConfirmActionKind.Add;
                 confirmedCompanyItemSummary = GetSelectedCompanyItemName();
-                itemActionErrorMessage = uomEntries.Any() ? "At least one UOM with a price must be added before saving this item." : "At least one UOM must be added before saving this item.";
+                itemActionErrorMessage = uomEntries.Any()
+                    ? "Every unit needs a conversion (relative to the company stock UOM). Open Add UOM to fix it."
+                    : "At least one UOM must be added before saving this item.";
                 showConfirmModal = true;
                 await PersistDraftAsync();
                 return;
@@ -1158,8 +1233,8 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                     return;
                 }
 
-                var prices = string.Join(", ", uomEntries.Where(p => p.Value.Price.HasValue).Select(p => $"{p.Key} ({p.Value.Conversion}): {p.Value.Price:N2}"));
-                Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Prices={prices}");
+                var units = string.Join(", ", uomEntries.Select(p => $"{p.Key} ({p.Value.Conversion})"));
+                Console.WriteLine($"{(IsEditingItem ? "Updated" : "Added")}: CompanyItemId={selectedCompanyItemId}, Principal={selectedDropdownPrincipal}, SKU={itemCode}, ItemName={itemName}, Units={units}");
 
                 var item = new SubdItem
                 {
@@ -1259,11 +1334,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             selectedCompanyItemDisplayName = item.CompanyItemName;
             selectedDropdownPrincipal = item.Principal;
 
-            var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId);
+            // Inactive units too, so the Add UOM window can show them (dimmed, with Reactivate).
+            var existingUoms = await mapItemService.GetSubdItemUomsAsync(item.SubdItemId, includeInactive: true);
             if (existingUoms is not null && existingUoms.Any())
             {
-                var hasBaseUnit = existingUoms.Any(u => u.ConversionToBase == 1);
-
                 availableUoms = existingUoms
                     .Select(u => (u.UomName ?? string.Empty).Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1273,8 +1347,11 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                 uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
                 foreach (var name in availableUoms)
                 {
-                    var matched = existingUoms.FirstOrDefault(e =>
-                        string.Equals((e.UomName ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
+                    // If a name has an active and an inactive row, the active one wins.
+                    var matched = existingUoms
+                        .Where(e => string.Equals((e.UomName ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(e => e.IsActive)
+                        .FirstOrDefault();
 
                     if (matched != null)
                     {
@@ -1282,11 +1359,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                         {
                             ItemsUomId = matched.ItemsUomId,
                             Conversion = matched.ConversionToBase,
-                            Price = matched.Price,
-                            IsStockUom = matched.IsStockUom
+                            IsActive = matched.IsActive
                         };
                     }
                 }
+
+                MarkStockEntries(await GetUomMatcherAsync());
             }
             else
             {

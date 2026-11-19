@@ -27,7 +27,7 @@ public partial class DeletedSalesInvoiceItem
 
     public int? UpdatedBy { get; set; }
 
-    public int? BaseQuantity { get; set; }
+    public decimal? BaseQuantity { get; set; }
 
     public decimal? StockPriceUsed { get; set; }
 

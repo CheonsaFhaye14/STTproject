@@ -8,8 +8,8 @@ public sealed class UomEntry
     public int? ItemsUomId { get; set; }
     public string? ConversionBasedOn { get; set; }
 
-    [JsonConverter(typeof(LenientNullableIntConverter))]
-    public int? Conversion { get; set; }
+    [JsonConverter(typeof(LenientNullableDecimalConverter))]
+    public decimal? Conversion { get; set; }
     public bool IsStockUom { get; set; }
     public decimal? Price { get; set; }
     public bool IsAutoCalculated { get; set; }

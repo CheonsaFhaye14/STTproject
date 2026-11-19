@@ -13,7 +13,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
         {
             _jsRuntime = jsRuntime;
         }
-//TODO: To be fixed
+        //TODO: To be fixed
         public async Task GenerateAndDownloadExcelAsync(
             List<(string Code, string Name)>? customers = null,
             List<(string Code, string Name)>? skus = null,
@@ -206,7 +206,7 @@ namespace STTproject.Features.User.SalesInvoice.Services
                     await _jsRuntime.InvokeVoidAsync("downloadFile", stream.ToArray(), fileName,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
                 }
-                
+
             }
         }
 

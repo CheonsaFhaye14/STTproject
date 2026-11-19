@@ -19,15 +19,17 @@ public partial class PriceRecalcLine
 
     public decimal? NewAmount { get; set; }
 
-    public int? BaseQuantity { get; set; }
+    public decimal? BaseQuantity { get; set; }
 
-    public int? StockConvToBase { get; set; }
+    public decimal? StockConvToBase { get; set; }
 
     public decimal? StockPrice { get; set; }
 
     public int? CompanyItemPriceHistoryId { get; set; }
 
     public string? Issue { get; set; }
+
+    public string? PricingNote { get; set; }
 
     public virtual PriceRecalcRun Run { get; set; } = null!;
 }

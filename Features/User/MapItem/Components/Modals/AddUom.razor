@@ -1,186 +1,434 @@
 ﻿@inject IJSRuntime JSRuntime
 
-
-<Modal ShowModal="ShowAddUomModal" Width="900px" MaxWidth="100%" MaxHeight="80vh"
-    Title="Add Unit of Measure" OnClose="CancelAsync" IconType="ModalIconType.Ruler" Subtitle="@getModalSubtitle()">
+<Modal ShowModal="ShowAddUomModal" Width="1000px" MaxWidth="100%" MaxHeight="94vh" Title="Add Unit of Measure"
+       FlushBody="true" OnClose="CancelAsync" IconType="ModalIconType.Ruler" Subtitle="@getModalSubtitle()">
     <ChildContent>
         @{
             var messages = BuildMessages();
+            var flagged = FlaggedRows(messages);
+            var allRows = UomRows;
+            var visibleRows = VisibleUomRows;
+            var perOptions = ConversionViewOptions;
+            var pieceSame = !StockIsPiece && PieceEntryName is { } pn && workingUomEntries[pn].Conversion == 1m;
         }
-        <FormSection Icon="ti ti-library-plus" Title="Additional Units of Measure" Expandable="true" IsExpanded="true">
-            <ChildContent>
-                <div class="form-group">
-                    <Select Label="Unit of Measure" Required="true" Items="@DefaultOptions" SelectedValue="@SelectedUomOption"
-                            SelectedValueChanged="OnUomSelectChanged" Placeholder="-- Select Unit of Measure --"
-                            ExtraOptions="@(new[] { ("__custom", "Other (type custom)") })"
-                            ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("uom")))" ErrorText='@GetFieldError("uom")' />
-                </div>
-                @if (SelectedUomOption == "__custom")
+        <div class="au">
+            @* ── Context: one slim line of facts + Units / Price history ── *@
+            <div class="au-ctx" id="uom-ref">
+                <span class="au-fact">
+                    <small>Stock UOM</small>
+                    <b>@(StockUomRequired ? StockDisplayName : "None")</b>
+                    <em>@(StockUomRequired ? "always 1" : "free item")</em>
+                </span>
+                @if (StockUomRequired)
                 {
-                    <div class="form-group">
-                        <Input Label="Custom Unit of Measure" Required="true" @bind-Value="CustomUom" Placeholder="Enter unit name"
-                                 ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("customUom")))" ErrorText='@GetFieldError("customUom")' />
-                    </div>
-                }
-                @if (!IsConversionNotSet)
-                {
-                <div class="form-group">
-                    <div class="conversion-label">
-                        <label>Conversion</label>
-                    </div>
-                    <div class="input-row">
-                        <Input TValue="string"
-                            Value="@ConversionInput"
-                            ValueChanged="@(async v => { ConversionInput = v ?? string.Empty; await PersistDraftAsync(); })"
-                            Placeholder="e.g., 12"
-                            Disabled="@IsBaseUom(GetSelectedUomName())"/>
-                        <Button Title="Clear conversion" OnClick="ClearConversionInputAsync" Disabled="@IsBaseUom(GetSelectedUomName())" />
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(GetFieldError("conversion")))
-                    {
-                        <span class="error-text">@GetFieldError("conversion")</span>
+                    <span class="au-fact">
+                        <small>Price</small>
+                        <b>@(ApplicableStockPrice is decimal sp ? $"₱{sp:N2}" : "-")</b>
+                        <em>per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
+                                                                                                                                                                                                PriceListLabel)</em>
+                        </span>
                     }
-                </div>
-                <div class="form-group">
-                    <Select Items="@ConversionBasedOnOptions"
-                            Label="@getLabelForConversionBased()"
-                            ValueSelector="@(k => k)"
-                            TextSelector="@(k => k)"
-                            SelectedValue="@ConversionBasedOnInput"
-                            SelectedValueChanged="OnConversionBasedOnChanged"
-                            Disabled="@IsBaseUom(GetSelectedUomName())" />
-                </div>
-                }
-                else
-                {
-                    <div class="form-group">
-                        <label>Conversion</label>
-                        <div class="input-row">
-                            <input type="text" value="Not set" disabled />
-                            <Button Title="Set conversion" OnClick="SetConversionInput" Disabled="@IsBaseUom(GetSelectedUomName())" />
-                        </div>
-                    </div>
-                }
-
-                <div class="form-group">
-                    <Input Label="Price" @bind-Value="PriceInput" Placeholder="0.00" Step="0.01" AddOptionalText="true" OptionalText="(Optional - will be calculated if left empty)"
-                           ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("price")))" ErrorText='@GetFieldError("price")' />
-                </div>
-                <Button Title="Add UOM" OnClick="() => AddUomEntryAsync(false)" Variant="ButtonVariant.Primary"></Button>
-            </ChildContent>
-        </FormSection>
-
-        <FormSection Title="All Units of Measures" Icon="ti ti-clipboard-list" IsExpanded="true" Expandable="true">
-            <ChildContent>
-                <div class="stock-ref" id="uom-ref">
-                    <span class="stock-chip">
-                        Company stock UOM
-                        <strong>@(string.IsNullOrWhiteSpace(CompanyStockUomName) ? "Not set" : CompanyStockUomName)</strong>
-                    </span>
-                    <span class="stock-chip">
-                        Applicable price
-                        <strong>@(ApplicableStockPrice?.ToString("N2") ?? "-")</strong>
-                        @if (!string.IsNullOrWhiteSpace(PriceListLabel))
-                        {
-                            <em>· @PriceListLabel</em>
-                        }
-                    </span>
-                </div>
-                @{
-                    var uomRows = UomRows;
-                }
-                @if (uomRows.Count > 0)
-                {
-                    <div id="uom-table" class="uom-table-block">
-                    <AddTable TItem="UomRow"
-                            Items="uomRows"
-                            Columns="UomColumns"
-                            ColumnLabels="UomColumnLabels"
-                            ColumnWidths="UomColumnWidths"
-                            EditableColumns="UomEditableColumns"
-                            ColumnInputTypes="UomColumnInputTypes"
-                            TemplateColumns="UomTemplateColumns"
-                            DisplayValueSelector="GetUomDisplayValue"
-                            RowClassSelector="@(r => r.Entry.IsActive && r.Entry.IsStockUom ? "row-highlight" : null)"
-                            RowIdSelector="@(r => UomRowDomId(r.Name))"
-                            CellClassSelector="GetCellClass"
-                            OnCellChanged="HandleUomCellChangedAsync"
-                            RemoveButtonVisible="true"
-                            ShowError="false">
-                        <CellTemplate Context="cell">
-                            @if (cell.Column == StockColumn)
+                    @if (PiecesPerStock is decimal pps && !StockIsPiece)
+                    {
+                        <span class="au-fact @(pieceSame ? "warn" : null)"
+                              title="@(pieceSame ? "A piece the same size as the stock UOM is unusual" : null)">
+                            <small>Packaging</small>
+                            <b>1 @StockDisplayName = @FormatNumber(pps) @PieceDisplayName</b>
+                            @if (pieceSame)
                             {
-                                <div class="stock-radio-cell">
-                                    <input type="radio" name="stock-uom" data-col="@StockColumn"
-                                        aria-label="Use @cell.Item.Name as the stock UOM"
-                                        checked="@cell.Item.Entry.IsStockUom"
-                                        disabled="@(!cell.Item.Entry.IsActive)"
-                                        @onchange="() => SelectStockUom(cell.Item.Name)" />
+                                <em>check this</em>
+                            }
+                        </span>
+                    }
+                    <div class="au-seg" role="tablist">
+                        <span class="@(activeTab != TabHistory ? "on" : null)">
+                            <Button Title="Units" Icon="ti ti-list" OnClick="@(() => SetTabAsync(TabUnits))" />
+                        </span>
+                        <span class="@(activeTab == TabHistory ? "on" : null)">
+                            <Button Title="Price history" Icon="ti ti-history" OnClick="@(() => SetTabAsync(TabHistory))"
+                                    Disabled="@(!CompanyItemId.HasValue || !StockUomRequired)" />
+                        </span>
+                    </div>
+                </div>
+
+                <div class="au-body">
+                    @* ── Left: add a unit ── *@
+                    <aside class="au-left">
+                        <h4>Add a unit</h4>
+                        <p class="au-lead">
+                            @(StockUomRequired
+                                ? "Prices follow the company price, so you only set how big the unit is."
+                                : "This item is free, so sizes don't change prices.")
+                        </p>
+
+                        <div class="au-field form-group">
+                            <Select Label="Unit" Required="true" Items="@DefaultOptions" SelectedValue="@SelectedUomOption"
+                                    SelectedValueChanged="OnUomSelectChanged" Placeholder="Select a unit"
+                                    ExtraOptions="@(new[] { ("__custom", "Other…") })"
+                                    ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("uom")))"
+                                    ErrorText='@GetFieldError("uom")' />
+                        </div>
+
+                        @if (SelectedUomOption == "__custom")
+                        {
+                            <div class="au-field form-group">
+                                <Input Label="Unit name" Required="true" @bind-Value="CustomUom" Placeholder="e.g., Tray"
+                                       ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("customUom")))"
+                                       ErrorText='@GetFieldError("customUom")' />
+                            </div>
+                        }
+
+                        @if (IsSelectedStockUom)
+                        {
+                            <div class="au-note">
+                                <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                <span><b>@GetSelectedUomName()</b> is the company stock UOM, so it is added at 1 (adding it is
+                                    optional). If this subd sells it differently, e.g. buy 1 take 1, edit its conversion after
+                                    adding.</span>
                                 </div>
                             }
-                        </CellTemplate>
-                        <CellSuffixTemplate Context="cell">
-                            @if (cell.Column == nameof(UomRow.UnitLabel))
+                    else
                             {
-                                @if (cell.Item.IsBase)
+                                <label class="au-label">
+                                    @ConversionLabel
+                                    @if (StockUomRequired)
+                                    {
+                                        <span class="au-req">*</span>
+                                    }
+                                </label>
+                                <div class="au-qty">
+                                    <div class="au-qty-num form-group">
+                                        <Input TValue="string" Value="@ConversionInput"
+                                               ValueChanged="@(async v => { ConversionInput = v ?? string.Empty; await PersistDraftAsync(); })"
+                                               Placeholder="e.g., 12"
+                                               ShowError="@(!string.IsNullOrWhiteSpace(GetFieldError("conversion")))"
+                                               ErrorText='@GetFieldError("conversion")' />
+                                    </div>
+                                    @if (ConversionBasedOnOptions.Count > 0)
+                                    {
+                                        <div class="au-qty-unit">
+                                            <Select Items="@ConversionBasedOnOptions" ShowPlaceholder="false" ValueSelector="@(k => k)"
+                                                    TextSelector="@(k => UnitText(k))" SelectedValue="@ConversionBasisName"
+                                                    SelectedValueChanged="OnConversionBasedOnChanged" />
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (AddPreviewConversion is decimal toStock)
                                 {
-                                    <span class="uom-badge uom-badge-base">Base</span>
+                                    var name = GetSelectedUomName();
+                                    <div class="au-preview">
+                                        <div class="au-p-main">1 @name = <span>@ConversionInput.Trim()
+                                            @UnitText(ConversionBasisName)</span></div>
+                                            <div class="au-p-rows">
+                                                @if (StockUomRequired && ConversionBasisName != StockRefKey)
+                                                {
+                                                    <span>In @StockDisplayName</span><b>@FormatNumber(toStock) @StockDisplayName</b>
+                                                }
+                                                @if (PieceEntryName is { } piece && workingUomEntries[piece].Conversion is decimal pc && pc
+                                        > 0
+                                                     && !string.Equals(piece, ConversionBasisName, StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    <span>In @piece</span><b>@FormatNumber(toStock / pc) @piece</b>
+                                                }
+                                                @if (StockUomRequired)
+                                                {
+                                                    <span>Price</span><b>@(ApplicableStockPrice is decimal p ? $"₱{p * toStock:N2}" : "-")</b>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                        else
+                                    {
+                                        <div class="au-preview empty">Pick a unit and enter its size to see the conversion and price.</div>
+                                    }
                                 }
-                                @if (IsSuggested(cell.Item.Name))
+
+                                <div class="au-block-btn">
+                                    <Button Title="@AddButtonTitle" Icon="ti ti-plus" OnClick="AddUomEntryAsync"
+                                            Variant="ButtonVariant.Primary" Disabled="@(!CanAdd)" />
+                                </div>
+                            </aside>
+
+                            @* ── Right: units or price history ── *@
+                            <section class="au-right">
+                                @if (activeTab != TabHistory)
                                 {
-                                    <span class="uom-badge uom-badge-suggested">Suggested</span>
-                                }
-                            }
-                            else if (cell.Column == nameof(UomRow.Conversion) && !cell.Item.IsBase && cell.Item.Entry.Conversion is > 0)
-                            {
-                                <span class="uom-sub">1 @cell.Item.Name = @cell.Item.Entry.Conversion @BaseUomName</span>
-                            }
-                            else if (cell.Column == nameof(UomRow.Price)
-                                && cell.Item.Entry.IsActive && cell.Item.Entry.IsStockUom
-                                && StockUomSuggester.PriceMatches(ApplicableStockPrice, cell.Item.Entry))
-                            {
-                                <span class="uom-note uom-note-ok" role="img" aria-label="Matches company price" title="Matches company price">
-                                    <i class="ti ti-check" aria-hidden="true"></i>
-                                </span>
-                            }
-                        </CellSuffixTemplate>
-                        <RowActionsTemplate Context="row">
-                            @if (!row.IsBase)
-                            {
-                                @if (row.Entry.IsActive)
-                                {
-                                    <Button OnClick="() => RemoveUomEntry(row.Name)" Tooltip="@(IsUomInUse(row.Name) ? "Deactivate" : "Remove")" Variant="ButtonVariant.IconActionDelete" Icon="ti ti-trash"></Button>
+                                    <div class="au-bar">
+                                        <h3>Units <span>@ActiveCount</span></h3>
+                                        @if (perOptions.Count > 1)
+                                        {
+                                            <div class="au-per">
+                                                <span>Show per</span>
+                                                <div class="au-pills">
+                                                    @foreach (var o in perOptions)
+                                                    {
+                                                        var unit = o;
+                                                        <span class="@(IsRefUnit(unit) ? "on" : null)">
+                                                            <Button Title="@UnitText(unit)" OnClick="@(() => OnConversionViewChanged(unit))" />
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (ShowSearch)
+                                    {
+                                        <div class="au-search form-group">
+                                            <Input TValue="string" Label="Search" Value="@listQuery" ValueChanged="OnListQueryChanged"
+                                                   Placeholder="Search units…" />
+                                        </div>
+                                    }
+
+                                    @if (messages.Count > 0)
+                                    {
+                                        <div class="au-notes" id="@ReviewPanelId">
+                                            @foreach (var m in messages)
+                                            {
+                                                var msg = m;
+                                                <div class="@NoteClass(msg.Severity)">
+                                                    <i class="@NoteIcon(msg.Severity)" aria-hidden="true"></i>
+                                                    <span>
+                                                        @msg.Text
+                                                        @if (msg.JumpRow is { } jr && workingUomEntries.ContainsKey(jr))
+                                                        {
+                                                            <a role="button" @onclick="() => BeginEdit(jr)">Fix</a>
+                                                        }
+                                                    </span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="au-list" id="uom-table">
+                                        @if (visibleRows.Count == 0)
+                                        {
+                                            <div class="au-empty">@(allRows.Count == 0 ? "No units yet. Add one on the left." : "No units match your search.")</div>
+                                        }
+                                        @foreach (var r in visibleRows)
+                                        {
+                                            var row = r;
+                                            var canEdit = row.Entry.IsActive && !row.IsVirtual;
+
+                                            @if (canEdit && string.Equals(editingName, row.Name, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <div class="au-u editing" id="@UomRowDomId(row.Name)">
+                                                    @if (row.IsStock || IsStockName(row.Name))
+                                                    {
+                                                        <div class="au-edit-hint">
+                                                            <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                                            If this subd sells @row.Name differently (e.g. buy 1 take 1), set its conversion, e.g. 2
+                                                            @UnitText(StockKey).
+                                                            The company @UnitText(StockKey) stays 1.
+                                                        </div>
+                                                    }
+                                                    <div class="au-edit">
+                                                        <div class="au-edit-col">
+                                                            <label class="au-label">Unit name</label>
+                                                            <div class="form-group">
+                                                                <Input TValue="string" Value="@editNameInput"
+                                                                       ValueChanged="@(v => editNameInput = v ?? string.Empty)"
+                                                                       ShowError="@editErrors.ContainsKey("name")"
+                                                                       ErrorText='@(editErrors.GetValueOrDefault("name") ?? string.Empty)' />
+                                                            </div>
+                                                        </div>
+                                                        <div class="au-edit-col">
+                                                            <label class="au-label">Conversion</label>
+                                                            <div class="au-qty">
+                                                                <div class="au-qty-num form-group">
+                                                                    <Input TValue="string" Value="@editSizeInput"
+                                                                           ValueChanged="@(v => editSizeInput = v ?? string.Empty)"
+                                                                           ShowError="@editErrors.ContainsKey("size")"
+                                                                           ErrorText='@(editErrors.GetValueOrDefault("size") ?? string.Empty)' />
+                                                                </div>
+                                                                <div class="au-qty-unit">
+                                                                    <Select Items="@EditBasisOptions" ShowPlaceholder="false"
+                                                                            ValueSelector="@(k => k)" TextSelector="@(k => UnitText(k))"
+                                                                            SelectedValue="@editBasis"
+                                                                            SelectedValueChanged="@((string v) => editBasis = v)" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="au-edit-acts">
+                                                            <Button Title="Cancel" OnClick="CancelEdit" />
+                                                            <Button Title="Save" OnClick="SaveEditAsync" Variant="ButtonVariant.Primary" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="@CardClass(row, flagged)" id="@UomRowDomId(row.Name)"
+                                                     @onclick="@(() => { if (canEdit) BeginEdit(row.Name); })">
+                                                    <div class="au-u-name">
+                                                        <div>
+                                                            @(row.IsVirtual ? row.UnitLabel : row.Name)
+                                                            @if (row.IsVirtual)
+                                                            {
+                                                                <small>not saved as a unit</small>
+                                                            }
+                                                            else if (!row.Entry.IsActive)
+                                                            {
+                                                                <small>inactive</small>
+                                                            }
+                                                        </div>
+                                                        @if (row.IsStock)
+                                                        {
+                                                            <span class="au-tag">STOCK UOM</span>
+                                                        }
+                                                        else if (!row.IsVirtual && IsBundle(row.Name))
+                                                        {
+                                                            <span class="au-tag bundle"
+                                                                  title="Sold as a bundle: priced as @FormatNumber(row.Entry.Conversion ?? 0) × the company @CompanyStockUomName">
+                                                                BUNDLE ×@FormatNumber(row.Entry.Conversion ?? 0)
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    <div class="au-u-conv @(row.Entry.Conversion is > 0 ? null : "bad")">
+                                                        <b>@CardSize(row)</b>
+                                                        @if (CardSizeHint(row) is { } hint)
+                                                        {
+                                                            <span>@hint</span>
+                                                        }
+                                                    </div>
+                                                    <div class="au-u-price">
+                                                        @CardPrice(row)
+                                                        @if (StockUomRequired)
+                                                        {
+                                                            <small>per @(row.IsVirtual ? row.UnitLabel : row.Name)</small>
+                                                        }
+                                                    </div>
+                                                    <div class="au-u-act" @onclick:stopPropagation="true">
+                                                        @if (!row.IsVirtual)
+                                                        {
+                                                            @if (row.Entry.IsActive)
+                                                            {
+                                                                @if (canEdit)
+                                                                {
+                                                                    <Button Tooltip="Edit" Variant="ButtonVariant.IconActionEdit" Icon="ti ti-pencil"
+                                                                            OnClick="() => BeginEdit(row.Name)" />
+                                                                }
+                                                                <Button Tooltip="@(IsUomInUse(row.Name) ? "Deactivate (used on invoices)" : "Remove")"
+                                                                        Variant="ButtonVariant.IconActionDelete" Icon="ti ti-trash"
+                                                                        OnClick="() => RemoveUomEntry(row.Name)" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <Button Tooltip="Reactivate" Variant="ButtonVariant.IconActionEdit" Icon="ti ti-restore"
+                                                                        OnClick="() => ReactivateUomEntry(row.Name)" />
+                                                            }
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+
+                                    <div class="au-foot-list">
+                                        <span>@ActiveCount active · @InactiveCount inactive</span>
+                                        <span>Click a unit to edit it</span>
+                                    </div>
                                 }
                                 else
                                 {
-                                    <Button OnClick="() => ReactivateUomEntry(row.Name)" Title="Reactivate"></Button>
-                                }
-                            }
-                        </RowActionsTemplate>
-                    </AddTable>
-                    </div>
+                                    var cols = HistoryColumns;
+                                    var current = CurrentHistoryIndex;
+                                    <div class="au-hist" id="uom-price-history">
+                                        <div class="au-bar au-bar-flush">
+                                            <h3>Price history</h3>
+                                            <span class="au-hsub">
+                                                per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
+                                                                                                                                                                                                                                                                                                                                PriceListLabel)
+                                                · @cols.Count unit@(cols.Count == 1 ? "" : "s")
+                                            </span>
+                                        </div>
+                                        <div class="au-hwrap">
+                                            @if (priceHistoryLoading)
+                                            {
+                                                <div class="au-empty">Loading…</div>
+                                            }
+                                            else if (priceHistory.Count == 0)
+                                            {
+                                                <div class="au-empty">No price history for this company item yet.</div>
+                                            }
+                                            else
+                                            {
+                                                <table class="au-ph">
+                                                    <thead>
+                                                        <tr>
+                                                            <th class="dcol">Effective</th>
+                                                            @foreach (var c in cols)
+                                                            {
+                                                                <th class="@(c.IsStock ? "sc" : null)">
+                                                                    @c.Name
+                                                                    <small>@(c.IsStock ? "stock UOM" : $"×                                                {FormatNumber(c.Conversion)}")</small>
+                                                                </th>
+                                                            }
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @for (var i = 0; i < priceHistory.Count; i++)
+                                                        {
+                                                            var h = priceHistory[i];
+                                                            var scheduled = h.AppliedDate is null;
+                                                            var isCurrent = i == current;
+                                                            var delta = HistoryDelta(i);
+                                                            <tr class="@(scheduled ? "sch" : isCurrent ? "cur" : null)">
+                                                                <td class="dcol">
+                                                                    <b>@h.EffectivityDate.ToString("MMM d, yyyy")</b>
+                                                                    <span class="au-pill @(scheduled ? "sch" : isCurrent ? "cur" : "old")">
+                                                                        @(scheduled ? "Scheduled" : isCurrent ? "Current" : "Applied")
+                                                                    </span>
+                                                                </td>
+                                                                @foreach (var c in cols)
+                                                                {
+                                                                    <td class="@(c.IsStock ? "sc" : null)">
+                                                                        @PriceFor(h.NewPrice, c.Conversion).ToString("N2")
+                                                                        @if (c.IsStock && delta is decimal d)
+                                                                        {
+                                                                            <span class="au-delta @(d >= 0 ? "up" : "down")">@(d >= 0 ? "▲" : "▼")
+                                                                                @Math.Abs(d).ToString("0.0")%</span>
+                                                                            }
+                                                                        </td>
+                                                                    }
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                            </div>
+                                            <div class="au-hnote">
+                                                Each unit's price is the stock price × its size. Invoices use the price in effect on the
+                                                invoice date.
+                                            </div>
+                                        </div>
+                                    }
+                                </section>
+                            </div>
+                        </div>
+                    </ChildContent>
+                    <FooterContent>
+                        @if (!string.IsNullOrWhiteSpace(DraftStorageKey))
+                        {
+                            <span class="au-draft"><i></i> Draft saved</span>
+                        }
+                        <span class="au-spacer"></span>
+                        <Button Title="Cancel" OnClick="CancelAsync" />
+                        <span class="au-danger"><Button Title="Clear draft" OnClick="ShowClearDraftConfirmModal" /></span>
+                        <Button Title="Save changes" OnClick="AddAsync" Variant="ButtonVariant.Primary" />
+                    </FooterContent>
+                </Modal>
+
+                @if (showClearDraftConfirmModal)
+                {
+                    <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
+                                  Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
+                                  OnNo="CancelClearDraftConfirm" />
                 }
 
-                <UomReviewPanel @ref="reviewPanel" Messages="messages" PanelId="@ReviewPanelId" OnJump="JumpToMessageAsync" />
-            </ChildContent>
-        </FormSection>
-    </ChildContent>
-    <FooterContent>
-        <Button Title="Cancel" OnClick="CancelAsync" />
-        <Button Title="Clear Draft" OnClick="ShowClearDraftConfirmModal" />
-        <Button Title="Save" OnClick="AddAsync" Variant="ButtonVariant.Primary" />
-    </FooterContent>
-</Modal>
-
-@if (showClearDraftConfirmModal)
-{
-    <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
-                    Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
-                    OnNo="CancelClearDraftConfirm" />
-}
-
-@if (showReactivateConflictModal)
-{
-    <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
-                    OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
-}
+                @if (showReactivateConflictModal)
+                {
+                    <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
+                                  OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
+                }

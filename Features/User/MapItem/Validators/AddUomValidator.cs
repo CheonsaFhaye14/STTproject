@@ -1,52 +1,48 @@
+using System.Globalization;
 using STTproject.Models;
 
 namespace STTproject.Features.User.MapItem.Validators;
 
+/// <summary>
+/// Checks for the Add UOM window. Conversions are decimals relative to the company stock UOM (stock UOM = 1).
+/// Prices are no longer entered, so there are no price rules.
+/// </summary>
 public static class AddUomValidator
 {
+    /// <param name="conversion">The conversion worked out from the input, in stock units (null when blank or invalid).</param>
+    /// <param name="conversionRequired">True when the company item has a stock UOM (priced item).</param>
     public static Dictionary<string, string> ValidateUomEntry(
         string uomName,
         string conversionInput,
-        int? pcConversion,
-        string priceInput,
+        decimal? conversion,
         Dictionary<string, UomEntry> existingEntries,
-        string baseUomName)
+        bool conversionRequired)
     {
         var errors = new Dictionary<string, string>();
 
         if (string.IsNullOrWhiteSpace(uomName))
-        {
             errors["uom"] = "Unit of measure is required.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(conversionInput))
-        {
-            if (!int.TryParse(conversionInput, out var rawConversion) || rawConversion <= 0)
-            {
-                errors["conversion"] = "Conversion must be a positive integer.";
-            }
-            else if (pcConversion.HasValue &&
-                    existingEntries.Values.Any(entry => entry.IsActive && entry.Conversion == pcConversion))
-            {
-                errors["conversion"] = "Conversion value must be unique.";
-            }
-            else if (IsBaseUnit(uomName, baseUomName) && pcConversion != 1)
-            {
-                errors["conversion"] = $"Unit '{baseUomName}' must have conversion 1.";
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(priceInput))
-        {
-            if (!decimal.TryParse(priceInput, out var price) || price < 0)
-            {
-                errors["price"] = "Price must be greater than zero.";
-            }
-        }
-
-        if (existingEntries.TryGetValue(uomName, out var existingEntry) && existingEntry.IsActive)
-        {
+        else if (existingEntries.TryGetValue(uomName, out var existing) && existing.IsActive)
             errors["uom"] = $"'{uomName}' already exists.";
+
+        if (string.IsNullOrWhiteSpace(conversionInput))
+        {
+            if (conversionRequired)
+                errors["conversion"] = "Conversion is required: prices are worked out from it.";
+        }
+        else if (!decimal.TryParse(conversionInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var raw) || raw <= 0)
+        {
+            errors["conversion"] = "Conversion must be a number greater than zero.";
+        }
+        else if (conversion is null)
+        {
+            errors["conversion"] = "Pick the unit the conversion is counted in.";
+        }
+        else if (existingEntries.Any(kv => kv.Value.IsActive
+                                           && !string.Equals(kv.Key, uomName, StringComparison.OrdinalIgnoreCase)
+                                           && kv.Value.Conversion == conversion))
+        {
+            errors["conversion"] = "Another unit already has this conversion.";
         }
 
         return errors;
@@ -54,69 +50,38 @@ public static class AddUomValidator
 
     public static Dictionary<string, string> ValidateFinalUomEntries(
         Dictionary<string, UomEntry> entries,
-        string baseUomName,
-        bool pricesRequired = true)
+        bool conversionRequired)
     {
         var errors = new Dictionary<string, string>();
 
-        if (pricesRequired && !entries.Any(x => x.Value.Price.HasValue))
-        {
-            errors["prices"] = "At least one unit of measure must have a price set for calculation.";
-        }
-
-        // Guard against duplicate active names (defense-in-depth: rename should already prevent this).
         var duplicateNameGroups = entries
             .Where(kv => kv.Value.IsActive)
-            .GroupBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(kv => kv.Key.Trim(), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1);
 
         foreach (var group in duplicateNameGroups)
-        {
             foreach (var kv in group)
-            {
                 errors[$"uomname_{kv.Key}"] = $"'{kv.Key}' is already in use.";
-            }
-        }
 
-        // Guard against duplicate active conversions.
         var duplicateConversionGroups = entries
             .Where(kv => kv.Value.IsActive && kv.Value.Conversion.HasValue)
             .GroupBy(kv => kv.Value.Conversion!.Value)
             .Where(g => g.Count() > 1);
 
         foreach (var group in duplicateConversionGroups)
-        {
             foreach (var kv in group)
-            {
-                errors[$"conversion_{kv.Key}"] = "Conversion value must be unique.";
-            }
-        }
+                errors[$"conversion_{kv.Key}"] = "Another unit has the same conversion.";
 
-        if (pricesRequired &&
-            entries.TryGetValue(baseUomName, out var baseUnitEntry) &&
-            (!baseUnitEntry.Price.HasValue || baseUnitEntry.Price <= 0))
+        if (conversionRequired)
         {
-            errors[$"price_{baseUomName}"] = "Base unit price must be provided or derivable from another priced unit.";
-        }
-
-        foreach (var kv in entries)
-        {
-            if (IsBaseUnit(kv.Key, baseUomName) && kv.Value.Conversion.HasValue && kv.Value.Conversion.Value != 1)
-            {
-                errors["conversion_base"] = $"Unit '{kv.Key}' must have conversion 1.";
-                break;
-            }
+            foreach (var kv in entries.Where(kv => kv.Value.IsActive && kv.Value.Conversion is null))
+                errors.TryAdd($"conversion_{kv.Key}", "Conversion is required: prices are worked out from it.");
         }
 
         return errors;
     }
 
-    private static bool IsBaseUnit(string? uom, string baseUomName)
-    {
-        return string.Equals((uom ?? string.Empty).Trim(), baseUomName.Trim(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    public static Dictionary<string, string> ValidateUomRename(string oldName, string newName, Dictionary<string, UomEntry> existingEntries, string baseUomName)
+    public static Dictionary<string, string> ValidateUomRename(string oldName, string newName, Dictionary<string, UomEntry> existingEntries)
     {
         var errors = new Dictionary<string, string>();
 
@@ -138,20 +103,23 @@ public static class AddUomValidator
 
     public static Dictionary<string, string> ValidateUomConversion(
         string uomName,
-        int? conversion,
+        decimal? conversion,
         Dictionary<string, UomEntry> existingEntries,
-        string baseUomName)
+        bool isStock)
     {
         var errors = new Dictionary<string, string>();
 
-        if (!conversion.HasValue)
-        {
-            return errors;
-        }
+        if (!conversion.HasValue) return errors;
 
         if (conversion.Value <= 0)
         {
-            errors[$"conversion_{uomName}"] = "Conversion must be a positive integer.";
+            errors[$"conversion_{uomName}"] = "Conversion must be greater than zero.";
+            return errors;
+        }
+
+        if (isStock && conversion.Value != 1m)
+        {
+            errors[$"conversion_{uomName}"] = "The stock UOM must have conversion 1.";
             return errors;
         }
 
@@ -161,15 +129,7 @@ public static class AddUomValidator
             kv.Value.Conversion == conversion);
 
         if (isDuplicate)
-        {
-            errors[$"conversion_{uomName}"] = "Conversion value must be unique.";
-            return errors;
-        }
-
-        if (IsBaseUnit(uomName, baseUomName) && conversion.Value != 1)
-        {
-            errors[$"conversion_{uomName}"] = $"Unit '{baseUomName}' must have conversion 1.";
-        }
+            errors[$"conversion_{uomName}"] = "Another unit has the same conversion.";
 
         return errors;
     }

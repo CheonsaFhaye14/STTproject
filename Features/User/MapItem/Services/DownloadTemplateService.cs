@@ -48,12 +48,12 @@ public class DownloadTemplateService
             worksheet.Cell(1, 7).Value = "UOM";
             worksheet.Cell(1, 8).Value = "ConversionBasedOn";
             worksheet.Cell(1, 9).Value = "Conversion";
-            worksheet.Cell(1, 10).Value = "Price";
-            worksheet.Cell(1, 11).Value = "StockUom";
+            // Read-only reference: the unit the company price is per. Prices come from the company price, so there is
+            // no Price column; the import ignores this column too.
+            worksheet.Cell(1, 10).Value = "CompanyStockUom";
 
             // Extra unlocked cells for user scratch space; the import parser ignores these columns.
-            // Moved past column K now that StockUom occupies K.
-            worksheet.Range("L2:AA1000").Style.Protection.Locked = false;
+            worksheet.Range("K2:AA1000").Style.Protection.Locked = false;
 
             // change number format to text for code/name columns, now including ConversionBasedOn (a UOM name)
             worksheet.Range("E2:H1000").Style.NumberFormat.Format = "@";
@@ -63,7 +63,7 @@ public class DownloadTemplateService
             headerRow.Style.Font.Bold = true;
             headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#000000");
             headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.FromHtml("#FFFFFF");
-                        worksheet.SheetView.FreezeRows(1);
+            worksheet.SheetView.FreezeRows(1);
 
             // Add data rows with empty duplication rows for each item
             int currentRow = 2;
@@ -92,12 +92,15 @@ public class DownloadTemplateService
                     worksheet.Cell(currentRow, 4).Value = item.CompanyItemName;
                     worksheet.Cell(currentRow, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
-                    // Empty unlocked columns for user to fill in (now includes ConversionBasedOn, col 8)
-                    for (int col = 5; col <= 11; col++)
+                    // Empty unlocked columns for user to fill in: SubdItemCode .. Conversion (cols 5-9)
+                    for (int col = 5; col <= 9; col++)
                     {
                         worksheet.Cell(currentRow, col);
                         worksheet.Cell(currentRow, col).Style.Protection.Locked = false;
                     }
+
+                    worksheet.Cell(currentRow, 10).Value = item.CompanyStockUom;
+                    worksheet.Cell(currentRow, 10).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
 
                     currentRow++;
                 }
@@ -113,24 +116,11 @@ public class DownloadTemplateService
             conversionValidation.IgnoreBlanks = true;
             conversionValidation.ShowInputMessage = true;
             conversionValidation.InputTitle = "Conversion";
-            conversionValidation.InputMessage = "How many of this UOM per 1 of 'Conversion Based On' (or per 1 PC if left blank).";
+            conversionValidation.InputMessage = "Pieces in one of this UOM (PC = 1, a case of 12 = 12). Or, with 'Conversion Based On', how many of that UOM. Include a row for the CompanyStockUom.";
             conversionValidation.ShowErrorMessage = true;
             conversionValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
             conversionValidation.ErrorTitle = "Invalid Conversion Value";
-            conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0. Note: if UOM is PC/PCS/PIECE, Conversion must be 1.";
-
-            // Price validation: decimal > 0 (col J)
-            var priceRange = worksheet.Range($"J2:J{lastDataRow}");
-            var priceValidation = priceRange.CreateDataValidation();
-            priceValidation.Decimal.GreaterThan(0);
-            priceValidation.IgnoreBlanks = true;
-            priceValidation.ShowInputMessage = true;
-            priceValidation.InputTitle = "Price";
-            priceValidation.InputMessage = "Must be a number greater than 0. Example: 10.50";
-            priceValidation.ShowErrorMessage = true;
-            priceValidation.ErrorStyle = ClosedXML.Excel.XLErrorStyle.Stop;
-            priceValidation.ErrorTitle = "Invalid Price Value";
-            priceValidation.ErrorMessage = "Price must be a number greater than 0.";
+            conversionValidation.ErrorMessage = "Conversion must be a whole number greater than 0 (pieces in one unit). If UOM is PC/PCS/PIECE, Conversion must be 1.";
 
             // UOM validation: dropdown from existing mapped UOMs, but allow new entries too
             if (uomSourceRange != null)
@@ -153,16 +143,6 @@ public class DownloadTemplateService
                 basedOnValidation.InputTitle = "Conversion Based On";
                 basedOnValidation.InputMessage = "Optional. Which UOM the Conversion count refers to. Leave blank to base directly on PC.";
                 basedOnValidation.ShowErrorMessage = false; // Allow custom entries
-
-                // Stock UOM validation: same dropdown list, optional
-                var stockUomRange = worksheet.Range($"K2:K{lastDataRow}");
-                var stockUomValidation = stockUomRange.CreateDataValidation();
-                stockUomValidation.List(uomSourceRange);
-                stockUomValidation.IgnoreBlanks = true;
-                stockUomValidation.ShowInputMessage = true;
-                stockUomValidation.InputTitle = "Stock UOM";
-                stockUomValidation.InputMessage = "Optional. Put the UOM that the company stock price applies to on one row of the item. Leave blank to get a suggestion.";
-                stockUomValidation.ShowErrorMessage = false; // Allow custom entries
             }
 
             // Auto-fit column widths
@@ -200,7 +180,7 @@ public class DownloadTemplateService
         worksheet.Cell(row, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
         worksheet.Cell(row, 4).Style.Protection.Locked = true;
 
-        // Unlocked columns: SubdItemCode, SubdItemName, UOM, ConversionBasedOn, Conversion, Price
+        // Unlocked columns: SubdItemCode, SubdItemName, UOM, ConversionBasedOn, Conversion
         worksheet.Cell(row, 5).Value = item.SubdItemCode;
         worksheet.Cell(row, 5).Style.Protection.Locked = false;
 
@@ -216,11 +196,11 @@ public class DownloadTemplateService
         worksheet.Cell(row, 9).Value = item.Conversion;
         worksheet.Cell(row, 9).Style.Protection.Locked = false;
 
-        worksheet.Cell(row, 10).Value = item.Price;
-        worksheet.Cell(row, 10).Style.Protection.Locked = false;
-
-        // Stock UOM is filled in by the user (optional): the UOM the company stock price applies to.
-        worksheet.Cell(row, 11).Style.Protection.Locked = false;
+        // The item's first row starts with the company stock UOM in the UOM column: fill in its piece count.
+        // Column J repeats the company stock UOM on every row as a locked reference.
+        worksheet.Cell(row, 10).Value = item.CompanyStockUom;
+        worksheet.Cell(row, 10).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+        worksheet.Cell(row, 10).Style.Protection.Locked = true;
     }
     public byte[] GenerateErrorReportExcel(ImportMapItemResult result, List<ImportMapItemRowResult> rowsToExport)
     {
@@ -236,8 +216,8 @@ public class DownloadTemplateService
             "SubdItemCode",
             "SubdItemName",
             "UOM",
-            "Conversion",
-            "Price"
+            "ConversionBasedOn",
+            "Conversion"
         };
 
         for (int i = 0; i < headers.Count; i++)

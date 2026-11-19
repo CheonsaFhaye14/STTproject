@@ -122,8 +122,8 @@ public sealed class SalesInvoiceUomOption
     public int ItemsUomId { get; init; }
     public string UomName { get; init; } = string.Empty;
     public decimal Price { get; init; }
-    public int? ConversionToBase { get; init; }
-    public int StockConvToBase { get; init; }
+    public decimal? ConversionToBase { get; init; }
+    public decimal StockConvToBase { get; init; }
     public decimal? StockPrice { get; init; }
     public string? PriceIssue { get; init; }
 }
@@ -329,7 +329,7 @@ public sealed class RecalcIssueItemRow
     public string ItemName { get; init; } = string.Empty;
     public string CompanyItemCode { get; init; } = string.Empty;
     public string UomName { get; init; } = string.Empty;
-    public int? ConversionToBase { get; init; }
+    public decimal? ConversionToBase { get; init; }
     public bool UomActive { get; init; }
     public string ActiveUoms { get; init; } = string.Empty;   // e.g. "Piece (1), Case (30, stock)"
     public int Lines { get; init; }

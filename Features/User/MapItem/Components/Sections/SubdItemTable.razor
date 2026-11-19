@@ -73,11 +73,7 @@
 							<div class="uom-legend">
 								<span>
 									<span class="uom-dot uom-dot-stock"></span>
-									Stock
-								</span>
-								<span>
-									<span class="uom-dot uom-dot-base"></span>
-									Base
+									Company stock UOM
 								</span>
 							</div>
 						</div>
@@ -99,46 +95,34 @@
 							<td class="text-col">@item.SubItemCode</td>
 							<td class="text-col">@item.Description</td>
 							<td class="uom-td">
-								@if (item.Uoms.Count == 0)
+								@{
+									var lines = UomLines(item);
+								}
+								@if (lines.Count == 0)
 								{
-									<span>—</span>
-									@if (CompanyRequiresStockUom(item))
-									{
-										<span class="uom-missing-stock">
-											<span class="uom-dot uom-dot-missing"></span>
-											No stock UOM
-										</span>
-									}
+									<span class="uom-none">No units</span>
 								}
 								else
 								{
-									<div class="uom-pill-list">
-										@foreach (var entry in item.Uoms)
+									<div class="uom-lines">
+										@foreach (var line in lines)
 										{
-											<span class="uom-pill" title="@GetUomTooltip(item, entry)">
-												@if (entry.IsStockUom)
-												{
-													<span class="uom-dot uom-dot-stock" title="Stock UOM"></span>
-												}
-												@if (entry.IsBaseUnit)
-												{
-													<span class="uom-dot uom-dot-base" title="Base UOM"></span>
-												}
-												@entry.UomName
-												@if (entry.Price.HasValue)
-												{
-													<span>@entry.Price.Value.ToString("N2")</span>
-												}
-											</span>
+											<div class="uom-line @line.Kind" title="@line.Tooltip">
+												<span class="uom-line-name">
+													@if (line.Kind is "stock" or "implicit")
+													{
+														<span class="uom-dot uom-dot-stock"></span>
+													}
+													@line.Name
+													@if (line.Kind == "bundle")
+													{
+														<span class="uom-mini-tag">B</span>
+													}
+												</span>
+												<span class="uom-line-price">@line.Price</span>
+											</div>
 										}
 									</div>
-									@if (CompanyRequiresStockUom(item) && !item.Uoms.Any(u => u.IsStockUom))
-									{
-										<span class="uom-missing-stock">
-											<span class="uom-dot uom-dot-missing"></span>
-											No stock UOM
-										</span>
-									}
 								}
 							</td>
 							<td>

@@ -53,7 +53,4 @@ public static class StockUomSuggester
             ? new StockUomSuggestion(matches[0].Key, $"Name matches the company stock UOM ({companyStockUom}).")
             : null;
     }
-
-    public static bool PriceMatches(decimal? applicablePrice, UomEntry entry) =>
-        applicablePrice.HasValue && entry.Price.HasValue && entry.Price.Value == applicablePrice.Value;
 }

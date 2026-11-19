@@ -1062,7 +1062,7 @@ public sealed class ImportSalesInvoiceService
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		ILookup<int, ItemsUom> uomsBySubdItemId,
-		IReadOnlyDictionary<int, HashSet<int>> knownConversionsBySubdItem,
+		IReadOnlyDictionary<int, HashSet<decimal>> knownConversionsBySubdItem,
 		IEnumerable<Data.Customer> allCustomers,
 		IEnumerable<SubdItem> allSubdItems,
 		UomSynonymMap uomSynonyms)
@@ -1848,26 +1848,27 @@ public sealed class ImportSalesInvoiceService
 		return cell.IsEmpty();
 	}
 
-	private static Dictionary<int, HashSet<int>> BuildKnownConversionsBySubdItem(
+	private static Dictionary<int, HashSet<decimal>> BuildKnownConversionsBySubdItem(
 		WorkbookRows source,
 		ILookup<string, SubdItem> subdItemsBySkuGroup,
 		IEnumerable<SubdItem> allSubdItems,
 		ILookup<(int subdItemId, string UomName), ItemsUom> uomLookup,
 		UomSynonymMap uomSynonyms)
 	{
-		var result = new Dictionary<int, HashSet<int>>();
+		// Conversions are decimals now (relative to the company stock UOM, e.g. PC = 0.0833333333).
+		var result = new Dictionary<int, HashSet<decimal>>();
 
-		void Record(int subdItemId, int conversion)
+		void Record(int subdItemId, decimal conversion)
 		{
 			if (!result.TryGetValue(subdItemId, out var set))
 			{
-				set = new HashSet<int>();
+				set = new HashSet<decimal>();
 				result[subdItemId] = set;
 			}
 			set.Add(conversion);
 		}
 
-		int? TryMatchConversion(SubdItem item, string uomString)
+		decimal? TryMatchConversion(SubdItem item, string uomString)
 		{
 			foreach (var synonym in uomSynonyms.Expand(uomString))
 			{

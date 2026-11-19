@@ -71,6 +71,8 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    public virtual DbSet<VwSubdCustomerKey> VwSubdCustomerKeys { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
 
@@ -78,11 +80,11 @@ public partial class EntrielContext : DbContext
     {
         modelBuilder.Entity<CompanyItem>(entity =>
         {
-            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E98388CD1744A");
+            entity.HasKey(e => e.CompanyItemId).HasName("PK__CompanyI__2A0E9838A2F86818");
 
             entity.ToTable("CompanyItem");
 
-            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA8C13BEF6").IsUnique();
+            entity.HasIndex(e => e.ItemCode, "UQ__CompanyI__3ECC0FEA3E9F1C03").IsUnique();
 
             entity.Property(e => e.Category)
                 .HasMaxLength(100)
@@ -107,10 +109,9 @@ public partial class EntrielContext : DbContext
             entity.Property(e => e.StockPriceRegional).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.StockUomName).HasMaxLength(20);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.CompanyItemCreatedByNavigations)
-                .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK_CompanyItem_CreatedBy");
+    .HasForeignKey(d => d.CreatedBy)
+    .HasConstraintName("FK_CompanyItem_CreatedBy");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.CompanyItemUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
@@ -119,7 +120,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<CompanyItemPriceHistory>(entity =>
         {
-            entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1344EDBBD81");
+            entity.HasKey(e => e.CompanyItemPriceHistoryId).HasName("PK__CompanyI__BA10F1349601297C");
 
             entity.ToTable("CompanyItemPriceHistory");
 
@@ -145,12 +146,12 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.CompanyItem).WithMany(p => p.CompanyItemPriceHistories)
                 .HasForeignKey(d => d.CompanyItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__CompanyIt__Compa__3D2915A8");
+                .HasConstraintName("FK__CompanyIt__Compa__18EBB532");
         });
 
         modelBuilder.Entity<Customer>(entity =>
         {
-            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D8494BD832");
+            entity.HasKey(e => e.CustomerId).HasName("PK__Customer__A4AE64D88741A950");
 
             entity.ToTable("Customer");
 
@@ -190,7 +191,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<DeletedSalesInvoice>(entity =>
         {
-            entity.HasKey(e => e.DeletedSalesInvoiceId).HasName("PK__DeletedS__FAABA1B9C3C943E8");
+            entity.HasKey(e => e.DeletedSalesInvoiceId).HasName("PK__DeletedS__FAABA1B94CCEE636");
 
             entity.ToTable("DeletedSalesInvoice");
 
@@ -203,18 +204,19 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.DeletionBatch).WithMany(p => p.DeletedSalesInvoices)
                 .HasForeignKey(d => d.DeletionBatchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DeletedSa__Delet__00AA174D");
+                .HasConstraintName("FK__DeletedSa__Delet__1CBC4616");
         });
 
         modelBuilder.Entity<DeletedSalesInvoiceItem>(entity =>
         {
-            entity.HasKey(e => e.DeletedSalesInvoiceItemId).HasName("PK__DeletedS__185AA697D2142B6D");
+            entity.HasKey(e => e.DeletedSalesInvoiceItemId).HasName("PK__DeletedS__185AA697A9479F76");
 
             entity.ToTable("DeletedSalesInvoiceItem");
 
             entity.HasIndex(e => e.DeletedSalesInvoiceId, "IX_DSII_Invoice");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.BaseQuantity).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.BilledAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.PriceSource)
                 .HasMaxLength(30)
@@ -225,15 +227,13 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.DeletedSalesInvoice).WithMany(p => p.DeletedSalesInvoiceItems)
                 .HasForeignKey(d => d.DeletedSalesInvoiceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DeletedSa__Delet__038683F8");
+                .HasConstraintName("FK__DeletedSa__Delet__1DB06A4F");
         });
 
         modelBuilder.Entity<ImportBatch>(entity =>
         {
             entity.ToTable("ImportBatch");
-
             entity.HasIndex(e => e.ImportFileId, "IX_ImportBatch_ImportFileId");
-
             entity.Property(e => e.ImportBatchId).ValueGeneratedNever();
             entity.Property(e => e.BatchStatus)
                 .HasMaxLength(50)
@@ -262,7 +262,6 @@ public partial class EntrielContext : DbContext
         modelBuilder.Entity<ImportError>(entity =>
         {
             entity.ToTable("ImportError");
-
             entity.HasIndex(e => new { e.Fingerprint, e.Status }, "IX_ImportError_Fingerprint_Status").HasFilter("([Fingerprint] IS NOT NULL)");
 
             entity.HasIndex(e => e.PreviousImportErrorId, "IX_ImportError_PreviousImportErrorId").HasFilter("([PreviousImportErrorId] IS NOT NULL)");
@@ -344,9 +343,7 @@ public partial class EntrielContext : DbContext
             entity.HasKey(e => e.EvidenceId);
 
             entity.ToTable("ImportErrorEvidence");
-
             entity.HasIndex(e => new { e.ImportErrorId, e.EvidenceHash }, "UX_ImportErrorEvidence_Error_Hash").IsUnique();
-
             entity.Property(e => e.EvidenceId).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.EvidenceHash)
@@ -363,9 +360,7 @@ public partial class EntrielContext : DbContext
         modelBuilder.Entity<ImportFile>(entity =>
         {
             entity.ToTable("ImportFile");
-
             entity.HasIndex(e => e.FileHash, "UX_ImportFile_FileHash").IsUnique();
-
             entity.Property(e => e.ImportFileId).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.FileHash)
@@ -378,7 +373,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<ImportTemplate>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2C6C1A2EB2");
+            entity.HasKey(e => e.ImportTemplateId).HasName("PK__ImportTe__AEC13D2CC93C7AE9");
 
             entity.HasIndex(e => new { e.ImportType, e.SubDistributorId, e.Principal, e.TemplateName }, "UX_ImportTemplates_ActiveName")
                 .IsUnique()
@@ -400,11 +395,13 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<ImportTemplateColumn>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E090006E83F");
+            entity.HasKey(e => e.ImportTemplateColumnId).HasName("PK__ImportTe__F6EF3E0986BEC5F8");
 
             entity.HasIndex(e => new { e.ImportTemplateId, e.SortOrder }, "IX_ImportTemplateColumns_Template");
-
             entity.HasIndex(e => new { e.ImportTemplateId, e.ImportTemplateSheetId, e.HeaderText }, "UX_ITC_Template_Header").IsUnique();
+            entity.HasIndex(e => new { e.ImportTemplateSheetId, e.FieldKey }, "UX_ITC_Sheet_Field")
+                .IsUnique()
+                .HasFilter("([FieldKey] IS NOT NULL)");
 
             entity.Property(e => e.FieldKey)
                 .HasMaxLength(50)
@@ -427,7 +424,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<ImportTemplateColumnAlias>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateColumnAliasId).HasName("PK__ImportTe__5AC20B7E06B9E5CC");
+            entity.HasKey(e => e.ImportTemplateColumnAliasId).HasName("PK__ImportTe__5AC20B7EBAA9ABDB");
 
             entity.HasIndex(e => new { e.ImportTemplateColumnId, e.AliasText }, "UX_ITCA_Column_Alias").IsUnique();
 
@@ -440,7 +437,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<ImportTemplateSheet>(entity =>
         {
-            entity.HasKey(e => e.ImportTemplateSheetId).HasName("PK__ImportTe__4755275865B88B8A");
+            entity.HasKey(e => e.ImportTemplateSheetId).HasName("PK__ImportTe__4755275853710B44");
 
             entity.Property(e => e.HeaderRowCount).HasDefaultValue(1, "DF_ITS_HeaderRowCount");
             entity.Property(e => e.HeaderRowMode)
@@ -456,21 +453,21 @@ public partial class EntrielContext : DbContext
 
             entity.HasOne(d => d.ImportTemplate).WithMany(p => p.ImportTemplateSheets)
                 .HasForeignKey(d => d.ImportTemplateId)
-                .HasConstraintName("FK__ImportTem__Impor__53D770D6");
+                .HasConstraintName("FK__ImportTem__Impor__2CF2ADDF");
         });
 
         modelBuilder.Entity<ItemsUom>(entity =>
         {
-            entity.HasKey(e => e.ItemsUomId).HasName("PK__ItemsUom__53724957BA9B3FE8");
+            entity.HasKey(e => e.ItemsUomId).HasName("PK__ItemsUom__53724957891B5952");
 
             entity.ToTable("ItemsUom");
 
             entity.HasIndex(e => new { e.SubdItemId, e.UomName }, "UQ_ItemsUom_SubdItem_Uom").IsUnique();
-
             entity.HasIndex(e => e.SubdItemId, "UX_ItemsUom_OneActiveStock")
                 .IsUnique()
                 .HasFilter("([IsStockUom]=(1) AND [IsActive]=(1))");
 
+            entity.Property(e => e.ConversionToBase).HasColumnType("decimal(18, 10)");
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())", "DF__ItemsUom__Create__18EBB532")
                 .HasColumnType("datetime");
@@ -497,7 +494,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<ItemsUomPriceHistory>(entity =>
         {
-            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA34B69D7D99");
+            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA34C5F2D289");
 
             entity.ToTable("ItemsUomPriceHistory");
 
@@ -518,7 +515,7 @@ public partial class EntrielContext : DbContext
 
             entity.HasOne(d => d.CompanyItemPriceHistory).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.CompanyItemPriceHistoryId)
-                .HasConstraintName("FK__ItemsUomP__Compa__3F115E1A");
+                .HasConstraintName("FK__ItemsUomP__Compa__30C33EC3");
 
             entity.HasOne(d => d.ItemsUom).WithMany(p => p.ItemsUomPriceHistories)
                 .HasForeignKey(d => d.ItemsUomId)
@@ -532,22 +529,27 @@ public partial class EntrielContext : DbContext
 
             entity.ToTable("PriceRecalcLine");
 
+            entity.Property(e => e.BaseQuantity).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.Issue)
                 .HasMaxLength(100)
                 .IsUnicode(false);
             entity.Property(e => e.NewAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.OldAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PricingNote)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.StockConvToBase).HasColumnType("decimal(18, 10)");
             entity.Property(e => e.StockPrice).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.Run).WithMany(p => p.PriceRecalcLines)
                 .HasForeignKey(d => d.RunId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__PriceReca__RunId__269AB60B");
+                .HasConstraintName("FK__PriceReca__RunId__339FAB6E");
         });
 
         modelBuilder.Entity<PriceRecalcRun>(entity =>
         {
-            entity.HasKey(e => e.RunId).HasName("PK__PriceRec__A259D4DD29A8E9FA");
+            entity.HasKey(e => e.RunId).HasName("PK__PriceRec__A259D4DD3BAEDB5E");
 
             entity.ToTable("PriceRecalcRun");
 
@@ -562,12 +564,12 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.SubDistributor).WithMany(p => p.PriceRecalcRuns)
                 .HasForeignKey(d => d.SubDistributorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__PriceReca__SubDi__22CA2527");
+                .HasConstraintName("FK__PriceReca__SubDi__3493CFA7");
         });
 
         modelBuilder.Entity<SalesInvoice>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1AE9FBEC78");
+            entity.HasKey(e => e.SalesInvoiceId).HasName("PK__SalesInv__BA05CD1A6B3559AB");
 
             entity.ToTable("SalesInvoice");
 
@@ -607,7 +609,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<SalesInvoiceDeletionBatch>(entity =>
         {
-            entity.HasKey(e => e.DeletionBatchId).HasName("PK__SalesInv__897FF3163671BA3D");
+            entity.HasKey(e => e.DeletionBatchId).HasName("PK__SalesInv__897FF316C114D6B1");
 
             entity.ToTable("SalesInvoiceDeletionBatch");
 
@@ -623,11 +625,12 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<SalesInvoiceItem>(entity =>
         {
-            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64DC7B368D");
+            entity.HasKey(e => e.SalesInvoiceItemId).HasName("PK__SalesInv__BA84EC64D716A8C7");
 
             entity.ToTable("SalesInvoiceItem");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.BaseQuantity).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.BilledAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -661,7 +664,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<SubDistributor>(entity =>
         {
-            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCD5B53D31B");
+            entity.HasKey(e => e.SubDistributorId).HasName("PK__SubDistr__954B9BCDA73BF392");
 
             entity.ToTable("SubDistributor");
 
@@ -733,7 +736,7 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<SubdItem>(entity =>
         {
-            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB656501717AC");
+            entity.HasKey(e => e.SubdItemId).HasName("PK__SubdItem__873BB65654B834BA");
 
             entity.ToTable("SubdItem");
 
@@ -834,9 +837,9 @@ public partial class EntrielContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4C13EF7F33");
+            entity.HasKey(e => e.UserId).HasName("PK__Users__1788CC4CF957C4C1");
 
-            entity.HasIndex(e => e.Username, "UQ__Users__536C85E42A318390").IsUnique();
+            entity.HasIndex(e => e.Username, "UQ__Users__536C85E4D1100CD2").IsUnique();
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql("(getdate())")
@@ -852,6 +855,20 @@ public partial class EntrielContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
             entity.Property(e => e.Username).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<VwSubdCustomerKey>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("vw_SubdCustomerKey");
+
+            entity.Property(e => e.SubdCustCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SubdCustName)
+                .HasMaxLength(200)
+                .IsUnicode(false);
         });
         modelBuilder.HasSequence<int>("ImportBatchIdSequence");
         modelBuilder.HasSequence<int>("ImportErrorEvidenceIdSequence");

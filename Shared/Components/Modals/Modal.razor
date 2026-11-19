@@ -26,7 +26,7 @@
                     }
                 </div>
             </div>
-            <div class="modal-body">
+            <div class="modal-body @(FlushBody ? "modal-body-flush" : null)">
                 @if (Details != null)
                 {
                     <div class="modal-details">
@@ -57,6 +57,8 @@
     [Parameter] public string? Width { get; set; }
     [Parameter] public string? MaxWidth { get; set; }
     [Parameter] public string? MaxHeight { get; set; }
+    /// <summary>No padding or gap in the body, for content that fills the modal edge to edge.</summary>
+    [Parameter] public bool FlushBody { get; set; }
 
     private string GetModalBoxStyle()
     {
@@ -77,18 +79,18 @@
 
     private static readonly Dictionary<ModalIconType, string> IconClassMap = new()
     {
-        { ModalIconType.Warning,  "fa-solid fa-triangle-exclamation" },
-        { ModalIconType.Upload,   "fa-solid fa-upload" },
-        { ModalIconType.Success,  "fa-solid fa-check" },
-        { ModalIconType.Error,    "fa-solid fa-xmark" },
-        { ModalIconType.Info,     "fa-solid fa-info" },
+        { ModalIconType.Warning, "fa-solid fa-triangle-exclamation" },
+        { ModalIconType.Upload, "fa-solid fa-upload" },
+        { ModalIconType.Success, "fa-solid fa-check" },
+        { ModalIconType.Error, "fa-solid fa-xmark" },
+        { ModalIconType.Info, "fa-solid fa-info" },
         { ModalIconType.Question, "fa-solid fa-question" },
         { ModalIconType.UserPlus, "fa-solid fa-user-plus" },
         { ModalIconType.UserEdit, "fa-solid fa-user-pen" },
         { ModalIconType.UserView, "fa-solid fa-user" },
-        { ModalIconType.Ruler,    "fa-solid fa-ruler-combined" },
+        { ModalIconType.Ruler, "fa-solid fa-ruler-combined" },
         { ModalIconType.ItemView, "fa-solid fa-dolly" },
-        { ModalIconType.Clone,    "fa-solid fa-clone" }
+        { ModalIconType.Clone, "fa-solid fa-clone" }
     };
 
     private string GetIconClass() =>

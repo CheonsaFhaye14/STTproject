@@ -25,7 +25,7 @@ public partial class SalesInvoiceItem
 
     public int ItemsUomId { get; set; }
 
-    public int? BaseQuantity { get; set; }
+    public decimal? BaseQuantity { get; set; }
 
     public decimal? StockPriceUsed { get; set; }
 

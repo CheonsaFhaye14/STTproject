@@ -12,4 +12,5 @@ public sealed class TemplateRow
     public decimal? Conversion { get; set; }
     public string? ConversionBasedOn { get; set; }
     public decimal? Price { get; set; }
+    public string? CompanyStockUom { get; set; }
 }

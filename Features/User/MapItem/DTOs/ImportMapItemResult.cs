@@ -54,7 +54,7 @@ public sealed class ImportMapItemRowResult
 	public string SubdItemCode { get; set; } = string.Empty;
 	public string SubdItemName { get; set; } = string.Empty;
 	public string UomName { get; set; } = string.Empty;
-	public int? Conversion { get; set; }
+	public decimal? Conversion { get; set; }
 	public decimal? Price { get; set; }
 
 	public string? StockUom { get; set; }
@@ -236,8 +236,15 @@ public sealed class PreparedItemGroup
 		}
 	}
 
+	/// <summary>
+	/// Units that can be the stock UOM: those that mean the company stock UOM (CS = CASE and so on) and have a piece count.
+	/// Conversions are saved relative to it, so no other unit can be chosen.
+	/// </summary>
 	public List<string> StockUomOptions => Rows
-		.Where(r => !string.IsNullOrWhiteSpace(r.UomName) && r.Conversion is > 0 && r.Price.HasValue)
+		.Where(r => !string.IsNullOrWhiteSpace(r.UomName) && r.Conversion is > 0
+					&& (!RequiresStockUom
+						|| STTproject.Features.User.MapItem.Services.StockUomSuggester.Canon(r.UomName)
+						   == STTproject.Features.User.MapItem.Services.StockUomSuggester.Canon(CompanyStockUomName)))
 		.Select(r => r.UomName.Trim())
 		.Distinct(StringComparer.OrdinalIgnoreCase)
 		.ToList();
@@ -246,14 +253,17 @@ public sealed class PreparedItemGroup
 	{
 		var match = StockUomOptions.FirstOrDefault(o => string.Equals(o, uomName?.Trim(), StringComparison.OrdinalIgnoreCase));
 		if (match is null)
-			return "A stock UOM needs a conversion and a price.";
+			return $"The stock UOM must be the company stock UOM ({CompanyStockUomName}) with a piece count.";
 
 		// Confirming the stock UOM already in use keeps the price decisions. Changing it resets them.
 		var sameStock = string.Equals(StockUomName, match, StringComparison.OrdinalIgnoreCase);
 
 		foreach (var row in Rows)
 		{
-			row.IsStockUom = string.Equals(row.UomName?.Trim(), match, StringComparison.OrdinalIgnoreCase);
+			// A piece stock UOM: a same-named row of more than 1 piece is a bundle (buy 1 take 1), not the stock UOM.
+			row.IsStockUom = string.Equals(row.UomName?.Trim(), match, StringComparison.OrdinalIgnoreCase)
+				&& (STTproject.Features.User.MapItem.Services.StockUomSuggester.Canon(CompanyStockUomName) != "PIECE"
+					|| row.Conversion is null || row.Conversion == 1);
 			row.Warnings.RemoveAll(w => w.StartsWith("Stock UOM", StringComparison.OrdinalIgnoreCase));
 		}
 

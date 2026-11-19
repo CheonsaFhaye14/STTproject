@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Services;
+using STTproject.Features.User.MapItem.Services;
 
 namespace STTproject.Features.User.MapItem.Components.Sections;
 
@@ -33,7 +34,17 @@ public partial class SubdItemTable
     [Parameter] public HashSet<int> CompanyItemsWithStockUom { get; set; } = new();
 
     private bool CompanyRequiresStockUom(MapSubDistributorItemRow item) =>
-        CompanyItemsWithStockUom.Contains(item.CompanyItemId);
+        CompanyItemsWithStockUom.Contains(item.CompanyItemId) || !string.IsNullOrWhiteSpace(item.CompanyStockUomName);
+
+    /// <summary>The company stock UOM isn't one of the item's rows. That's fine: it is always 1.</summary>
+    private bool StockUomImplicit(MapSubDistributorItemRow item) =>
+        CompanyRequiresStockUom(item)
+        && !string.IsNullOrWhiteSpace(item.CompanyStockUomName)
+        && !item.Uoms.Any(u => u.IsStockUom);
+
+    /// <summary>Priced units without a conversion can't be priced.</summary>
+    private bool HasMissingConversion(MapSubDistributorItemRow item) =>
+        CompanyRequiresStockUom(item) && item.Uoms.Any(u => u.ConversionToBase is not > 0);
     private string SearchText { get; set; } = string.Empty;
     private SubItemSortOrder SortOrder { get; set; } = SubItemSortOrder.CreatedDateDesc;
     private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.SubItemCode;
@@ -239,30 +250,78 @@ public partial class SubdItemTable
         return !string.IsNullOrEmpty(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetUomTooltip(MapSubDistributorItemRow item, MapSubDistributorUomRow entry)
+    /// <summary>One line of the UOM cell: name, size in stock units, price.</summary>
+    private sealed record UomLine(string Name, string Conversion, string Price, string Kind, string Tooltip);
+
+    /// <summary>
+    /// The item's units as small lines: the stock UOM first (a dashed line when the item has no row for it, it is
+    /// always 1), then the rest by size. A stock-named unit at another size is a bundle (e.g. buy 1 take 1: PK = 2 PK).
+    /// </summary>
+    private static List<UomLine> UomLines(MapSubDistributorItemRow item)
     {
-        var roles = new List<string>();
+        var stock = item.CompanyStockUomName?.Trim();
+        var free = string.IsNullOrWhiteSpace(stock);
+        var lines = new List<UomLine>();
 
-        if (entry.IsStockUom)
-            roles.Add("Stock UOM");
+        // Company stock price, worked back from any priced unit (unit price = stock price × conversion).
+        var stockPrice = item.Uoms
+            .Where(u => u.Price is not null && u.ConversionToBase is > 0)
+            .Select(u => u.Price!.Value / u.ConversionToBase!.Value)
+            .Cast<decimal?>()
+            .FirstOrDefault();
 
-        if (entry.IsBaseUnit)
-            roles.Add("Base UOM");
+        static string Short(decimal v) => v.ToString(v >= 100 ? "#,0.##" : "0.####", System.Globalization.CultureInfo.InvariantCulture);
+        string PriceText(decimal? p) => free ? "Free" : p is decimal v ? $"₱{v:N2}" : "-";
 
-        var description = string.Join(" and ", roles);
-
-        var baseUom = item.Uoms.FirstOrDefault(u => u.IsBaseUnit);
-
-        if (entry.ConversionToBase.HasValue &&
-            baseUom?.ConversionToBase is > 0)
+        if (!free && !item.Uoms.Any(u => u.IsStockUom))
         {
-            var conversion = (decimal)entry.ConversionToBase.Value
-                / baseUom.ConversionToBase.Value;
-
-            description +=
-                $"\n1 {entry.UomName} = {conversion:N0} {baseUom.UomName}";
+            lines.Add(new UomLine(stock!, "1", PriceText(stockPrice), "implicit",
+                $"Company stock UOM ({stock}) · always 1 · not saved as a unit"));
         }
 
-        return description;
+        foreach (var u in item.Uoms
+                     .OrderByDescending(u => u.IsStockUom)
+                     .ThenByDescending(u => u.ConversionToBase ?? decimal.MinValue))
+        {
+            if (u.IsStockUom)
+            {
+                lines.Add(new UomLine(u.UomName, "1", PriceText(u.Price), "stock", $"Company stock UOM ({stock}) · conversion 1"));
+            }
+            else if (u.ConversionToBase is not decimal c || c <= 0)
+            {
+                lines.Add(new UomLine(u.UomName, "no size", "no size", "missing", "No conversion: this unit can't be priced"));
+            }
+            else
+            {
+                var bundle = !free && StockUomSuggester.Canon(u.UomName) == StockUomSuggester.Canon(stock) && c != 1m;
+                lines.Add(new UomLine(u.UomName, free ? Short(c) : $"{Short(c)} {stock}", PriceText(u.Price),
+                    bundle ? "bundle" : "unit",
+                    bundle
+                        ? $"Bundle: 1 {u.UomName} = {Short(c)} {stock} (e.g. buy 1 take 1)"
+                        : free ? $"Free item · 1 {u.UomName} = {Short(c)}" : $"1 {u.UomName} = {Short(c)} {stock}"));
+            }
+        }
+
+        return lines;
     }
+
+    // Conversions are relative to the company stock UOM (stock UOM = 1).
+    private static string GetUomTooltip(MapSubDistributorItemRow item, MapSubDistributorUomRow entry)
+    {
+        var stock = item.CompanyStockUomName?.Trim();
+
+        if (entry.IsStockUom)
+            return $"Company stock UOM ({stock}) · conversion 1";
+
+        if (string.IsNullOrWhiteSpace(stock))
+            return "Free item: no stock UOM, priced at 0";
+
+        if (entry.ConversionToBase is not > 0)
+            return "No conversion: this unit can't be priced";
+
+        return $"1 {entry.UomName} = {FormatConversion(entry.ConversionToBase.Value)} {stock}";
+    }
+
+    private static string FormatConversion(decimal value) =>
+        value == Math.Round(value) ? value.ToString("N0") : value.ToString("0.######");
 }

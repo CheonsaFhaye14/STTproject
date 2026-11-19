@@ -12,9 +12,60 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;            /* title and picker stay on one line */
+    flex: 1 1 auto;
+    min-width: 0;
     margin-bottom: 0;
 }
+
+.header-with-search .header-title {
+    white-space: nowrap;
+    flex: none;
+}
+
+/* Sub distributor picker (shared AutoComplete: its input and list need ::deep) */
+.subd-picker {
+    flex: 0 1 560px;
+    min-width: 260px;
+}
+
+    .subd-picker ::deep .autocomplete-wrapper input {
+        width: 100%;
+        height: 40px;
+        padding: 0 14px 0 38px;
+        box-sizing: border-box;
+        border: 1px solid #D8CBB8;
+        border-radius: 10px;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238A8A92' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center;
+        font-size: 14px;
+        font-weight: 600;
+        color: #211A10;
+        box-shadow: 0 2px 8px rgba(27, 27, 31, 0.06);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+        .subd-picker ::deep .autocomplete-wrapper input:focus {
+            border-color: #B08D57;
+            box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.2);
+        }
+
+    .subd-picker ::deep .autocomplete-list {
+        border-radius: 10px;
+        border-color: #E4DACB;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        z-index: 1100;
+    }
+
+    .subd-picker ::deep .autocomplete-item {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+        .subd-picker ::deep .autocomplete-item:hover,
+        .subd-picker ::deep .autocomplete-item.active {
+            background: #F4E8D2;
+        }
 
 .header-title {
     font-size: 18px;
@@ -106,6 +157,14 @@
     .top-header-row {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .header-with-search {
+        flex-wrap: wrap;
+    }
+
+    .subd-picker {
+        flex: 1 1 100%;
     }
 
     .top-buttons {
@@ -316,4 +375,3 @@
     gap: 10px;
     background-color: #f5f5f5;
 }
-

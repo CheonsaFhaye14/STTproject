@@ -40,7 +40,7 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public decimal? PriceIncreaseAmount { get; set; }
         public DateTime? AppliedDate { get; set; }
         public int? CreatedBy { get; set; }
-        public int? ConversionToBase { get; set; }
+        public decimal? ConversionToBase { get; set; }
     }
 
     public class AddPriceIncreaseDto
@@ -82,12 +82,12 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public string? SubdItemName { get; set; }
         public int ItemsUomId { get; set; }
         public bool IsStockUom { get; set; }
-        public int? StockConversionToBase { get; set; }
+        public decimal? StockConversionToBase { get; set; }
         public decimal? CurrentPrice { get; set; }
         public decimal? Increase { get; set; }
         public bool IsManual { get; set; }
         public string? UomName { get; set; }
-        public int? ConversionToBase { get; set; }
+        public decimal? ConversionToBase { get; set; }
         public decimal? OldPrice { get; set; }
         public string? PriceListType { get; set; }
         public decimal? NewPrice { get; set; }

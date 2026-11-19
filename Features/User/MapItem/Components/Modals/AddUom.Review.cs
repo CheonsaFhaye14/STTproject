@@ -11,7 +11,7 @@ public partial class AddUom
     private const string RefField = "ref";
 
     private static readonly HashSet<string> AddFormKeys =
-        new(StringComparer.Ordinal) { "uom", "customUom", "conversion", "price" };
+        new(StringComparer.Ordinal) { "uom", "customUom", "conversion" };
 
     private bool hasTriedSave;
     private UomReviewPanel? reviewPanel;
@@ -22,10 +22,7 @@ public partial class AddUom
     {
         var rows = UomRows;
         var rowOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < rows.Count; i++)
-        {
-            rowOrder[rows[i].Name] = i;
-        }
+        for (var i = 0; i < rows.Count; i++) rowOrder[rows[i].Name] = i;
 
         var messages = new List<UomMessage>();
         var states = new Dictionary<string, UomMessageSeverity>(StringComparer.Ordinal);
@@ -34,19 +31,14 @@ public partial class AddUom
         {
             if (row is null || field is null || severity == UomMessageSeverity.Note) return;
             var key = CellKey(row, field);
-            if (!states.TryGetValue(key, out var existing) || severity < existing)
-            {
-                states[key] = severity;
-            }
+            if (!states.TryGetValue(key, out var existing) || severity < existing) states[key] = severity;
         }
 
         void Add(UomMessage message)
         {
             // A message pointing at a row that no longer exists becomes table-level.
             if (message.RowName is not null && !rowOrder.ContainsKey(message.RowName))
-            {
                 message = message with { RowName = null, Field = null, TargetRow = null };
-            }
 
             messages.Add(message);
             Mark(message.RowName, message.Field, message.Severity);
@@ -61,82 +53,58 @@ public partial class AddUom
 
         // Warnings and notes
         if (!string.IsNullOrWhiteSpace(ReferenceNote))
-        {
             Add(new UomMessage("ref-note", UomMessageSeverity.Warning, ReferenceNote!, null, RefField));
-        }
 
-        var stock = CurrentStockEntry;
-        var stockName = CurrentStockName;
-
-        if (stock is null)
+        if (!StockUomRequired)
         {
-            if (StockUomRequired && rows.Any(r => r.Entry.IsActive) && !validationErrors.ContainsKey("stockuom"))
-            {
-                Add(new UomMessage("stock-missing", UomMessageSeverity.Warning,
-                    "Select which unit matches the company's stock-price unit.", null, StockColumn));
-            }
+            Add(new UomMessage("free-item", UomMessageSeverity.Note,
+                "The company item has no stock UOM, so it is free (₱0) on invoices. Conversions are kept but not used for prices.",
+                null, RefField));
         }
         else
         {
-            if (StockVariancePct is decimal pct && pct != 0
-                && stock.Price is decimal mapped && ApplicableStockPrice is decimal company)
+            if (StockNeedsRescale && !validationErrors.ContainsKey("stockuom"))
             {
-                var companyUnit = string.IsNullOrWhiteSpace(CompanyStockUomName) ? "stock UOM" : CompanyStockUomName;
-
-                if (StockVarianceIsLarge)
-                {
-                    Add(new UomMessage("stock-variance", UomMessageSeverity.Warning,
-                        $"{mapped:N2} is far from the company price {company:N2}. Is it the same unit as “{companyUnit}”?",
-                        stockName, nameof(UomRow.Price)));
-                }
-                else
-                {
-                    Add(new UomMessage("stock-variance", UomMessageSeverity.Note,
-                        $"{pct:+0.#;-0.#}% vs the company price {company:N2}. Sub-distributor markup is expected.",
-                        stockName, nameof(UomRow.Price)));
-                }
+                Add(new UomMessage("stock-scale", UomMessageSeverity.Warning,
+                    $"Conversions look per piece ({RescaleRowName} = {FormatNumber(workingUomEntries[RescaleRowName!].Conversion!.Value)}, " +
+                    $"{PieceDisplayName} = 1). Use “Rescale to {CompanyStockUomName}” so the stock UOM is 1. " +
+                    $"If the subd really sells {RescaleRowName} as a bundle, leave it.",
+                    RescaleRowName, nameof(UomRow.Conversion)));
             }
 
-            if (stockName is not null && IsSuggested(stockName) && !stockUomChosenByUser
-                && !string.IsNullOrWhiteSpace(suggestionReason))
+            if (ApplicableStockPrice is null)
             {
-                Add(new UomMessage("stock-suggested", UomMessageSeverity.Note,
-                    $"Suggested as the stock unit: {suggestionReason}.", stockName, StockColumn));
+                Add(new UomMessage("no-price", UomMessageSeverity.Note,
+                    "There is no company price for this sub-distributor's price list yet, so prices show as “-”.",
+                    null, RefField));
             }
 
-            var gaps = rows
-                .Select(r => (Row: r, Gap: PriceGap(r)))
-                .Where(x => x.Gap is not null)
-                .Select(x => (x.Row, Gap: x.Gap!.Value))
-                .ToList();
-
-            if (gaps.Count > 3)
+            if (StockRowImplicit && workingUomEntries.FirstOrDefault(kv => kv.Value.IsActive && IsStockName(kv.Key)) is { Key: not null } bundle
+                && bundle.Value.Conversion is decimal bc)
             {
-                Add(new UomMessage("price-gaps", UomMessageSeverity.Warning,
-                    $"{gaps.Count} prices differ from the {stockName} price × conversion.",
-                    null, nameof(UomRow.Price), gaps[0].Row.Name));
-
-                foreach (var g in gaps)
-                {
-                    Mark(g.Row.Name, nameof(UomRow.Price), UomMessageSeverity.Warning);
-                }
+                Add(new UomMessage("stock-bundle", UomMessageSeverity.Note,
+                    $"This subd's {bundle.Key} is {FormatNumber(bc)} {CompanyStockUomName} (sold as a bundle), so it's priced as " +
+                    $"{FormatNumber(bc)} × the {CompanyStockUomName} price. The company {CompanyStockUomName} itself is always 1.",
+                    null, RefField));
             }
-            else
+            else if (StockRowImplicit)
             {
-                foreach (var g in gaps)
-                {
-                    var sign = g.Gap.Diff > 0 ? "+" : "−";
-                    Add(new UomMessage($"price-gap:{g.Row.Name}", UomMessageSeverity.Warning,
-                        $"Expected {g.Gap.Expected:N2} ({sign}{Math.Abs(g.Gap.Diff):N2}): " +
-                        $"{stockName} price ÷ {stock.Conversion} × {g.Row.Entry.Conversion}.",
-                        g.Row.Name, nameof(UomRow.Price)));
-                }
+                Add(new UomMessage("stock-implicit", UomMessageSeverity.Note,
+                    $"{CompanyStockUomName} isn't one of this item's units. That's fine: the stock UOM is always 1 " +
+                    $"and the sizes below are counted in {CompanyStockUomName}.", null, RefField));
             }
 
-            if (gaps.Count > 0)
+            if (!StockIsPiece && PieceEntryName is { } piece && workingUomEntries[piece].Conversion == 1m)
             {
-                Add(new UomMessage("price-gaps-kept", UomMessageSeverity.Note,
-                    $"Prices that differ from the {stockName} price and conversions are kept when prices change."));
+                Add(new UomMessage("piece-same", UomMessageSeverity.Warning,
+                    $"{piece} is the same size as {StockDisplayName}. If a {StockDisplayName} holds more than one piece, fix {piece}'s size.",
+                    piece, nameof(UomRow.Conversion)));
+            }
+
+            if (!StockIsPiece && PiecesPerStock is null && rows.Count > 0)
+            {
+                Add(new UomMessage("no-piece", UomMessageSeverity.Note,
+                    $"Add a {BaseUomName} unit to see the packaging (pieces per {StockDisplayName}).", null, RefField));
             }
         }
 
@@ -153,28 +121,15 @@ public partial class AddUom
         switch (key)
         {
             case "stockuom":
-                {
-                    var stock = CurrentStockEntry;
-                    if (stock is null)
-                    {
-                        return new UomMessage(key, UomMessageSeverity.Error, text, null, StockColumn);
-                    }
-
-                    var field = stock.Conversion is not > 0 ? nameof(UomRow.Conversion) : nameof(UomRow.Price);
-                    return new UomMessage(key, UomMessageSeverity.Error, text, CurrentStockName, field);
-                }
-            case "prices":
-                return new UomMessage(key, UomMessageSeverity.Error, text);
-            case "conversion_base":
-                return new UomMessage(key, UomMessageSeverity.Error, text, BaseUomName, nameof(UomRow.Conversion));
+                return StockEntryName is { } stock
+                    ? new UomMessage(key, UomMessageSeverity.Error, text, stock, nameof(UomRow.Conversion))
+                    : new UomMessage(key, UomMessageSeverity.Error, text, null, RefField);
         }
 
         if (key.StartsWith("uomname_", StringComparison.Ordinal))
             return new UomMessage(key, UomMessageSeverity.Error, text, key["uomname_".Length..], nameof(UomRow.UnitLabel));
         if (key.StartsWith("conversion_", StringComparison.Ordinal))
             return new UomMessage(key, UomMessageSeverity.Error, text, key["conversion_".Length..], nameof(UomRow.Conversion));
-        if (key.StartsWith("price_", StringComparison.Ordinal))
-            return new UomMessage(key, UomMessageSeverity.Error, text, key["price_".Length..], nameof(UomRow.Price));
 
         return new UomMessage(key, UomMessageSeverity.Error, text);
     }
@@ -186,66 +141,56 @@ public partial class AddUom
             ? severity == UomMessageSeverity.Error ? "cell-error" : "cell-warn"
             : null;
 
-
-    private void DeriveBaseUnitPrice()
-    {
-        var baseEntry = workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
-        if (baseEntry is null || baseEntry.Price.HasValue) return;
-
-        var source = workingUomEntries.Values.FirstOrDefault(entry =>
-            entry != baseEntry && entry.Price.HasValue && entry.Conversion.HasValue && entry.Conversion.Value != 0);
-        if (source is null) return;
-
-        baseEntry.Price = Math.Round(source.Price!.Value / source.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
-        baseEntry.IsAutoCalculated = true;
-    }
-
     private Dictionary<string, string> BuildFinalErrors()
     {
-        var errors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, BaseUomName, pricesRequired: StockUomRequired);
-
-        var baseEntry = workingUomEntries.Values.FirstOrDefault(e => e.Conversion == 1);
-        if (baseEntry is not null && workingUomEntries.Values.Any(e =>
-                e != baseEntry && e.Price.HasValue && e.Conversion.HasValue && e.Conversion.Value != 0))
-        {
-            errors.Remove($"price_{BaseUomName}");
-        }
+        var errors = AddUomValidator.ValidateFinalUomEntries(workingUomEntries, conversionRequired: StockUomRequired);
 
         if (StockUomRequired)
         {
-            var stock = CurrentStockEntry;
-            if (stock is null)
-                errors["stockuom"] = "Select which UOM corresponds to the company's stock-price unit.";
-            else if (stock.Conversion is not > 0)
-                errors["stockuom"] = "The stock UOM needs a valid conversion.";
-            else if (!stock.Price.HasValue)
-                errors["stockuom"] = "The stock UOM needs a price.";
+            var stock = StockEntry;
+            // No row for the stock UOM is fine (it is always 1); a row that is there must be 1.
+            if (stock is not null && stock.Conversion != 1m)
+                errors["stockuom"] = $"The stock UOM ({StockEntryName}) must have conversion 1. Use “Rescale to {StockEntryName}”.";
         }
 
         foreach (var (name, entry) in workingUomEntries.Where(kv => kv.Value.IsActive))
-        {
-            foreach (var kv in AddUomValidator.ValidateUomConversion(name, entry.Conversion, workingUomEntries, BaseUomName))
-            {
+            foreach (var kv in AddUomValidator.ValidateUomConversion(name, entry.Conversion, workingUomEntries, isStock: false))
                 errors.TryAdd(kv.Key, kv.Value);
-            }
-        }
 
         foreach (var kv in validationErrors.Where(kv => kv.Key.StartsWith("uomname_", StringComparison.Ordinal)))
-        {
             errors.TryAdd(kv.Key, kv.Value);
-        }
 
+        DropStockDuplicateErrors(errors);
         return errors;
     }
+
+    /// <summary>
+    /// "Same conversion" errors caused only by the stock UOM row (always 1) are dropped: a unit the same size as the
+    /// stock UOM gets the "same size" warning instead, so adding the stock UOM row never blocks saving.
+    /// </summary>
+    private void DropStockDuplicateErrors(Dictionary<string, string> errors)
+    {
+        if (StockEntryName is not { } stock) return;
+
+        var atOne = workingUomEntries
+            .Where(kv => kv.Value.IsActive && kv.Value.Conversion == 1m)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        // Only the stock row plus one other unit share 1: not a real duplicate between saved units.
+        if (atOne.Count(n => !string.Equals(n, stock, StringComparison.OrdinalIgnoreCase)) <= 1)
+            foreach (var name in atOne)
+                if (errors.TryGetValue($"conversion_{name}", out var msg) && msg.Contains("same conversion", StringComparison.OrdinalIgnoreCase))
+                    errors.Remove($"conversion_{name}");
+    }
+
     private void RefreshFinalErrors()
     {
         if (!hasTriedSave) return;
 
         var fresh = BuildFinalErrors();
         foreach (var kv in validationErrors.Where(kv => AddFormKeys.Contains(kv.Key)))
-        {
             fresh.TryAdd(kv.Key, kv.Value);
-        }
 
         validationErrors = fresh;
     }
@@ -280,10 +225,12 @@ public partial class AddUom
         await InvokeReviewJsAsync("flash", ReviewPanelId, "uom-flash-panel");
 
         var first = messages.FirstOrDefault(m => m.Severity == UomMessageSeverity.Error);
-        if (first is not null)
+        if (first?.JumpRow is { } row && workingUomEntries.ContainsKey(row))
         {
-            await JumpToMessageAsync(first);
+            BeginEdit(row);                       // open the unit so it can be fixed right there
+            await InvokeAsync(StateHasChanged);
         }
+        if (first is not null) await JumpToMessageAsync(first);
     }
 
     private async Task InvokeReviewJsAsync(string function, params object?[] args)

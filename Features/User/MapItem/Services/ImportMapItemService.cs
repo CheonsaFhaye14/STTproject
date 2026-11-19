@@ -103,8 +103,7 @@ public sealed class ImportMapItemService
 			"SubdItemCode",
 			"SubdItemName",
 			"UOM",
-			"Conversion",
-			"Price"
+			"Conversion"
 		};
 		result.OriginalHeaders = headers
 			.OrderBy(kvp => kvp.Value)
@@ -161,6 +160,10 @@ public sealed class ImportMapItemService
 
 		var subdDistributors = await subdDistributorsQuery
 			.ToDictionaryAsync(s => Normalize(s.SubdCode), cancellationToken);
+
+		// Stock UOM = company StockUomName, matched by name, built-in spellings and the subd's UOM synonyms.
+		var uomMatcher = await UomNameMatcher.LoadAsync(
+			context, subdDistributors.Values.Select(sd => sd.SubDistributorId), cancellationToken);
 
 		var companyItems = await context.CompanyItems
 			.AsNoTracking()
@@ -246,6 +249,16 @@ public sealed class ImportMapItemService
 			var rowErrors = ValidateGroupConsistency(groupRows, groupWarnings);
 			MergeRowErrors(rowErrors, groupRows, crossGroupIdentityErrors);
 
+			// A unit counted in itself (PC = 2 PC) can't be worked out: block it so the preview and the save can't disagree.
+			foreach (var selfRow in groupRows.Where(r => r.Conversion is not null && r.Conversion != 1
+														 && !string.IsNullOrWhiteSpace(r.ConversionBasedOn)
+														 && Normalize(r.ConversionBasedOn) == Normalize(r.UOM)))
+			{
+				if (!rowErrors.TryGetValue(selfRow.RowNumber, out var list)) rowErrors[selfRow.RowNumber] = list = new List<string>();
+				list.Add($"'{selfRow.UOM}' is counted in itself ({selfRow.UOM} = {selfRow.Conversion} {selfRow.UOM}). " +
+						 $"Count it in another unit, or use 1 if it is the base unit.");
+			}
+
 			// Validate company item exists
 			if (!companyItems.TryGetValue(Normalize(firstRow.CompanyItemCode), out var companyItem))
 			{
@@ -278,14 +291,9 @@ public sealed class ImportMapItemService
 				continue;
 			}
 
-			// A company item without a Stock UOM (e.g. free goods) needs no stock UOM and no price on the
-			// mapped item. Unpriced UOMs are stored as 0.00, matching SaveSubdItemUomPricesAsync.
+			// A company item without a Stock UOM (e.g. free goods) needs no stock UOM and is priced at 0.
+			// Prices are not imported any more: each UOM is the company stock price × conversion.
 			var requiresStock = !string.IsNullOrWhiteSpace(companyItem.StockUomName);
-
-			decimal? Effective(ImportedMapItemRow r, IReadOnlyDictionary<int, decimal> computed) =>
-				r.Price
-				?? (computed.TryGetValue(r.RowNumber, out var c) ? c : (decimal?)null)
-				?? (requiresStock ? null : 0m);
 
 			var subdDistributorKey = (
 				Normalize(firstRow.SubDistributorCode),
@@ -307,36 +315,31 @@ public sealed class ImportMapItemService
 				}
 			}
 
-			var baseRow = groupRows.FirstOrDefault(r => r.Conversion == 1);
-			if (requiresStock && baseRow is not null && !baseRow.Price.HasValue)
-			{
-				var hasConvertibleReference = groupRows.Any(r =>
-					r.RowNumber != baseRow.RowNumber &&
-					r.Price.HasValue &&
-					r.Conversion.HasValue && r.Conversion.Value > 0);
-
-				if (!hasConvertibleReference)
-				{
-					if (!rowErrors.TryGetValue(baseRow.RowNumber, out var baseIssues))
-					{
-						baseIssues = new List<string>();
-						rowErrors[baseRow.RowNumber] = baseIssues;
-					}
-					baseIssues.Add($"'{baseRow.UOM}' (the base unit) has no price, and no other UOM row has both a price and a conversion to derive it from.");
-				}
-			}
-
-			var computedPricesByRow = ComputeMissingPrices(groupRows, rowErrors, requiresStock);
-			var stock = ResolveStockUom(groupRows, companyItem.StockUomName, computedPricesByRow, rowErrors, groupWarnings,
+			// File conversions are piece counts. The company stock UOM row gives the pieces per stock UOM,
+			// and every conversion is stored as pieces ÷ that (stock UOM = 1).
+			bool IsStock(string? uom) => uomMatcher.IsStockUom(subdDistributor.SubDistributorId, uom, companyItem.StockUomName);
+			// When the company stock UOM is a piece, a stock-named row of more than 1 piece is the subd's bundle
+			// (buy 1 take 1: PC = 2 pieces), not the stock UOM.
+			var stockIsPiece = StockUomSuggester.Canon(companyItem.StockUomName) == "PIECE";
+			bool IsStockRow(ImportedMapItemRow r) => IsStock(r.UOM) && (!stockIsPiece || r.Conversion is null || r.Conversion == 1);
+			var stock = ResolveStockUom(groupRows, companyItem.StockUomName, IsStock, rowErrors, groupWarnings,
 					out var fileStockUom, out var suggestedStockUom, out var suggestedStockUomReason);
 			var applicablePrice = ResolveApplicablePrice(companyItem, subdDistributor.PriceListType);
+
+			// Shown for reference only (company price × conversion); nothing from the file's Price column is used.
+			decimal? ReferencePrice(ImportedMapItemRow r) =>
+				!requiresStock ? 0m
+				: applicablePrice.Price is decimal p && r.Conversion is int c && c > 0 && stock.StockPieces is decimal sp && sp > 0
+					? Math.Round(p * c / sp, 2, MidpointRounding.AwayFromZero)
+					: null;
+
 			var hasAnyErrors = rowErrors.Any(kvp => kvp.Value.Count > 0);
 			if (hasAnyErrors)
 			{
 				var createdRows = new List<ImportMapItemRowResult>();
 				foreach (var row in groupRows)
 				{
-					var effectivePrice = Effective(row, computedPricesByRow);
+					var effectivePrice = ReferencePrice(row);
 					var rowIssues = rowErrors.TryGetValue(row.RowNumber, out var issues)
 						? issues
 						: new List<string>();
@@ -354,9 +357,9 @@ public sealed class ImportMapItemService
 						Conversion = row.Conversion,
 						Price = effectivePrice,
 						ImportedPrice = effectivePrice,
-						PriceFromFile = row.Price.HasValue,
+						PriceFromFile = false,
 						StockUom = row.StockUom,
-						IsStockUom = IsStockRow(row, stock.Name),
+						IsStockUom = IsStockRow(row),
 						IsSuccess = rowIssues.Count == 0
 					};
 					ApplyRawValues(rowResult, row.RawValues);
@@ -395,7 +398,7 @@ public sealed class ImportMapItemService
 
 			foreach (var row in groupRows)
 			{
-				var effectivePrice = Effective(row, computedPricesByRow);
+				var effectivePrice = ReferencePrice(row);
 
 				var rowResult = new ImportMapItemRowResult
 				{
@@ -411,9 +414,9 @@ public sealed class ImportMapItemService
 					Conversion = row.Conversion,
 					Price = effectivePrice,
 					ImportedPrice = effectivePrice,
-					PriceFromFile = row.Price.HasValue,
+					PriceFromFile = false,
 					StockUom = row.StockUom,
-					IsStockUom = IsStockRow(row, stock.Name),
+					IsStockUom = IsStockRow(row),
 					IsSuccess = true
 				};
 				ApplyRawValues(rowResult, row.RawValues);
@@ -424,37 +427,16 @@ public sealed class ImportMapItemService
 					rowResult.Warnings.AddRange(rowWarnings);
 				}
 
-				// Conversion is optional only when the row carries its own price.
+				// Conversion is a piece count; prices are worked out from it, so priced items need one.
 				if (row.Conversion.HasValue && row.Conversion.Value <= 0)
 				{
 					rowResult.IsSuccess = false;
-					rowResult.Issues.Add("Conversion must be a whole number greater than 0 when provided.");
+					rowResult.Issues.Add("Conversion must be a whole number greater than 0 (pieces in one unit).");
 				}
-				else if (!row.Conversion.HasValue && !row.Price.HasValue && requiresStock)
+				else if (!row.Conversion.HasValue && requiresStock)
 				{
 					rowResult.IsSuccess = false;
-					rowResult.Issues.Add("Conversion is required unless a price is entered directly for this row.");
-				}
-				else if (!row.Conversion.HasValue && row.Price.HasValue)
-				{
-					// Valid, but worth flagging — could be an intentional price-only row,
-					// or a forgotten conversion. Non-blocking.
-					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has no conversion — only a price was provided. Double-check if this was intentional.");
-				}
-
-				// Validate price — 0 is a valid price now, only negative/missing is an error.
-				if (effectivePrice is null || effectivePrice < 0)
-				{
-					rowResult.IsSuccess = false;
-					rowResult.Issues.Add("Price must be provided or computable from another UOM row, and cannot be negative.");
-				}
-				else if (effectivePrice.Value == 0 && requiresStock)
-				{
-					// Non-blocking — 0 is technically valid, but it's much more likely a
-					// mistake (blank cell, copy-paste slip) than an intentional free item.
-					// For free goods (no company Stock UOM) 0 is the intended value, so no warning.
-					var priceSource = row.Price.HasValue ? "entered directly" : "computed from another UOM row";
-					rowResult.Warnings.Add($"Row {row.RowNumber} ({row.UOM}) has a price of 0 ({priceSource}). Double-check this was intentional.");
+					rowResult.Issues.Add("Conversion is required: enter how many pieces are in one unit.");
 				}
 
 				// Validate UOM is not empty
@@ -486,14 +468,8 @@ public sealed class ImportMapItemService
 				ApplicableStockPrice = applicablePrice.Price,
 				PriceListLabel = applicablePrice.Label
 			};
-			// Compare the imported prices with the company price and the calculated UOM prices.
-			// Differences become warnings the admin decides; nothing is changed here.
-			if (uomResults.All(r => r.Issues.Count == 0))
-			{
-				preparedSuccess.RefreshPricePrompts(preserveChoices: false);
-			}
+			// Prices are no longer imported, so there are no price decisions to make.
 			preparedSuccess.Selected = uomResults.All(r => r.Issues.Count == 0)
-				&& preparedSuccess.PendingPriceDecisions == 0
 				&& preparedSuccess.StockUomReady;
 			foreach (var rr in uomResults.SelectMany(r => r.Issues.Select(i => new ImportMapItemIssue(r.RowNumber, r.SubdItemCode, i))))
 			{
@@ -602,32 +578,54 @@ public sealed class ImportMapItemService
 				await groupContext.SaveChangesAsync(cancellationToken);
 				createdSubdItemId = subdItem.SubdItemId;
 
-				var uomEntries = new Dictionary<string, UomEntry>();
+				// File conversions are pieces; store them relative to the company stock UOM (stock UOM = 1).
+				decimal? stockPieces = null;
+				var stockIsPieceUom = StockUomSuggester.Canon(companyItem.StockUomName) == "PIECE";
+				var stockRow = requiresStock
+					? subdItemRows.FirstOrDefault(r => r.IsStockUom && r.Conversion is > 0 && (!stockIsPieceUom || r.Conversion == 1))
+					: null;
+				if (requiresStock)
+				{
+					if (stockIsPieceUom)
+					{
+						stockPieces = 1m;                          // stock UOM is a piece: piece counts already are stock units (no row needed)
+					}
+					else if (stockRow is not null)
+					{
+						stockPieces = stockRow.Conversion is { } sc ? (decimal)sc : null;
+					}
+					else
+					{
+						throw new InvalidOperationException(
+							$"Add a row for the company stock UOM '{companyItem.StockUomName}' with its piece count before committing (the file's conversions are piece counts).");
+					}
+				}
+
+				var uomEntries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
 				foreach (var row in subdItemRows)
 				{
-					if (string.IsNullOrWhiteSpace(row.UomName) || (requiresStock && !row.Price.HasValue))
+					if (string.IsNullOrWhiteSpace(row.UomName))
 					{
 						continue;
 					}
 
-					var canonicalUom = CanonicalizeUomName(row.UomName);
-					uomEntries[canonicalUom] = new UomEntry
+					decimal? pieces = row.Conversion is { } cv ? (decimal)cv : null;
+					if (requiresStock && pieces is not > 0)
 					{
-						Conversion = row.Conversion,
-						Price = row.Price,
-						IsStockUom = row.IsStockUom,
-						// A price from the file is kept as typed, so it is a manual price. A price that was
-						// computed, or where the admin took the suggested value, follows the stock price.
-						// Free-goods prices are fixed at 0, so they never follow the stock price.
-						IsAutoCalculated = requiresStock && (!row.PriceFromFile || row.PriceChoice == PriceChoice.Suggested)
+						continue;   // blocked at Check File; never saved without a conversion
+					}
+
+					// Only the one row used as the stock UOM is 1. Another stock-named row (e.g. Pack 66 next to PK 33,
+					// a buy 1 take 1 bundle) keeps its own size: 66 ÷ 33 = 2 PK.
+					var isStockRow = requiresStock && ReferenceEquals(row, stockRow);
+					uomEntries[CanonicalizeUomName(row.UomName)] = new UomEntry
+					{
+						Conversion = requiresStock
+							? (isStockRow ? 1m : Math.Round(pieces!.Value / stockPieces!.Value, 10, MidpointRounding.AwayFromZero))
+							: pieces,
+						IsStockUom = isStockRow,
+						IsActive = true
 					};
-				}
-
-				EnsureBaseUnitUom(uomEntries);
-
-				if (requiresStock && !uomEntries.Values.Any(e => e.IsStockUom))
-				{
-					throw new InvalidOperationException("Stock UOM is required. Choose one in the import results before committing.");
 				}
 
 				var uomSaved = await _mapItemService.SaveSubdItemUomPricesAsync(
@@ -740,7 +738,8 @@ public sealed class ImportMapItemService
 
 			// Skip completely empty rows
 			if (string.IsNullOrWhiteSpace(subdItemCode) && string.IsNullOrWhiteSpace(uom) &&
-				row.Cell(headers["Conversion"]).IsEmpty() && row.Cell(headers["Price"]).IsEmpty())
+				row.Cell(headers["Conversion"]).IsEmpty()
+				&& (!headers.TryGetValue("Price", out var priceColForEmpty) || row.Cell(priceColForEmpty).IsEmpty()))
 			{
 				continue;
 			}
@@ -758,14 +757,8 @@ public sealed class ImportMapItemService
 					conversion = parsedConversion;
 				}
 			}
+			// Price is no longer used (prices come from the company price); an old template's column is simply ignored.
 			decimal? price = null;
-			if (!row.Cell(headers["Price"]).IsEmpty())
-			{
-				if (TryGetDecimal(row.Cell(headers["Price"]), out var parsedPrice) && parsedPrice >= 0)
-				{
-					price = parsedPrice;
-				}
-			}
 
 			var rawValues = headers.ToDictionary(
 				kvp => kvp.Key,
@@ -970,7 +963,7 @@ public sealed class ImportMapItemService
 			var groupRowsList = group.OrderBy(row => row.RowNumber).ToList();
 			var first = groupRowsList[0];
 
-			var isFullDuplicate = groupRowsList.Skip(1).All(row => row.Price == first.Price);
+			var isFullDuplicate = true;   // prices are no longer imported, so same UOM + conversion is a plain duplicate
 
 			var rowNumbers = FormatRowNumbers(groupRowsList.Select(r => r.RowNumber));
 
@@ -1030,120 +1023,6 @@ public sealed class ImportMapItemService
 		}
 	}
 
-	private static Dictionary<int, decimal> ComputeMissingPrices(
-		List<ImportedMapItemRow> rows,
-		Dictionary<int, List<string>> rowErrors,
-		bool pricesRequired)
-	{
-		var computedPricesByRow = new Dictionary<int, decimal>();
-
-		void AddError(int rowNumber, string message)
-		{
-			if (!rowErrors.TryGetValue(rowNumber, out var list))
-			{
-				list = new List<string>();
-				rowErrors[rowNumber] = list;
-			}
-			if (!list.Contains(message, StringComparer.OrdinalIgnoreCase))
-			{
-				list.Add(message);
-			}
-		}
-
-		var pricedRows = rows
-			.Where(row => row.Price.HasValue && row.Conversion.HasValue && row.Conversion.Value > 0)
-			.OrderBy(row => row.RowNumber)
-			.ToList();
-
-		var missingPriceRows = rows.Where(row => !row.Price.HasValue).ToList();
-		if (missingPriceRows.Count == 0)
-		{
-			return computedPricesByRow;
-		}
-
-		var unresolvable = missingPriceRows.Where(row => !row.Conversion.HasValue).ToList();
-		if (pricesRequired)
-		{
-			foreach (var row in unresolvable)
-			{
-				AddError(row.RowNumber, $"Row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}) needs either a price or a conversion.");
-			}
-		}
-
-		var resolvableMissingPriceRows = missingPriceRows.Except(unresolvable).ToList();
-		if (resolvableMissingPriceRows.Count == 0)
-		{
-			return computedPricesByRow;
-		}
-
-		if (pricedRows.Count == 0)
-		{
-			if (pricesRequired)
-			{
-				foreach (var row in resolvableMissingPriceRows)
-				{
-					AddError(row.RowNumber, "At least one row in each item group must have both a price and a conversion to compute missing prices for other UOM rows.");
-				}
-			}
-			return computedPricesByRow;
-		}
-
-		var sourceRow = pricedRows[0];
-		var unitPrice = sourceRow.Price!.Value / sourceRow.Conversion!.Value;
-
-		foreach (var row in resolvableMissingPriceRows)
-		{
-			var computedPrice = Math.Round(unitPrice * row.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
-			if (computedPrice < 0)
-			{
-				AddError(row.RowNumber, $"Unable to compute a valid price for row {row.RowNumber} ({row.SubdItemCode}/{row.UOM}).");
-				continue;
-			}
-
-			computedPricesByRow[row.RowNumber] = computedPrice;
-		}
-
-		return computedPricesByRow;
-	}
-
-	private static void EnsureBaseUnitUom(Dictionary<string, UomEntry> uomEntries)
-	{
-		if (uomEntries.Count == 0)
-		{
-			return;
-		}
-
-		// The base unit is identified purely by Conversion == 1. If no row claims
-		// that role, the SubdItem simply has no base unit — we no longer force one
-		// into existence by repurposing or synthesizing an entry.
-		var existingBaseKey = uomEntries.FirstOrDefault(kv => kv.Value.Conversion == 1).Key;
-		if (string.IsNullOrWhiteSpace(existingBaseKey) || !uomEntries.TryGetValue(existingBaseKey, out var baseEntry))
-		{
-			return;
-		}
-
-		if (baseEntry.Price.HasValue)
-		{
-			return;
-		}
-
-		var pricedSource = uomEntries
-			.Where(entry => !string.Equals(entry.Key, existingBaseKey, StringComparison.OrdinalIgnoreCase))
-			.Where(entry => entry.Value.Price.HasValue && entry.Value.Conversion > 0)
-			.OrderBy(entry => entry.Value.Conversion)
-			.FirstOrDefault();
-
-		if (pricedSource.Value != null && pricedSource.Value.Price.HasValue && pricedSource.Value.Conversion > 0)
-		{
-			baseEntry.Price = Math.Round(pricedSource.Value.Price.Value / pricedSource.Value.Conversion!.Value, 2, MidpointRounding.AwayFromZero);
-			baseEntry.IsAutoCalculated = true;
-		}
-	}
-
-	private static bool IsStockRow(ImportedMapItemRow row, string? stockName) =>
-		!string.IsNullOrWhiteSpace(stockName)
-		&& string.Equals(row.UOM.Trim(), stockName.Trim(), StringComparison.OrdinalIgnoreCase);
-
 	// The company price this sub-distributor's stock price is compared with.
 	// Same rule as the Add UOM modal: KCPI items with Regional and National prices use the price list
 	// assigned to the sub-distributor; everything else uses the single stock price.
@@ -1160,10 +1039,15 @@ public sealed class ImportMapItemService
 		};
 	}
 
-	private static (string? Name, StockUomSource Source, string? Reason) ResolveStockUom(
+	/// <summary>
+	/// The item's stock UOM is always the company stock UOM, found by name (CS = CASE and so on). Its row's conversion
+	/// (a piece count) is the number every other conversion is divided by. A company stock UOM that is a piece needs no row.
+	/// A "Stock UOM" column in the file is only checked against it.
+	/// </summary>
+	private static (string? Name, StockUomSource Source, string? Reason, decimal? StockPieces) ResolveStockUom(
 		List<ImportedMapItemRow> groupRows,
 		string? companyStockUomName,
-		IReadOnlyDictionary<int, decimal> computedPrices,
+		Func<string?, bool> isStock,
 		Dictionary<int, List<string>> rowErrors,
 		Dictionary<int, List<string>> rowWarnings,
 		out string? fileValue,
@@ -1184,120 +1068,88 @@ public sealed class ImportMapItemService
 			}
 		}
 
-		decimal? EffectivePrice(ImportedMapItemRow r) =>
-			r.Price ?? (computedPrices.TryGetValue(r.RowNumber, out var computed) ? computed : (decimal?)null);
-
-		var uomNames = groupRows
-			.Select(r => r.UOM.Trim())
-			.Where(u => u.Length > 0)
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToList();
-
 		var explicitRows = groupRows.Where(r => !string.IsNullOrWhiteSpace(r.StockUom)).ToList();
 		var explicitValues = explicitRows
 			.Select(r => r.StockUom!.Trim())
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToList();
 
-		var entries = new Dictionary<string, UomEntry>(StringComparer.OrdinalIgnoreCase);
-		foreach (var r in groupRows.Where(r => !string.IsNullOrWhiteSpace(r.UOM)))
-		{
-			entries[r.UOM.Trim()] = new UomEntry
-			{
-				Conversion = r.Conversion,
-				Price = EffectivePrice(r),
-				IsActive = true
-			};
-		}
-
-		var suggestion = StockUomSuggester.Suggest(companyStockUomName, entries);
 		fileValue = explicitValues.Count == 0 ? null : string.Join(", ", explicitValues);
-		suggestedName = suggestion?.UomName;
-		suggestedReason = suggestion?.Reason;
-		var why = string.IsNullOrWhiteSpace(suggestedReason) ? string.Empty : $" ({suggestedReason})";
+		suggestedName = null;
+		suggestedReason = null;
 
-		if (explicitValues.Count > 1)
-		{
-			var shown = string.Join(", ", explicitValues.Select(v => $"'{v}'"));
-			foreach (var r in explicitRows)
-			{
-				Add(rowErrors, r.RowNumber, $"Stock UOM has conflicting values ({shown}) for this item. Use one Stock UOM per item.");
-			}
-			return (null, StockUomSource.None, null);
-		}
-
-		if (explicitValues.Count == 1)
-		{
-			var value = explicitValues[0];
-			var stockRows = groupRows
-				.Where(r => string.Equals(r.UOM.Trim(), value, StringComparison.OrdinalIgnoreCase))
-				.ToList();
-
-			if (stockRows.Count == 0)
-			{
-				// Not an import-blocking error: the file's value may be the company's own unit (e.g. "IB").
-				// Nothing is picked for the admin. The item waits in Warnings until they choose one.
-				var companyNote = string.IsNullOrWhiteSpace(companyStockUomName)
-					? $" The company item {explicitRows[0].CompanyItemCode} also has no stock UOM set, so none can be suggested."
-					: string.Empty;
-				var suggestNote = suggestedName is null ? string.Empty : $" Suggested: {suggestedName}{why}.";
-				Add(rowWarnings, explicitRows[0].RowNumber,
-					$"Stock UOM '{value}' from your file doesn't match any UOM of this item ({string.Join(", ", uomNames)}).{suggestNote} " +
-					$"Choose the stock UOM here.{companyNote}");
-				return (null, StockUomSource.None, null);
-			}
-
-			var usable = stockRows.FirstOrDefault(r => r.Conversion is > 0 && EffectivePrice(r).HasValue);
-			if (usable is null)
-			{
-				var first = stockRows[0];
-				Add(rowErrors, first.RowNumber, first.Conversion is > 0
-					? $"Stock UOM '{first.UOM}' needs a price."
-					: $"Stock UOM '{first.UOM}' needs a conversion greater than 0.");
-				return (first.UOM.Trim(), StockUomSource.Explicit, null);
-			}
-
-			if (suggestedName is not null
-				&& !string.Equals(suggestedName, usable.UOM.Trim(), StringComparison.OrdinalIgnoreCase))
-			{
-				Add(rowWarnings, usable.RowNumber,
-					$"Stock UOM '{usable.UOM.Trim()}' from your file differs from the suggested '{suggestedName}'{why}. " +
-					"Your file's value is used unless you change it.");
-			}
-
-			return (usable.UOM.Trim(), StockUomSource.Explicit, null);
-		}
-
-		// The company item has no Stock UOM (e.g. free goods): the mapped item doesn't need one either.
+		// Free company item: no stock UOM, conversions are not used for prices.
 		if (string.IsNullOrWhiteSpace(companyStockUomName))
 		{
-			return (null, StockUomSource.None, null);
+			return (null, StockUomSource.None, null, null);
 		}
 
-		if (!string.IsNullOrWhiteSpace(suggestedName))
+		var companyStock = companyStockUomName.Trim();
+		var stockCanon = StockUomSuggester.Canon(companyStock);
+
+		if (explicitValues.Any(v => !isStock(v)))
 		{
-			var localSuggestedName = suggestedName;
-
-			var anchor = groupRows.FirstOrDefault(r =>
-				string.Equals(
-					r.UOM.Trim(),
-					localSuggestedName,
-					StringComparison.OrdinalIgnoreCase))
-				?? groupRows[0];
-
-			Add(
-				rowWarnings,
-				anchor.RowNumber,
-				$"Stock UOM suggested: {localSuggestedName}{why}. " +
-				"Select this item to confirm it, or change it first.");
-
-			return (localSuggestedName, StockUomSource.Suggested, suggestedReason);
+			Add(rowWarnings, explicitRows[0].RowNumber,
+				$"The Stock UOM column ('{fileValue}') is ignored: conversions are always based on the company stock UOM '{companyStock}'.");
 		}
 
-		var firstRow = groupRows[0];
-		Add(rowWarnings, firstRow.RowNumber,
-			$"Stock UOM not set: none of this item's UOMs matches the company stock UOM '{companyStockUomName}'. Choose one here.");
-		return (null, StockUomSource.None, null);
+		// Company stock UOM is a piece: the file's piece counts already are stock units, so no stock row is needed,
+		// and a stock-named row of more than 1 piece is saved as a bundle (PC = 2 pieces → PC ×2).
+		if (stockCanon == "PIECE")
+		{
+			foreach (var bundle in groupRows.Where(r => !string.IsNullOrWhiteSpace(r.UOM) && isStock(r.UOM) && r.Conversion is > 1))
+			{
+				Add(rowWarnings, bundle.RowNumber,
+					$"'{bundle.UOM.Trim()}' is {bundle.Conversion} pieces, so it is saved as a bundle: 1 {bundle.UOM.Trim()} = {bundle.Conversion} {companyStock} " +
+					$"(e.g. buy 1 take 1). The company {companyStock} stays 1.");
+			}
+
+			suggestedName = companyStock;
+			suggestedReason = "the company stock UOM is a piece, so piece counts are used as they are";
+			return (companyStock, StockUomSource.Explicit, suggestedReason, 1m);
+		}
+
+		var stockRows = groupRows
+			.Where(r => !string.IsNullOrWhiteSpace(r.UOM) && isStock(r.UOM))
+			.ToList();
+
+		if (stockRows.Count > 1)
+		{
+			var names = string.Join(", ", stockRows.Select(r => $"'{r.UOM.Trim()}'"));
+			foreach (var r in stockRows)
+			{
+				Add(rowErrors, r.RowNumber, $"More than one row is the company stock UOM '{companyStock}' ({names}). Keep one.");
+			}
+			return (null, StockUomSource.None, null, null);
+		}
+
+		if (stockRows.Count == 1)
+		{
+			var row = stockRows[0];
+			suggestedName = row.UOM.Trim();
+			suggestedReason = $"matches the company stock UOM ({companyStock}) by name or UOM synonym";
+
+			if (row.Conversion is not > 0)
+			{
+				Add(rowErrors, row.RowNumber,
+					$"Stock UOM '{row.UOM.Trim()}' needs its piece count in Conversion (for example 12 for a case of 12).");
+				return (suggestedName, StockUomSource.Explicit, suggestedReason, null);
+			}
+
+			return (suggestedName, StockUomSource.Explicit, suggestedReason, row.Conversion.Value);
+		}
+
+		// No row for the stock UOM: fine when it is a piece (piece counts already are stock units).
+		if (stockCanon == "PIECE")
+		{
+			suggestedName = companyStock;
+			suggestedReason = "the company stock UOM is a piece, so it needs no row (always 1)";
+			return (companyStock, StockUomSource.Explicit, suggestedReason, 1m);
+		}
+
+		Add(rowErrors, groupRows[0].RowNumber,
+			$"The file's conversions are piece counts: add a row for the company stock UOM '{companyStock}' with its piece count so they can be turned into {companyStock} units. (Once mapped, the item doesn't need to keep that row.)");
+		return (null, StockUomSource.None, null, null);
 	}
 
 	private static List<ImportedMapItemRow> ResolveConversionsForGroup(List<ImportedMapItemRow> groupRows)
@@ -1320,11 +1172,6 @@ public sealed class ImportMapItemService
 					return null;
 				}
 
-				if (row.Conversion == 1)
-				{
-					return 1m;
-				}
-
 				if (!row.Conversion.HasValue)
 				{
 					return null;
@@ -1337,6 +1184,12 @@ public sealed class ImportMapItemService
 
 				var basisKey = Normalize(row.ConversionBasedOn);
 
+				// Counted in itself: nothing to follow (flagged as an error at Check File when it isn't 1).
+				if (basisKey == uomKey)
+				{
+					return row.Conversion;
+				}
+
 				if (!visiting.Add(uomKey) || !byUom.ContainsKey(basisKey))
 				{
 					return row.Conversion;
@@ -1348,7 +1201,10 @@ public sealed class ImportMapItemService
 
 			foreach (var row in rowsList)
 			{
-				if (row.Conversion == 1 || !row.Conversion.HasValue)
+				// A 1 with no basis (or counted in itself) is the base unit; a 1 counted in another unit follows that unit.
+				if (!row.Conversion.HasValue
+					|| (row.Conversion == 1 && (string.IsNullOrWhiteSpace(row.ConversionBasedOn)
+												|| Normalize(row.ConversionBasedOn) == Normalize(row.UOM))))
 				{
 					result.Add(row);
 					continue;

@@ -3,33 +3,43 @@ using STTproject.Data;
 
 namespace STTproject.Features.Pricing;
 
-/// <summary>Price of one subd UOM on a given invoice date, derived from company price history.</summary>
+/// <summary>
+/// Price of one subd UOM on a given invoice date, derived from company price history.
+/// ConversionToBase is relative to the company item's stock UOM (stock UOM = 1), so
+/// one unit of this UOM costs StockPrice × ConversionToBase.
+/// </summary>
 public sealed record UomPriceInfo(
     int ItemsUomId,
     int SubdItemId,
     string SubdItemCode,
     string UomName,
-    int ConversionToBase,
-    int StockConvToBase,
+    decimal ConversionToBase,
     decimal? StockPrice,
     int? CompanyItemPriceHistoryId,
-    string? Issue)
+    string? Issue,
+    bool IsFree = false)
 {
-    public bool IsPriced => Issue is null && StockPrice.HasValue;
+    /// <summary>Kept so existing callers compile: the stock UOM is always 1 now.</summary>
+    public decimal StockConvToBase => 1m;
+
+    /// <summary>Free company items (no stock UOM, never priced) count as priced at ₱0.</summary>
+    public bool IsPriced => Issue is null && (IsFree || StockPrice.HasValue);
 
     /// <summary>Display price of one unit of this UOM.</summary>
-    public decimal UnitPrice => IsPriced
-        ? Math.Round(StockPrice!.Value * ConversionToBase / StockConvToBase, 2, MidpointRounding.AwayFromZero)
+    public decimal UnitPrice => IsPriced && !IsFree
+        ? Math.Round(StockPrice!.Value * ConversionToBase, 2, MidpointRounding.AwayFromZero)
         : 0m;
 
-    public int BaseQuantityFor(int quantity) => Math.Abs(quantity) * ConversionToBase;
+    /// <summary>Quantity in company stock units (can be fractional: 3 PC = 0.25 CS).</summary>
+    public decimal BaseQuantityFor(int quantity) =>
+        Math.Round(Math.Abs(quantity) * ConversionToBase, 6, MidpointRounding.AwayFromZero);
 
-    /// <summary>Line amount, rounded once: qty x conversion x stock price / stock conversion.</summary>
+    /// <summary>Line amount, rounded once: |qty| × conversion × stock price. Same rule as sp_RecalculateInvoiceAmounts.</summary>
     public decimal AmountFor(int quantity, bool isCredit)
     {
-        if (!IsPriced) return 0m;
+        if (!IsPriced || IsFree) return 0m;
         var amount = Math.Round(
-            Math.Abs(quantity) * ConversionToBase * StockPrice!.Value / StockConvToBase,
+            Math.Abs(quantity) * ConversionToBase * StockPrice!.Value,
             2, MidpointRounding.AwayFromZero);
         return isCredit ? -amount : amount;
     }
@@ -40,6 +50,9 @@ public static class InvoicePricing
     /// <summary>
     /// Prices every UOM (active or not) of the sub distributor's items on the invoice date.
     /// Key = ItemsUomId. Lines that cannot be priced carry an Issue instead of a price.
+    /// The rules match sp_RecalculateInvoiceAmounts:
+    ///   free company item (no StockUomName, no price, no history) -> priced at ₱0
+    ///   price but no StockUomName, no conversion, no price list, no price on the date -> Issue
     /// </summary>
     public static async Task<Dictionary<int, UomPriceInfo>> LoadUomPricesAsync(
         EntrielContext context,
@@ -66,9 +79,12 @@ public static class InvoicePricing
                 si.SubdItemId,
                 si.SubdItemCode,
                 si.CompanyItemId,
+                si.CompanyItem.StockUomName,
+                si.CompanyItem.StockPrice,
                 IsDual = si.CompanyItem.StockPriceRegional != null,
+                HasListPrice = si.CompanyItem.StockPriceRegional != null || si.CompanyItem.StockPriceNational != null,
                 Uoms = si.ItemsUoms
-                    .Select(u => new { u.ItemsUomId, u.UomName, u.ConversionToBase, u.IsStockUom, u.IsActive })
+                    .Select(u => new { u.ItemsUomId, u.UomName, u.ConversionToBase, u.IsActive })
                     .ToList()
             })
             .ToListAsync(ct);
@@ -80,6 +96,14 @@ public static class InvoicePricing
             .Where(h => companyIds.Contains(h.CompanyItemId) && h.EffectivityDate < cutoff)
             .Select(h => new { h.CompanyItemId, h.PriceListType, h.EffectivityDate, h.CompanyItemPriceHistoryId, h.NewPrice })
             .ToListAsync(ct);
+
+        // Company items that have ever had a price row (any list, any date): these are never "free".
+        var everPriced = (await context.CompanyItemPriceHistories.AsNoTracking()
+                .Where(h => companyIds.Contains(h.CompanyItemId))
+                .Select(h => h.CompanyItemId)
+                .Distinct()
+                .ToListAsync(ct))
+            .ToHashSet();
 
         // Latest row per (company item, price list) — same ordering as fn_CompanyPriceAtDate
         var latest = history
@@ -94,36 +118,51 @@ public static class InvoicePricing
 
         foreach (var item in items)
         {
-            var stock = item.Uoms.Where(u => u.IsStockUom && u.IsActive).ToList();
+            var hasStockUom = !string.IsNullOrWhiteSpace(item.StockUomName);
+            var hasAnyPrice = (item.StockPrice ?? 0m) != 0m || item.HasListPrice || everPriced.Contains(item.CompanyItemId);
+            var isFree = !hasStockUom && !hasAnyPrice;
+
             string? itemIssue = null;
-            var stockConv = 0;
-
-            if (stock.Count == 0) itemIssue = "No stock UOM";
-            else if (stock.Count > 1) itemIssue = "More than one stock UOM";
-            else if ((stock[0].ConversionToBase ?? 0) <= 0) itemIssue = "Stock UOM has no conversion";
-            else stockConv = stock[0].ConversionToBase!.Value;
-
             string? listType = item.IsDual ? priceListType : null;
-            if (itemIssue is null && item.IsDual && string.IsNullOrWhiteSpace(priceListType))
-                itemIssue = "Sub distributor has no price list (Regional/National)";
+            var hasPrice = false;
+            decimal? newPrice = null;
+            int? historyId = null;
 
-            var hasPrice = latest.TryGetValue((item.CompanyItemId, listType), out var price);
-            if (itemIssue is null && !hasPrice)
-                itemIssue = "No company price on or before the invoice date";
+            if (!isFree)
+            {
+                if (!hasStockUom)
+                    itemIssue = "Company item has a price but no stock UOM";
+                else if (item.IsDual && string.IsNullOrWhiteSpace(priceListType))
+                    itemIssue = "Sub distributor has no price list (Regional/National)";
+                else
+                {
+                    hasPrice = latest.TryGetValue((item.CompanyItemId, listType), out var price);
+                    if (!hasPrice)
+                        itemIssue = "No company price on or before the invoice date";
+                    else
+                    {
+                        newPrice = price!.NewPrice;
+                        historyId = price.CompanyItemPriceHistoryId;
+                    }
+                }
+            }
 
             foreach (var u in item.Uoms)
             {
-                var conv = u.ConversionToBase ?? 0;
-                var issue = itemIssue
-                            ?? (!u.IsActive ? "UOM is inactive" : null)
-                            ?? (conv <= 0 ? "UOM has no conversion" : null);
+                var conv = u.ConversionToBase ?? 0m;
+
+                // Free items only need a UOM that belongs to them and is active; no conversion required.
+                var issue = !u.IsActive ? "UOM is inactive"
+                          : isFree ? null
+                          : itemIssue ?? (conv <= 0m ? "UOM has no conversion" : null);
 
                 result[u.ItemsUomId] = new UomPriceInfo(
                     u.ItemsUomId, item.SubdItemId, item.SubdItemCode, u.UomName,
-                    conv, stockConv,
-                    issue is null ? price!.NewPrice : null,
-                    issue is null ? price!.CompanyItemPriceHistoryId : null,
-                    issue);
+                    conv,
+                    issue is null && !isFree ? newPrice : (isFree && issue is null ? 0m : null),
+                    issue is null && !isFree ? historyId : null,
+                    issue,
+                    IsFree: isFree && issue is null);
             }
         }
 
