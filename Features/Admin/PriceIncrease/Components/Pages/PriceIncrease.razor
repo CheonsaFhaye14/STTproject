@@ -4,10 +4,8 @@
 @using STTproject.Features.Admin.PriceIncrease.Components.Sections
 @using STTproject.Shared.Components.Loadings
 
-<LoadingOverlay Show="isLoading"
-                      Title="Loading price changes…"
-                      Subtitle="Please wait while we fetch the latest data."
-                      IconClass="fa-solid fa-money-bill-trend-up" />
+<LoadingOverlay Show="isLoading" Title="Loading price changes…" Subtitle="Please wait while we fetch the latest data."
+                IconClass="fa-solid fa-money-bill-trend-up" />
 
 <div style="@(isLoading ? "display:none;" : "")">
     <div class="clt-page">
@@ -17,37 +15,41 @@
                 <h1 class="clt-page-title">Price Changes</h1>
                 <p class="clt-page-sub">@totalCount total price changes</p>
             </div>
-            <button class="clt-add-btn" @onclick="OpenAddPriceIncreaseModal">
-                <span class="clt-add-icon">+</span> Add price change
-            </button>
-        </div>
+            <div class="pi-head-actions">
+                <div class="pi-seg" role="tablist">
+                    <button class="@(groupByItem ? "" : "on")" @onclick="() => groupByItem = false">All changes</button>
+                    <button class="@(groupByItem ? "on" : "")" @onclick="() => groupByItem = true">By company
+                        item</button>
+                    </div>
+                    <button class="clt-add-btn" @onclick="OpenAddPriceIncreaseModal">
+                        <span class="clt-add-icon">+</span> Add price change
+                    </button>
+                </div>
+            </div>
 
-        @* ------------- Price List Table ----------------- *@
-        <PriceIncreaseTable @ref="priceIncreaseTable" OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged"
-                            OnEditPriceIncrease="OpenEditModal"
-                             />
-        <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
-                    Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Change" : "Confirm Creation of Price Change")"
-                    Message="@(showConfirmError ? null : (editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?"))"
-                    ErrorMessage="@confirmErrorMessage"
-                    ShowError="showConfirmError"
-                    OnYes="ConfirmAddPriceIncrease"
-                    OnNo="CancelConfirm"
-                    OnErrorConfirm="DismissConfirmError" />
+            @* ------------- Price List Table ----------------- *@
+            <PriceIncreaseTable @ref="priceIncreaseTable" GroupByItem="groupByItem" OnLoaded="OnTableLoaded"
+                                OnCountChanged="OnCountChanged" OnEditPriceIncrease="OpenEditModal" />
+            <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
+                          Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Change" : "Confirm Creation of Price Change")"
+                          Message="@(showConfirmError ? null : (editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?"))"
+                          ErrorMessage="@confirmErrorMessage" ShowError="showConfirmError" OnYes="ConfirmAddPriceIncrease"
+                          OnNo="CancelConfirm" OnErrorConfirm="DismissConfirmError" />
 
-        @if (showAddModal)
-        {
-            <AddPriceIncrease @ref="addPriceIncreaseModal" PriceIncreaseId="editPriceIncreaseId" onCancel="CancelAddPriceIncrease"
-                            OnRequestConfirm="OpenConfirmModal" />
-        }
+            @if (showAddModal)
+            {
+                <AddPriceIncrease @ref="addPriceIncreaseModal" PriceIncreaseId="editPriceIncreaseId"
+                                  onCancel="CancelAddPriceIncrease" OnRequestConfirm="OpenConfirmModal" OnDeleted="OnPriceChangeDeleted" />
+            }
        
 
+        </div>
     </div>
-</div>
 
 
 @code {
     private ConfirmModal? confirmAddModal;
+    private bool groupByItem;
     private bool showConfirmAddModal;
     private bool showAddModal;
     private bool isLoading = true;
@@ -64,7 +66,7 @@
 
     private void OpenAddPriceIncreaseModal()
     {
-        editPriceIncreaseId = null; 
+        editPriceIncreaseId = null;
         showAddModal = true;
     }
     private void OpenEditModal(int id)
@@ -113,5 +115,12 @@
     private void CancelConfirm() => showConfirmAddModal = false;
 
     private void CancelAddPriceIncrease() => showAddModal = false;
+
+    private async Task OnPriceChangeDeleted()
+    {
+        showAddModal = false;
+        if (priceIncreaseTable != null)
+            await priceIncreaseTable.LoadPageAsync();
+    }
 
 }

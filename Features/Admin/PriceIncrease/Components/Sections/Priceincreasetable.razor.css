@@ -1,0 +1,30 @@
+/* Price history modal */
+.pi-hist-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pi-fact {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 11px;
+    border: 1px solid #E4DACB;
+    border-radius: 9px;
+    background: #FBF9F5;
+}
+
+    .pi-fact small {
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #8A8A92;
+    }
+
+    .pi-fact b {
+        font-size: 13.5px;
+        font-variant-numeric: tabular-nums;
+    }

@@ -56,6 +56,9 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     CreatedBy = h.CreatedBy,
                     CreatedDate = h.CreatedDate,
                     Principal = h.CompanyItem.Principal,
+                    StockUomName = h.CompanyItem.StockUomName,
+                    OldPrice = h.OldPrice,
+                    NewPrice = h.NewPrice,
                     Status = h.AppliedDate != null
                         ? "Applied"
                         : (h.EffectivityDate <= now ? "Overdue" : "Pending")
@@ -141,6 +144,10 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     AppliedDate = h.AppliedDate,
                     CreatedBy = h.CreatedBy,
                     CreatedDate = h.CreatedDate,
+                    Principal = h.CompanyItem.Principal,
+                    StockUomName = h.CompanyItem.StockUomName,
+                    OldPrice = h.OldPrice,
+                    NewPrice = h.NewPrice,
                     Status = h.AppliedDate != null
                         ? "Applied"
                         : (h.EffectivityDate <= now ? "Overdue" : "Pending")
@@ -253,28 +260,161 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             return (items, total);
         }
 
+        /// <summary>
+        /// "By company item" view: one row per company item that has price changes, filtered and sorted in the
+        /// database. Status filter keeps items that have at least one change with that status.
+        /// </summary>
+        public async Task<(IEnumerable<CompanyItemPriceSummaryDto> Items, int TotalCount)> GetCompanyItemSummaryPagedAsync(
+            int page, int pageSize, string? search, string? status, string? principal,
+            string? sortColumn = "CreatedDate", bool sortAscending = false)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var now = NowPh();
+
+            var items = db.CompanyItems.AsNoTracking().Where(c => c.CompanyItemPriceHistories.Any());
+
+            if (!string.IsNullOrWhiteSpace(principal))
+                items = items.Where(c => c.Principal == principal);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                items = items.Where(c => c.ItemCode.Contains(term) || c.ItemName.Contains(term));
+            }
+
+            items = status?.ToLowerInvariant() switch
+            {
+                "pending" => items.Where(c => c.CompanyItemPriceHistories.Any(h => h.AppliedDate == null && h.EffectivityDate > now)),
+                "overdue" => items.Where(c => c.CompanyItemPriceHistories.Any(h => h.AppliedDate == null && h.EffectivityDate <= now)),
+                "applied" => items.Where(c => c.CompanyItemPriceHistories.Any(h => h.AppliedDate != null)),
+                _ => items
+            };
+
+            var total = await items.CountAsync();
+
+            var projected = items.Select(c => new CompanyItemPriceSummaryDto
+            {
+                CompanyItemId = c.CompanyItemId,
+                CompanyItemCode = c.ItemCode,
+                CompanyItemName = c.ItemName,
+                Principal = c.Principal,
+                StockUomName = c.StockUomName,
+                StockPrice = c.StockPrice,
+                StockPriceRegional = c.StockPriceRegional,
+                StockPriceNational = c.StockPriceNational,
+                ChangeCount = c.CompanyItemPriceHistories.Count(),
+                PendingCount = c.CompanyItemPriceHistories.Count(h => h.AppliedDate == null),
+                NextEffectivityDate = c.CompanyItemPriceHistories.Where(h => h.AppliedDate == null)
+                    .Min(h => (DateTime?)h.EffectivityDate),
+                LastEffectivityDate = c.CompanyItemPriceHistories.Where(h => h.AppliedDate != null)
+                    .Max(h => (DateTime?)h.EffectivityDate),
+                LastCreatedDate = c.CompanyItemPriceHistories.Max(h => h.CreatedDate)
+            });
+
+            projected = (sortColumn, sortAscending) switch
+            {
+                ("CompanyItemCode", true) => projected.OrderBy(x => x.CompanyItemCode),
+                ("CompanyItemCode", false) => projected.OrderByDescending(x => x.CompanyItemCode),
+                ("EffectivityDate", true) => projected.OrderBy(x => x.NextEffectivityDate ?? x.LastEffectivityDate),
+                ("EffectivityDate", false) => projected.OrderByDescending(x => x.NextEffectivityDate ?? x.LastEffectivityDate),
+                ("Status", true) => projected.OrderBy(x => x.PendingCount),
+                ("Status", false) => projected.OrderByDescending(x => x.PendingCount),
+                ("CreatedDate", true) => projected.OrderBy(x => x.LastCreatedDate),
+                _ => projected.OrderByDescending(x => x.LastCreatedDate)
+            };
+
+            var list = await projected
+                .Skip(Math.Max(0, page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (list, total);
+        }
+
+        /// <summary>Every price change of one company item, newest first (all price lists).</summary>
+        public async Task<IReadOnlyList<PriceIncreaseTableListDto>> GetCompanyItemHistoryAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var now = NowPh();
+
+            return await db.CompanyItemPriceHistories.AsNoTracking()
+                .Where(h => h.CompanyItemId == companyItemId)
+                .OrderByDescending(h => h.EffectivityDate)
+                .ThenByDescending(h => h.CompanyItemPriceHistoryId)
+                .Select(h => new PriceIncreaseTableListDto
+                {
+                    CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
+                    CompanyItemId = h.CompanyItemId,
+                    CompanyItemCode = h.CompanyItem.ItemCode,
+                    CompanyItemName = h.CompanyItem.ItemName,
+                    Principal = h.CompanyItem.Principal,
+                    StockUomName = h.CompanyItem.StockUomName,
+                    PriceListType = h.PriceListType,
+                    PriceIncreaseAmount = h.PriceIncreaseAmount,
+                    OldPrice = h.OldPrice,
+                    NewPrice = h.NewPrice,
+                    EffectivityDate = h.EffectivityDate,
+                    AppliedDate = h.AppliedDate,
+                    CreatedBy = h.CreatedBy,
+                    CreatedDate = h.CreatedDate,
+                    Status = h.AppliedDate != null ? "Applied" : (h.EffectivityDate <= now ? "Overdue" : "Pending")
+                })
+                .ToListAsync();
+        }
+
+        /// <summary>
+        /// What a price change means per sub-item UOM: old/new price = the change's old/new company price ×
+        /// conversion, for the sub-items on that price list. Worked out live (UOM prices are not stored).
+        /// </summary>
         public async Task<IReadOnlyList<PriceIncreaseViewDto>> GetCascadedUomDetailsAsync(int companyItemPriceHistoryId)
         {
             await using var db = _dbFactory.CreateDbContext();
-            return await db.ItemsUomPriceHistories
-                .AsNoTracking()
-                .Where(h => h.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
-                .Select(h => new PriceIncreaseViewDto
+
+            var h = await db.CompanyItemPriceHistories.AsNoTracking()
+                .Where(x => x.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
+                .Select(x => new { x.CompanyItemId, x.PriceListType, x.OldPrice, x.NewPrice, x.PriceIncreaseAmount, x.AppliedDate, x.CreatedBy })
+                .FirstOrDefaultAsync();
+            if (h == null) return new List<PriceIncreaseViewDto>();
+
+            var query = db.ItemsUoms.AsNoTracking()
+                .Where(u => u.SubdItem.CompanyItemId == h.CompanyItemId && u.IsActive && u.SubdItem.IsActive);
+            if (h.PriceListType != null)
+                query = query.Where(u => u.SubdItem.SubDistributor.PriceListType == h.PriceListType);
+
+            var uoms = await query
+                .Select(u => new
                 {
-                    SubdItemId = h.ItemsUom.SubdItemId,
-                    SubdItemCode = h.ItemsUom.SubdItem.SubdItemCode,
-                    SubdItemName = h.ItemsUom.SubdItem.ItemName,
-                    ConversionToBase = h.ItemsUom.ConversionToBase,
-                    PriceListType = h.ItemsUom.SubdItem.SubDistributor.PriceListType,
-                    UomName = h.ItemsUom.UomName,
-                    OldPrice = h.OldPrice,
-                    NewPrice = h.NewPrice,
+                    u.SubdItemId,
+                    u.SubdItem.SubdItemCode,
+                    SubdItemName = u.SubdItem.ItemName,
+                    u.UomName,
+                    u.ConversionToBase
+                })
+                .ToListAsync();
+
+            static decimal? Times(decimal price, decimal? conv) =>
+                conv is decimal c && c > 0 ? Math.Round(price * c, 2, MidpointRounding.AwayFromZero) : null;
+
+            return uoms
+                .Select(u => new PriceIncreaseViewDto
+                {
+                    SubdItemId = u.SubdItemId,
+                    SubdItemCode = u.SubdItemCode,
+                    SubdItemName = u.SubdItemName,
+                    UomName = u.UomName,
+                    ConversionToBase = u.ConversionToBase,
+                    PriceListType = h.PriceListType,
+                    OldPrice = Times(h.OldPrice, u.ConversionToBase),
+                    NewPrice = Times(h.NewPrice, u.ConversionToBase),
+                    PriceIncreaseAmount = Times(h.PriceIncreaseAmount, u.ConversionToBase),
                     AppliedDate = h.AppliedDate,
                     CreatedBy = h.CreatedBy
-                }).OrderBy(x => x.SubdItemCode)
+                })
+                .OrderBy(x => x.SubdItemCode)
                 .ThenBy(x => x.SubdItemId)
-                .ThenBy(x => x.ConversionToBase ?? int.MinValue)
-                .ThenBy(x => x.UomName).ToListAsync();
+                .ThenByDescending(x => x.ConversionToBase)
+                .ThenBy(x => x.UomName)
+                .ToList();
         }
 
         public async Task<IReadOnlyList<string?>> GetAllPrincipalsAsync()
@@ -311,6 +451,10 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     _ => entity.CompanyItem.StockPrice
                 },
                 PriceIncreaseAmount = entity.PriceIncreaseAmount,
+                Principal = entity.CompanyItem.Principal,
+                StockUomName = entity.CompanyItem.StockUomName,
+                OldPrice = entity.OldPrice,
+                NewPrice = entity.NewPrice,
                 EffectivityDate = entity.EffectivityDate,
                 AppliedDate = entity.AppliedDate,
                 CreatedBy = entity.CreatedBy,
@@ -337,6 +481,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     Principal = c.Principal,
                     StockPriceRegional = c.StockPriceRegional,
                     StockPriceNational = c.StockPriceNational,
+                    StockUomName = c.StockUomName,
                 })
                 .ToListAsync();
         }
@@ -450,31 +595,8 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     break;
             }
 
-            // Build UOM overrides.
-            var skippedUomIds = dto.SkippedUomIds
-                ?? new List<int>();
-
-            var manualUomPrices = dto.ManualUomPrices
-                ?? new Dictionary<int, decimal>();
-
-            var overridesTable = new DataTable();
-            overridesTable.Columns.Add("ItemsUomId", typeof(int));
-            overridesTable.Columns.Add("Skip", typeof(bool));
-            overridesTable.Columns.Add("NewPrice", typeof(decimal));
-
-            foreach (var uomId in skippedUomIds)
-            {
-                overridesTable.Rows.Add(uomId, true, DBNull.Value);
-            }
-
-            foreach (var kv in manualUomPrices)
-            {
-                if (skippedUomIds.Contains(kv.Key))
-                    continue;
-
-                overridesTable.Rows.Add(kv.Key, false, kv.Value);
-            }
-
+            // Only the company price is scheduled. UOM prices are company price × conversion, worked out when
+            // invoices are priced, so there is no UOM history to write.
             var connection = (SqlConnection)db.Database.GetDbConnection();
             var wasClosed = connection.State != ConnectionState.Open;
 
@@ -535,11 +657,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                             Value = (object?)line.PriceListType ?? DBNull.Value
                         });
 
-                    var tvp = cmd.Parameters.AddWithValue(
-                        "@UomOverrides", overridesTable);
-
-                    tvp.SqlDbType = SqlDbType.Structured;
-                    tvp.TypeName = "dbo.UomOverrideTableType";
+                    // @UomOverrides (table-valued) is left out: it is optional and ignored by the procedure.
 
                     await cmd.ExecuteNonQueryAsync();
                 }
@@ -550,7 +668,7 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 return (true, null);
             }
             catch (SqlException sqlEx)
-                when (sqlEx.Number is >= 50001 and <= 50006)
+                when (sqlEx.Number is >= 50001 and <= 50009)
             {
                 await RollbackQuietly();
 
@@ -570,9 +688,6 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                         false,
                         "The price increase schedule could not be created because a required record or configuration is missing."),
 
-                    50004 => (
-                        false,
-                        "Some UOMs can't be calculated automatically (missing stock UOM, conversion or price). Enter a price or choose \"Don't change price\" for them."),
 
                     50005 => (
                         false,
@@ -581,6 +696,12 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     50006 => (
                         false,
                         "The price list doesn't match this item's pricing structure."),
+
+                    50007 => (false, "Enter a price change amount."),
+
+                    50008 => (false, "Effectivity date is required."),
+
+                    50009 => (false, "A new price change must start today or later. To change past prices, edit an applied change."),
 
                     _ => (false, "Invalid price list.")
                 };
@@ -633,9 +754,17 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     && h.EffectivityDate < end);
         }
 
-        public async Task<(bool success, string? error)> UpdatePendingIncreaseAsync(
+        /// <summary>
+        /// Edits a price change, pending or applied (admin). The item's price chain for that price list is rebuilt
+        /// afterwards (each row's old price = the previous row's new price) and the company item's current price is
+        /// re-synced to the latest applied row. Moving an applied row into the future makes it pending again.
+        /// </summary>
+        public async Task<(bool success, string? error)> UpdatePriceChangeAsync(
             int companyItemPriceHistoryId, decimal priceIncreaseAmount, DateTime effectivityDate, int? updatedBy)
         {
+            if (priceIncreaseAmount == 0)
+                return (false, "Amount cannot be zero.");
+
             await using var db = _dbFactory.CreateDbContext();
             await using var tx = await db.Database.BeginTransactionAsync();
             try
@@ -646,47 +775,38 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 if (history == null)
                     return (false, "Price change not found.");
 
-                if (history.AppliedDate != null)
-                    return (false, "This change has already been applied and can no longer be edited.");
-
                 var start = effectivityDate.Date;
                 var end = start.AddDays(1);
 
                 var duplicateExists = await db.CompanyItemPriceHistories
                     .AnyAsync(h =>
                         h.CompanyItemId == history.CompanyItemId
-                        && h.AppliedDate == null
                         && h.CompanyItemPriceHistoryId != companyItemPriceHistoryId
                         && h.PriceListType == history.PriceListType
                         && h.EffectivityDate >= start
                         && h.EffectivityDate < end);
 
                 if (duplicateExists)
-                {
-                    return (false,
-                        "This item already has a pending price change for that price list and effectivity date.");
-                }
+                    return (false, "This item already has a price change for that price list on that date.");
 
-                if (duplicateExists)
-                    return (false, "This company item already has another pending price change.");
+                var basePrice = await ChainBasePriceAsync(db, history.CompanyItemId, history.PriceListType);
 
                 history.PriceIncreaseAmount = priceIncreaseAmount;
-                history.NewPrice = history.OldPrice + priceIncreaseAmount;
                 history.EffectivityDate = effectivityDate;
 
-                var uomRows = await db.ItemsUomPriceHistories
-                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId && u.AppliedDate == null)
-                    .Include(u => u.ItemsUom)
-                    .ToListAsync();
-
-                foreach (var uom in uomRows)
-                {
-                    var conversion = uom.ItemsUom?.ConversionToBase ?? 1;
-                    uom.NewPrice = uom.OldPrice + (priceIncreaseAmount * conversion);
-                    uom.EffectivityDate = effectivityDate;
-                }
+                // An applied change moved into the future is pending again; it applies on its new date.
+                if (history.AppliedDate != null && effectivityDate > NowPh())
+                    history.AppliedDate = null;
 
                 await db.SaveChangesAsync();
+
+                var chainError = await RechainAsync(db, history.CompanyItemId, history.PriceListType, basePrice, updatedBy);
+                if (chainError != null)
+                {
+                    await tx.RollbackAsync();
+                    return (false, chainError);
+                }
+
                 await tx.CommitAsync();
                 return (true, null);
             }
@@ -697,6 +817,79 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             }
         }
 
+        /// <summary>Kept for callers of the old name.</summary>
+        public Task<(bool success, string? error)> UpdatePendingIncreaseAsync(
+            int companyItemPriceHistoryId, decimal priceIncreaseAmount, DateTime effectivityDate, int? updatedBy) =>
+            UpdatePriceChangeAsync(companyItemPriceHistoryId, priceIncreaseAmount, effectivityDate, updatedBy);
+
+        /// <summary>Invoice lines priced from this price change (they keep their amount until recalculated).</summary>
+        public async Task<int> CountInvoiceLinesUsingAsync(int companyItemPriceHistoryId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.SalesInvoiceItems.AsNoTracking()
+                .CountAsync(i => i.CompanyItemPriceHistoryId == companyItemPriceHistoryId);
+        }
+
+        /// <summary>The price before the item's first change on this price list (the start of the chain).</summary>
+        private static async Task<decimal?> ChainBasePriceAsync(EntrielContext db, int companyItemId, string? priceListType)
+        {
+            return await db.CompanyItemPriceHistories
+                .Where(h => h.CompanyItemId == companyItemId && h.PriceListType == priceListType)
+                .OrderBy(h => h.EffectivityDate)
+                .ThenBy(h => h.CompanyItemPriceHistoryId)
+                .Select(h => (decimal?)h.OldPrice)
+                .FirstOrDefaultAsync();
+        }
+
+        /// <summary>
+        /// Rebuilds OldPrice/NewPrice for every change of the item on this price list, in date order, from
+        /// <paramref name="basePrice"/>; then sets the company item's price for that list to the latest applied
+        /// change (or the base price when none is applied). Returns an error message, or null.
+        /// </summary>
+        private async Task<string?> RechainAsync(EntrielContext db, int companyItemId, string? priceListType,
+            decimal? basePrice, int? updatedBy)
+        {
+            var rows = await db.CompanyItemPriceHistories
+                .Where(h => h.CompanyItemId == companyItemId && h.PriceListType == priceListType)
+                .OrderBy(h => h.EffectivityDate)
+                .ThenBy(h => h.CompanyItemPriceHistoryId)
+                .ToListAsync();
+
+            var running = basePrice ?? rows.FirstOrDefault()?.OldPrice;
+            if (running is null) return null;   // nothing to chain
+
+            foreach (var row in rows)
+            {
+                row.OldPrice = running.Value;
+                row.NewPrice = running.Value + row.PriceIncreaseAmount;
+                if (row.NewPrice < 0)
+                    return $"The change on {row.EffectivityDate:MMM d, yyyy} would make the price negative ({row.NewPrice:N2}).";
+                running = row.NewPrice;
+            }
+
+            var current = rows.LastOrDefault(r => r.AppliedDate != null)?.NewPrice ?? basePrice;
+
+            var item = await db.CompanyItems.FirstOrDefaultAsync(c => c.CompanyItemId == companyItemId);
+            if (item != null && current.HasValue)
+            {
+                switch (priceListType)
+                {
+                    case PriceListTypes.Regional: item.StockPriceRegional = current; break;
+                    case PriceListTypes.National: item.StockPriceNational = current; break;
+                    default: item.StockPrice = current; break;
+                }
+                item.UpdatedDate = NowPh();
+                if (updatedBy.HasValue) item.UpdatedBy = updatedBy;
+            }
+
+            await db.SaveChangesAsync();
+            return null;
+        }
+
+        /// <summary>
+        /// Every active UOM of the company item's sub-items, priced from the company price: price = stock price for
+        /// the sub-distributor's price list × conversion (conversions are relative to the stock UOM).
+        /// </summary>
         public async Task<IReadOnlyList<CompanyItemUomPriceDto>> GetUomPricesByCompanyItemIdAsync(
             int companyItemId, string? priceListType = null)
         {
@@ -704,16 +897,15 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
 
             var item = await db.CompanyItems.AsNoTracking()
                 .Where(c => c.CompanyItemId == companyItemId)
-                .Select(c => new { c.StockPriceRegional, c.StockPriceNational })
+                .Select(c => new { c.StockPrice, c.StockPriceRegional, c.StockPriceNational })
                 .FirstOrDefaultAsync();
-            var usesPriceLists = item != null &&
+            if (item == null) return new List<CompanyItemUomPriceDto>();
+
+            var usesPriceLists =
                 PricingStructureResolver.Resolve(null, item.StockPriceRegional, item.StockPriceNational) == PricingStructure.Dual;
 
-            var query = db.ItemsUoms
-                .AsNoTracking()
-                .Where(u => u.SubdItem.CompanyItemId == companyItemId
-                    && u.IsActive
-                    && u.SubdItem.IsActive);
+            var query = db.ItemsUoms.AsNoTracking()
+                .Where(u => u.SubdItem.CompanyItemId == companyItemId && u.IsActive && u.SubdItem.IsActive);
 
             if (priceListType != null)
                 query = query.Where(u => u.SubdItem.SubDistributor.PriceListType == priceListType);
@@ -727,57 +919,54 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     u.SubdItemId,
                     SubdItemCode = u.SubdItem.SubdItemCode,
                     SubdItemName = u.SubdItem.ItemName,
-                    IsStockUom = u.IsStockUom,
-                    StockConversion = u.SubdItem.ItemsUoms
-                        .Where(x => x.IsStockUom && x.IsActive)
-                        .Select(x => x.ConversionToBase)
-                        .FirstOrDefault(),
                     u.UomName,
                     u.ConversionToBase,
-                    CurrentPrice = u.Price,
                     ListType = u.SubdItem.SubDistributor.PriceListType
                 })
                 .ToListAsync();
 
-            var uomIds = uoms.Select(u => u.ItemsUomId).ToList();
-
-            var pendingHistory = await db.ItemsUomPriceHistories
-                .AsNoTracking()
-                .Where(h => uomIds.Contains(h.ItemsUomId) && h.AppliedDate == null)
-                .GroupBy(h => h.ItemsUomId)
-                .Select(g => g.OrderByDescending(h => h.EffectivityDate)
-                            .ThenByDescending(h => h.ItemsUomPriceHistoryId)
-                            .First())
-                .ToListAsync();
-
-            var historyByUomId = pendingHistory.ToDictionary(h => h.ItemsUomId);
+            decimal? PriceFor(string? list) => !usesPriceLists
+                ? item.StockPrice
+                : list switch
+                {
+                    PriceListTypes.Regional => item.StockPriceRegional,
+                    PriceListTypes.National => item.StockPriceNational,
+                    _ => null
+                };
 
             return uoms
                 .Select(u =>
                 {
-                    historyByUomId.TryGetValue(u.ItemsUomId, out var history);
+                    var stock = PriceFor(u.ListType);
+                    var current = stock.HasValue && u.ConversionToBase is decimal c && c > 0
+                        ? Math.Round(stock.Value * c, 2, MidpointRounding.AwayFromZero)
+                        : (decimal?)null;
                     return new CompanyItemUomPriceDto
                     {
                         SubdItemId = u.SubdItemId,
                         SubdItemCode = u.SubdItemCode,
                         SubdItemName = u.SubdItemName,
                         ItemsUomId = u.ItemsUomId,
-                        IsStockUom = u.IsStockUom,
-                        StockConversionToBase = u.StockConversion,
+                        IsStockUom = u.ConversionToBase == 1m,
+                        StockConversionToBase = 1m,
                         UomName = u.UomName,
-                        CurrentPrice = u.CurrentPrice,
                         ConversionToBase = u.ConversionToBase,
-                        OldPrice = history?.OldPrice ?? u.CurrentPrice,
-                        NewPrice = history?.NewPrice,
-                        PriceListType = u.ListType,
+                        CurrentPrice = current,
+                        OldPrice = current,
+                        PriceListType = usesPriceLists ? u.ListType : null,
                     };
                 })
                 .OrderBy(x => x.SubdItemCode)
-                .ThenBy(x => x.UomName)
+                .ThenByDescending(x => x.ConversionToBase)
                 .ToList();
         }
 
-        public async Task<(bool success, string? error)> CancelPendingIncreaseAsync(int companyItemPriceHistoryId)
+        /// <summary>
+        /// Deletes a price change, pending or applied (admin). Invoice lines priced from it are moved to the change in
+        /// effect before it (their amounts stay until the invoices are recalculated). The chain is rebuilt and the
+        /// company item's current price re-synced. Old UOM history rows linked to it are removed too.
+        /// </summary>
+        public async Task<(bool success, string? error)> DeletePriceChangeAsync(int companyItemPriceHistoryId, int? updatedBy = null)
         {
             await using var db = _dbFactory.CreateDbContext();
             await using var tx = await db.Database.BeginTransactionAsync();
@@ -789,28 +978,52 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                 if (history == null)
                     return (false, "Price change not found.");
 
-                if (history.AppliedDate != null)
-                    return (false, "This change has already been applied and can no longer be canceled.");
+                var basePrice = await ChainBasePriceAsync(db, history.CompanyItemId, history.PriceListType);
 
-                // Remove the company-level history row
+                // The change in effect before this one (same item and price list).
+                var previousId = await db.CompanyItemPriceHistories
+                    .Where(h => h.CompanyItemId == history.CompanyItemId
+                                && h.PriceListType == history.PriceListType
+                                && h.CompanyItemPriceHistoryId != history.CompanyItemPriceHistoryId
+                                && (h.EffectivityDate < history.EffectivityDate
+                                    || (h.EffectivityDate == history.EffectivityDate
+                                        && h.CompanyItemPriceHistoryId < history.CompanyItemPriceHistoryId)))
+                    .OrderByDescending(h => h.EffectivityDate)
+                    .ThenByDescending(h => h.CompanyItemPriceHistoryId)
+                    .Select(h => (int?)h.CompanyItemPriceHistoryId)
+                    .FirstOrDefaultAsync();
+
+                await db.SalesInvoiceItems
+                    .Where(i => i.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.CompanyItemPriceHistoryId, previousId));
+
+                // Legacy UOM history (no longer written) must go before its parent row.
+                await db.ItemsUomPriceHistories
+                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
+                    .ExecuteDeleteAsync();
+
                 db.CompanyItemPriceHistories.Remove(history);
-
-                // Remove all linked UOM-level history rows
-                var uomRows = await db.ItemsUomPriceHistories
-                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId && u.AppliedDate == null)
-                    .ToListAsync();
-
-                db.ItemsUomPriceHistories.RemoveRange(uomRows);
-
                 await db.SaveChangesAsync();
+
+                var chainError = await RechainAsync(db, history.CompanyItemId, history.PriceListType, basePrice, updatedBy);
+                if (chainError != null)
+                {
+                    await tx.RollbackAsync();
+                    return (false, chainError);
+                }
+
                 await tx.CommitAsync();
                 return (true, null);
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return (false, $"Unable to cancel the price change: {ex.GetBaseException().Message}");
+                return (false, $"Unable to delete the price change: {ex.GetBaseException().Message}");
             }
         }
+
+        /// <summary>Kept for callers of the old name.</summary>
+        public Task<(bool success, string? error)> CancelPendingIncreaseAsync(int companyItemPriceHistoryId) =>
+            DeletePriceChangeAsync(companyItemPriceHistoryId);
     }
 }

@@ -1,0 +1,46 @@
+/* Header actions: view switch (same look as Import Errors' All Errors / By Import File) + Add button */
+.pi-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pi-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid #E4DACB;
+    border-radius: 12px;
+    background: #F1EBE1;
+}
+
+    .pi-seg button {
+        height: 34px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #8A6A34;
+        cursor: pointer;
+        transition: background-color .15s, color .15s;
+    }
+
+        .pi-seg button:hover {
+            color: #262625;
+        }
+
+        .pi-seg button.on {
+            background: #fff;
+            color: #262625;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+@media (max-width: 700px) {
+    .pi-head-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}

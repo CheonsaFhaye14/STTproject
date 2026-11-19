@@ -9,14 +9,37 @@ namespace STTproject.Features.Admin.PriceIncrease.DTOs
         public string? CompanyItemCode { get; set; }
         public decimal? StockPrice { get; set; }
         public decimal? PriceIncreaseAmount { get; set; }
+        /// <summary>Company price before / after this change.</summary>
+        public decimal? OldPrice { get; set; }
+        public decimal? NewPrice { get; set; }
         public DateTime? EffectivityDate { get; set; }
         public DateTime? AppliedDate { get; set; }
         public string? PriceListType { get; set; }
         public string? Status { get; set; }
         public int? CreatedBy { get; set; }
         public string? Principal { get; set; }
+        public string? StockUomName { get; set; }
         public DateTime CreatedDate { get; set; }
     }
+
+    /// <summary>One company item in the "By company item" view.</summary>
+    public class CompanyItemPriceSummaryDto
+    {
+        public int CompanyItemId { get; set; }
+        public string? CompanyItemCode { get; set; }
+        public string? CompanyItemName { get; set; }
+        public string? Principal { get; set; }
+        public string? StockUomName { get; set; }
+        public decimal? StockPrice { get; set; }
+        public decimal? StockPriceRegional { get; set; }
+        public decimal? StockPriceNational { get; set; }
+        public int ChangeCount { get; set; }
+        public int PendingCount { get; set; }
+        public DateTime? NextEffectivityDate { get; set; }
+        public DateTime? LastEffectivityDate { get; set; }
+        public DateTime LastCreatedDate { get; set; }
+    }
+
     public class GroupedPriceIncreaseDto
     {
         public int GroupKey { get; set; }

@@ -87,6 +87,73 @@
         <main class="clt-main">
             <div class="clt-table-card">
                 <div class="clt-table-scroll">
+@if (groupByItem)
+{
+<table class="clt-table">
+    <thead>
+        <tr>
+            <th @onclick='() => SortBy("CompanyItemCode")'>Company Item @SortIndicator("CompanyItemCode")</th>
+            <th>Stock UOM</th>
+            <th>Current Price</th>
+            <th @onclick='() => SortBy("EffectivityDate")'>Next / Last Change @SortIndicator("EffectivityDate")</th>
+            <th @onclick='() => SortBy("Status")'>Changes @SortIndicator("Status")</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (isLoading)
+        {
+            <tr><td colspan="6" class="clt-empty"><div class="clt-empty-inner"><p>Loading…</p></div></td></tr>
+        }
+        else if (!ItemSummaries.Any())
+        {
+            <tr><td colspan="7" class="clt-empty"><div class="clt-empty-inner"><p>@(HasActiveFilters ? "No company items match your filters" : "No price changes found")</p></div></td></tr>
+        }
+        else
+        {
+            @foreach (var it in ItemSummaries)
+            {
+                <tr>
+                    <td><div class="clt-name">@it.CompanyItemCode - @it.CompanyItemName</div></td>
+                    <td>@(it.StockUomName ?? "-")</td>
+                    <td>
+                        @if (it.StockPriceRegional.HasValue || it.StockPriceNational.HasValue)
+                        {
+                            <div class="clt-schedule-row"><strong>Regional:</strong> @(it.StockPriceRegional?.ToString("N2") ?? "-")</div>
+                            <div class="clt-schedule-row"><strong>National:</strong> @(it.StockPriceNational?.ToString("N2") ?? "-")</div>
+                        }
+                        else
+                        {
+                            <div>@(it.StockPrice?.ToString("N2") ?? "-")</div>
+                        }
+                    </td>
+                    <td>
+                        @if (it.NextEffectivityDate.HasValue)
+                        {
+                            <div><span class="clt-status clt-status-pending">Next</span> @it.NextEffectivityDate.Value.ToString("MMM d, yyyy")</div>
+                        }
+                        <div class="clt-muted">Last: @(it.LastEffectivityDate?.ToString("MMM d, yyyy") ?? "-")</div>
+                    </td>
+                    <td>
+                        <div>@it.ChangeCount</div>
+                        @if (it.PendingCount > 0)
+                        {
+                            <div class="clt-muted">@it.PendingCount pending</div>
+                        }
+                    </td>
+                    <td>
+                        <div class="clt-actions">
+                            <button class="clt-btn-edit" @onclick="() => OpenHistoryAsync(it)">View</button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+}
+else
+{
 
 
 <table class="clt-table">
@@ -95,6 +162,8 @@
             <th @onclick='() => SortBy("CompanyItemCode")'>
                 Company Item @SortIndicator("CompanyItemCode")
             </th>
+
+            <th>Stock UOM</th>
 
             <th @onclick='() => SortBy("EffectivityDate")'>
                 Effective Date @SortIndicator("EffectivityDate")
@@ -121,7 +190,7 @@
     @if (isLoading)
     {
         <tr>
-            <td colspan="6" class="clt-empty">
+            <td colspan="7" class="clt-empty">
                 <div class="clt-empty-inner">
                     <p>Loading…</p>
                 </div>
@@ -131,7 +200,7 @@
     else if (!PagedPriceIncrease.Any())
     {
         <tr>
-            <td colspan="6" class="clt-empty">
+            <td colspan="7" class="clt-empty">
                 <div class="clt-empty-inner">
                     <p>
                         @(HasActiveFilters
@@ -172,6 +241,9 @@
                         @item.CompanyItemCode - @item.CompanyItemName
                     </div>
                 </td>
+
+                @* Stock UOM *@
+                <td>@(item.Schedules.FirstOrDefault()?.StockUomName ?? "-")</td>
 
                 @* Effective Date *@
                 <td>
@@ -261,21 +333,19 @@
                     @foreach (var schedule in schedules)
                     {
                         <div class="clt-actions">
-                            <Button Variant="ButtonVariant.Primary"
-                                    Title="View"
-                                    OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
-                                        schedule.CompanyItemPriceHistoryId))" />
-
-                            @if (!string.Equals(
-                                schedule.Status,
-                                "Applied",
-                                StringComparison.OrdinalIgnoreCase))
+                            @if (schedules.Count > 1)
                             {
-                                <Button Variant="ButtonVariant.Secondary"
-                                        Title="Cancel"
-                                        OnClick="@(() => RequestCancel(
-                                            schedule.CompanyItemPriceHistoryId))" />
+                                <span class="clt-muted">@schedule.PriceListType</span>
                             }
+                            @* Same buttons as the Subdistributors table (css/Table.css) *@
+                            <button class="clt-btn-edit"
+                                    @onclick="() => OnEditPriceIncrease.InvokeAsync(schedule.CompanyItemPriceHistoryId)">
+                                Edit
+                            </button>
+                            <button class="clt-btn-toggle clt-btn-deactivate"
+                                    @onclick="() => RequestDelete(schedule)">
+                                Delete
+                            </button>
                         </div>
                     }
                 </td>
@@ -285,6 +355,7 @@
 </tbody>
 
 </table>
+}
 
 
                 </div>
@@ -292,15 +363,17 @@
 
             <div class="clt-footer">
                 <span class="clt-footer-count">
-                    Showing @PagedPriceIncrease.Count of @totalCount company items
+                    @(groupByItem
+                        ? $"Showing {ItemSummaries.Count} of {itemTotal} company items"
+                        : $"Showing {PagedPriceIncrease.Count} of {totalCount} price changes")
                 </span>                
-                @if (totalPages > 1)
+                @if (CurrentTotalPages > 1)
                 {
                     <div class="clt-pagination">
                         <button class="clt-page-btn" disabled="@(currentPage == 1)"
                                 @onclick="() => GoToPage(currentPage - 1)">←</button>
-                        <span>Page @currentPage of @totalPages</span>
-                        <button class="clt-page-btn" disabled="@(currentPage >= totalPages)"
+                        <span>Page @currentPage of @CurrentTotalPages</span>
+                        <button class="clt-page-btn" disabled="@(currentPage >= CurrentTotalPages)"
                                 @onclick="() => GoToPage(currentPage + 1)">→</button>
                     </div>
                 }
@@ -308,8 +381,84 @@
         </main>
     </div>
 
-    <ConfirmModal Show="showToggleConfirmModal" Title="Confirm Cancellation of price change"
+    @if (historyItem is not null)
+    {
+        <Modal ShowModal="true" Width="860px" MaxWidth="100%" MaxHeight="88vh" Title="Price history"
+               Subtitle="@($"{historyItem.CompanyItemCode} - {historyItem.CompanyItemName}")"
+               IconType="ModalIconType.ItemView" OnClose="CloseHistory">
+            <ChildContent>
+                <div class="pi-hist-facts">
+                    <span class="pi-fact"><small>Stock UOM</small><b>@(historyItem.StockUomName ?? "-")</b></span>
+                    @if (historyItem.StockPriceRegional.HasValue || historyItem.StockPriceNational.HasValue)
+                    {
+                        <span class="pi-fact"><small>Regional</small><b>@(historyItem.StockPriceRegional?.ToString("N2") ?? "-")</b></span>
+                        <span class="pi-fact"><small>National</small><b>@(historyItem.StockPriceNational?.ToString("N2") ?? "-")</b></span>
+                    }
+                    else
+                    {
+                        <span class="pi-fact"><small>Stock price</small><b>@(historyItem.StockPrice?.ToString("N2") ?? "-")</b></span>
+                    }
+                    <span class="pi-fact"><small>Changes</small><b>@historyRows.Count</b></span>
+                </div>
+
+                @if (historyLoading)
+                {
+                    <p class="clt-muted">Loading…</p>
+                }
+                else
+                {
+                    <div class="clt-table-card">
+                        <table class="clt-table">
+                            <thead>
+                                <tr>
+                                    <th>Effective Date</th>
+                                    <th>Price List</th>
+                                    <th>Old Price</th>
+                                    <th>Amount</th>
+                                    <th>New Price</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in historyRows)
+                                {
+                                    <tr>
+                                        <td>@(h.EffectivityDate?.ToString("MMM d, yyyy") ?? "-")</td>
+                                        <td>@(h.PriceListType ?? "Stock")</td>
+                                        <td>@(h.OldPrice?.ToString("N2") ?? "-")</td>
+                                        <td>@(h.PriceIncreaseAmount is decimal a ? (a >= 0 ? "+" : "") + a.ToString("N2") : "-")</td>
+                                        <td><strong>@(h.NewPrice?.ToString("N2") ?? "-")</strong></td>
+                                        <td><span class="clt-status clt-status-@(h.Status?.ToLowerInvariant())">@h.Status</span></td>
+                                        <td>
+                                            <div class="clt-actions">
+                                                <button class="clt-btn-edit"
+                                                        @onclick="() => OnEditPriceIncrease.InvokeAsync(h.CompanyItemPriceHistoryId)">
+                                                    Edit
+                                                </button>
+                                                <button class="clt-btn-toggle clt-btn-deactivate" @onclick="() => RequestDelete(h)">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </ChildContent>
+            <FooterContent>
+                <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="CloseHistory" />
+            </FooterContent>
+        </Modal>
+    }
+
+    <ConfirmModal Show="showToggleConfirmModal" Title="Delete price change"
                   Message="@toggleConfirmMessage" OnYes="ConfirmToggle" OnNo="CancelToggle" />
+
+    <ConfirmModal Show="showDeleteError" Title="Price change not deleted" ShowError="true"
+                  ErrorMessage="@deleteError" OnErrorConfirm="DismissDeleteError" />
 </div>
 
 @code {
@@ -320,6 +469,54 @@
     private record FilterOption(string Value, string Text);
 
     private List<GroupedPriceIncreaseDto> PagedPriceIncrease { get; set; } = new();
+
+    /// <summary>"By company item" view, switched from the page header.</summary>
+    [Parameter] public bool GroupByItem { get; set; }
+    private bool groupByItem;
+    private bool viewInitialized;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!viewInitialized) { groupByItem = GroupByItem; viewInitialized = true; return; }
+        if (GroupByItem != groupByItem) await SetViewAsync(GroupByItem);
+    }
+    private List<CompanyItemPriceSummaryDto> ItemSummaries { get; set; } = new();
+    private int itemTotal;
+    private int CurrentTotalPages => (int)Math.Ceiling((groupByItem ? itemTotal : totalCount) / (double)pageSize);
+
+    private async Task SetViewAsync(bool byItem)
+    {
+        if (groupByItem == byItem) return;
+        groupByItem = byItem;
+        currentPage = 1;
+        await LoadPageAsync();
+    }
+
+    // Price history of one item (opened with View)
+    private CompanyItemPriceSummaryDto? historyItem;
+    private List<PriceIncreaseTableListDto> historyRows = new();
+    private bool historyLoading;
+
+    private async Task OpenHistoryAsync(CompanyItemPriceSummaryDto item)
+    {
+        historyItem = item;
+        await ReloadHistoryAsync();
+    }
+
+    private async Task ReloadHistoryAsync()
+    {
+        if (historyItem is null) return;
+        historyLoading = true;
+        await InvokeAsync(StateHasChanged);
+        historyRows = (await AdminPriceIncreaseService.GetCompanyItemHistoryAsync(historyItem.CompanyItemId)).ToList();
+        historyLoading = false;
+    }
+
+    private void CloseHistory()
+    {
+        historyItem = null;
+        historyRows = new();
+    }
     private List<string> Principals { get; set; } = new();
 
     private List<FilterOption> PrincipalOptions =>
@@ -396,18 +593,42 @@
         await InvokeAsync(StateHasChanged);
         try
         {
-            var (items, total) =
-                await AdminPriceIncreaseService.GetGroupedPagedAsync(
-                    currentPage,
-                    pageSize,
-                    _searchTerm,
-                    SelectedStatus,
-                    SelectedPrincipalId,
-                    SortColumn,
-                    SortAscending);
+            if (groupByItem)
+            {
+                var (summaries, sumTotal) = await AdminPriceIncreaseService.GetCompanyItemSummaryPagedAsync(
+                    currentPage, pageSize, _searchTerm, SelectedStatus, SelectedPrincipalId, SortColumn, SortAscending);
+                ItemSummaries = summaries.ToList();
+                itemTotal = sumTotal;
 
-            PagedPriceIncrease = items.ToList();
-            totalCount = total;
+                // Keep the open history (and its item's prices) in step after an edit or delete.
+                if (historyItem is not null)
+                {
+                    historyItem = ItemSummaries.FirstOrDefault(x => x.CompanyItemId == historyItem.CompanyItemId) ?? historyItem;
+                    historyRows = (await AdminPriceIncreaseService.GetCompanyItemHistoryAsync(historyItem.CompanyItemId)).ToList();
+                }
+            }
+
+            if (!groupByItem)
+            {
+                var (items, total) =
+                    await AdminPriceIncreaseService.GetGroupedPagedAsync(
+                        currentPage,
+                        pageSize,
+                        _searchTerm,
+                        SelectedStatus,
+                        SelectedPrincipalId,
+                        SortColumn,
+                        SortAscending);
+
+                PagedPriceIncrease = items.ToList();
+                totalCount = total;
+            }
+            else
+            {
+                // Total changes for the stats: a 1-row page is enough.
+                var (_, allTotal) = await AdminPriceIncreaseService.GetPagedAsync(1, 1, _searchTerm, SelectedStatus, SelectedPrincipalId);
+                totalCount = allTotal;
+            }
 
             var (_, pendingTotal) = await AdminPriceIncreaseService.GetPagedAsync(
                 1, 1, _searchTerm, "pending", SelectedPrincipalId);
@@ -476,16 +697,15 @@
 
         <div class="clt-actions">
             <Button Variant="ButtonVariant.Primary"
-                    Title="View"
+                    Title="Edit"
                     OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
                         schedule.CompanyItemPriceHistoryId))" />
 
             @if (schedule.Status != "Applied")
             {
                 <Button Variant="ButtonVariant.Secondary"
-                        Title="Cancel"
-                        OnClick="@(() => RequestCancel(
-                            schedule.CompanyItemPriceHistoryId))" />
+                        Title="Delete"
+                        OnClick="@(() => RequestDelete(schedule))" />
             }
         </div>
     </div>;
@@ -495,17 +715,47 @@
         await LoadPageAsync();
     }
 
-    private void RequestCancel(int companyItemPriceHistoryId)
+    private bool showDeleteError;
+    private string? deleteError;
+
+    private void DismissDeleteError()
     {
-        pendingToggleId = companyItemPriceHistoryId;
-        toggleConfirmMessage = "Are you sure you want to cancel this price change?";
+        showDeleteError = false;
+        deleteError = null;
+    }
+
+    private async Task RequestDelete(PriceIncreaseTableListDto schedule)
+    {
+        pendingToggleId = schedule.CompanyItemPriceHistoryId;
+        var list = schedule.PriceListType is { } pl ? $" {pl}" : string.Empty;
+
+        if (string.Equals(schedule.Status, "Applied", StringComparison.OrdinalIgnoreCase))
+        {
+            var lines = await AdminPriceIncreaseService.CountInvoiceLinesUsingAsync(schedule.CompanyItemPriceHistoryId);
+            toggleConfirmMessage =
+                $"This{list} change is already applied. Deleting it rebuilds the item's price history and sets its current price back." +
+                (lines > 0
+                    ? $" {lines} invoice line{(lines == 1 ? " was" : "s were")} priced with it and keep their amounts until the invoices are recalculated."
+                    : string.Empty) +
+                " Delete it?";
+        }
+        else
+        {
+            toggleConfirmMessage = $"Delete this pending{list} price change?";
+        }
+
         showToggleConfirmModal = true;
     }
 
     private async Task ConfirmToggle()
     {
         showToggleConfirmModal = false;
-        await AdminPriceIncreaseService.CancelPendingIncreaseAsync(companyItemPriceHistoryId: pendingToggleId);
+        var (success, error) = await AdminPriceIncreaseService.DeletePriceChangeAsync(pendingToggleId);
+        if (!success)
+        {
+            deleteError = error ?? "The price change could not be deleted.";
+            showDeleteError = true;
+        }
         await LoadPageAsync();
     }
 
@@ -534,16 +784,15 @@
     private RenderFragment RenderScheduleActions(
         PriceIncreaseTableListDto schedule) => @<div class="clt-actions">
         <Button Variant="ButtonVariant.Primary"
-                Title="View"
+                Title="Edit"
                 OnClick="@(() => OnEditPriceIncrease.InvokeAsync(
                     schedule.CompanyItemPriceHistoryId))" />
 
         @if (schedule.Status != "Applied")
         {
             <Button Variant="ButtonVariant.Secondary"
-                    Title="Cancel"
-                    OnClick="@(() => RequestCancel(
-                        schedule.CompanyItemPriceHistoryId))" />
+                    Title="Delete"
+                    OnClick="@(() => RequestDelete(schedule))" />
         }
     </div>;
 

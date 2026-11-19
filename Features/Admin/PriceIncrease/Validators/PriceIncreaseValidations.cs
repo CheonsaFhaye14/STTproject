@@ -63,6 +63,10 @@ public static class PriceIncreaseValidations
         return errors;
     }
 
+    /// <summary>
+    /// Admin edit of an existing change: any date is allowed (past dates change prices already used),
+    /// the amount just can't be blank or zero.
+    /// </summary>
     public static Task<Dictionary<string, string>> ValidateEditPriceIncreaseAsync(
         AddPriceIncreaseDto dto)
     {
@@ -71,7 +75,8 @@ public static class PriceIncreaseValidations
         ValidateAmountAndDate(
             dto.PriceIncreaseAmount,
             dto.EffectivityDate,
-            errors);
+            errors,
+            allowPastDate: true);
 
         return Task.FromResult(errors);
     }
@@ -79,7 +84,8 @@ public static class PriceIncreaseValidations
     private static void ValidateAmountAndDate(
         decimal? priceIncreaseAmount,
         DateTime? effectivityDate,
-        Dictionary<string, string> errors)
+        Dictionary<string, string> errors,
+        bool allowPastDate = false)
     {
         if (!priceIncreaseAmount.HasValue)
         {
@@ -97,7 +103,7 @@ public static class PriceIncreaseValidations
             errors[AddPriceIncrease.EffectivityDate.Key] =
                 AddPriceIncrease.EffectivityDate.ErrorMessage;
         }
-        else if (effectivityDate.Value.Date < DateTime.Today)
+        else if (!allowPastDate && effectivityDate.Value.Date < DateTime.Today)
         {
             errors[AddPriceIncrease.EffectivityDate.Key] =
                 "Effectivity date cannot be in the past.";

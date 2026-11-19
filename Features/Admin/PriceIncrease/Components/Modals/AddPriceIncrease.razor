@@ -4,478 +4,529 @@
 @using STTproject.Shared.Components.Buttons
 @using STTproject.Shared.Components.Forms
 @using STTproject.Shared.Components.Modals
-@using STTproject.Shared.Components.Tables
 
 @inject STTproject.Features.Admin.PriceIncrease.Services.IAdminPriceIncreaseService AdminPriceIncreaseService
 @inject STTproject.Services.IUserContextService UserContextService
 
-<Modal ShowModal="true" Width="900px" MaxWidth="100%" MaxHeight="88vh"
-       Title="@(isEdit ? (isReadOnly ? "View Price Change" : "Edit Price Change") : "Schedule Price Change")"
-       IconType="@(isEdit ? (isReadOnly ? ModalIconType.UserView : ModalIconType.UserEdit) : ModalIconType.UserPlus)"
-       OnClose="Cancel">
+<Modal ShowModal="true" Width="1000px" MaxWidth="100%" MaxHeight="92vh" FlushBody="true"
+       Title="@(isEdit ? "Edit price change" : "Schedule price change")" Subtitle="@ModalSubtitle"
+       IconType="@(isEdit ? ModalIconType.UserEdit : ModalIconType.UserPlus)" OnClose="Cancel">
     <ChildContent>
-        <FormSection Icon="ti ti-info-circle" Title="Company Item" IsExpanded="@IsCompanyItemExpanded" Expandable="true"
-                     Summary="@(SelectedCompanyItem is null ? "No item selected" : $"{SelectedCompanyItem.CompanyItemCode} - {SelectedCompanyItem.CompanyItemName} ({SelectedCompanyItem.Principal})")">
-            <ChildContent>
+        <div class="pc">
+            <div class="pc-main">
+
+                @* ───── 1 · Company item (add only) ───── *@
                 @if (!isEdit)
                 {
-                    <div class="form-group">
-                        <AutoComplete Label="Principal" Placeholder="Select a principal" Items="Principals"
-                                      SelectedValue="@Principal" SelectedValueChanged="OnPrincipalChanged" />
-                    </div>
-
-                    <div class="form-group">
-                        <AutoComplete Label="Company Item" Required="true" Placeholder="Search company item..."
-                                      TItem="CompanyItemDropdownItem" Items="FilteredCompanyItems"
-                                      ValueSelector="@(x => x.CompanyItemId.ToString())"
-                                      TextSelector="@(x => $"{x.CompanyItemCode} - {x.CompanyItemName}")"
-                                      SelectedValue="@(SelectedCompanyItemId?.ToString())" SelectedItemChanged="OnCompanyItemSelected"
-                                      ShowError="@ShowValidationErrors"
-                                      ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)" />
-                    </div>
-                }
-                else
-                {
-                    <div class="form-group">
-                        <Input Label="Company Item" Value="@($"{ViewCompanyItemCode} - {ViewCompanyItemName}")"
-                               Disabled="true" />
-                    </div>
-                    <div class="form-group">
-                        <Input Label="Price List" Value="@(ViewPriceListType ?? "Stock Price")" Disabled="true" />
-                    </div>
-                }
-            </ChildContent>
-        </FormSection>
-
-        @if (SelectedCompanyItem != null && !isEdit)
-        {
-            <FormSection Icon="ti ti-circle-plus" Title="Price Change Details" IsExpanded="true" Expandable="true">
-                <ChildContent>
-                    @* ---------- Add mode: the pricing structure decides what is shown ---------- *@
-                    @if (!isEdit && SelectedCompanyItem != null)
-                    {
-                        @if (IsBlocked)
+                    <section class="pc-step">
+                        <h5>1 · Company item</h5>
+                        @if (SelectedCompanyItem is null)
                         {
-                            <div class="pl-warning pl-blocked">
-                                <i class="ti ti-alert-octagon" aria-hidden="true"></i>
-                                <div>@PricingStructureResolver.Describe(Structure!.Value)</div>
+                            <div class="pc-grid2">
+                                <div class="form-group">
+                                    <AutoComplete Label="Principal" Placeholder="All principals" Items="Principals"
+                                                  SelectedValue="@Principal" SelectedValueChanged="OnPrincipalChanged" />
+                                </div>
+                                <div class="form-group">
+                                    <AutoComplete Label="Company item" Required="true" Placeholder="Search code or name…"
+                                                  TItem="CompanyItemDropdownItem" Items="FilteredCompanyItems"
+                                                  ValueSelector="@(x => x.CompanyItemId.ToString())"
+                                                  TextSelector="@(x => $"{x.CompanyItemCode} - {x.CompanyItemName}")"
+                                                  SelectedValue="@(SelectedCompanyItemId?.ToString())"
+                                                  SelectedItemChanged="OnCompanyItemSelected" ShowError="@ShowValidationErrors"
+                                                  ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key)" />
+                                </div>
                             </div>
                         }
-                        else if (IsSingle)
+                        else
                         {
-                            <div class="form-group">
-                                <Input Label="Current Stock Price" Value="@Fmt(SelectedStockPrice)" Disabled="true" />
-                            </div>
-                        }
-                        else if (IsDual)
-                        {
-
-                            @if (IsDual)
-                            {
-                                <label class="same-row">
-                                    <input type="checkbox" role="switch" @bind="UseSameSettings" />
-
-                                    <span>
-                                        <strong>Use the same amount and effectivity date for both</strong>
-                                    </span>
-                                </label>
-                            }
-
-                            @if (ExcludedSubDistributors.Any())
-                            {
-                                <div class="pl-warning">
-                                    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                                    <div>
-                                        <strong>Some subdistributors will not receive this price change</strong>
-                                        <p>These subdistributors have no price list assigned and will be excluded from the scheduled update.</p>
-                                        <ul>
-                                            @foreach (var name in ExcludedSubDistributors)
-                                            {
-                                                <li>@name</li>
-                                            }
-                                        </ul>
-                                        <p>Regional and National prices will only affect subdistributors assigned to the selected price list.</p>
+                            <div class="pc-item">
+                                <div>
+                                    <span class="pc-code">@SelectedCompanyItem.CompanyItemCode ·
+                                        @SelectedCompanyItem.Principal</span>
+                                        <b>@SelectedCompanyItem.CompanyItemName</b>
+                                        <span class="pc-muted">Stock UOM: @(SelectedCompanyItem.StockUomName ?? "-")</span>
                                     </div>
+                                    <Button Title="Change" Variant="ButtonVariant.Secondary" OnClick="ClearItem" />
                                 </div>
                             }
-                        }
+                        </section>
                     }
 
-                    @if (IsSingle || isEdit || UsesSharedInputs)
+                    @if (IsBlocked)
                     {
-                        <div class="form-group">
-                            <Input Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount)"
-                                   @bind-Value="PriceIncreaseAmount" Step="0.01" Disabled="@isReadOnly"
-                                   ShowError="@ShowValidationErrors"
-                                   ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key)" />
-                        </div>
-                        @if (IsSingle && SelectedStockPrice.HasValue && PriceIncreaseAmount.HasValue)
-                        {
-                            <div class="form-group">
-                                <Input Label="New Stock Price" Value="@Fmt(SelectedStockPrice + PriceIncreaseAmount)"
-                                       Disabled="true" />
-                            </div>
-                        }
-                        <div class="form-group">
-                            <DateInput
-                            Label="@PriceIncreaseValidations.Label(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate)"
-                            @bind-Value="EffectivityDate" Disabled="@isReadOnly" ShowError="@ShowValidationErrors"
-                            ErrorText="@GetFieldError(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key)" />
+                        <div class="pc-note warn">
+                            <i class="ti ti-alert-octagon" aria-hidden="true"></i>
+                            <span>@PricingStructureResolver.Describe(Structure!.Value)</span>
                         </div>
                     }
-                    else if (IsDual)
+                    else if (isEdit || SelectedCompanyItem is not null)
                     {
-                        @foreach (var list in SelectedLists)
+                        @* ───── 2 · Price list (add, dual-priced items) ───── *@
+                        @if (IsDual)
                         {
-                            <div class="pl-card">
-                                <div class="form-group">
-                                    <Input TValue="decimal?" Label="@($"{list} adjustment amount *")" Value="@GetAmount(list)"
-                                           ValueChanged="@((decimal? v) => SetAmount(list, v))"
-                                           Step="0.01" ShowError="@ShowValidationErrors" ErrorText="@GetFieldError(AmountErrorKey(list))" />
+                            <section class="pc-step">
+                                <h5>2 · Price list</h5>
+                                <div class="pc-tabs">
+                                    <button type="button" class="@(ListChoice == ChoiceBoth ? "on" : null)"
+                                            @onclick="() => ListChoice = ChoiceBoth">
+                                        <b>Both lists</b><small>Same change and date</small>
+                                    </button>
+                                    <button type="button" class="@(ListChoice == PriceListTypes.Regional ? "on" : null)"
+                                            @onclick="() => ListChoice = PriceListTypes.Regional">
+                                        <b>Regional</b><small>@Fmt(SelectedCompanyItem?.StockPriceRegional) now</small>
+                                    </button>
+                                    <button type="button" class="@(ListChoice == PriceListTypes.National ? "on" : null)"
+                                            @onclick="() => ListChoice = PriceListTypes.National">
+                                        <b>National</b><small>@Fmt(SelectedCompanyItem?.StockPriceNational) now</small>
+                                    </button>
                                 </div>
-                                <div class="form-group">
-                                    <DateInput Label="@($"{list} effectivity date *")" Value="@DateFor(list)"
-                                               ValueChanged="@((DateTime? d) => SetDate(list, d))" ShowError="@ShowValidationErrors"
-                                               ErrorText="@GetFieldError(DateErrorKey(list))" />
-                                </div>
-                            </div>
-                        }
-                    }
 
-                    @if (IsDual)
-                    {
-                        <div class="sum-wrap">
-                            <table class="sum-table">
-                                <thead>
-                                    <tr><th></th>@foreach (var l in SelectedLists) {
-                                        <th>@l</th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>Current price</td>@foreach (var l in SelectedLists) {
-                                    <td>@Fmt(CurrentFor(l))</td>
-                                }
-                            </tr>
-                            <tr>
-                                <td>Increase</td>@foreach (var l in SelectedLists) {
-                                <td>@FmtSigned(GetAmount(l))</td>
-                            }
-                        </tr>
-                        <tr>
-                            <td>New price</td>@foreach (var l in SelectedLists) {
-                            <td class="sum-new">
-                                @Fmt(CurrentFor(l) + GetAmount(l))</td>
-                            }
-                        </tr>
-                        <tr>
-                            <td>Effectivity date</td>@foreach (var l in SelectedLists) {
-                            <td>
-                                @(DateFor(l)?.ToString("MMM d, yyyy") ?? "-")</td>
-                            }
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        }
-
-        @if (isEdit)
-        {
-            <div class="form-group">
-                <Input Label="Status" Value="@ViewStatus" Disabled="true" />
-            </div>
-        }
-
-        @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
-        {
-            <span class="error-text">@generalError</span>
-        }
-    </ChildContent>
-</FormSection>
-        }
-
-
-        @if (PreviewUomPrices.Any())
-{
-    <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
-        <ChildContent>
-            @if (!isEdit)
-            {
-                <p class="uom-caption">
-                    Increase = price change ÷ stock UOM conversion × UOM conversion, rounded to 2 decimals.
-                </p>
-                @if (ManualCount > 0)
-                {
-                    <div class="uom-note">
-                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-                        @ManualCount UOM@(ManualCount == 1 ? " needs" : "s need") a manual price. Enter one or skip it.
-                    </div>
-                }
-            }
-
-            @foreach (var g in PreviewGroups)
-            {
-                var head = g.First();
-                <div class="uom-group">
-                    <div class="uom-group-head">
-                        <span>@head.SubdItemCode - @head.SubdItemName</span>
-                        @if (head.PriceListType is { } pl)
-                        {
-                            <span class="pl-pill pl-@pl.ToLowerInvariant()">@pl</span>
-                        }
-                    </div>
-                    <table class="uom-table">
-                        <colgroup>
-                            <col style="width:34%" />
-                            <col style="width:22%" />
-                            <col style="width:20%" />
-                            <col style="width:24%" />
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th>UOM</th>
-                                <th>Current</th>
-                                <th>Increase</th>
-                                <th>New price</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var row in g)
-                            {
-                                var skipped = !isEdit && SkippedUomIds.Contains(row.ItemsUomId);
-                                var needsInput = !isEdit && RequiresManualPrice(row) && !skipped;
-                                <tr class="@(needsInput ? "uom-manual" : skipped ? "uom-skipped" : "")">
-                                    <td>
-                                        <span>@row.UomName</span>
-                                        @if (row.IsStockUom)
-                                        {
-                                            <span class="uom-tag">Stock</span>
-                                        }
-                                        <span class="uom-conv">@(row.ConversionToBase == 1 ? "Base unit" : $"×                                      {row.ConversionToBase} base")</span>
-                                    </td>
-                                    <td>@FormatUomPriceColumn(row, "OldPrice")</td>
-                                    <td class="@(row.Increase > 0 ? "uom-up" : "")">@FormatUomPriceColumn(row, "Increase")
-                                    </td>
-                                    <td>
-                                        @if (needsInput)
-                                        {
-                                            <input class="uom-input" type="number" step="0.01" placeholder="Enter price"
-                                                   value="@GetEditableUomValue(row, "NewPrice")"
-                                                   @onchange="e => SetManualPrice(row.ItemsUomId, e.Value?.ToString())" />
-                                        }
-                                        else
-                                        {
-                                            @FormatUomPriceColumn(row, "NewPrice")
-                                        }
-                                    </td>
-                                </tr>
-                                @if (!isEdit && RequiresManualPrice(row))
+                                @if (ExcludedSubDistributors.Any())
                                 {
-                                    <tr class="@(skipped ? "uom-skipped" : "uom-manual")">
-                                        <td colspan="4" class="uom-why-cell">
-                                            <div class="uom-why">
-                                                <span>@ManualReason(row)</span>
-                                                <label>
-                                                    <input type="checkbox" checked="@skipped"
-                                                           @onchange="e => ToggleSkipPrice(row.ItemsUomId, e.Value)" />
-                                                    Skip this UOM
-                                                </label>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                    <div class="pc-note warn">
+                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                        <span>
+                                            <b>Not affected (no price list assigned):</b> @string.Join(", ", ExcludedSubDistributors)
+                                        </span>
+                                    </div>
                                 }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </ChildContent>
-    </FormSection>
-}
-else if ((SelectedCompanyItem != null && !IsBlocked) || isEdit)
-{
-    <FormSection Icon="ti ti-list-check" Title="Sub-Item / UOM Prices" IsExpanded="true" Expandable="true">
-        <ChildContent>
-            <p><em>No active UOMs found for this selection.</em></p>
-        </ChildContent>
-    </FormSection>
-}
-</ChildContent>
-<FooterContent>
-    @if (isReadOnly)
-    {
-        <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
-    }
-    else
-    {
-        <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
-        <Button
-        Title="@(isSubmitting ? (isEdit ? "Saving..." : "Scheduling...") : (isEdit ? "Save Changes" : "Schedule Increase"))"
-        Variant="ButtonVariant.Primary" OnClick="RequestConfirm" Disabled="@(isSubmitting || IsBlocked)"></Button>
-    }
-</FooterContent>
-</Modal>
+                            </section>
+                        }
+
+                        @* ───── Change and date ───── *@
+                        <section class="pc-step">
+                            <h5>@(isEdit ? "Change and date" : IsDual ? "3 · Change and date" : "2 · Change and date")</h5>
+                            <div class="pc-grid2">
+                                <div>
+                                    <label class="pc-label">Change <span class="pc-req">*</span></label>
+                                    <div class="pc-amt">
+                                        <div class="pc-mode">
+                                            <button type="button" class="@(ChangeMode == ModeAmount ? "on" : null)"
+                                                    @onclick="() => SetMode(ModeAmount)" title="Amount (₱)">₱ ±</button>
+                                            <button type="button" class="@(ChangeMode == ModePercent ? "on" : null)"
+                                                    @onclick="() => SetMode(ModePercent)" title="Percent">%</button>
+                                            <button type="button" class="@(ChangeMode == ModeNewPrice ? "on" : null)"
+                                                    @onclick="() => SetMode(ModeNewPrice)" title="Type the new price">New</button>
+                                        </div>
+                                        <div class="pc-amt-input">
+                                            <Input TValue="decimal?" Value="@ChangeValue"
+                                                   ValueChanged="@((decimal? v) => ChangeValue = v)" Step="0.01"
+                                                   Placeholder="@(ChangeMode == ModePercent ? "e.g. 5" : ChangeMode == ModeNewPrice ? "New price" : "e.g. 50.00")" />
+                                        </div>
+                                    </div>
+                                    <div class="pc-quick">
+                                        @foreach (var q in new[] { 2m, 5m, 10m, -5m })
+                                        {
+                                            var pct = q;
+                                            <button type="button" @onclick="() => QuickPercent(pct)">@(pct > 0 ? "+" :
+                                                                             "−")@Math.Abs(pct)%</button>
+                                            }
+                                        </div>
+                                        @if (ShowValidationErrors && GetAmountError() is { Length: > 0 } amtErr)
+                                        {
+                                            <span class="error-text">@amtErr</span>
+                                        }
+                                    </div>
+                                    <div>
+                                        @* Same label + 40px box structure as the Change field, so both line up. *@
+                                        <label class="pc-label">Effectivity date <span class="pc-req">*</span></label>
+                                        <div class="pc-date">
+                                            <DateInput @bind-Value="EffectivityDate" ShowError="@ShowValidationErrors"
+                                                       ErrorText="@GetDateError()" />
+                                        </div>
+                                        <div class="pc-quick">
+                                            <button type="button"
+                                                    @onclick="() => EffectivityDate = DateTime.Today.AddDays(1)">Tomorrow</button>
+                                            <button type="button"
+                                                    @onclick="() => EffectivityDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1)">1st
+                                                of next month</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                @if (isEdit && IsAppliedView)
+                                {
+                                    <div class="pc-note warn">
+                                        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                                        <span>
+                                            <b>This change is already applied.</b> Saving rebuilds the @(ViewPriceListType ?? "stock") price
+                                            history from this change on and
+                                            updates the item's current price. Moving the date into the future makes it pending again.
+                                            @if (InvoiceLinesUsing > 0)
+                                            {
+                                                <b> @InvoiceLinesUsing invoice line@(InvoiceLinesUsing == 1 ? " was" : "s were") priced with
+                                                    it</b>
+                                                    <text>; they keep their amounts until you recalculate those invoices.</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+
+                                    @* ───── Effect on sub-items (read-only) ───── *@
+                                    var impact = ImpactRows;
+                                    <details class="pc-impact">
+                                        <summary>
+                                            <i class="ti ti-list-details" aria-hidden="true"></i>
+                                            Effect on sub-items
+                                            <small>· @impact.Select(r => r.SubdItemId).Distinct().Count() sub-items · @impact.Count
+                                                UOMs</small>
+                                                <i class="ti ti-chevron-right pc-caret" aria-hidden="true"></i>
+                                            </summary>
+                                            @if (impact.Count == 0)
+                                            {
+                                                <p class="pc-muted pc-pad">No active sub-item UOMs for this selection.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="pc-imp-scroll">
+                                                    <table class="pc-imp">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Sub-item</th>
+                                                                <th>UOM</th>
+                                                                <th class="r">Now</th>
+                                                                <th class="r">New</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var r in impact)
+                                                            {
+                                                                <tr class="@(r.ConversionToBase is > 0 ? null : "muted")">
+                                                                    <td>
+                                                                        @r.SubdItemCode - @r.SubdItemName
+                                                                        @if (r.PriceListType is { } pl && IsDual)
+                                                                        {
+                                                                            <span class="pc-pl @(pl == PriceListTypes.Regional ? "r" : "n")">@pl[0]</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        @r.UomName
+                                                                        <small class="pc-muted">@(r.ConversionToBase is decimal c && c > 0 ? (c == 1m ?
+                                                                                           "stock" : "× " + c.ToString("0.####")) : "no conversion")</small>
+                                                                        </td>
+                                                                        <td class="r">@Fmt(r.OldPrice)</td>
+                                                                        <td class="r"><b>@Fmt(r.NewPrice)</b></td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                            </details>
+                                        }
+
+                                        @if (ShowValidationErrors && GetFieldError("general") is { Length: > 0 } generalError)
+                                        {
+                                            <span class="error-text">@generalError</span>
+                                        }
+                                    </div>
+
+                                    @* ───── Right: result + history ───── *@
+                                    <aside class="pc-side">
+                                        <p class="pc-side-h">Result</p>
+                                        @if (!isEdit && SelectedCompanyItem is null)
+                                        {
+                                            <div class="pc-empty">Pick a company item to see the new price.</div>
+                                        }
+                                        else if (!IsBlocked)
+                                        {
+                                            <div class="pc-result">
+                                                @foreach (var list in Lists)
+                                                {
+                                                    var basePrice = BaseFor(list);
+                                                    var amount = AmountFor(list);
+                                                    var newPrice = basePrice + amount;
+                                                    <div class="pc-result-row">
+                                                        <span
+                                                            class="pc-pl @(list == PriceListTypes.Regional ? "r" : list == PriceListTypes.National ? "n" : "s")">@(list
+                                                            ?? "Stock")</span>
+                                                            <div>
+                                                                <span class="pc-from">@Fmt(basePrice)</span>
+                                                                <div class="pc-to">@(amount.HasValue ? Fmt(newPrice) : "—")</div>
+                                                                <div class="pc-when">@(EffectivityDate.HasValue ? "from " +
+                                                                                                    EffectivityDate.Value.ToString("MMM d, yyyy") : "pick a date")</div>
+                                                                </div>
+                                                                @if (amount is decimal a && basePrice is decimal b && b != 0)
+                                                                {
+                                                                    <span class="pc-badge @(a >= 0 ? "up" : "down")">@FmtSigned(a) · @((a / b *
+                                                                                                    100m).ToString("0.0"))%</span>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </div>
+
+                                                        <p class="pc-side-h">Price history@(Lists.Count > 1 ? " · " + Lists[0] : string.Empty)</p>
+                                                        var timeline = Timeline;
+                                                        @if (timeline.Count == 0)
+                                                        {
+                                                            <div class="pc-empty">No earlier price changes.</div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="pc-hist">
+                                                                @foreach (var t in timeline)
+                                                                {
+                                                                    <div class="pc-h @t.Css">
+                                                                        <span class="pc-dot"></span>
+                                                                        <b>@t.Price</b>
+                                                                        <small>@t.Date · @t.Label</small>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    }
+                                                    <div class="pc-note info">
+                                                        <i class="ti ti-info-circle" aria-hidden="true"></i>
+                                                        <span>UOM prices follow the company price (stock price × conversion). Only the company price is
+                                                            saved.</span>
+                                                        </div>
+                                                    </aside>
+                                                </div>
+                                            </ChildContent>
+                                            <FooterContent>
+                                                @if (isEdit)
+                                                {
+                                                    <span class="pc-danger"><Button Title="Delete change" Variant="ButtonVariant.Secondary"
+                                                                                        OnClick="() => showDeleteConfirm = true" Disabled="@isSubmitting" /></span>
+                                                    }
+                                                    <span class="pc-spacer"></span>
+                                                    <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting" />
+                                                    <Button
+                                                    Title="@(isSubmitting ? (isEdit ? "Saving..." : "Scheduling...") : (isEdit ? "Save changes" : "Schedule change"))"
+                                                    Variant="ButtonVariant.Primary" OnClick="RequestConfirm"
+                                                    Disabled="@(isSubmitting || IsBlocked || (!isEdit && SelectedCompanyItem is null))" />
+                                                </FooterContent>
+                                            </Modal>
+
+<ConfirmModal Show="showDeleteConfirm" Title="Delete price change" IconClass="fas fa-trash" Message="@DeleteMessage"
+              OnYes="DeleteAsync" OnNo="() => showDeleteConfirm = false" />
+<ConfirmModal Show="deleteError is not null" Title="Price change not deleted" ShowError="true"
+              ErrorMessage="@deleteError" OnErrorConfirm="() => deleteError = null" />
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
     [Parameter] public EventCallback OnRequestConfirm { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
     [Parameter] public int? PriceIncreaseId { get; set; }
 
-    private static readonly string[] DualLists = { PriceListTypes.Regional, PriceListTypes.National };
+    private const string ChoiceBoth = "both";
+    private const string ModeAmount = "amt";
+    private const string ModePercent = "pct";
+    private const string ModeNewPrice = "new";
 
     private bool isEdit => PriceIncreaseId.HasValue;
-    private bool isReadOnly;
     private int? CurrentUserId => UserContextService.UserId;
 
-    private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List<CompanyItemUomPriceDto>();
-    private IReadOnlyList<string> ExcludedSubDistributors { get; set; } = new List<string>();
-
+    // ---------------- Add mode ----------------
+    private IReadOnlyList<CompanyItemDropdownItem> CompanyItems { get; set; } = new List<CompanyItemDropdownItem>();
+    private IReadOnlyList<string?> Principals { get; set; } = new List<string>();
+    private string? Principal { get; set; }
     private CompanyItemDropdownItem? SelectedCompanyItem { get; set; }
     private int? SelectedCompanyItemId { get; set; }
-    private IReadOnlyList<CompanyItemDropdownItem> CompanyItems { get; set; } = new List<CompanyItemDropdownItem>();
+    private IReadOnlyList<string> ExcludedSubDistributors { get; set; } = new List<string>();
+    private string ListChoice { get; set; } = ChoiceBoth;
+
     private IEnumerable<CompanyItemDropdownItem> FilteredCompanyItems =>
-        string.IsNullOrWhiteSpace(Principal)
-            ? CompanyItems
-            : CompanyItems.Where(c => c.Principal == Principal);
+        string.IsNullOrWhiteSpace(Principal) ? CompanyItems : CompanyItems.Where(c => c.Principal == Principal);
 
-    private string? Principal { get; set; }
-    private IReadOnlyList<string?> Principals { get; set; } = new List<string>();
-
-    // Single-price item, shared amount for dual items, and the edit view
-    private decimal? SelectedStockPrice { get; set; }
-    private decimal? PriceIncreaseAmount { get; set; }
-    private DateTime? EffectivityDate { get; set; }
-
-    // Dual-price item
+    private PricingStructure? Structure => SelectedCompanyItem?.Structure;
     private bool IsDual => !isEdit && Structure == PricingStructure.Dual;
-    private bool IsSingle => !isEdit && Structure == PricingStructure.Single;
+    private bool IsBlocked => !isEdit && SelectedCompanyItem != null && Structure is PricingStructure.Invalid or
+PricingStructure.Incomplete;
 
-    private IEnumerable<string> SelectedLists => IsDual ? DualLists : Enumerable.Empty<string>();
-    private bool UsesSharedInputs => IsDual && UseSameSettings;
-    private decimal? RegionalAmount { get; set; }
-    private decimal? NationalAmount { get; set; }
-    private DateTime? RegionalDate { get; set; }
-    private DateTime? NationalDate { get; set; }
-    private bool IsCompanyItemExpanded { get; set; } = true;
-    private bool IsPriceDetailsExpanded { get; set; }
+    // ---------------- Shared ----------------
+    private string ChangeMode { get; set; } = ModeAmount;
+    private decimal? ChangeValue { get; set; }
+    private DateTime? EffectivityDate { get; set; }
+    private IReadOnlyList<CompanyItemUomPriceDto> UomPrices { get; set; } = new List<CompanyItemUomPriceDto>();
+    private IReadOnlyList<PriceIncreaseTableListDto> ItemHistory { get; set; } = new List<PriceIncreaseTableListDto>();
 
-    // View/edit-mode display fields
-    private string? ViewCompanyItemCode { get; set; }
-    private string? ViewCompanyItemName { get; set; }
-    private string? ViewPriceListType { get; set; }
-    private string? ViewStatus { get; set; }
-    private DateTime CreatedDate { get; set; }
-    private string? CreatedByName { get; set; }
+    // ---------------- Edit mode ----------------
+    private PriceIncreaseTableListDto? EditRow { get; set; }
+    private string? ViewPriceListType => EditRow?.PriceListType;
+    private decimal? ViewOldPrice => EditRow?.OldPrice;
+    private bool IsAppliedView => string.Equals(EditRow?.Status, "Applied", StringComparison.OrdinalIgnoreCase);
+    private int InvoiceLinesUsing { get; set; }
 
     private Dictionary<string, string> Errors { get; set; } = new();
     private bool ShowValidationErrors { get; set; }
     private bool isSubmitting;
+    private bool showDeleteConfirm;
+    private string? deleteError;
 
     private AddPriceIncreaseDto? PendingScheduleDto;
     private (decimal Amount, DateTime EffectivityDate)? PendingEditData;
 
-    private HashSet<int> SkippedUomIds { get; set; } = new();
-    private Dictionary<int, string> ManualPriceInputs { get; set; } = new();
+    private string? ModalSubtitle => isEdit
+        ? EditRow is null ? null
+            : $"{EditRow.CompanyItemCode} - {EditRow.CompanyItemName} · {EditRow.PriceListType ?? "Stock price"} · {EditRow.Status}"
+        : "Choose an item, the price list, the change and the date.";
 
-    // ---------------- Pricing structure ----------------
+    // ---------------- Lists, prices, amounts ----------------
 
-    private PricingStructure? Structure => SelectedCompanyItem?.Structure;
-    private bool IsBlocked => !isEdit && SelectedCompanyItem != null && Structure is PricingStructure.Invalid or
-PricingStructure.Incomplete;
-    private static string Fmt(decimal? v) => v?.ToString("N2") ?? "-";
+    /// <summary>The price lists this change applies to (null = single stock price).</summary>
+    private List<string?> Lists
+    {
+        get
+        {
+            if (isEdit) return new List<string?> { ViewPriceListType };
+            if (IsDual)
+                return ListChoice == ChoiceBoth
+                    ? new List<string?> { PriceListTypes.Regional, PriceListTypes.National }
+                    : new List<string?> { ListChoice };
+            return new List<string?> { null };
+        }
+    }
+
+    private decimal? BaseFor(string? list) => isEdit
+        ? ViewOldPrice
+        : list switch
+        {
+            PriceListTypes.Regional => SelectedCompanyItem?.StockPriceRegional,
+            PriceListTypes.National => SelectedCompanyItem?.StockPriceNational,
+            _ => SelectedCompanyItem?.StockPrice
+        };
+
+    /// <summary>The ₱ change for a list, from the amount / percent / new price typed.</summary>
+    private decimal? AmountFor(string? list)
+    {
+        if (ChangeValue is not decimal v) return null;
+        var b = BaseFor(list);
+        return ChangeMode switch
+        {
+            ModePercent => b is decimal bp ? Math.Round(bp * v / 100m, 2, MidpointRounding.AwayFromZero) : null,
+            ModeNewPrice => b is decimal bn ? v - bn : null,
+            _ => v
+        };
+    }
+
+    private void SetMode(string mode)
+    {
+        if (mode == ChangeMode) return;
+        // Keep the same change when switching how it is typed (based on the first list).
+        var first = Lists.FirstOrDefault();
+        var amount = AmountFor(first);
+        var b = BaseFor(first);
+        ChangeMode = mode;
+        if (amount is decimal a && b is decimal bp)
+        {
+            ChangeValue = mode switch
+            {
+                ModePercent => bp == 0 ? null : Math.Round(a / bp * 100m, 2),
+                ModeNewPrice => bp + a,
+                _ => a
+            };
+        }
+    }
+
+    private void QuickPercent(decimal pct)
+    {
+        ChangeMode = ModePercent;
+        ChangeValue = pct;
+    }
+
+    // ---------------- Preview ----------------
+
+    private List<CompanyItemUomPriceDto> ImpactRows
+    {
+        get
+        {
+            var lists = Lists;
+            IEnumerable<CompanyItemUomPriceDto> rows = isEdit || !IsDual
+                ? UomPrices
+                : UomPrices.Where(u => lists.Contains(u.PriceListType));
+
+            return rows.Select(u =>
+                {
+                    var now = u.OldPrice ?? u.CurrentPrice;
+                    var inc = AmountFor(isEdit ? ViewPriceListType : u.PriceListType) is decimal a
+                        ? UomPriceCalculator.Increase(a, u.ConversionToBase)
+                        : null;
+                    return new CompanyItemUomPriceDto
+                    {
+                        SubdItemId = u.SubdItemId,
+                        SubdItemCode = u.SubdItemCode,
+                        SubdItemName = u.SubdItemName,
+                        UomName = u.UomName,
+                        ConversionToBase = u.ConversionToBase,
+                        PriceListType = u.PriceListType,
+                        OldPrice = now,
+                        NewPrice = now.HasValue && inc.HasValue ? now + inc : null
+                    };
+                })
+                .OrderBy(r => r.PriceListType)
+                .ThenBy(r => r.SubdItemCode)
+                .ThenByDescending(r => r.ConversionToBase ?? decimal.MinValue)
+                .ToList();
+        }
+    }
+
+    private sealed record TimelineItem(DateTime When, string Date, string Price, string Label, string Css);
+
+    /// <summary>The item's history for the first list, with this change placed where its date puts it.</summary>
+    private List<TimelineItem> Timeline
+    {
+        get
+        {
+            var list = Lists.FirstOrDefault();
+            var rows = ItemHistory.Where(h => h.PriceListType == list).ToList();
+            var currentId = rows.Where(h => h.AppliedDate != null)
+                                .OrderByDescending(h => h.EffectivityDate).Select(h => (int?)h.CompanyItemPriceHistoryId).FirstOrDefault();
+
+            var items = new List<TimelineItem>();
+            foreach (var h in rows)
+            {
+                if (isEdit && h.CompanyItemPriceHistoryId == PriceIncreaseId) continue; // shown below with the edited values
+                var when = h.EffectivityDate ?? DateTime.MinValue;
+                var (label, css) = h.AppliedDate == null
+                    ? ("Pending", "pend")
+                    : h.CompanyItemPriceHistoryId == currentId ? ("Current", "cur") : ("Applied", "");
+                items.Add(new TimelineItem(when, when.ToString("MMM d, yyyy"), Fmt(h.NewPrice), label, css));
+            }
+
+            var amount = AmountFor(list);
+            var newPrice = BaseFor(list) + amount;
+            if (EffectivityDate is DateTime d && amount.HasValue)
+            {
+                items.Add(new TimelineItem(d, d.ToString("MMM d, yyyy"), Fmt(newPrice),
+                    isEdit ? "This change · editing" : Lists.Count > 1 ? "New · both lists" : "New", isEdit ? "edit" : "new"));
+            }
+
+            var ordered = items.OrderByDescending(i => i.When).ToList();
+            var shown = ordered.Take(8).ToList();
+            var mine = ordered.FirstOrDefault(i => i.Css is "edit" or "new");
+            if (mine is not null && !shown.Contains(mine))
+                shown[^1] = mine; // always show this change
+            return shown;
+        }
+    }
+
+    // ---------------- Formatting / errors ----------------
+
+    private static string Fmt(decimal? v) => v is decimal d ? $"₱{d:N2}" : "-";
 
     private static string FmtSigned(decimal? v) =>
-        v is decimal d ? $"{(d >= 0 ? "+" : "-")}{Math.Abs(d):N2}" : "-";
+        v is decimal d ? $"{(d >= 0 ? "+" : "−")}{Math.Abs(d):N2}" : "-";
 
-    private string GetFieldError(string key) =>
-        Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
+    private string GetFieldError(string key) => Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
 
-    private static string AmountErrorKey(string? list) =>
-        $"{PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key}:{list}";
+    private string GetAmountError() =>
+        Errors.Where(kv => kv.Key.StartsWith(PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key,
+StringComparison.Ordinal))
+              .Select(kv => kv.Value).FirstOrDefault() ?? string.Empty;
 
-    private static string DateErrorKey(string? list) =>
-        $"{PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key}:{list}";
+    private string GetDateError() =>
+        Errors.Where(kv => kv.Key.StartsWith(PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key,
+StringComparison.Ordinal))
+              .Select(kv => kv.Value).FirstOrDefault() ?? string.Empty;
 
-    private bool ListSelected(string? list) =>
-        IsDual && DualLists.Contains(list);
-
-    private decimal? GetAmount(string? list) =>
-        UsesSharedInputs
-            ? PriceIncreaseAmount
-            : list switch
-            {
-                PriceListTypes.Regional => RegionalAmount,
-                PriceListTypes.National => NationalAmount,
-                _ => null
-            };
-
-    private void SetAmount(string list, decimal? value)
-    {
-        if (UsesSharedInputs)
-        {
-            PriceIncreaseAmount = value;
-            return;
-        }
-
-        if (list == PriceListTypes.Regional)
-            RegionalAmount = value;
-        else if (list == PriceListTypes.National)
-            NationalAmount = value;
-    }
-
-    private DateTime? DateFor(string? list) =>
-        UsesSharedInputs
-            ? EffectivityDate
-            : list switch
-            {
-                PriceListTypes.Regional => RegionalDate,
-                PriceListTypes.National => NationalDate,
-                _ => null
-            };
-
-    private void SetDate(string list, DateTime? value)
-    {
-        if (UsesSharedInputs)
-        {
-            EffectivityDate = value;
-            return;
-        }
-
-        if (list == PriceListTypes.Regional)
-            RegionalDate = value;
-        else if (list == PriceListTypes.National)
-            NationalDate = value;
-    }
-
-    private decimal? CurrentFor(string list) => list switch
-    {
-        PriceListTypes.Regional => SelectedCompanyItem?.StockPriceRegional,
-        PriceListTypes.National => SelectedCompanyItem?.StockPriceNational,
-        _ => null
-    };
-
-    private decimal? EffectiveAmount(string? list) =>
-        IsDual ? (ListSelected(list) ? GetAmount(list) : null) : PriceIncreaseAmount;
-    private bool UseSameSettings { get; set; } = true;
-    private void ResetPricingInputs()
-    {
-        UseSameSettings = true;
-
-        RegionalAmount = null;
-        NationalAmount = null;
-        RegionalDate = null;
-        NationalDate = null;
-
-        PriceIncreaseAmount = null;
-        EffectivityDate = null;
-
-        SkippedUomIds.Clear();
-        ManualPriceInputs.Clear();
-        ExcludedSubDistributors = new List<string>();
-
-        Errors = new();
-        ShowValidationErrors = false;
-    }
+    private string DeleteMessage => IsAppliedView
+        ? $"This change is already applied. Deleting it rebuilds the item's price history and sets its current price back." +
+          (InvoiceLinesUsing > 0 ? $" {InvoiceLinesUsing} invoice line(s) keep their amounts until recalculated." : string.Empty)
++ " Delete it?"
+        : "Delete this pending price change?";
 
     // ---------------- Selection ----------------
 
@@ -483,232 +534,81 @@ PricingStructure.Incomplete;
     {
         SelectedCompanyItem = item;
         SelectedCompanyItemId = item?.CompanyItemId;
-        ResetPricingInputs();
-
+        ResetInputs();
         UomPrices = new List<CompanyItemUomPriceDto>();
-        SelectedStockPrice = null;
+        ItemHistory = new List<PriceIncreaseTableListDto>();
+        ExcludedSubDistributors = new List<string>();
 
-        if (item == null)
-        {
-            IsCompanyItemExpanded = true;
-            IsPriceDetailsExpanded = false;
-            return;
-        }
-
+        if (item is null) return;
         Principal = item.Principal;
 
         if (item.Structure is PricingStructure.Single or PricingStructure.Dual)
         {
-            SelectedStockPrice = item.Structure == PricingStructure.Single
-                ? item.StockPrice
-                : null;
-
-            UomPrices = await AdminPriceIncreaseService
-                .GetUomPricesByCompanyItemIdAsync(item.CompanyItemId);
-
+            UomPrices = await AdminPriceIncreaseService.GetUomPricesByCompanyItemIdAsync(item.CompanyItemId);
+            ItemHistory = await AdminPriceIncreaseService.GetCompanyItemHistoryAsync(item.CompanyItemId);
             if (item.Structure == PricingStructure.Dual)
-            {
-                ExcludedSubDistributors = await AdminPriceIncreaseService
-                    .GetSubDistributorsWithoutPriceListAsync(item.CompanyItemId);
-            }
+                ExcludedSubDistributors = await AdminPriceIncreaseService.GetSubDistributorsWithoutPriceListAsync(item.CompanyItemId);
         }
+    }
 
-        if (item.Structure is PricingStructure.Single or PricingStructure.Dual)
-        {
-            IsCompanyItemExpanded = false;
-            IsPriceDetailsExpanded = true;
-        }
-        else
-        {
-            IsCompanyItemExpanded = true;
-            IsPriceDetailsExpanded = false;
-        }
+    private void ClearItem()
+    {
+        SelectedCompanyItem = null;
+        SelectedCompanyItemId = null;
+        UomPrices = new List<CompanyItemUomPriceDto>();
+        ItemHistory = new List<PriceIncreaseTableListDto>();
+        ExcludedSubDistributors = new List<string>();
+        ResetInputs();
     }
 
     private void OnPrincipalChanged(string? value)
     {
         Principal = value;
-
-        if (SelectedCompanyItem != null)
-        {
-            var stillValid = CompanyItems.Any(c =>
-                c.CompanyItemId == SelectedCompanyItem.CompanyItemId &&
-                (string.IsNullOrWhiteSpace(Principal) || c.Principal == Principal));
-
-            if (!stillValid)
-            {
-                SelectedCompanyItem = null;
-                SelectedCompanyItemId = null;
-                SelectedStockPrice = null;
-                UomPrices = new List<CompanyItemUomPriceDto>();
-                ResetPricingInputs();
-            }
-        }
+        if (SelectedCompanyItem != null && !string.IsNullOrWhiteSpace(Principal) && SelectedCompanyItem.Principal != Principal)
+            ClearItem();
     }
 
-    // ---------------- UOM preview ----------------
-
-    // A UOM can't be calculated automatically if anything the proc needs is missing.
-    private static bool RequiresManualPrice(CompanyItemUomPriceDto item) =>
-        !item.StockConversionToBase.HasValue || item.StockConversionToBase.Value <= 0
-        || !item.ConversionToBase.HasValue || item.ConversionToBase.Value <= 0
-        || !item.CurrentPrice.HasValue;
-
-    private static string ManualReason(CompanyItemUomPriceDto r) =>
-        !(r.StockConversionToBase > 0) ? "No stock UOM set for this sub-item"
-        : !(r.ConversionToBase > 0) ? "No conversion set"
-        : "No current price";
-
-    private IEnumerable<CompanyItemUomPriceDto> UomsInScope =>
-        IsDual ? UomPrices.Where(u => ListSelected(u.PriceListType)) : UomPrices;
-
-    private int ManualCount => isEdit ? 0 : UomsInScope.Count(u =>
-        RequiresManualPrice(u) && !SkippedUomIds.Contains(u.ItemsUomId)
-        && !(ManualPriceInputs.TryGetValue(u.ItemsUomId, out var t) && decimal.TryParse(t, out _)));
-
-    private CompanyItemUomPriceDto BuildPreviewRow(CompanyItemUomPriceDto u)
+    private void ResetInputs()
     {
-        decimal? increase = null, newPrice = null;
-        var manual = false;
-
-        if (!SkippedUomIds.Contains(u.ItemsUomId))
-        {
-            if (ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed) && decimal.TryParse(typed, out var manualValue))
-            {
-                newPrice = manualValue;
-                manual = true;
-                if (u.CurrentPrice.HasValue) increase = manualValue - u.CurrentPrice.Value;
-            }
-            else if (!RequiresManualPrice(u) && EffectiveAmount(u.PriceListType) is decimal amount)
-            {
-                increase = UomPriceCalculator.Increase(amount, u.ConversionToBase, u.StockConversionToBase);
-                newPrice = u.CurrentPrice + increase;
-            }
-        }
-
-        return new CompanyItemUomPriceDto
-        {
-            SubdItemId = u.SubdItemId,
-            SubdItemCode = u.SubdItemCode,
-            SubdItemName = u.SubdItemName,
-            ItemsUomId = u.ItemsUomId,
-            UomName = u.UomName,
-            ConversionToBase = u.ConversionToBase,
-            StockConversionToBase = u.StockConversionToBase,
-            IsStockUom = u.IsStockUom,
-            PriceListType = u.PriceListType,
-            CurrentPrice = u.CurrentPrice,
-            OldPrice = u.CurrentPrice,
-            Increase = increase,
-            NewPrice = newPrice,
-            IsManual = manual
-        };
+        ListChoice = ChoiceBoth;
+        ChangeMode = ModeAmount;
+        ChangeValue = null;
+        EffectivityDate = null;
+        Errors = new();
+        ShowValidationErrors = false;
     }
-
-    private List<CompanyItemUomPriceDto> PreviewUomPrices
-    {
-        get
-        {
-            IEnumerable<CompanyItemUomPriceDto> items = isEdit ? UomPrices : UomsInScope.Select(BuildPreviewRow);
-
-            return items
-                .OrderBy(x => x.PriceListType)
-                .ThenBy(x => x.SubdItemCode)
-                .ThenBy(x => x.SubdItemId)
-                .ThenBy(x => x.ConversionToBase ?? int.MinValue)
-                .ThenBy(x => x.UomName)
-                .ToList();
-        }
-    }
-
-    private IEnumerable<IGrouping<(string? List, int? SubdItemId), CompanyItemUomPriceDto>> PreviewGroups =>
-        PreviewUomPrices.GroupBy(x => (x.PriceListType, x.SubdItemId));
-
-    private void SetManualPrice(int itemsUomId, string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) { ManualPriceInputs.Remove(itemsUomId); return; }
-        ManualPriceInputs[itemsUomId] = value;
-        SkippedUomIds.Remove(itemsUomId);
-    }
-
-    private void ToggleSkipPrice(int itemsUomId, object? checkedValue)
-    {
-        if (checkedValue is not bool isChecked) return;
-
-        if (isChecked)
-        {
-            SkippedUomIds.Add(itemsUomId);
-            ManualPriceInputs.Remove(itemsUomId);
-        }
-        else
-        {
-            SkippedUomIds.Remove(itemsUomId);
-        }
-    }
-
-    private string? FormatUomPriceColumn(CompanyItemUomPriceDto item, string column) => column switch
-    {
-        "OldPrice" => item.OldPrice?.ToString("N2") ?? "-",
-        "Increase" => !isEdit && SkippedUomIds.Contains(item.ItemsUomId)
-            ? "-"
-            : item.Increase is decimal inc ? $"{(inc >= 0 ? "+" : "-")}{Math.Abs(inc):N2}" : "-",
-        "NewPrice" => !isEdit && SkippedUomIds.Contains(item.ItemsUomId)
-            ? "No change"
-            : item.NewPrice is decimal np
-                ? (item.IsManual ? $"{np:N2} (manual)" : np.ToString("N2"))
-                : "-",
-        _ => null
-    };
-
-    private string? GetEditableUomValue(CompanyItemUomPriceDto item, string column) => column switch
-    {
-        "NewPrice" => item.NewPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        _ => null
-    };
 
     // ---------------- Load ----------------
 
     protected override async Task OnInitializedAsync()
     {
-        Principals = await AdminPriceIncreaseService.GetAllPrincipalsAsync();
         if (isEdit)
         {
-            var history = await AdminPriceIncreaseService.GetPriceIncreaseByIdAsync(PriceIncreaseId!.Value);
-            if (history != null)
+            EditRow = await AdminPriceIncreaseService.GetPriceIncreaseByIdAsync(PriceIncreaseId!.Value);
+            if (EditRow is null) return;
+
+            ChangeValue = EditRow.PriceIncreaseAmount;
+            EffectivityDate = EditRow.EffectivityDate;
+            InvoiceLinesUsing = await AdminPriceIncreaseService.CountInvoiceLinesUsingAsync(PriceIncreaseId!.Value);
+
+            if (EditRow.CompanyItemId is int itemId)
+                ItemHistory = await AdminPriceIncreaseService.GetCompanyItemHistoryAsync(itemId);
+
+            var details = await AdminPriceIncreaseService.GetCascadedUomDetailsAsync(PriceIncreaseId!.Value);
+            UomPrices = details.Select(d => new CompanyItemUomPriceDto
             {
-                ViewCompanyItemCode = history.CompanyItemCode;
-                ViewCompanyItemName = history.CompanyItemName;
-                ViewPriceListType = history.PriceListType;
-                SelectedCompanyItemId = history.CompanyItemId;
-                SelectedStockPrice = history.StockPrice;
-                PriceIncreaseAmount = history.PriceIncreaseAmount;
-                EffectivityDate = history.EffectivityDate;
-                ViewStatus = history.Status;
-                CreatedDate = history.CreatedDate;
-                CreatedByName = await AdminPriceIncreaseService.GetUserNameByIdAsync(history.CreatedBy);
-
-                var details = await AdminPriceIncreaseService.GetCascadedUomDetailsAsync(PriceIncreaseId!.Value);
-                UomPrices = details.Select(d => new CompanyItemUomPriceDto
-                {
-                    SubdItemId = d.SubdItemId,
-                    SubdItemCode = d.SubdItemCode,
-                    SubdItemName = d.SubdItemName,
-                    UomName = d.UomName,
-                    ConversionToBase = d.ConversionToBase,
-                    PriceListType = d.PriceListType,
-                    OldPrice = d.OldPrice,
-                    NewPrice = d.NewPrice,
-                    Increase = d.NewPrice.HasValue && d.OldPrice.HasValue ? d.NewPrice - d.OldPrice : null
-                }).ToList();
-
-                if (string.Equals(history.Status, "Applied", StringComparison.OrdinalIgnoreCase))
-                {
-                    isReadOnly = true;
-                }
-            }
+                SubdItemId = d.SubdItemId,
+                SubdItemCode = d.SubdItemCode,
+                SubdItemName = d.SubdItemName,
+                UomName = d.UomName,
+                ConversionToBase = d.ConversionToBase,
+                PriceListType = d.PriceListType,
+                OldPrice = d.OldPrice
+            }).ToList();
         }
         else
         {
+            Principals = await AdminPriceIncreaseService.GetAllPrincipalsAsync();
             CompanyItems = await AdminPriceIncreaseService.GetCompanyItemsForDropdownAsync();
         }
     }
@@ -717,25 +617,25 @@ PricingStructure.Incomplete;
 
     private async Task RequestConfirm()
     {
+        Errors = new();
+        ShowValidationErrors = true;
+        var amountKey = PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key;
+        var dateKey = PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key;
+
         if (isEdit)
         {
-            var dtoToValidate = new AddPriceIncreaseDto
+            var amount = AmountFor(ViewPriceListType);
+            Errors = await PriceIncreaseValidations.ValidateEditPriceIncreaseAsync(new AddPriceIncreaseDto
             {
-                PriceIncreaseAmount = PriceIncreaseAmount,
+                PriceIncreaseAmount = amount,
                 EffectivityDate = EffectivityDate
-            };
-
-            Errors = await PriceIncreaseValidations.ValidateEditPriceIncreaseAsync(dtoToValidate);
-            ShowValidationErrors = true;
+            });
             if (Errors.Any()) return;
 
-            PendingEditData = (PriceIncreaseAmount!.Value, EffectivityDate!.Value);
+            PendingEditData = (amount!.Value, EffectivityDate!.Value);
         }
         else
         {
-            Errors = new();
-            ShowValidationErrors = true;
-
             if (SelectedCompanyItem == null)
             {
                 Errors[PriceIncreaseValidations.AddPriceIncrease.CompanyItem.Key] = "Select a company item.";
@@ -743,90 +643,41 @@ PricingStructure.Incomplete;
             }
             if (IsBlocked) return;
 
-            var scope = UomsInScope.ToList();
-            var scopeIds = scope.Select(u => u.ItemsUomId).ToHashSet();
-
-            var skipped = SkippedUomIds.Where(scopeIds.Contains).ToList();
-            var manual = scope
-                .Where(u => RequiresManualPrice(u) && !SkippedUomIds.Contains(u.ItemsUomId))
-                .Where(u => ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed) && decimal.TryParse(typed, out _))
-                .ToDictionary(u => u.ItemsUomId, u => decimal.Parse(ManualPriceInputs[u.ItemsUomId]));
-
             var lines = new List<PriceIncreaseLineDto>();
-            var amountKey = PriceIncreaseValidations.AddPriceIncrease.PriceIncreaseAmount.Key;
-            var dateKey = PriceIncreaseValidations.AddPriceIncrease.EffectivityDate.Key;
-
-            // Reuse the existing validator once per list, so date and pending-change rules still apply.
-            async Task Probe(string? list, decimal? amount, DateTime? date)
+            foreach (var list in Lists)
             {
-                var probe = new AddPriceIncreaseDto
+                var amount = AmountFor(list);
+                var errs = await PriceIncreaseValidations.ValidateAddPriceIncreaseAsync(new AddPriceIncreaseDto
                 {
                     CompanyItemId = SelectedCompanyItemId,
                     PriceIncreaseAmount = amount,
                     PriceListType = list,
-                    EffectivityDate = date,
-                    CreatedBy = CurrentUserId,
-                    SkippedUomIds = skipped,
-                    ManualUomPrices = manual
-                };
-                var errs = await PriceIncreaseValidations.ValidateAddPriceIncreaseAsync(probe, AdminPriceIncreaseService);
+                    EffectivityDate = EffectivityDate,
+                    CreatedBy = CurrentUserId
+                }, AdminPriceIncreaseService);
+
                 foreach (var (key, msg) in errs)
                 {
-                    var target = IsDual && !UsesSharedInputs
-                        ? (key == amountKey ? AmountErrorKey(list) : key == dateKey ? DateErrorKey(list) : key)
-                        : key;
-                    Errors.TryAdd(target, msg);
+                    var prefix = list is null ? string.Empty : $"{list}: ";
+                    var target = key == amountKey || key == dateKey ? $"{key}:{list}" : key;
+                    Errors.TryAdd(target, Lists.Count > 1 ? prefix + msg : msg);
                 }
-            }
 
-            if (IsDual)
-            {
-                foreach (var list in SelectedLists)
-                {
-                    var amount = GetAmount(list);
-                    var date = DateFor(list);
+                if (BaseFor(list) is decimal b && amount is decimal a && b + a < 0)
+                    Errors.TryAdd($"{amountKey}:{list}", $"{(list is null ? "The" : list)} price would be negative.");
 
-                    await Probe(list, amount, date);
-
-                    if (amount is decimal a && a != 0)
-                    {
-                        lines.Add(new PriceIncreaseLineDto
-                        {
-                            PriceListType = list,
-                            Amount = a,
-                            EffectivityDate = date
-                        });
-                    }
-                }
-            }
-            else
-            {
-                await Probe(null, PriceIncreaseAmount, EffectivityDate);
-                if (PriceIncreaseAmount is decimal single && single != 0)
-                    lines.Add(new PriceIncreaseLineDto { PriceListType = null, Amount = single, EffectivityDate = EffectivityDate });
+                if (amount is decimal ok && ok != 0)
+                    lines.Add(new PriceIncreaseLineDto { PriceListType = list, Amount = ok, EffectivityDate = EffectivityDate });
             }
 
             if (Errors.Any()) return;
-
-            var unresolved = scope.Where(RequiresManualPrice)
-                .Where(u => !SkippedUomIds.Contains(u.ItemsUomId))
-                .Where(u => !ManualPriceInputs.TryGetValue(u.ItemsUomId, out var typed) || !decimal.TryParse(typed, out _))
-                .ToList();
-
-            if (unresolved.Any())
-            {
-                Errors["general"] = "Enter a new price or choose \"Skip this UOM\" for every UOM that can't be calculated automatically.";
-                return;
-            }
 
             PendingScheduleDto = new AddPriceIncreaseDto
             {
                 CompanyItemId = SelectedCompanyItemId,
                 EffectivityDate = EffectivityDate,
                 CreatedBy = CurrentUserId,
-                Lines = lines,
-                SkippedUomIds = skipped,
-                ManualUomPrices = manual
+                Lines = lines
             };
         }
 
@@ -842,17 +693,12 @@ PricingStructure.Incomplete;
             if (isEdit)
             {
                 if (PendingEditData == null) return (false, "No pending changes.");
-                return await AdminPriceIncreaseService.UpdatePendingIncreaseAsync(
-                    PriceIncreaseId!.Value,
-                    PendingEditData.Value.Amount,
-                    PendingEditData.Value.EffectivityDate,
-                    CurrentUserId);
+                return await AdminPriceIncreaseService.UpdatePriceChangeAsync(
+                    PriceIncreaseId!.Value, PendingEditData.Value.Amount, PendingEditData.Value.EffectivityDate, CurrentUserId);
             }
-            else
-            {
-                if (PendingScheduleDto == null) return (false, "No pending data.");
-                return await AdminPriceIncreaseService.ScheduleIncreaseAsync(PendingScheduleDto);
-            }
+
+            if (PendingScheduleDto == null) return (false, "No pending data.");
+            return await AdminPriceIncreaseService.ScheduleIncreaseAsync(PendingScheduleDto);
         }
         finally
         {
@@ -860,9 +706,23 @@ PricingStructure.Incomplete;
         }
     }
 
-    private Task Cancel()
+    private async Task DeleteAsync()
     {
-        if (onCancel.HasDelegate) return onCancel.InvokeAsync();
-        return Task.CompletedTask;
+        showDeleteConfirm = false;
+        if (!isEdit) return;
+
+        isSubmitting = true;
+        var (success, error) = await AdminPriceIncreaseService.DeletePriceChangeAsync(PriceIncreaseId!.Value, CurrentUserId);
+        isSubmitting = false;
+
+        if (!success)
+        {
+            deleteError = error ?? "The price change could not be deleted.";
+            return;
+        }
+
+        if (OnDeleted.HasDelegate) await OnDeleted.InvokeAsync();
     }
+
+    private Task Cancel() => onCancel.HasDelegate ? onCancel.InvokeAsync() : Task.CompletedTask;
 }

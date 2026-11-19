@@ -7,8 +7,9 @@
 @inject IImportTemplateService Templates
 @inject STTproject.Services.IUserContextService UserContext
 
-<Modal ShowModal="true" Width="980px" MaxWidth="96vw" MaxHeight="94vh" Title="UOM synonyms"
-       Subtitle="Spellings in one group mean the same unit when an import matches a file's UOM" OnClose="RequestClose">
+<Modal ShowModal="true" Width="980px" MaxWidth="96vw" MaxHeight="94vh" IconType="ModalIconType.Ruler"
+       Title="UOM synonyms" Subtitle="Spellings in one group mean the same unit when an import matches a file's UOM"
+       OnClose="RequestClose">
     <ChildContent>
         @if (isLoading)
         {
