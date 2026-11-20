@@ -97,7 +97,7 @@ public partial class AddUom
             if (!StockIsPiece && PieceEntryName is { } piece && workingUomEntries[piece].Conversion == 1m)
             {
                 Add(new UomMessage("piece-same", UomMessageSeverity.Warning,
-                    $"{piece} is the same size as {StockDisplayName}. If a {StockDisplayName} holds more than one piece, fix {piece}'s size.",
+                    $"{piece} is the same conversion as {StockDisplayName}. If a {StockDisplayName} holds more than one piece, fix {piece}'s conversion.",
                     piece, nameof(UomRow.Conversion)));
             }
 
@@ -165,7 +165,7 @@ public partial class AddUom
     }
 
     /// <summary>
-    /// "Same conversion" errors caused only by the stock UOM row (always 1) are dropped: a unit the same size as the
+    /// "Same conversion" errors caused only by the stock UOM row (always 1) are dropped: a unit the same conversion as the
     /// stock UOM gets the "same size" warning instead, so adding the stock UOM row never blocks saving.
     /// </summary>
     private void DropStockDuplicateErrors(Dictionary<string, string> errors)

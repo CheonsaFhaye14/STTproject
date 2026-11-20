@@ -60,7 +60,14 @@ namespace STTproject.Features.Admin.CompanyItem.DTOs
         public int CompanyItemId { get; set; }
         public decimal NewPrice { get; set; }
         public decimal OldPrice { get; set; }
+        public string? PriceListType { get; set; }
         public DateTime EffectivityDate { get; set; }
+        public DateTime? AppliedDate { get; set; }
+
+        // The stock price entered on create is stored as a history row on this date,
+        // so it covers every invoice before the first price change.
+        public static readonly DateTime StartingPriceDate = new(2000, 1, 1);
+        public bool IsStartingPrice => EffectivityDate.Date == StartingPriceDate;
         public DateTime CreatedDate { get; set; }
         public int? CreatedBy { get; set; }
     }

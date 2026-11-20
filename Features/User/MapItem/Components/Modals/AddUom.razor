@@ -25,13 +25,13 @@
                         <small>Price</small>
                         <b>@(ApplicableStockPrice is decimal sp ? $"₱{sp:N2}" : "-")</b>
                         <em>per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
-                                                                                                                                                                                                PriceListLabel)</em>
+                                                                                                                                                                                                                            PriceListLabel)</em>
                         </span>
                     }
                     @if (PiecesPerStock is decimal pps && !StockIsPiece)
                     {
                         <span class="au-fact @(pieceSame ? "warn" : null)"
-                              title="@(pieceSame ? "A piece the same size as the stock UOM is unusual" : null)">
+                              title="@(pieceSame ? "A piece the same conversion as the stock UOM is unusual" : null)">
                             <small>Packaging</small>
                             <b>1 @StockDisplayName = @FormatNumber(pps) @PieceDisplayName</b>
                             @if (pieceSame)
@@ -140,7 +140,8 @@
                                     }
                         else
                                     {
-                                        <div class="au-preview empty">Pick a unit and enter its size to see the conversion and price.</div>
+                                        <div class="au-preview empty">Pick a unit and enter its conversion to see the conversion and price.
+                                        </div>
                                     }
                                 }
 
@@ -339,7 +340,7 @@
                                             <h3>Price history</h3>
                                             <span class="au-hsub">
                                                 per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
-                                                                                                                                                                                                                                                                                                                                PriceListLabel)
+                                                                                                                                                                                                                                                                                                                                                                                PriceListLabel)
                                                 · @cols.Count unit@(cols.Count == 1 ? "" : "s")
                                             </span>
                                         </div>

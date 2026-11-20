@@ -28,8 +28,8 @@
             </div>
 
             @* ------------- Price List Table ----------------- *@
-            <PriceIncreaseTable @ref="priceIncreaseTable" GroupByItem="groupByItem" OnLoaded="OnTableLoaded"
-                                OnCountChanged="OnCountChanged" OnEditPriceIncrease="OpenEditModal" />
+            <PriceIncreaseTable @ref="priceIncreaseTable" GroupByItem="groupByItem" OpenCompanyItemId="CompanyItemQuery"
+                                OnLoaded="OnTableLoaded" OnCountChanged="OnCountChanged" OnEditPriceIncrease="OpenEditModal" />
             <ConfirmModal @ref="confirmAddModal" Show="showConfirmAddModal"
                           Title="@(editPriceIncreaseId.HasValue ? "Confirm Update of Price Change" : "Confirm Creation of Price Change")"
                           Message="@(showConfirmError ? null : (editPriceIncreaseId.HasValue ? "Are you sure you want to save changes to this price change?" : "Are you sure you want to create this price change?"))"
@@ -50,6 +50,14 @@
 @code {
     private ConfirmModal? confirmAddModal;
     private bool groupByItem;
+
+    // Opened from a company item as /admin/priceincrease?companyitem=ID: start on "By company item" with its history open.
+    [SupplyParameterFromQuery(Name = "companyitem")] public int? CompanyItemQuery { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (CompanyItemQuery is > 0) groupByItem = true;
+    }
     private bool showConfirmAddModal;
     private bool showAddModal;
     private bool isLoading = true;

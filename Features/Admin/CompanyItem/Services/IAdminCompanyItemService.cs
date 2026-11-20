@@ -22,6 +22,9 @@ namespace STTproject.Features.Admin.CompanyItem.Services
         Task<bool> ItemCodeExistsAsync(string itemCode, int? excludeId = null, CancellationToken cancellationToken = default);
         Task<CompanyItemListDto?> GetByItemCodeAsync(string itemCode, CancellationToken cancellationToken = default);
         Task<IEnumerable<CompanyItemPriceHistoryDto>> GetPriceHistoryByCompanyItemIdAsync(int companyItemId);
+        Task<int> CountMappedSubdItemsAsync(int companyItemId);
+        /// <summary>How many sub-distributor items are mapped to the company item, and across how many sub-distributors.</summary>
+        Task<(int SubdItems, int SubDistributors)> GetMappingSummaryAsync(int companyItemId);
         Task<bool> UpdateStockPricesAsync(
             int companyItemId, decimal? stock, decimal? regional, decimal? national,
             int? updatedBy, CancellationToken cancellationToken = default);

@@ -83,7 +83,7 @@ public partial class AddUom
         return IsBundle(key) && workingUomEntries[key].Conversion is decimal c ? $"{key} ×{FormatNumber(c)}" : key;
     }
 
-    /// <summary>A stock-named unit the subd sells at another size (buy 1 take 1: PK = 2 PK).</summary>
+    /// <summary>A stock-named unit the subd sells at another conversion (buy 1 take 1: PK = 2 PK).</summary>
     private bool IsBundle(string name) =>
         StockUomRequired && workingUomEntries.TryGetValue(name, out var e) && e.IsActive
         && IsStockName(name) && e.Conversion is decimal c && c > 0 && c != 1m;
@@ -558,7 +558,7 @@ public partial class AddUom
             flagged.Contains(r.Name) ? "flag" : null
         }.Where(c => c is not null));
 
-    /// <summary>"16 PK" — the unit's size counted in the "Show per" unit.</summary>
+    /// <summary>"16 PK" — the unit's conversion counted in the "Show per" unit.</summary>
     private string CardSize(UomRow r)
     {
         if (r.Entry.Conversion is not decimal c || c <= 0) return "No size";
@@ -611,7 +611,7 @@ public partial class AddUom
     private string editBasis = string.Empty;
     private Dictionary<string, string> editErrors = new();
 
-    /// <summary>Units the size can be counted in while editing: every other active unit, plus the stock UOM.</summary>
+    /// <summary>Units the conversion can be counted in while editing: every other active unit, plus the stock UOM.</summary>
     private List<string> EditBasisOptions
     {
         get
@@ -669,7 +669,7 @@ public partial class AddUom
         else if (BasisConversion(editBasis) is decimal basis)
             conversion = Math.Round(size * basis, 10, MidpointRounding.AwayFromZero);
         else
-            editErrors["size"] = "Pick what the size is counted in.";
+            editErrors["size"] = "Pick what the conversion is counted in.";
 
         if (conversion is decimal conv)
         {

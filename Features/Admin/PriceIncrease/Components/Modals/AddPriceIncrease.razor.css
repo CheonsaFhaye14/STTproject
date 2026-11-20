@@ -102,11 +102,23 @@
 .pc-side-h { margin: 4px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
 .pc-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 10px; text-align: center; color: var(--faint); font-size: 12px; }
 .pc-result { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
-.pc-result-row { display: grid; grid-template-columns: 74px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-2); }
+/* list tag + change badge on the first line, prices underneath, so nothing is cut in the 320px pane */
+.pc-result-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "tag badge" "body body";
+    gap: 6px 10px;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line-2);
+}
+.pc-result-row > .pc-pl { grid-area: tag; justify-self: start; }
+.pc-result-row > div { grid-area: body; min-width: 0; }
+.pc-result-row > .pc-badge { grid-area: badge; justify-self: end; }
 .pc-result-row:last-child { border-bottom: 0; }
 .pc-from { color: var(--faint); text-decoration: line-through; font-variant-numeric: tabular-nums; }
 .pc-to { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pc-when { font-size: 11.5px; color: var(--muted); }
+.pc-when { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .pc-badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .pc-badge.up { background: var(--danger-soft); color: var(--danger); }
 .pc-badge.down { background: var(--ok-soft); color: var(--ok); }

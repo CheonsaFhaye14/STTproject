@@ -22,6 +22,8 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
           /// <summary>Invoice lines priced from this change.</summary>
           Task<int> CountInvoiceLinesUsingAsync(int companyItemPriceHistoryId);
           /// <summary>"By company item" view: one row per item with price changes.</summary>
+          /// <summary>Summary of one company item for its price history (null if the item doesn't exist).</summary>
+          Task<CompanyItemPriceSummaryDto?> GetCompanyItemSummaryAsync(int companyItemId);
           Task<(IEnumerable<CompanyItemPriceSummaryDto> Items, int TotalCount)> GetCompanyItemSummaryPagedAsync(
               int page, int pageSize, string? search, string? status, string? principal,
               string? sortColumn = "CreatedDate", bool sortAscending = false);

@@ -2,131 +2,388 @@
 @inject STTproject.Features.Admin.CompanyItem.Services.IAdminCompanyItemService AdminCompanyItemService
 @inject STTproject.Services.IUserContextService UserContextService
 
-
-<Modal ShowModal="true" Width="720px" MaxWidth="100%" MaxHeight="88vh" IconType="ModalIconType.ItemView"
-       Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
-       OnClose="Cancel">
-    <ChildContent>
-        <FormSection Icon="ti ti-box" Title="Company Item Details" Expandable="@isEdit" IsExpanded="true">
-            <ChildContent>
-                <div class="form-group" <Input Label="Sku Code" Required="true" @bind-Value="ItemCode"
-                                                   Disabled="@isViewMode" Placeholder="Enter SKU Code" ShowError="@ShowValidationErrors"
-                                                   ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
-                </div>
-                <div class="form-group">
-                    <Input Label="Item Name" Required="true" @bind-Value="ItemName" Disabled="@isViewMode"
-                           Placeholder="Enter Item Name" ShowError="@ShowValidationErrors"
-                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
-                </div>
-                <div class="form-group">
-                    <AutoComplete Label="Principal" Items="Principals" Disabled="@isViewMode" SelectedValue="@Principal"
-                                  AllowCustomValue="true" Required="true" ShowError="@ShowValidationErrors"
-                                  Placeholder="Select a principal or Enter a new one" SelectedValueChanged="@(v => Principal = v)"
-                                  ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)" />
-                </div>
-                <div class="form-group">
-                    <AutoComplete Label="PPG" Items="PPGs" AddOptionalText="true" Disabled="@isViewMode"
-                                  SelectedValue="@PPG" Placeholder="Select a PPG or Enter a new one" AllowCustomValue="true" />
-                </div>
-                <div class="form-group">
-                    <AutoComplete Label="Category" Items="Categories" AddOptionalText="true" Disabled="@isViewMode"
-                                  SelectedValue="@Category" Placeholder="Select a category or Enter a new one"
-                                  AllowCustomValue="true" />
-                </div>
-                <div class="form-group">
-                    <Input Label="Stock UOM" @bind-Value="StockUomName" Disabled="@isViewMode"
-                           Placeholder="Enter Stock UOM" Required="true" ShowError="@ShowValidationErrors"
-                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockUomName.Key)" />
-                </div>
-
-                @if (Principal == "KCPI")
+@* Rendered only after the item has loaded: the modal then opens once, at its final size, instead of
+   opening around a small loading box and growing. *@
+@if (isLoaded)
+{
+    <Modal ShowModal="true" Width="780px" MaxWidth="100%" MaxHeight="92vh" IconType="ModalIconType.ItemView"
+           Title="@(isEdit ? (isViewMode ? "View Company Item" : "Edit Company Item") : "Add New Company Item")"
+           Subtitle="@HeaderSubtitle" FlushBody="true" OnClose="Cancel">
+        <ChildContent>
+            <div class="ci">
+                @if (isEdit && isLoaded)
                 {
-                    <div class="form-group">
-                        <Input Label="Regional Stock Price" Required="true" @bind-Value="StockPriceRegional"
-                               Disabled="@isViewMode" Placeholder="Enter Regional Stock Price"
-                               ShowError="@ShowValidationErrors"
-                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceRegional.Key)" />
-                    </div>
-                    <div class="form-group">
-                        <Input Label="National Stock Price" Required="true" @bind-Value="StockPriceNational"
-                               Disabled="@isViewMode" Placeholder="Enter National Stock Price"
-                               ShowError="@ShowValidationErrors"
-                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceNational.Key)" />
+                    @* ---------- Facts + tabs ---------- *@
+                    <div class="ci-bar">
+                        <span class="ci-fact">
+                            <small>Status</small><b>@(IsActive ? "Active" : "Inactive")</b>
+                            <i class="ci-dot @(IsActive ? "" : "off")"></i>
+                        </span>
+                        <span class="ci-fact">
+                            <small>Mapped</small><b>@MappedSubdItemCount</b>
+                            <em>sub-distributor item@(MappedSubdItemCount == 1 ? "" : "s")</em>
+                        </span>
+                        <div class="ci-seg">
+                            <button type="button" class="@(activeTab == Tab.Details ? "on" : "")"
+                                    @onclick="() => activeTab = Tab.Details">
+                                <i class="ti ti-list-details"></i> Details
+                            </button>
+                            <button type="button" class="@(activeTab == Tab.History ? "on" : "")"
+                                    @onclick="() => activeTab = Tab.History">
+                                <i class="ti ti-history"></i> Price history
+                            </button>
+                        </div>
                     </div>
                 }
+
+                <div class="ci-body">
+                    @if (!isLoaded)
+                    {
+                        <div class="ci-loading"><i class="ti ti-loader-2"></i> Loading…</div>
+                    }
+                    else if (isEdit && activeTab == Tab.History)
+                    {
+                        @* ---------- Price history ---------- *@
+                        @if (NextChange is { } next)
+                        {
+                            <div class="ci-next">
+                                <span class="ci-next-ic"><i class="ti ti-clock"></i></span>
+                                <div>
+                                    <b>Next change on @next.EffectivityDate.ToString("MMM d, yyyy")</b>
+                                    <small>
+                                        @ListLabel(next.PriceListType) @Money(next.OldPrice) → @Money(next.NewPrice)
+                                        (<span class="@ChangeClass(next)">@ChangeText(next)</span>)
+                                    </small>
+                                </div>
+                            </div>
+                        }
+
+                        @if (HasListPrices)
+                        {
+                            <div class="ci-filters">
+                                <button type="button" class="@(historyFilter == null ? "on" : "")"
+                                        @onclick="() => historyFilter = null">All</button>
+                                <button type="button" class="@(historyFilter == "Regional" ? "on" : "")"
+                                        @onclick="@(() => historyFilter = "Regional")">Regional</button>
+                                <button type="button" class="@(historyFilter == "National" ? "on" : "")"
+                                        @onclick="@(() => historyFilter = "National")">National</button>
+                            </div>
+                        }
+
+                        @if (!FilteredHistory.Any())
+                        {
+                            <div class="ci-empty">No price history yet.</div>
+                        }
+                        else
+                        {
+                            <div class="ci-hist-wrap">
+                                <table class="ci-hist">
+                                    <thead>
+                                        <tr>
+                                            <th>Effective</th>
+                                            @if (HasListPrices)
+                                            {
+                                                <th>List</th>
+                                            }
+                                            <th class="n">Was</th>
+                                            <th class="n">Now</th>
+                                            <th class="n">Change</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var h in FilteredHistory)
+                                        {
+                                            <tr>
+                                                <td class="d">
+                                                    <b>@h.EffectivityDate.ToString("MMM d, yyyy")</b>
+                                                    @if (IsStart(h))
+                                                    {
+                                                        <small>Starting price</small>
+                                                    }
+                                                </td>
+                                                @if (HasListPrices)
+                                                {
+                                                    <td><span class="ci-tag @TagClass(h.PriceListType)">@TagShort(h.PriceListType)</span>
+                                                    </td>
+                                                }
+                                                <td class="n">@(IsStart(h) ? "—" : h.OldPrice.ToString("N2"))</td>
+                                                <td class="n"><b>@h.NewPrice.ToString("N2")</b></td>
+                                                <td class="n @(IsStart(h) ? "" : ChangeClass(h))">@(IsStart(h) ? "—" : ChangeText(h))
+                                                </td>
+                                                <td>
+                                                    @if (IsStart(h))
+                                                    {
+                                                        <span class="ci-st start">Starting</span>
+                                                    }
+                                                    else if (h.AppliedDate.HasValue)
+                                                    {
+
+                                                        <span class="ci-st ap">Applied</span>
+                                                    }
+                                                    else
+                                                    {
+
+                                                        <span class="ci-st sc">Scheduled</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    else if (isViewMode)
+                    {
+                        @* ---------- View ---------- *@
+                        <div class="ci-view">
+                            <div class="ci-item">
+                                <div class="ci-item-top">
+                                    <span class="ci-code">@ItemCode</span>
+                                    <h4>@ItemName</h4>
+                                </div>
+                                <div class="ci-rows">
+                                    <div class="ci-row"><span><i
+                                        class="ti ti-building"></i>Principal</span><b>@Show(Principal)</b></div>
+                                        <div class="ci-row"><span><i class="ti ti-category"></i>PPG</span><b
+                                            class="@NoneClass(PPG)">@Show(PPG)</b></div>
+                                            <div class="ci-row"><span><i class="ti ti-tag"></i>Category</span><b
+                                                class="@NoneClass(Category)">@Show(Category)</b></div>
+                                                <div class="ci-row"><span><i class="ti ti-box"></i>Stock UOM</span><b
+                                                    class="@NoneClass(StockUomName)">@Show(StockUomName)</b></div>
+                                                    <div class="ci-row">
+                                                        <span><i class="ti ti-sitemap"></i>Mapped to</span>
+                                                        @if (MappedSubdItemCount > 0)
+                                                        {
+                                                            <a class="ci-map-link" href="@MapItemsUrl">
+                                                                @MappedSubdItemCount item@(MappedSubdItemCount == 1 ? "" : "s") · @MappedSubdCount
+                                                                sub-distributor@(MappedSubdCount == 1 ? "" : "s")
+                                                                <i class="ti ti-arrow-right"></i>
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <b class="none">Not mapped yet</b>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="ci-prices">
+                                                <div class="ci-pp-h">Current price @if (!string.IsNullOrWhiteSpace(StockUomName)) {
+                                                    <small>per
+                                                        @StockUomName</small>
+                                                    }
+                                                </div>
+                                                @if (HasListPrices)
+                                                {
+                                                    <div class="ci-pc">
+                                                        <div class="k"><span class="ci-tag reg">REGIONAL</span><span>@SinceText("Regional")</span>
+                                                        </div>
+                                                        <div class="v">@Money(StockPriceRegional)</div>
+                                                    </div>
+                                                    <div class="ci-pc">
+                                                        <div class="k"><span class="ci-tag nat">NATIONAL</span><span>@SinceText("National")</span>
+                                                        </div>
+                                                        <div class="v">@Money(StockPriceNational)</div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="ci-pc">
+                                                        <div class="k"><span class="ci-tag stk">STOCK</span><span>@SinceText(null)</span></div>
+                                                        <div class="v">@Money(StockPrice)</div>
+                                                    </div>
+                                                }
+                                                @if (NextChange is { } nc)
+                                                {
+                                                    <div class="ci-nextc">
+                                                        <b>Next change · @nc.EffectivityDate.ToString("MMM d, yyyy")</b>
+                                                        @ListLabel(nc.PriceListType) → @Money(nc.NewPrice)
+                                                        <span class="@ChangeClass(nc)">(@ChangeText(nc))</span>
+                                                    </div>
+                                                }
+                                                <a class="ci-link" href="@PriceChangesUrl">Go to Price Changes <i
+                                                    class="ti ti-arrow-right"></i></a>
+                                                </div>
+                                            </div>
+
+                                            <p class="ci-audit">
+                                                Created@(CreatedByName != null ? " by " : "") <b>@CreatedByName</b> · @CreatedDateDisplay
+                                                @if (UpdatedDate != null)
+                                                {
+                                                    <span>&nbsp;·&nbsp; Updated@(UpdatedByName != null ? " by " : "") <b>@UpdatedByName</b> ·
+                                                        @UpdatedDateDisplay</span>
+                                                    }
+                                                </p>
+                                            }
                 else
-                {
-                    <div class="form-group">
-                        <Input Label="Stock Price" Required="true" @bind-Value="StockPrice" Disabled="@isViewMode"
-                               Placeholder="Enter Stock Price" ShowError="@ShowValidationErrors"
-                               ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPrice.Key)" />
-                    </div>
-                }
-                <div class="form-group">
-                    <Toggle @bind-Bind="IsActive" Disabled="@isViewMode" />
-                </div>
-            </ChildContent>
-        </FormSection>
-        @if (isViewMode && PriceHistory.Any())
-        {
-            <FormSection Icon="ti ti-history" Title="Price History" Expandable="true" IsExpanded="false">
-                <ChildContent>
-                    <AddTable TItem="CompanyItemPriceHistoryDto" Items="@PriceHistory.ToList()"
-                              Columns="@(new List<string> { "EffectivityDate", "NewPrice", "CreatedDate" })" ColumnLabels="@(new Dictionary<string, string>
-                              {
-                                  ["EffectivityDate"] = "Effectivity Date",
-                                  ["NewPrice"] = "New Price",
-                                  ["CreatedDate"] = "Created Date"
-                              })" DisplayValueSelector="@FormatPriceHistoryColumn" ViewMode="true" Disabled="true"
-                              RemoveButtonVisible="false" AddButtonVisible="false" />
-                </ChildContent>
-            </FormSection>
-        }
-        @if (isViewMode)
-        {
-            <FormSection Icon="ti ti-info-circle" Title="Audit Information" Expandable="true" IsExpanded="false">
-                <ChildContent>
-                    @if (CreatedByName != null)
-                    {
-                        <div class="form-group">
-                            <Input Label="Created By" Disabled="true" @bind-Value="@CreatedByName" />
-                        </div>
-                    }
-                    <div class="form-group">
-                        <Input Label="Created Date" Disabled="true" Value="CreatedDateDisplay" />
-                    </div>
-                    @if (UpdatedByName != null)
-                    {
-                        <div class="form-group">
-                            <Input Label="Updated By" Disabled="true" @bind-Value="@UpdatedByName" />
-                        </div>
-                    }
-                    @if (UpdatedDate != null)
-                    {
-                        <div class="form-group">
-                            <Input Label="Updated Date" Disabled="true" Value="UpdatedDateDisplay" />
-                        </div>
-                    }
-                </ChildContent>
-            </FormSection>
-        }
-        
-    </ChildContent>
-    <FooterContent>
-        @if (isEdit && isViewMode)
-        {
-            <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
-            <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
-        }
-        else
-        {
-            <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="Cancel" Disabled="@isSubmitting"></Button>
-            <Button
-            Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Company Item"))"
-            Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" Disabled="@isSubmitting"></Button>
-        }
-    </FooterContent>
-</Modal>
+                                            {
+                                                @* ---------- Form (add + edit) ---------- *@
+                                                <section class="ci-sec">
+                                                    <div class="ci-sec-h"><span class="ci-num">1</span>
+                                                        <h3>Company Item Details</h3>
+                                                        <p>How the item shows on lists and reports</p>
+                                                    </div>
+                                                    <div class="ci-g2">
+                                                        <div class="form-group">
+                                                            <Input Label="SKU Code" Required="true" @bind-Value="ItemCode" Placeholder="Enter SKU Code"
+                                                                   ShowError="@ShowValidationErrors"
+                                                                   ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemCode.Key)" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <Input Label="Item Name" Required="true" @bind-Value="ItemName"
+                                                                   Placeholder="Enter Item Name" ShowError="@ShowValidationErrors"
+                                                                   ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.ItemName.Key)" />
+                                                        </div>
+                                                    </div>
+                                                </section>
+
+                                                <section class="ci-sec">
+                                                    <div class="ci-sec-h"><span class="ci-num">2</span>
+                                                        <h3>Classification</h3>
+                                                        <p>Pick from the list or type a new one</p>
+                                                    </div>
+                                                    <div class="ci-g3">
+                                                        <div class="form-group">
+                                                            <AutoComplete Label="Principal" Items="Principals" SelectedValue="@Principal"
+                                                                          SelectedValueChanged="@(v => Principal = v)" AllowCustomValue="true" Required="true"
+                                                                          Placeholder="Select or enter a principal" ShowError="@ShowValidationErrors"
+                                                                          ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.Principal.Key)" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <AutoComplete Label="PPG" Items="PPGs" AddOptionalText="true" SelectedValue="@PPG"
+                                                                          SelectedValueChanged="@(v => PPG = v)" AllowCustomValue="true"
+                                                                          Placeholder="Select or enter a PPG" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <AutoComplete Label="Category" Items="Categories" AddOptionalText="true"
+                                                                          SelectedValue="@Category" SelectedValueChanged="@(v => Category = v)"
+                                                                          AllowCustomValue="true" Placeholder="Select or enter a category" />
+                                                        </div>
+                                                    </div>
+                                                </section>
+
+                                                <section class="ci-sec">
+                                                    <div class="ci-sec-h"><span class="ci-num">3</span>
+                                                        <h3>Stock &amp; Pricing</h3>
+                                                        <p>Price is for one stock unit</p>
+                                                    </div>
+                                                    <div class="ci-g3">
+                                                        <div class="form-group @(StockUomLocked ? "ci-locked" : "")">
+                                                            <Input Label="Stock UOM" Required="@(!StockUomLocked)" @bind-Value="StockUomName"
+                                                                   Disabled="@StockUomLocked" Placeholder="e.g. PK, CS, PC"
+                                                                   ShowError="@ShowValidationErrors"
+                                                                   ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockUomName.Key)" />
+                                                        </div>
+
+                                                        @if (!isEdit)
+                                                        {
+                                                            @if (IsKcpi)
+                                                            {
+                                                                <div class="form-group">
+                                                                    <Input Label="Regional Price" Required="true" @bind-Value="StockPriceRegional"
+                                                                           Placeholder="₱ 0.00" ShowError="@ShowValidationErrors"
+                                                                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceRegional.Key)" />
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <Input Label="National Price" Required="true" @bind-Value="StockPriceNational"
+                                                                           Placeholder="₱ 0.00" ShowError="@ShowValidationErrors"
+                                                                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPriceNational.Key)" />
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="form-group ci-span2">
+                                                                    <Input Label="Stock Price" Required="true" @bind-Value="StockPrice" Placeholder="₱ 0.00"
+                                                                           ShowError="@ShowValidationErrors"
+                                                                           ErrorText="@GetFieldError(CompanyItemValidations.AddCompanyItem.StockPrice.Key)" />
+                                                                </div>
+                                                            }
+                                                        }
+                                                        else if (HasListPrices)
+                                                        {
+                                                            <div class="ci-ro"><label><span class="ci-tag reg">REGIONAL</span> Price</label>
+                                                                <div class="ci-pbox"><b>@Money(StockPriceRegional)</b> @PerUom</div>
+                                                            </div>
+                                                            <div class="ci-ro"><label><span class="ci-tag nat">NATIONAL</span> Price</label>
+                                                                <div class="ci-pbox"><b>@Money(StockPriceNational)</b> @PerUom</div>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="ci-ro ci-span2"><label>Stock Price</label>
+                                                                <div class="ci-pbox"><b>@Money(StockPrice)</b> @PerUom</div>
+                                                            </div>
+                                                        }
+                                                    </div>
+
+                                                    @if (!isEdit)
+                                                    {
+                                                        <p class="ci-help"><i class="ti ti-info-circle"></i>This is the item's first price. To change it
+                                                            later, use Price Changes.</p>
+                                                        }
+                        else
+                                                        {
+                                                            <p class="ci-help warn">
+                                                                <i class="ti ti-lock"></i>
+                                                                <span>
+                                                                    @LockText Prices change on <a href="@PriceChangesUrl">Price Changes</a>.
+                                                                </span>
+                                                            </p>
+                                                        }
+
+                                                        <div class="ci-active">
+                                                            <div><b>Status</b><small>Inactive items can't be mapped or used on new transactions.</small>
+                                                            </div>
+                                                            <Toggle @bind-Bind="IsActive" />
+                                                        </div>
+                                                    </section>
+                                                }
+                                            </div>
+                                        </div>
+                                    </ChildContent>
+                                    <FooterContent>
+                                        <div class="ci-foot">
+                                            @if (!isLoaded)
+                                            {
+                                                <span class="ci-foot-note"></span>
+                                                <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+                                            }
+                                            else if (isEdit && isViewMode)
+                                            {
+                                                <span class="ci-foot-note"></span>
+                                                <Button Title="Close" Variant="ButtonVariant.Secondary" OnClick="Cancel"></Button>
+                                                @if (activeTab == Tab.Details)
+                                                {
+                                                    <Button Title="Edit" Variant="ButtonVariant.Primary" OnClick="EnableEdit"></Button>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="ci-foot-note">
+                                                    @if (isEdit)
+                                                    {
+                                                        @("Only details, classification and status are saved here.")
+                                                    }
+                                                    else
+                                                    {
+
+                                                        <span class="req">*</span>
+                                                        @(" Required")
+                                                    }
+                                                </span>
+                                                <Button Title="Cancel" Variant="ButtonVariant.Secondary" OnClick="CancelOrBack"
+                                                        Disabled="@isSubmitting"></Button>
+                                                <Button
+                                                Title="@(isSubmitting ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Company Item"))"
+                                                Variant="ButtonVariant.Primary" OnClick="CreateCompanyItem" Disabled="@isSubmitting"></Button>
+                                            }
+                                        </div>
+                                    </FooterContent>
+                                </Modal>
+                            }
 
 @code {
     [Parameter] public EventCallback onCancel { get; set; }
@@ -147,6 +404,19 @@
     private string? Category { get; set; }
     private bool IsActive { get; set; } = true;
     private bool isViewMode = false;
+    private string? OriginalStockUomName { get; set; }
+    private int MappedSubdItemCount { get; set; }
+    private int MappedSubdCount { get; set; }
+    // Sub-item conversions are counted in the stock UOM, so it can't be renamed once items are mapped.
+    private bool StockUomLocked => isEdit && MappedSubdItemCount > 0 && !string.IsNullOrWhiteSpace(OriginalStockUomName);
+
+    private enum Tab { Details, History }
+    private Tab activeTab = Tab.Details;
+    private string? historyFilter;
+
+    // Snapshot of the editable fields, so Cancel in edit mode goes back to view without keeping changes.
+    private (string? Code, string? Name, string? Principal, string? Ppg, string? Category, string? Uom, bool Active)
+viewSnapshot;
 
     // Audit fields (view mode only)
     private DateTime CreatedDate { get; set; }
@@ -168,11 +438,86 @@
     private string GetFieldError(string key) =>
         Errors.TryGetValue(key, out var msg) ? msg : string.Empty;
     private IReadOnlyList<CompanyItemPriceHistoryDto> PriceHistory { get; set; } = new List<CompanyItemPriceHistoryDto>();
+
+    // ---------- display helpers ----------
+    private bool IsKcpi => string.Equals(Principal?.Trim(), "KCPI", StringComparison.OrdinalIgnoreCase);
+
+    // Existing items show whichever prices they actually have; new items follow the principal.
+    private bool HasListPrices => isEdit
+        ? StockPriceRegional.HasValue || StockPriceNational.HasValue || PriceHistory.Any(h =>
+!string.IsNullOrEmpty(h.PriceListType))
+        : IsKcpi;
+
+    private string? HeaderSubtitle => isEdit
+        ? $"{ItemCode} · {ItemName}"
+        : "Fill in the item details and its starting price.";
+
+    private string LockText => StockUomLocked
+        ? "Stock UOM is locked (" + MappedSubdItemCount + " sub-distributor item" + (MappedSubdItemCount == 1 ? "" : "s") + " use it)."
+        : "";
+
+    private string PriceChangesUrl => isEdit ? $"/admin/priceincrease?companyitem={CompanyItemId}" : "/admin/priceincrease";
+    private string MapItemsUrl => $"/admin/mapitem?companyitem={CompanyItemId}";
+    private string PerUom => string.IsNullOrWhiteSpace(StockUomName) ? "" : $"per {StockUomName}";
+
+    private static string Show(string? v) => string.IsNullOrWhiteSpace(v) ? "Not set" : v;
+    private static string NoneClass(string? v) => string.IsNullOrWhiteSpace(v) ? "none" : "";
+    private static string Money(decimal? v) => v.HasValue ? "₱" + v.Value.ToString("N2") : "—";
+
+    private static bool SameList(string? a, string? b) =>
+        string.Equals(a ?? string.Empty, b ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+    // The first row of a price list (old price 0) is the starting price.
+    private bool IsStart(CompanyItemPriceHistoryDto h) =>
+        h.IsStartingPrice || (h.OldPrice == 0m && !PriceHistory.Any(o =>
+            SameList(o.PriceListType, h.PriceListType) &&
+            (o.EffectivityDate < h.EffectivityDate ||
+             (o.EffectivityDate == h.EffectivityDate && o.CompanyItemPriceHistoryId < h.CompanyItemPriceHistoryId))));
+
+    private IEnumerable<CompanyItemPriceHistoryDto> FilteredHistory =>
+        historyFilter == null ? PriceHistory : PriceHistory.Where(h => SameList(h.PriceListType, historyFilter));
+
+    private CompanyItemPriceHistoryDto? NextChange =>
+        PriceHistory.Where(h => !h.AppliedDate.HasValue)
+            .OrderBy(h => h.EffectivityDate).ThenBy(h => h.CompanyItemPriceHistoryId)
+            .FirstOrDefault();
+
+    private string SinceText(string? list)
+    {
+        var latest = PriceHistory
+            .Where(h => h.AppliedDate.HasValue && SameList(h.PriceListType, list))
+            .OrderByDescending(h => h.EffectivityDate).ThenByDescending(h => h.CompanyItemPriceHistoryId)
+            .FirstOrDefault();
+        if (latest == null) return "";
+        return IsStart(latest) ? "starting price" : "since " + latest.EffectivityDate.ToString("MMM d, yyyy");
+    }
+
+    private static string ListLabel(string? list) => string.IsNullOrEmpty(list) ? "" : list;
+    private static string TagClass(string? list) =>
+        SameList(list, "Regional") ? "reg" : SameList(list, "National") ? "nat" : "stk";
+    private static string TagShort(string? list) =>
+        SameList(list, "Regional") ? "REG" : SameList(list, "National") ? "NAT" : "STOCK";
+    private static decimal Delta(CompanyItemPriceHistoryDto h) => h.NewPrice - h.OldPrice;
+    private static string ChangeClass(CompanyItemPriceHistoryDto h) => Delta(h) > 0 ? "up" : Delta(h) < 0 ? "down" : "";
+    private static string ChangeText(CompanyItemPriceHistoryDto h) =>
+        (Delta(h) > 0 ? "+" : Delta(h) < 0 ? "−" : "") + Math.Abs(Delta(h)).ToString("N2");
+
+    private bool isLoaded;
+
     protected override async Task OnInitializedAsync()
     {
-        Principals = await AdminCompanyItemService.GetAllPrincipalsAsync();
-        PPGs = await AdminCompanyItemService.GetAllPPGsAsync();
-        Categories = await AdminCompanyItemService.GetAllCategoriesAsync();
+        // Set before the first await: Blazor renders as soon as this method awaits, and an existing
+        // item must open in view mode, not flash the edit form while it loads.
+        isViewMode = isEdit;
+
+        // Each call opens its own DbContext, so the lists can load at the same time.
+        var principalsTask = AdminCompanyItemService.GetAllPrincipalsAsync();
+        var ppgsTask = AdminCompanyItemService.GetAllPPGsAsync();
+        var categoriesTask = AdminCompanyItemService.GetAllCategoriesAsync();
+        await Task.WhenAll(principalsTask, ppgsTask, categoriesTask);
+        Principals = principalsTask.Result;
+        PPGs = ppgsTask.Result;
+        Categories = categoriesTask.Result;
         if (isEdit)
         {
             isViewMode = true;
@@ -190,6 +535,8 @@
                 StockPriceRegional = companyItem.StockPriceRegional;
                 StockPriceNational = companyItem.StockPriceNational;
                 StockUomName = companyItem.StockUomName;
+                OriginalStockUomName = companyItem.StockUomName;
+                (MappedSubdItemCount, MappedSubdCount) = await AdminCompanyItemService.GetMappingSummaryAsync(CompanyItemId.Value);
                 // Audit
                 CreatedDate = companyItem.CreatedDate;
                 UpdatedDate = companyItem.UpdatedDate;
@@ -201,12 +548,34 @@
                     UpdatedByName = await AdminCompanyItemService.GetUserNameByIdAsync(companyItem.UpdatedBy);
             }
         }
+        isLoaded = true;
     }
 
-    private void EnableEdit() => isViewMode = false;
+    private void EnableEdit()
+    {
+        viewSnapshot = (ItemCode, ItemName, Principal, PPG, Category, StockUomName, IsActive);
+        Errors = new();
+        ShowValidationErrors = false;
+        activeTab = Tab.Details;
+        isViewMode = false;
+    }
+
+    // Cancel while editing an existing item goes back to view and drops the changes; otherwise it closes.
+    private Task CancelOrBack()
+    {
+        if (isEdit && !isViewMode)
+        {
+            (ItemCode, ItemName, Principal, PPG, Category, StockUomName, IsActive) = viewSnapshot;
+            Errors = new();
+            ShowValidationErrors = false;
+            isViewMode = true;
+            return Task.CompletedTask;
+        }
+        return Cancel();
+    }
+
     private async Task CreateCompanyItem()
     {
-
         var companyItemToValidate = new STTproject.Data.CompanyItem
         {
             ItemCode = ItemCode ?? string.Empty,
@@ -215,20 +584,15 @@
             StockUomName = StockUomName ?? string.Empty,
         };
 
-        bool isSingleStockPrice = !string.Equals(
-            Principal?.Trim(),
-            "KCPI",
-            StringComparison.OrdinalIgnoreCase
-        );
-
         Errors = await CompanyItemValidations.ValidateAddCompanyItemAsync(
             companyItemToValidate,
             AdminCompanyItemService,
             CompanyItemId,
-            isSingleStockPrice,
+            isSingleStockPrice: !IsKcpi,
             StockPrice,
             StockPriceRegional,
-            StockPriceNational
+            StockPriceNational,
+            validatePrices: !isEdit
         );
 
         ShowValidationErrors = true;
@@ -246,10 +610,7 @@
                 Principal = Principal,
                 PPG = PPG,
                 Category = Category,
-                StockPrice = StockPrice,
-                StockPriceRegional = StockPriceRegional,
-                StockPriceNational = StockPriceNational,
-                StockUomName = StockUomName,
+                StockUomName = StockUomLocked ? OriginalStockUomName : StockUomName,
                 IsActive = IsActive,
                 UpdatedBy = CurrentUserId
             };
@@ -263,9 +624,10 @@
                 Principal = Principal,
                 PPG = PPG,
                 Category = Category,
-                StockPrice = StockPrice,
-                StockPriceRegional = StockPriceRegional,
-                StockPriceNational = StockPriceNational,
+                // Only the prices that belong to the principal's price structure are saved.
+                StockPrice = IsKcpi ? null : StockPrice,
+                StockPriceRegional = IsKcpi ? StockPriceRegional : null,
+                StockPriceNational = IsKcpi ? StockPriceNational : null,
                 StockUomName = StockUomName,
                 IsActive = IsActive,
                 CreatedBy = CurrentUserId
@@ -274,13 +636,7 @@
 
         await OnRequestConfirm.InvokeAsync();
     }
-    private string? FormatPriceHistoryColumn(CompanyItemPriceHistoryDto item, string column) => column switch
-    {
-        "EffectivityDate" => item.EffectivityDate.ToString("MMM d, yyyy"),
-        "NewPrice" => item.NewPrice.ToString("N2"),
-        "CreatedDate" => item.CreatedDate.ToString("MMM d, yyyy hh:mm tt"),
-        _ => null
-    };
+
     public async Task<(bool success, string? error)> SubmitAsync()
     {
         isSubmitting = true;

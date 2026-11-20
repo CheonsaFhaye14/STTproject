@@ -573,7 +573,24 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             onParametersSetLock.Release();
 
             var query = System.Web.HttpUtility.ParseQueryString(new Uri(Navigation.Uri).Query);
-            if (!int.TryParse(query["subd"], out var subdId) || subdId <= 0) return;
+
+            // Opened from a company item as /admin/mapitem?companyitem=ID (optionally with &subd=): show only the
+            // sub-distributor items mapped to it. Without a subd, admin mode lists every sub-distributor's items.
+            int? linkCompanyItemId = int.TryParse(query["companyitem"], out var ciId) && ciId > 0 ? ciId : null;
+
+            if (!int.TryParse(query["subd"], out var subdId) || subdId <= 0)
+            {
+                if (linkCompanyItemId is int onlyItem)
+                {
+                    selectedSubdId = 0;
+                    UpdateSelectedSubdLocation();
+                    selectedPrincipal = null;
+                    ResetItemForm(persistDraft: false);
+                    await LoadMapTablesAsync();
+                    ApplyCompanyItemLinkFilter(onlyItem);
+                }
+                return;
+            }
             var sku = query["sku"]?.Trim();
             var skuName = query["name"]?.Trim();
             var uom = query["uom"]?.Trim();
@@ -590,6 +607,12 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             selectedPrincipal = null;
             ResetItemForm(persistDraft: false);
             await LoadMapTablesAsync();
+
+            if (linkCompanyItemId is int linkedItem)
+            {
+                ApplyCompanyItemLinkFilter(linkedItem);
+                return;
+            }
 
             // Item not found: nothing is mapped yet, so put the code and name from the file into the header and let the admin pick the company item.
             var newSku = query["newsku"]?.Trim();
@@ -639,6 +662,23 @@ namespace STTproject.Features.User.MapItem.Components.Pages
             if (!string.IsNullOrWhiteSpace(uom)) suggestedUomName = uom;
             await OpenAddUomModal();
             StateHasChanged();
+        }
+
+        /// <summary>Filters the sub-distributor items to one company item, the same as clicking its row in the company items table.</summary>
+        private void ApplyCompanyItemLinkFilter(int companyItemId)
+        {
+            var row = companyItemsAll.FirstOrDefault(c => c.CompanyItemId == companyItemId);
+            selectedCompanyItemIdForFilter = companyItemId;
+            selectedPrincipal = string.IsNullOrWhiteSpace(row?.Principal) ? null : row!.Principal;
+            UpdateFilteredSubDistributorItems();
+
+            if (!filteredSubDistributorItems.Any())
+            {
+                itemActionErrorMessage = selectedSubdId == 0
+                    ? "No sub-distributor items are mapped to this company item yet."
+                    : "This sub-distributor has no items mapped to this company item.";
+                showErrorModal = true;
+            }
         }
 
         private async Task HydrateClientStateAfterRenderAsync()

@@ -49,16 +49,61 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                 Ppg = dto.PPG ?? string.Empty,
                 Category = dto.Category ?? string.Empty,
                 StockPrice = dto.StockPrice,
-                StockPriceRegional = dto.StockPriceRegional, 
+                StockPriceRegional = dto.StockPriceRegional,
                 StockPriceNational = dto.StockPriceNational,
                 StockUomName = dto.StockUomName ?? string.Empty,
                 IsActive = dto.IsActive,
                 CreatedDate = NowPh(),
                 CreatedBy = dto.CreatedBy,
             };
+            await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+
             db.CompanyItems.Add(entity);
+            await db.SaveChangesAsync(cancellationToken); // history rows need the new id
+
+            // Invoices are priced from CompanyItemPriceHistory, so the stock price is also stored as the
+            // starting history row. It is dated early so it covers every invoice before the first price change.
+            var effective = CompanyItemPriceHistoryDto.StartingPriceDate;
+
+            void AddStart(string? type, decimal? price)
+            {
+                if (price is not decimal p || p <= 0) return;
+                db.CompanyItemPriceHistories.Add(new Data.CompanyItemPriceHistory
+                {
+                    CompanyItemId = entity.CompanyItemId,
+                    PriceListType = type,
+                    OldPrice = 0m,
+                    NewPrice = p,
+                    PriceIncreaseAmount = p,
+                    EffectivityDate = effective,
+                    AppliedDate = effective,
+                    CreatedDate = entity.CreatedDate,
+                    CreatedBy = dto.CreatedBy,
+                });
+            }
+
+            AddStart(null, dto.StockPrice);
+            AddStart("Regional", dto.StockPriceRegional);
+            AddStart("National", dto.StockPriceNational);
+
             await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
             return await GetCompanyItemByIdAsync(entity.CompanyItemId);
+        }
+
+        public async Task<int> CountMappedSubdItemsAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.SubdItems.CountAsync(si => si.CompanyItemId == companyItemId);
+        }
+
+        public async Task<(int SubdItems, int SubDistributors)> GetMappingSummaryAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            var mapped = db.SubdItems.Where(si => si.CompanyItemId == companyItemId);
+            var items = await mapped.CountAsync();
+            var subds = items == 0 ? 0 : await mapped.Select(si => si.SubDistributorId).Distinct().CountAsync();
+            return (items, subds);
         }
 
         public async Task<CompanyItemUpdateDto?> UpdateCompanyItemAsync(CompanyItemUpdateDto dto)
@@ -72,10 +117,17 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             entity.Principal = dto.Principal ?? entity.Principal;
             entity.Ppg = dto.PPG ?? entity.Ppg;
             entity.Category = dto.Category ?? entity.Category;
-            entity.StockPrice = dto.StockPrice ?? entity.StockPrice;
-            entity.StockPriceRegional = dto.StockPriceRegional ?? entity.StockPriceRegional;
-            entity.StockPriceNational = dto.StockPriceNational ?? entity.StockPriceNational;
-            entity.StockUomName = dto.StockUomName ?? entity.StockUomName;
+            // Prices are not changed here: they move only through Price Changes (history + rechain).
+
+            // Sub-item conversions are counted in the stock UOM, so it stays put once items are mapped.
+            if (!string.IsNullOrWhiteSpace(dto.StockUomName) &&
+                !string.Equals(dto.StockUomName.Trim(), entity.StockUomName?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                // A blank stock UOM can always be filled (import backfill); a set one only changes while nothing is mapped.
+                var canChange = string.IsNullOrWhiteSpace(entity.StockUomName) ||
+                    !await db.SubdItems.AnyAsync(si => si.CompanyItemId == entity.CompanyItemId);
+                if (canChange) entity.StockUomName = dto.StockUomName.Trim();
+            }
             entity.IsActive = dto.IsActive;
             entity.UpdatedBy = dto.UpdatedBy;
             entity.UpdatedDate = NowPh();
@@ -271,10 +323,13 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             return await db.CompanyItemPriceHistories
                 .Where(h => h.CompanyItemId == companyItemId)
                 .OrderByDescending(h => h.EffectivityDate)
+                .ThenByDescending(h => h.CompanyItemPriceHistoryId)
                 .Select(h => new CompanyItemPriceHistoryDto
                 {
                     CompanyItemPriceHistoryId = h.CompanyItemPriceHistoryId,
                     CompanyItemId = h.CompanyItemId,
+                    PriceListType = h.PriceListType,
+                    AppliedDate = h.AppliedDate,
                     OldPrice = h.OldPrice,
                     NewPrice = h.NewPrice,
                     EffectivityDate = h.EffectivityDate,
@@ -353,7 +408,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                     NewPrice = newPrice,
                     PriceIncreaseAmount = newPrice - (oldPrice ?? 0m),
                     EffectivityDate = now,
-                    AppliedDate = now,         
+                    AppliedDate = now,
                     CreatedDate = now,
                     CreatedBy = updatedBy
                 });
@@ -381,8 +436,8 @@ namespace STTproject.Features.Admin.CompanyItem.Services
             return true;
         }
 
-            public async Task<IReadOnlyList<ExistingPriceHistoryRow>> GetPriceHistoryRowsAsync(
-            int companyItemId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ExistingPriceHistoryRow>> GetPriceHistoryRowsAsync(
+        int companyItemId, CancellationToken cancellationToken = default)
         {
             await using var db = _dbFactory.CreateDbContext();
             return await db.CompanyItemPriceHistories
@@ -398,7 +453,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
                     h.AppliedDate))
                 .ToListAsync(cancellationToken);
         }
- 
+
         // Writes historical / scheduled prices for ONE item in a single transaction.
         //  - Rows dated today or earlier are recorded as already applied.
         //  - Rows dated in the future are recorded as NOT applied, so the scheduled-price
@@ -565,7 +620,7 @@ namespace STTproject.Features.Admin.CompanyItem.Services
 
             return new HistoricalPriceApplyResult(true, null, inserted, skipped);
         }
- 
+
 
     }
 }

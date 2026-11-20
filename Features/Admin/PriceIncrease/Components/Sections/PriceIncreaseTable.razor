@@ -472,6 +472,8 @@ else
 
     /// <summary>"By company item" view, switched from the page header.</summary>
     [Parameter] public bool GroupByItem { get; set; }
+    /// <summary>Company item whose price history opens on load (from /admin/priceincrease?companyitem=ID).</summary>
+    [Parameter] public int? OpenCompanyItemId { get; set; }
     private bool groupByItem;
     private bool viewInitialized;
 
@@ -571,14 +573,32 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Parameters are already set here; take the starting view now so the first load uses it.
+        groupByItem = GroupByItem;
+        viewInitialized = true;
+
         try
         {
+            CompanyItemPriceSummaryDto? openItem = null;
+            if (OpenCompanyItemId is int openId && openId > 0)
+            {
+                openItem = await AdminPriceIncreaseService.GetCompanyItemSummaryAsync(openId);
+                // Narrow the grouped list to that item, so it's the row shown behind its history.
+                if (openItem is not null) _searchTerm = openItem.CompanyItemCode ?? string.Empty;
+            }
+
             Principals = (await AdminPriceIncreaseService.GetAllPrincipalsAsync())
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .Select(p => p!)
                 .ToList();
 
             await LoadPageAsync();
+
+            if (openItem is not null)
+            {
+                historyItem = ItemSummaries.FirstOrDefault(x => x.CompanyItemId == openItem.CompanyItemId) ?? openItem;
+                await ReloadHistoryAsync();
+            }
         }
         catch (Exception ex)
         {

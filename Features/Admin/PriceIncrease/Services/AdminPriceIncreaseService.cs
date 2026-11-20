@@ -331,6 +331,32 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
             return (list, total);
         }
 
+        public async Task<CompanyItemPriceSummaryDto?> GetCompanyItemSummaryAsync(int companyItemId)
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            return await db.CompanyItems.AsNoTracking()
+                .Where(c => c.CompanyItemId == companyItemId)
+                .Select(c => new CompanyItemPriceSummaryDto
+                {
+                    CompanyItemId = c.CompanyItemId,
+                    CompanyItemCode = c.ItemCode,
+                    CompanyItemName = c.ItemName,
+                    Principal = c.Principal,
+                    StockUomName = c.StockUomName,
+                    StockPrice = c.StockPrice,
+                    StockPriceRegional = c.StockPriceRegional,
+                    StockPriceNational = c.StockPriceNational,
+                    ChangeCount = c.CompanyItemPriceHistories.Count(),
+                    PendingCount = c.CompanyItemPriceHistories.Count(h => h.AppliedDate == null),
+                    NextEffectivityDate = c.CompanyItemPriceHistories.Where(h => h.AppliedDate == null)
+                        .Min(h => (DateTime?)h.EffectivityDate),
+                    LastEffectivityDate = c.CompanyItemPriceHistories.Where(h => h.AppliedDate != null)
+                        .Max(h => (DateTime?)h.EffectivityDate),
+                    LastCreatedDate = c.CompanyItemPriceHistories.Max(h => (DateTime?)h.CreatedDate) ?? new DateTime(1900, 1, 1)
+                })
+                .FirstOrDefaultAsync();
+        }
+
         /// <summary>Every price change of one company item, newest first (all price lists).</summary>
         public async Task<IReadOnlyList<PriceIncreaseTableListDto>> GetCompanyItemHistoryAsync(int companyItemId)
         {
