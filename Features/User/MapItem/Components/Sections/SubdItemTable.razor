@@ -43,6 +43,15 @@
 				<option value="CreatedDateAsc">Oldest</option>
 			</select>
 		</div>
+		@* Check: rows an admin may need to fix. Counts follow the search. *@
+		<div class="filter-group">
+			<select value="@ActiveCheck" @onchange="OnCheckChanged" title="Show rows that may need fixing">
+				<option value="@CheckFilter.All">All items</option>
+				<option value="@CheckFilter.NoConversion">No conversion (@noConversionCount)</option>
+				<option value="@CheckFilter.NoPrice">No price (@noPriceCount)</option>
+				<option value="@CheckFilter.Free">Free items (@freeCount)</option>
+			</select>
+		</div>
 	</div>
 	<div class="mapping-table-wrapper">
 		<table class="mapping-table">
@@ -150,7 +159,16 @@
 						<td colspan="@GetEmptyStateColumnSpan()">
 							<div class="empty-state-inline">
 								<div>
-									No sub distributor items found.@(SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : "")
+									@if (ActiveCheck != CheckFilter.All && SubdItems.Any(MatchesSearch))
+									{
+										@("Nothing to fix here. ")
+										<a role="button" class="subd-items-clear-filter"
+										   @onclick="() => SetCheck(CheckFilter.All)">Show all</a>
+									}
+									else
+									{
+										@("No sub distributor items found." + (SelectedCompanyItemIdForFilter.HasValue ? " No items are connected to the selected company item." : ""))
+									}
 								</div>
 
 							

@@ -45,6 +45,38 @@ public partial class SubdItemTable
     /// <summary>Priced units without a conversion can't be priced.</summary>
     private bool HasMissingConversion(MapSubDistributorItemRow item) =>
         CompanyRequiresStockUom(item) && item.Uoms.Any(u => u.ConversionToBase is not > 0);
+    /// <summary>The company item has a price but some unit can't show one (no company price to multiply).</summary>
+    private bool HasMissingPrice(MapSubDistributorItemRow item) =>
+        CompanyRequiresStockUom(item) && item.Uoms.Any(u => u.ConversionToBase is > 0 && u.Price is null);
+
+    /// <summary>The company item has no stock UOM, so its units are priced at 0.</summary>
+    private bool IsFreeItem(MapSubDistributorItemRow item) => !CompanyRequiresStockUom(item);
+
+    // ── Quick "check" filter: rows an admin may need to fix ──
+    private enum CheckFilter { All, NoConversion, NoPrice, Free }
+    private CheckFilter ActiveCheck { get; set; } = CheckFilter.All;
+
+    // Counts follow the search (and the page's subd / company item filter), not the check filter itself.
+    private int noConversionCount, noPriceCount, freeCount;
+
+    private bool MatchesCheck(MapSubDistributorItemRow item) => ActiveCheck switch
+    {
+        CheckFilter.NoConversion => HasMissingConversion(item),
+        CheckFilter.NoPrice => HasMissingPrice(item),
+        CheckFilter.Free => IsFreeItem(item),
+        _ => true
+    };
+
+    private void SetCheck(CheckFilter check)
+    {
+        ActiveCheck = check;
+        CurrentPage = 1;
+        RefreshFilteredItems();
+    }
+
+    private void OnCheckChanged(ChangeEventArgs e) =>
+        SetCheck(Enum.TryParse<CheckFilter>(e.Value?.ToString(), out var c) ? c : CheckFilter.All);
+
     private string SearchText { get; set; } = string.Empty;
     private SubItemSortOrder SortOrder { get; set; } = SubItemSortOrder.CreatedDateDesc;
     private SubItemSortColumn SortColumn { get; set; } = SubItemSortColumn.SubItemCode;
@@ -86,13 +118,17 @@ public partial class SubdItemTable
         RefreshFilteredItems();
     }
 
-    private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch));
+    private IEnumerable<MapSubDistributorItemRow> FilteredSubdItems => ApplySort(SubdItems.Where(MatchesSearch).Where(MatchesCheck));
     private List<MapSubDistributorItemRow> _filteredSubdItems = new();
     private void RefreshFilteredItems()
     {
-        var items = SubdItems.Where(MatchesSearch);
+        var searched = SubdItems.Where(MatchesSearch).ToList();
 
-        _filteredSubdItems = ApplySort(items).ToList();
+        noConversionCount = searched.Count(HasMissingConversion);
+        noPriceCount = searched.Count(HasMissingPrice);
+        freeCount = searched.Count(IsFreeItem);
+
+        _filteredSubdItems = ApplySort(searched.Where(MatchesCheck)).ToList();
     }
 
     private void SetSortByColumn(SubItemSortColumn column)
@@ -123,6 +159,9 @@ public partial class SubdItemTable
     {
         SortColumn = SubItemSortColumn.CreatedDate;
         SortAscending = SortOrder == SubItemSortOrder.CreatedDateAsc;
+        // The table shows a cached, sorted list: rebuild it, or Newest / Oldest changes nothing on screen.
+        CurrentPage = 1;
+        RefreshFilteredItems();
         return Task.CompletedTask;
     }
 

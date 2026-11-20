@@ -150,6 +150,15 @@ public sealed class ImportCustomersService
                 ZipCode = zip
             };
 
+            // No subd code and the store name is just the customer name: treat as "no mapping",
+            // so it is never saved or checked against other customers' mappings.
+            // RawValues below still keep the original text for the error report.
+            if (SubdCustomerKey.IsRedundant(rowResult.SubdCustCode, rowResult.SubdCustName, rowResult.CustomerName))
+            {
+                rowResult.SubdCustCode = string.Empty;
+                rowResult.SubdCustName = string.Empty;
+            }
+
             foreach (var (col, header) in detection.AllHeaderColumns)
             {
                 rowResult.RawValues[header] = GetString(row, col);

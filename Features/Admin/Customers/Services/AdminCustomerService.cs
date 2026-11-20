@@ -52,7 +52,9 @@ namespace STTproject.Features.Admin.Customers.Services
         };
 
         // Trims, applies the placeholder rule, drops blank pairs and repeats (first one wins).
-        private static List<SubdMappingDto> CleanMappings(IEnumerable<SubdMappingDto>? mappings)
+        // When customerName is given, a NEW mapping with no code whose name is the customer's own name
+        // is dropped too (it adds nothing). Existing rows are kept so an edit never deletes them.
+        private static List<SubdMappingDto> CleanMappings(IEnumerable<SubdMappingDto>? mappings, string? customerName = null)
         {
             var seen = new HashSet<string>();
             var result = new List<SubdMappingDto>();
@@ -62,6 +64,7 @@ namespace STTproject.Features.Admin.Customers.Services
                 var code = SubdCustomerKey.Code(m.SubdCustCode);
                 var name = SubdCustomerKey.Name(m.SubdCustName);
                 if (code.Length == 0 && name.Length == 0) continue;
+                if (m.SubdCustomerId == 0 && SubdCustomerKey.IsRedundant(code, name, customerName)) continue;
                 if (!seen.Add(SubdCustomerKey.Compare(code, name))) continue;
 
                 result.Add(new SubdMappingDto
@@ -107,7 +110,7 @@ namespace STTproject.Features.Admin.Customers.Services
                 CreatedBy = dto.CreatedBy
             };
 
-            foreach (var m in CleanMappings(dto.Mappings))
+            foreach (var m in CleanMappings(dto.Mappings, dto.CustomerName))
             {
                 entity.SubdCustomers.Add(new SubdCustomer
                 {
@@ -151,7 +154,7 @@ namespace STTproject.Features.Admin.Customers.Services
             entity.UpdatedDate = now;
             entity.UpdatedBy = dto.UpdatedBy;
 
-            var incoming = CleanMappings(dto.Mappings);
+            var incoming = CleanMappings(dto.Mappings, dto.CustomerName);
             var keepIds = incoming
                 .Where(m => m.SubdCustomerId > 0)
                 .Select(m => m.SubdCustomerId)

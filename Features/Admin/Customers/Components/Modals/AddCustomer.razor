@@ -238,6 +238,7 @@
     private List<SubdMappingDto> BuildMappings() =>
         SubdCustPairs
             .Where(p => !SubdCustomerKey.IsBlank(p.SubdCustCode, p.SubdCustName))
+            .Where(p => p.SubdCustomerId != null || !SubdCustomerKey.IsRedundant(p.SubdCustCode, p.SubdCustName, CustomerName))
             .Select(p => new SubdMappingDto
             {
                 SubdCustomerId = p.SubdCustomerId ?? 0,
@@ -258,6 +259,10 @@
             var name = SubdCustomerKey.Name(pair.SubdCustName);
 
             if (code.Length == 0 && name.Length == 0)
+                continue;
+
+            // Same as the customer name with no code: not saved, so nothing to check.
+            if (pair.SubdCustomerId == null && SubdCustomerKey.IsRedundant(code, name, CustomerName))
                 continue;
 
             if (code.Length > SubdCustomerKey.CodeMaxLength)

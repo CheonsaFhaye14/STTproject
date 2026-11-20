@@ -22,6 +22,13 @@ public static class SubdCustomerKey
     public static bool IsBlank(string? code, string? name) =>
         Code(code).Length == 0 && Name(name).Length == 0;
 
+    // No code, and the name is just the customer's own name: the mapping adds nothing,
+    // so it is treated as "no mapping" (not saved, not checked for conflicts).
+    public static bool IsRedundant(string? code, string? name, string? customerName) =>
+        Code(code).Length == 0 &&
+        Name(name).Length > 0 &&
+        string.Equals(Name(name), Name(customerName), StringComparison.OrdinalIgnoreCase);
+
     // In-memory comparison key. SQL comparisons are already case-insensitive (default collation).
     public static string Compare(string? code, string? name) =>
         $"{Code(code)}|{Name(name)}".ToUpperInvariant();
