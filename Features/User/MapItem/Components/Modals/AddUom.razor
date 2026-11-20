@@ -25,7 +25,7 @@
                         <small>Price</small>
                         <b>@(ApplicableStockPrice is decimal sp ? $"₱{sp:N2}" : "-")</b>
                         <em>per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
-                                                                                                                                                                                                                            PriceListLabel)</em>
+                                                                                                                                                                                                                                                        PriceListLabel)</em>
                         </span>
                     }
                     @if (PiecesPerStock is decimal pps && !StockIsPiece)
@@ -340,7 +340,7 @@
                                             <h3>Price history</h3>
                                             <span class="au-hsub">
                                                 per @StockDisplayName · @(string.IsNullOrWhiteSpace(PriceListLabel) ? "Standard list" :
-                                                                                                                                                                                                                                                                                                                                                                                PriceListLabel)
+                                                                                                                                                                                                                                                                                                                                                                                                                                PriceListLabel)
                                                 · @cols.Count unit@(cols.Count == 1 ? "" : "s")
                                             </span>
                                         </div>
@@ -363,73 +363,74 @@
                                                             {
                                                                 <th class="@(c.IsStock ? "sc" : null)">
                                                                     @c.Name
-                                                                    <small>@(c.IsStock ? "stock UOM" : $"×                                                {FormatNumber(c.Conversion)}")</small>
-                                                                </th>
-                                                            }
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (var i = 0; i < priceHistory.Count; i++)
-                                                        {
-                                                            var h = priceHistory[i];
-                                                            var scheduled = h.AppliedDate is null;
-                                                            var isCurrent = i == current;
-                                                            var delta = HistoryDelta(i);
-                                                            <tr class="@(scheduled ? "sch" : isCurrent ? "cur" : null)">
-                                                                <td class="dcol">
-                                                                    <b>@h.EffectivityDate.ToString("MMM d, yyyy")</b>
-                                                                    <span class="au-pill @(scheduled ? "sch" : isCurrent ? "cur" : "old")">
-                                                                        @(scheduled ? "Scheduled" : isCurrent ? "Current" : "Applied")
-                                                                    </span>
-                                                                </td>
-                                                                @foreach (var c in cols)
-                                                                {
-                                                                    <td class="@(c.IsStock ? "sc" : null)">
-                                                                        @PriceFor(h.NewPrice, c.Conversion).ToString("N2")
-                                                                        @if (c.IsStock && delta is decimal d)
-                                                                        {
-                                                                            <span class="au-delta @(d >= 0 ? "up" : "down")">@(d >= 0 ? "▲" : "▼")
-                                                                                @Math.Abs(d).ToString("0.0")%</span>
-                                                                            }
-                                                                        </td>
-                                                                    }
-                                                                </tr>
-                                                            }
-                                                        </tbody>
-                                                    </table>
-                                                }
+                                                                    <small>@(c.IsStock ? "stock UOM" : "× " +
+                                                                                                                        FormatNumber(c.Conversion))</small>
+                                                                    </th>
+                                                                }
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @for (var i = 0; i < priceHistory.Count; i++)
+                                                            {
+                                                                var h = priceHistory[i];
+                                                                var scheduled = h.AppliedDate is null;
+                                                                var isCurrent = i == current;
+                                                                var delta = HistoryDelta(i);
+                                                                <tr class="@(scheduled ? "sch" : isCurrent ? "cur" : null)">
+                                                                    <td class="dcol">
+                                                                        <b>@h.EffectivityDate.ToString("MMM d, yyyy")</b>
+                                                                        <span class="au-pill @(scheduled ? "sch" : isCurrent ? "cur" : "old")">
+                                                                            @(scheduled ? "Scheduled" : isCurrent ? "Current" : "Applied")
+                                                                        </span>
+                                                                    </td>
+                                                                    @foreach (var c in cols)
+                                                                    {
+                                                                        <td class="@(c.IsStock ? "sc" : null)">
+                                                                            @PriceFor(h.NewPrice, c.Conversion).ToString("N2")
+                                                                            @if (c.IsStock && delta is decimal d)
+                                                                            {
+                                                                                <span class="au-delta @(d > 0 ? "up" : "down")">@(d > 0 ? "▲" : "▼")
+                                                                                    @Math.Abs(d).ToString("0.0")%</span>
+                                                                                }
+                                                                            </td>
+                                                                        }
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    }
+                                                </div>
+                                                <div class="au-hnote">
+                                                    Each unit's price is the stock price × its size. Invoices use the price in effect on the
+                                                    invoice date.
+                                                </div>
                                             </div>
-                                            <div class="au-hnote">
-                                                Each unit's price is the stock price × its size. Invoices use the price in effect on the
-                                                invoice date.
-                                            </div>
-                                        </div>
-                                    }
-                                </section>
+                                        }
+                                    </section>
+                                </div>
                             </div>
-                        </div>
-                    </ChildContent>
-                    <FooterContent>
-                        @if (!string.IsNullOrWhiteSpace(DraftStorageKey))
-                        {
-                            <span class="au-draft"><i></i> Draft saved</span>
-                        }
-                        <span class="au-spacer"></span>
-                        <Button Title="Cancel" OnClick="CancelAsync" />
-                        <span class="au-danger"><Button Title="Clear draft" OnClick="ShowClearDraftConfirmModal" /></span>
-                        <Button Title="Save changes" OnClick="AddAsync" Variant="ButtonVariant.Primary" />
-                    </FooterContent>
-                </Modal>
+                        </ChildContent>
+                        <FooterContent>
+                            @if (!string.IsNullOrWhiteSpace(DraftStorageKey))
+                            {
+                                <span class="au-draft"><i></i> Draft saved</span>
+                            }
+                            <span class="au-spacer"></span>
+                            <Button Title="Cancel" OnClick="CancelAsync" />
+                            <span class="au-danger"><Button Title="Clear draft" OnClick="ShowClearDraftConfirmModal" /></span>
+                            <Button Title="Save changes" OnClick="AddAsync" Variant="ButtonVariant.Primary" />
+                        </FooterContent>
+                    </Modal>
 
-                @if (showClearDraftConfirmModal)
-                {
-                    <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
-                                  Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
-                                  OnNo="CancelClearDraftConfirm" />
-                }
+                    @if (showClearDraftConfirmModal)
+                    {
+                        <ConfirmModal Show="showClearDraftConfirmModal" Title="Clear Draft"
+                                      Message="Clear all unsaved changes for this UOM draft?" OnYes="ConfirmClearDraftAsync"
+                                      OnNo="CancelClearDraftConfirm" />
+                    }
 
-                @if (showReactivateConflictModal)
-                {
-                    <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
-                                  OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
-                }
+                    @if (showReactivateConflictModal)
+                    {
+                        <ConfirmModal Show="showReactivateConflictModal" Title="Reactivate UOM" Message="@reactivateConflictMessage"
+                                      OnYes="DismissReactivateConflictModal" OnNo="DismissReactivateConflictModal" />
+                    }

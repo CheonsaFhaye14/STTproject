@@ -289,7 +289,7 @@ public partial class SubdItemTable
             }
             else if (u.ConversionToBase is not decimal c || c <= 0)
             {
-                lines.Add(new UomLine(u.UomName, "no size", "no size", "missing", "No conversion: this unit can't be priced"));
+                lines.Add(new UomLine(u.UomName, "no conversion", "no conversion", "missing", "No conversion: this unit can't be priced"));
             }
             else
             {

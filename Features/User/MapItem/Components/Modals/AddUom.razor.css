@@ -76,11 +76,12 @@
 .au-seg .on ::deep .btn { background: #fff !important; color: var(--au-ink) !important; box-shadow: 0 1px 3px rgba(0, 0, 0, .1) !important; }
 
 /* ── Body ── */
-.au-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; }
+/* minmax(0, 1fr): a wide price table scrolls inside its box instead of pushing the right pane past the modal */
+.au-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
 .au-left { padding: 18px 20px; overflow: auto; border-right: 1px solid var(--au-line); }
 .au-left h4 { margin: 0 0 4px; font-size: 14px; }
 .au-lead { margin: 0 0 16px; font-size: 12px; color: var(--au-muted); }
-.au-right { min-height: 0; display: flex; flex-direction: column; }
+.au-right { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 
 /* fields (shared Input / Select) */
 .au-field { margin-bottom: 14px; }
@@ -288,14 +289,16 @@
 }
 
 /* ── Price history ── */
-.au-hist { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 20px; }
+.au-hist { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
 .au-bar-flush { padding: 0 0 12px; }
-.au-hsub { margin-left: auto; font-size: 11.5px; color: var(--au-muted); }
+.au-hsub { margin-left: auto; min-width: 0; font-size: 11.5px; color: var(--au-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .au-hwrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--au-line); border-radius: 12px; }
 .au-ph { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .au-ph th, .au-ph td { padding: 10px 14px; white-space: nowrap; text-align: right; background: #fff; border-bottom: 1px solid var(--au-line-2); }
 .au-ph thead th { position: sticky; top: 0; z-index: 2; background: var(--au-cream); border-bottom: 1px solid var(--au-line); font-size: 11px; font-weight: 700; }
 .au-ph thead th small { display: block; font-size: 10px; font-weight: 500; color: var(--au-faint); }
+.au-ph td { vertical-align: top; }
+.au-ph td:not(.dcol) { padding-top: 12px; }
 .au-ph .dcol { position: sticky; left: 0; z-index: 1; min-width: 150px; text-align: left; border-right: 1px solid var(--au-line-2); }
 .au-ph thead .dcol { z-index: 3; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--au-faint); }
 .au-ph .dcol b { display: block; font-size: 12.5px; }
@@ -311,7 +314,8 @@
 .au-pill.cur { background: var(--au-ok-soft); color: var(--au-ok); }
 .au-pill.sch { background: var(--au-gold-bright); color: var(--au-gold-dark); }
 .au-pill.old { background: var(--au-line-2); color: var(--au-muted); }
-.au-delta { margin-left: 6px; padding: 1px 6px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+/* under the stock price, so it never pushes the price out of its column */
+.au-delta { display: block; width: fit-content; margin: 4px 0 0 auto; padding: 1px 6px; border-radius: 20px; font-size: 10px; font-weight: 700; }
 .au-delta.up { background: #FBE9E4; color: #A5412C; }
 .au-delta.down { background: var(--au-ok-soft); color: var(--au-ok); }
 .au-hnote { margin-top: 10px; font-size: 11px; color: var(--au-faint); }

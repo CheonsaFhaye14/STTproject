@@ -253,26 +253,43 @@ public partial class AddUom
     private bool priceHistoryLoading;
     private List<CompanyPriceHistoryRow> priceHistory = new();
 
-    /// <summary>One column per active unit, the stock UOM first (row or not).</summary>
+    /// <summary>
+    /// One column per price: the stock UOM first (row or not), then the other active units, largest first. Units at the
+    /// same conversion share one column ("CS / Case"), since their prices are always the same.
+    /// </summary>
     private List<(string Name, decimal Conversion, bool IsStock)> HistoryColumns
     {
         get
         {
-            var cols = new List<(string, decimal, bool)> { (StockDisplayName, 1m, true) };
-            cols.AddRange(workingUomEntries
+            var units = workingUomEntries
                 .Where(kv => kv.Value.IsActive && kv.Value.Conversion is > 0
                              && !string.Equals(kv.Key, StockEntryName, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(kv => kv.Value.Conversion)
-                .Select(kv => (kv.Key, kv.Value.Conversion!.Value, false)));
+                .Select(kv => (Name: kv.Key, Conv: Math.Round(kv.Value.Conversion!.Value, 6)))
+                .ToList();
+
+            string Names(string first, decimal conv) =>
+                string.Join(" / ", new[] { first }.Concat(units.Where(u => u.Conv == conv).Select(u => u.Name))
+                                                  .Distinct(StringComparer.OrdinalIgnoreCase));
+
+            var cols = new List<(string, decimal, bool)> { (Names(StockDisplayName, 1m), 1m, true) };
+            cols.AddRange(units
+                .Where(u => u.Conv != 1m)
+                .GroupBy(u => u.Conv)
+                .OrderByDescending(g => g.Key)
+                .Select(g => (string.Join(" / ", g.Select(u => u.Name)), g.Key, false)));
             return cols;
         }
     }
 
-    /// <summary>Change from the previous (older) price, in percent.</summary>
-    private decimal? HistoryDelta(int index) =>
-        index + 1 < priceHistory.Count && priceHistory[index + 1].NewPrice is var prev && prev != 0
-            ? (priceHistory[index].NewPrice - prev) / prev * 100m
-            : null;
+    /// <summary>Change from the previous (older) price, in percent. Null when the price didn't change.</summary>
+    private decimal? HistoryDelta(int index)
+    {
+        if (index + 1 >= priceHistory.Count) return null;
+        var prev = priceHistory[index + 1].NewPrice;
+        if (prev == 0) return null;
+        var pct = (priceHistory[index].NewPrice - prev) / prev * 100m;
+        return Math.Abs(pct) < 0.05m ? null : pct;
+    }
 
     private int CurrentHistoryIndex => priceHistory.FindIndex(h => h.AppliedDate is not null);
 
@@ -561,7 +578,7 @@ public partial class AddUom
     /// <summary>"16 PK" — the unit's conversion counted in the "Show per" unit.</summary>
     private string CardSize(UomRow r)
     {
-        if (r.Entry.Conversion is not decimal c || c <= 0) return "No size";
+        if (r.Entry.Conversion is not decimal c || c <= 0) return "No conversion";
         if (IsRefUnit(r.Name)) return $"1 {ViewUnitName}";
         return $"{FormatNumber(c / RefConversion)} {ViewUnitName}";
     }
