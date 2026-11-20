@@ -409,16 +409,6 @@ public class MapItemService : IMapItemService
                     .Distinct()
                     .ToListAsync(cancellationToken);
 
-                // ItemsUomPriceHistory still has a foreign key to ItemsUom: a unit with old UOM price rows is deactivated
-                // instead of deleted. Remove this check when that table is dropped.
-                var existingIds = existingUoms.Select(e => e.ItemsUomId).ToList();
-                var uomIdsWithHistory = await context.ItemsUomPriceHistories
-                    .AsNoTracking()
-                    .Where(h => existingIds.Contains(h.ItemsUomId))
-                    .Select(h => h.ItemsUomId)
-                    .Distinct()
-                    .ToListAsync(cancellationToken);
-
                 var now = DateTime.Now;
                 var matchedExistingIds = new HashSet<int>();
 
@@ -450,7 +440,6 @@ public class MapItemService : IMapItemService
 
                         existing.UomName = name;
                         existing.ConversionToBase = entry.Conversion;
-                        existing.Price = null;                  // UOM prices are no longer stored (company price × conversion)
                         existing.IsActive = entry.IsActive;
                         existing.UpdatedBy = currentUserId > 0 ? currentUserId : existing.UpdatedBy;
                         existing.UpdatedDate = now;
@@ -462,7 +451,6 @@ public class MapItemService : IMapItemService
                         {
                             UomName = name,
                             ConversionToBase = entry.Conversion,
-                            Price = null,
                             IsActive = entry.IsActive,
                             SubdItemId = subdItemId,
                             CreatedDate = now,
@@ -478,7 +466,7 @@ public class MapItemService : IMapItemService
                     .ToList();
 
                 var toDeactivate = toRemove
-                    .Where(e => uomIdsInUse.Contains(e.ItemsUomId) || uomIdsWithHistory.Contains(e.ItemsUomId))
+                    .Where(e => uomIdsInUse.Contains(e.ItemsUomId))
                     .ToList();
                 var toHardDelete = toRemove.Except(toDeactivate).ToList();
 

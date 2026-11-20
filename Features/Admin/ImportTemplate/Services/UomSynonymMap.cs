@@ -43,13 +43,25 @@ public sealed class UomSynonymMap
     }
 
     /// <summary>
-    /// Every spelling to try for this unit, the group's first spelling first. A trailing "(…)" is ignored.
-    /// A unit no group knows comes back as itself.
+    /// Every spelling to try for this unit, the group's first spelling first. A unit no group knows comes back as itself.
+    /// <para>
+    /// A unit with a trailing "(…)" is first looked up as written: a group can hold "pc (pack)" for a subd that sells a
+    /// pack as "PC (PACK)", so it doesn't fall into the Piece group. Otherwise the "(…)" is dropped ("CS (24s)" → cs)
+    /// and the unit as written is still tried first, so an item unit named exactly "PC (PACK)" matches without a group.
+    /// </para>
     /// </summary>
     public IEnumerable<string> Expand(string? value)
     {
-        var stripped = TrailingParen.Replace(value ?? string.Empty, string.Empty).Trim();
-        return _groupBySpelling.TryGetValue(Norm(stripped), out var group) ? group : new[] { stripped };
+        var written = (value ?? string.Empty).Trim();
+        if (_groupBySpelling.TryGetValue(Norm(written), out var exact))
+            return exact;
+
+        var stripped = TrailingParen.Replace(written, string.Empty).Trim();
+        IEnumerable<string> rest = _groupBySpelling.TryGetValue(Norm(stripped), out var group) ? group : new[] { stripped };
+
+        return Norm(stripped) == Norm(written) || written.Length == 0
+            ? rest
+            : new[] { written }.Concat(rest).Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     public static string Norm(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;

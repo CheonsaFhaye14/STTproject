@@ -1,9 +1,14 @@
+using System.Text.RegularExpressions;
 using STTproject.Features.Admin.ImportTemplate.DTOs;
 
 namespace STTproject.Features.Admin.ImportTemplate.Validators;
 
 public static class UomSynonymValidator
 {
+    // Brackets are allowed only as one group at the end, like "pc (pack)": a subd's own unit that is
+    // written with a note. Anything else with brackets ("(pc)", "pc (a) b", "pc (") is a typo.
+    private static readonly Regex BracketedSpelling = new(@"^[^()]+\s\([^()]+\)$", RegexOptions.Compiled);
+
     /// <summary>Checks one already-normalized spelling. Null when it's fine.</summary>
     public static string? CheckSpelling(string spelling)
     {
@@ -11,8 +16,8 @@ public static class UomSynonymValidator
             return "Enter a spelling.";
         if (spelling.Length > UomSynonymLimits.SpellingMax)
             return $"\"{spelling}\" is longer than {UomSynonymLimits.SpellingMax} characters.";
-        if (spelling.IndexOfAny(new[] { '(', ')' }) >= 0)
-            return $"\"{spelling}\" can't contain brackets. Anything in brackets at the end of a file's UOM is ignored before matching.";
+        if (spelling.IndexOfAny(new[] { '(', ')' }) >= 0 && !BracketedSpelling.IsMatch(spelling))
+            return $"\"{spelling}\" can only have brackets at the end, after a space, like \"pc (pack)\".";
         return null;
     }
 

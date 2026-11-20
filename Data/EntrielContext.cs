@@ -45,8 +45,6 @@ public partial class EntrielContext : DbContext
 
     public virtual DbSet<ItemsUom> ItemsUoms { get; set; }
 
-    public virtual DbSet<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; }
-
     public virtual DbSet<PriceRecalcLine> PriceRecalcLines { get; set; }
 
     public virtual DbSet<PriceRecalcRun> PriceRecalcRuns { get; set; }
@@ -472,7 +470,6 @@ public partial class EntrielContext : DbContext
                 .HasDefaultValueSql("(getdate())", "DF__ItemsUom__Create__18EBB532")
                 .HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF__ItemsUom__IsActi__690797E6");
-            entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UomName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -490,37 +487,6 @@ public partial class EntrielContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.ItemsUomUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_ItemsUom_UpdatedBy");
-        });
-
-        modelBuilder.Entity<ItemsUomPriceHistory>(entity =>
-        {
-            entity.HasKey(e => e.ItemsUomPriceHistoryId).HasName("PK__ItemsUom__4D74DA34C5F2D289");
-
-            entity.ToTable("ItemsUomPriceHistory");
-
-            entity.Property(e => e.AppliedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.EffectivityDate).HasColumnType("datetime");
-            entity.Property(e => e.NewPrice).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.OldPrice).HasColumnType("decimal(18, 2)");
-
-            entity.HasOne(d => d.CompanyItem).WithMany(p => p.ItemsUomPriceHistories)
-                .HasForeignKey(d => d.CompanyItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ItemsUomPriceHistory_CompanyItem");
-
-            entity.HasOne(d => d.CompanyItemPriceHistory).WithMany(p => p.ItemsUomPriceHistories)
-                .HasForeignKey(d => d.CompanyItemPriceHistoryId)
-                .HasConstraintName("FK__ItemsUomP__Compa__30C33EC3");
-
-            entity.HasOne(d => d.ItemsUom).WithMany(p => p.ItemsUomPriceHistories)
-                .HasForeignKey(d => d.ItemsUomId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ItemsUomPriceHistory_ItemsUom");
         });
 
         modelBuilder.Entity<PriceRecalcLine>(entity =>

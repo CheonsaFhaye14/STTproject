@@ -11,8 +11,6 @@ public partial class ItemsUom
 
     public decimal? ConversionToBase { get; set; }
 
-    public bool IsBaseUnit { get; set; }
-
     public DateTime CreatedDate { get; set; }
 
     public int? CreatedBy { get; set; }
@@ -21,17 +19,11 @@ public partial class ItemsUom
 
     public DateTime? UpdatedDate { get; set; }
 
-    public decimal? Price { get; set; }
-
     public int SubdItemId { get; set; }
 
     public bool IsActive { get; set; }
 
-    public bool IsStockUom { get; set; }
-
     public virtual User? CreatedByNavigation { get; set; }
-
-    public virtual ICollection<ItemsUomPriceHistory> ItemsUomPriceHistories { get; set; } = new List<ItemsUomPriceHistory>();
 
     public virtual ICollection<SalesInvoiceItem> SalesInvoiceItems { get; set; } = new List<SalesInvoiceItem>();
 

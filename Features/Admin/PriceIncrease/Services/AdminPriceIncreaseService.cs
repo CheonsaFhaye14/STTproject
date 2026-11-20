@@ -1023,11 +1023,6 @@ namespace STTproject.Features.Admin.PriceIncrease.Services
                     .Where(i => i.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.CompanyItemPriceHistoryId, previousId));
 
-                // Legacy UOM history (no longer written) must go before its parent row.
-                await db.ItemsUomPriceHistories
-                    .Where(u => u.CompanyItemPriceHistoryId == companyItemPriceHistoryId)
-                    .ExecuteDeleteAsync();
-
                 db.CompanyItemPriceHistories.Remove(history);
                 await db.SaveChangesAsync();
 

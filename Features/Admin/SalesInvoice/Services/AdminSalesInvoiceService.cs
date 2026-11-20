@@ -1407,7 +1407,7 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
         var subdItemIds = lines.Select(x => x.SubdItemId).Distinct().ToList();
         var activeUoms = await context.ItemsUoms.AsNoTracking()
             .Where(u => subdItemIds.Contains(u.SubdItemId) && u.IsActive)
-            .Select(u => new { u.SubdItemId, u.UomName, u.ConversionToBase, u.IsStockUom })
+            .Select(u => new { u.SubdItemId, u.UomName, u.ConversionToBase })
             .ToListAsync(ct);
 
         var activeBySubdItem = activeUoms
@@ -1415,7 +1415,8 @@ public class AdminSalesInvoiceService : IAdminSalesInvoiceService
             .ToDictionary(
                 g => g.Key,
                 g => string.Join(", ", g.OrderBy(u => u.ConversionToBase)
-                    .Select(u => $"{u.UomName} ({u.ConversionToBase}{(u.IsStockUom ? ", stock" : "")})")));
+                    // Conversions are counted in the company stock UOM, so the unit at 1 is the stock unit.
+                    .Select(u => $"{u.UomName} ({u.ConversionToBase}{(u.ConversionToBase == 1m ? ", stock" : "")})")));
 
         return lines
             .GroupBy(x => new
