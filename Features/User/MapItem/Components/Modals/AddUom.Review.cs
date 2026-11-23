@@ -79,7 +79,9 @@ public partial class AddUom
                     null, RefField));
             }
 
-            if (StockRowImplicit && workingUomEntries.FirstOrDefault(kv => kv.Value.IsActive && IsStockName(kv.Key)) is { Key: not null } bundle
+            // While a rescale is pending, the bundle / implicit-stock notes and the "same conversion" warning are misleading.
+            if (!StockNeedsRescale && StockRowImplicit
+                && workingUomEntries.FirstOrDefault(kv => kv.Value.IsActive && IsStockName(kv.Key)) is { Key: not null } bundle
                 && bundle.Value.Conversion is decimal bc)
             {
                 Add(new UomMessage("stock-bundle", UomMessageSeverity.Note,
@@ -87,14 +89,14 @@ public partial class AddUom
                     $"{FormatNumber(bc)} × the {CompanyStockUomName} price. The company {CompanyStockUomName} itself is always 1.",
                     null, RefField));
             }
-            else if (StockRowImplicit)
+            else if (!StockNeedsRescale && StockRowImplicit)
             {
                 Add(new UomMessage("stock-implicit", UomMessageSeverity.Note,
                     $"{CompanyStockUomName} isn't one of this item's units. That's fine: the stock UOM is always 1 " +
                     $"and the sizes below are counted in {CompanyStockUomName}.", null, RefField));
             }
 
-            if (!StockIsPiece && PieceEntryName is { } piece && workingUomEntries[piece].Conversion == 1m)
+            if (!StockNeedsRescale && !StockIsPiece && PieceEntryName is { } piece && workingUomEntries[piece].Conversion == 1m)
             {
                 Add(new UomMessage("piece-same", UomMessageSeverity.Warning,
                     $"{piece} is the same conversion as {StockDisplayName}. If a {StockDisplayName} holds more than one piece, fix {piece}'s conversion.",

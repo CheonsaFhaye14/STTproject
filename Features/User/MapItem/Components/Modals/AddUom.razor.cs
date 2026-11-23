@@ -6,6 +6,7 @@ using STTproject.Models;
 using STTproject.Features.User.MapItem.DTOs;
 using STTproject.Features.User.MapItem.Validators;
 using STTproject.Features.User.MapItem.Services;
+using STTproject.Shared.Components.Forms;
 
 namespace STTproject.Features.User.MapItem.Components.Modals;
 
@@ -16,7 +17,7 @@ namespace STTproject.Features.User.MapItem.Components.Modals;
 /// the same as ItemsUom.ConversionToBase. They can be shown per stock UOM or per piece. Prices are not entered here:
 /// each one is the company stock price × conversion, shown for reference only.
 /// </summary>
-public partial class AddUom
+public partial class AddUom : IDisposable
 {
     /// <summary>Name used for the piece unit (the page passes "Piece").</summary>
     [Parameter] public string BaseUomName { get; set; } = "PC";
@@ -84,8 +85,10 @@ public partial class AddUom
     }
 
     /// <summary>A stock-named unit the subd sells at another conversion (buy 1 take 1: PK = 2 PK).</summary>
+    /// <remarks>Not while the item still needs rescaling: then the stock-named row is per piece, not a bundle.</remarks>
     private bool IsBundle(string name) =>
-        StockUomRequired && workingUomEntries.TryGetValue(name, out var e) && e.IsActive
+        StockUomRequired && !StockNeedsRescale
+        && workingUomEntries.TryGetValue(name, out var e) && e.IsActive
         && IsStockName(name) && e.Conversion is decimal c && c > 0 && c != 1m;
 
     private UomEntry? StockEntry => StockEntryName is { } n ? workingUomEntries[n] : null;
@@ -130,8 +133,8 @@ public partial class AddUom
         }
     }
 
-    /// <summary>The stock UOM row exists but isn't 1: the item's conversions are still per piece (not migrated).</summary>
-    private bool StockNeedsRescale => false;
+    /// <summary>The stock-named row isn't 1 while the piece row is: the item's conversions are still per piece (not migrated).</summary>
+    private bool StockNeedsRescale => RescaleRowName is not null;
 
     // ── Conversion view: per any unit (default the stock UOM) ───────────
 
@@ -329,16 +332,22 @@ public partial class AddUom
         }
     }
 
+    /// <summary>
+    /// The unit typed or picked in the Unit AutoComplete: one of <see cref="DefaultOptions"/> or any name typed in.
+    /// The AutoComplete sends null while the typed text matches nothing yet, so this is never left null.
+    /// </summary>
     private string selectedUomOption = string.Empty;
     private string SelectedUomOption
     {
         get => selectedUomOption;
         set
         {
-            if (selectedUomOption == value) return;
-            selectedUomOption = value;
+            var v = value ?? string.Empty;
+            if (selectedUomOption == v) return;
+            selectedUomOption = v;
             validationErrors.Remove("uom");
-            if (selectedUomOption != "__custom") CustomUom = string.Empty;
+            validationErrors.Remove("conversion");
+            if (selectedUomOption != "__custom") customUom = string.Empty;
         }
     }
 
@@ -414,12 +423,13 @@ public partial class AddUom
 
     private bool IsSelectedStockUom => IsStockName(GetSelectedUomName());
 
+    // "__custom" + CustomUom is from the old Select with an "Other…" option; kept so older saved drafts still load.
     private string GetSelectedUomName() =>
-        selectedUomOption == "__custom" ? (CustomUom ?? string.Empty).Trim() : selectedUomOption.Trim();
+        selectedUomOption == "__custom" ? (customUom ?? string.Empty).Trim() : (selectedUomOption ?? string.Empty).Trim();
 
-    private async Task OnUomSelectChanged(string value)
+    private async Task OnUomSelectChanged(string? value)
     {
-        SelectedUomOption = value;
+        SelectedUomOption = value ?? string.Empty;
         await PersistDraftAsync();
     }
 
@@ -648,6 +658,28 @@ public partial class AddUom
         }
     }
 
+    /// <summary>Stored conversion from what was typed while editing: size × the basis unit's conversion.</summary>
+    private decimal? EditConversion(decimal size, string basisKey)
+    {
+        if (size <= 0 || BasisConversion(basisKey) is not decimal b) return null;
+        return Math.Round(size * b, 10, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>What to show in the size box for a stored conversion and basis (the reverse of <see cref="EditConversion"/>).</summary>
+    private string EditSizeText(decimal conversion, string basisKey) =>
+        conversion > 0 && BasisConversion(basisKey) is decimal b ? FormatNumber(conversion / b) : string.Empty;
+
+    private async Task OnEditBasisChanged(string value)
+    {
+        // Keep the same size when switching basis: re-express the typed amount in the new unit.
+        if (decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size)
+            && EditConversion(size, editBasis) is decimal conv)
+            editSizeInput = EditSizeText(conv, value);
+
+        editBasis = value;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private void BeginEdit(string name)
     {
         if (!workingUomEntries.TryGetValue(name, out var entry) || !entry.IsActive) return;
@@ -661,9 +693,7 @@ public partial class AddUom
                   : options.Contains(StockKey) ? StockKey
                   : options.FirstOrDefault() ?? string.Empty;
 
-        editSizeInput = entry.Conversion is decimal c && BasisConversion(editBasis) is decimal b
-            ? FormatNumber(c / b)
-            : string.Empty;
+        editSizeInput = entry.Conversion is decimal c ? EditSizeText(c, editBasis) : string.Empty;
     }
 
     private void CancelEdit()
@@ -683,8 +713,8 @@ public partial class AddUom
         decimal? conversion = null;
         if (!decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size) || size <= 0)
             editErrors["size"] = "Enter a number greater than 0.";
-        else if (BasisConversion(editBasis) is decimal basis)
-            conversion = Math.Round(size * basis, 10, MidpointRounding.AwayFromZero);
+        else if (EditConversion(size, editBasis) is decimal worked)
+            conversion = worked;
         else
             editErrors["size"] = "Pick what the conversion is counted in.";
 
@@ -857,6 +887,7 @@ public partial class AddUom
             e.Conversion = Math.Round(e.Conversion!.Value / factor, 10, MidpointRounding.AwayFromZero);
 
         workingUomEntries[row].Conversion = 1m;
+        RefreshStockFlags();          // the stock-named row is now 1, so it's the stock UOM again
         RefreshFinalErrors();
         await PersistDraftAsync();
         await InvokeAsync(StateHasChanged);
@@ -889,6 +920,146 @@ public partial class AddUom
             pendingJumpRow = null;
             await InvokeReviewJsAsync("jumpTo", UomRowDomId(row), null);
         }
+
+        // Window-wide keys (Enter / Esc / Ctrl+S) only while the window is open, so they don't touch the page behind it.
+        if (!ShowAddUomModal)
+        {
+            if (shortcutsOn)
+            {
+                shortcutsOn = false;
+                await InvokeKeysJsAsync("unshortcuts");
+            }
+            return;
+        }
+
+        selfRef ??= DotNetObjectReference.Create(this);
+        if (!shortcutsOn)
+        {
+            shortcutsOn = true;
+            await InvokeKeysJsAsync("shortcuts", selfRef);
+        }
+
+        // Enter-key flow of the add form (conversion → "counted in" → add). The script wires each form element only once.
+        await InvokeKeysJsAsync("wire", AddFormId, selfRef);
+
+        // Focus moves wait for the render that shows the field (the conversion input is hidden for the stock UOM).
+        if (pendingFocusId is { } id)
+        {
+            pendingFocusId = null;
+            await InvokeKeysJsAsync("focusIn", id);
+        }
+        else if (shouldFocusUomSelect && unitAutoComplete is not null)
+        {
+            shouldFocusUomSelect = false;
+            try { await unitAutoComplete.GetInputRef().FocusAsync(); }
+            catch (JSException) { }
+            catch (InvalidOperationException) { }   // input not rendered yet: tried again on the next render
+        }
+    }
+
+    // ── Keyboard flow of the add form ──────────────────────────────────────
+
+    private const string AddFormId = "uom-add-form";
+    private const string AddConvId = "uom-add-conv";
+    private const string AddBasisId = "uom-add-basis";
+    private const string AddButtonId = "uom-add-btn";
+
+    private AutoComplete<string>? unitAutoComplete;
+    private DotNetObjectReference<AddUom>? selfRef;
+    private IJSObjectReference? keysJs;
+    private string? pendingFocusId;
+    private bool shortcutsOn;
+
+    /// <summary>Ctrl+S with no unit being edited: the same as Save changes.</summary>
+    [JSInvokable]
+    public Task SaveAllFromKeyboard() => InvokeAsync(async () =>
+    {
+        if (showClearDraftConfirmModal || showReactivateConflictModal || editingName is not null) return;
+        await AddAsync();
+        StateHasChanged();
+    });
+
+    /// <summary>Esc with no unit being edited: closes an open confirm first, else the same as Cancel.</summary>
+    [JSInvokable]
+    public Task CancelFromKeyboard() => InvokeAsync(async () =>
+    {
+        if (showClearDraftConfirmModal) { CancelClearDraftConfirm(); StateHasChanged(); return; }
+        if (showReactivateConflictModal) { DismissReactivateConflictModal(); StateHasChanged(); return; }
+        await CancelAsync();
+    });
+
+    /// <summary>Enter in the Unit field with a unit chosen: on to the conversion (or the Add button for the stock UOM, which has none).</summary>
+    private Task OnUnitConfirmedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(GetSelectedUomName())) return Task.CompletedTask;
+
+        pendingFocusId = IsSelectedStockUom ? AddButtonId : AddConvId;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Enter on the "counted in" select after its list was opened. Runs the same add as the button; when the add is
+    /// refused, focus goes to the field showing the error so it can be fixed straight away.
+    /// </summary>
+    [JSInvokable]
+    public Task AddUnitFromKeyboard() => InvokeAsync(async () =>
+    {
+        await AddUomEntryAsync();
+
+        // A call from JS doesn't re-render on its own the way a button click does, so the errors would stay hidden.
+        if (validationErrors.ContainsKey("uom") || validationErrors.ContainsKey("customUom"))
+            shouldFocusUomSelect = true;
+        else if (validationErrors.ContainsKey("conversion"))
+            pendingFocusId = AddConvId;
+
+        StateHasChanged();
+    });
+
+    /// <summary>Enter in the unit being edited. Returns true when it was saved (false leaves the errors on screen).</summary>
+    [JSInvokable]
+    public async Task<bool> SaveEditFromKeyboard()
+    {
+        var saved = false;
+        await InvokeAsync(async () =>
+        {
+            if (editingName is null) return;
+            await SaveEditAsync();
+            saved = editingName is null;
+            StateHasChanged();
+        });
+        return saved;
+    }
+
+    /// <summary>Esc in the unit being edited.</summary>
+    [JSInvokable]
+    public Task CancelEditFromKeyboard() => InvokeAsync(() =>
+    {
+        CancelEdit();
+        StateHasChanged();
+    });
+
+    private async Task InvokeKeysJsAsync(string function, params object?[] args)
+    {
+        try
+        {
+            keysJs ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/js/uomaddkeys.js");
+            await keysJs.InvokeVoidAsync(function, args);
+        }
+        catch (JSDisconnectedException) { }
+        catch (TaskCanceledException) { }
+        catch (JSException ex)
+        {
+            Console.Error.WriteLine($"uomaddkeys.js '{function}' failed: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        // Leaving the page with the window open: take the window-wide keys off (best effort, the circuit may be gone).
+        if (shortcutsOn && keysJs is not null)
+            _ = keysJs.InvokeVoidAsync("unshortcuts").AsTask().ContinueWith(_ => { }, TaskScheduler.Default);
+        selfRef?.Dispose();
     }
     private bool showClearDraftConfirmModal;
     private AddUomModalDraftState? loadedDraft;
@@ -941,23 +1112,14 @@ public partial class AddUom
         }
     }
 
-    // Picks the suggested unit in the Unit of Measure field: the matching standard option, or "Other" with the name typed in.
+    // Puts the suggested unit in the Unit field: the matching standard option's spelling, else the name as typed.
     private void ApplySuggestedUom()
     {
         var name = SuggestedUomName?.Trim();
         if (string.IsNullOrWhiteSpace(name) || !string.IsNullOrEmpty(selectedUomOption)) return;
         if (workingUomEntries.ContainsKey(name)) return;
 
-        var standard = DefaultOptions.FirstOrDefault(o => string.Equals(o, name, StringComparison.OrdinalIgnoreCase));
-        if (standard is not null)
-        {
-            SelectedUomOption = standard;
-        }
-        else
-        {
-            SelectedUomOption = "__custom";
-            CustomUom = name;
-        }
+        SelectedUomOption = DefaultOptions.FirstOrDefault(o => string.Equals(o, name, StringComparison.OrdinalIgnoreCase)) ?? name;
     }
 
     private async Task AddAsync()
@@ -1019,9 +1181,12 @@ public partial class AddUom
         foreach (var entry in draft.WorkingUomEntries)
             workingUomEntries[entry.Key.Trim()] = entry.Value;
 
-        selectedUomOption = draft.SelectedUomOption;
-        customUom = draft.CustomUom;
-        conversionInput = draft.ConversionInput;
+        // An older draft may hold "__custom" + a typed name: the AutoComplete takes the name directly now.
+        selectedUomOption = draft.SelectedUomOption == "__custom"
+            ? (draft.CustomUom ?? string.Empty).Trim()
+            : draft.SelectedUomOption ?? string.Empty;
+        customUom = string.Empty;
+        conversionInput = draft.ConversionInput ?? string.Empty;
         validationErrors.Clear();
     }
 
