@@ -1398,7 +1398,10 @@ namespace STTproject.Features.User.MapItem.Components.Pages
                         uomEntries[name] = new UomEntry
                         {
                             ItemsUomId = matched.ItemsUomId,
-                            Conversion = matched.ConversionToBase,
+                            // Older saves can hold 0.9999996 for 1 (12 × 0.0833333): snap so the stock UOM is recognised.
+                            Conversion = matched.ConversionToBase is decimal c && c > 0
+                                ? STTproject.Features.User.MapItem.Components.Modals.AddUom.SnapConversion(c)
+                                : matched.ConversionToBase,
                             IsActive = matched.IsActive
                         };
                     }

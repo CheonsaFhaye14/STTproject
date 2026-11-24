@@ -40,7 +40,26 @@ public partial class SubdItemTable
     private bool StockUomImplicit(MapSubDistributorItemRow item) =>
         CompanyRequiresStockUom(item)
         && !string.IsNullOrWhiteSpace(item.CompanyStockUomName)
-        && !item.Uoms.Any(u => u.IsStockUom);
+        && !item.Uoms.Any(u => IsStockRow(item, u));
+
+    /// <summary>
+    /// Older saves can hold 0.9999996 for 1 (12 × 0.0833333). Snapped the same way as the Add UOM window, so a
+    /// near-whole value is read as the whole number it was meant to be.
+    /// </summary>
+    private static decimal? Snapped(decimal? conversion) =>
+        conversion is decimal c && c > 0
+            ? STTproject.Features.User.MapItem.Components.Modals.AddUom.SnapConversion(c)
+            : conversion;
+
+    /// <summary>
+    /// The unit is the company stock UOM: flagged so by the service, or stock-named (CS = Case, …) at conversion 1.
+    /// The second check catches rows whose saved 1 drifted, which the service's exact check misses.
+    /// </summary>
+    private static bool IsStockRow(MapSubDistributorItemRow item, MapSubDistributorUomRow u) =>
+        u.IsStockUom
+        || (!string.IsNullOrWhiteSpace(item.CompanyStockUomName)
+            && StockUomSuggester.Canon(u.UomName) == StockUomSuggester.Canon(item.CompanyStockUomName)
+            && Snapped(u.ConversionToBase) == 1m);
 
     /// <summary>Priced units without a conversion can't be priced.</summary>
     private bool HasMissingConversion(MapSubDistributorItemRow item) =>
@@ -312,21 +331,21 @@ public partial class SubdItemTable
         static string Short(decimal v) => v.ToString(v >= 100 ? "#,0.##" : "0.####", System.Globalization.CultureInfo.InvariantCulture);
         string PriceText(decimal? p) => free ? "Free" : p is decimal v ? $"₱{v:N2}" : "-";
 
-        if (!free && !item.Uoms.Any(u => u.IsStockUom))
+        if (!free && !item.Uoms.Any(u => IsStockRow(item, u)))
         {
             lines.Add(new UomLine(stock!, "1", PriceText(stockPrice), "implicit",
                 $"Company stock UOM ({stock}) · always 1 · not saved as a unit"));
         }
 
         foreach (var u in item.Uoms
-                     .OrderByDescending(u => u.IsStockUom)
+                     .OrderByDescending(u => IsStockRow(item, u))
                      .ThenByDescending(u => u.ConversionToBase ?? decimal.MinValue))
         {
-            if (u.IsStockUom)
+            if (!free && IsStockRow(item, u))
             {
                 lines.Add(new UomLine(u.UomName, "1", PriceText(u.Price), "stock", $"Company stock UOM ({stock}) · conversion 1"));
             }
-            else if (u.ConversionToBase is not decimal c || c <= 0)
+            else if (Snapped(u.ConversionToBase) is not decimal c || c <= 0)
             {
                 lines.Add(new UomLine(u.UomName, "no conversion", "no conversion", "missing", "No conversion: this unit can't be priced"));
             }
@@ -349,16 +368,16 @@ public partial class SubdItemTable
     {
         var stock = item.CompanyStockUomName?.Trim();
 
-        if (entry.IsStockUom)
+        if (IsStockRow(item, entry))
             return $"Company stock UOM ({stock}) · conversion 1";
 
         if (string.IsNullOrWhiteSpace(stock))
             return "Free item: no stock UOM, priced at 0";
 
-        if (entry.ConversionToBase is not > 0)
+        if (Snapped(entry.ConversionToBase) is not decimal c || c <= 0)
             return "No conversion: this unit can't be priced";
 
-        return $"1 {entry.UomName} = {FormatConversion(entry.ConversionToBase.Value)} {stock}";
+        return $"1 {entry.UomName} = {FormatConversion(c)} {stock}";
     }
 
     private static string FormatConversion(decimal value) =>

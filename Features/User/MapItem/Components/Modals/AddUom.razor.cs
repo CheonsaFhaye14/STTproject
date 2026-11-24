@@ -455,7 +455,7 @@ public partial class AddUom : IDisposable
         else if (decimal.TryParse(conversionInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var count) && count > 0
                  && BasisConversion(ConversionBasisName) is decimal basisConv)
         {
-            conversion = Math.Round(count * basisConv, 10, MidpointRounding.AwayFromZero);
+            conversion = SnapConversion(count * basisConv);
         }
         else
         {
@@ -662,20 +662,82 @@ public partial class AddUom : IDisposable
     private decimal? EditConversion(decimal size, string basisKey)
     {
         if (size <= 0 || BasisConversion(basisKey) is not decimal b) return null;
-        return Math.Round(size * b, 10, MidpointRounding.AwayFromZero);
+        return SnapConversion(size * b);
     }
 
     /// <summary>What to show in the size box for a stored conversion and basis (the reverse of <see cref="EditConversion"/>).</summary>
     private string EditSizeText(decimal conversion, string basisKey) =>
         conversion > 0 && BasisConversion(basisKey) is decimal b ? FormatNumber(conversion / b) : string.Empty;
 
+    /// <summary>
+    /// Rounds away the drift that 6-decimal display values leave behind (0.166667 × 12 = 2.000004 → 2,
+    /// 0.0833334 → 1/12), then keeps 10 decimals like ItemsUom.ConversionToBase.
+    /// </summary>
+    /// <summary>Snaps every unit's conversion (see <see cref="SnapConversion"/>), so exact checks like "== 1" hold.</summary>
+    private void SnapAllConversions()
+    {
+        foreach (var e in workingUomEntries.Values)
+            if (e.Conversion is decimal c && c > 0) e.Conversion = SnapConversion(c);
+    }
+
+    /// <remarks>Internal so the Map Item page can mark the stock UOM with the same rule.</remarks>
+    internal static decimal SnapConversion(decimal value)
+    {
+        if (value <= 0) return value;
+
+        var whole = Math.Round(value);
+        if (whole > 0 && Math.Abs(value - whole) <= 0.00001m * whole) return whole;
+
+        if (value < 1m)
+        {
+            var per = Math.Round(1m / value);   // e.g. 12 for 0.0833333
+            if (per > 1 && Math.Abs(1m / value - per) <= 0.0001m * per)
+                return Math.Round(1m / per, 10, MidpointRounding.AwayFromZero);
+        }
+
+        return Math.Round(value, 10, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// The exact stored conversion behind the size box, and the text the box was filled with. As long as the box
+    /// still shows that text, saving keeps the exact value instead of re-reading the rounded text (no drift).
+    /// </summary>
+    private decimal? editExactConversion;
+    private string editSizeShown = string.Empty;
+
+    private void ShowEditSize(decimal? conversion, string basisKey)
+    {
+        editExactConversion = conversion;
+        editSizeInput = editSizeShown = conversion is decimal c ? EditSizeText(c, basisKey) : string.Empty;
+    }
+
+    /// <summary>The conversion the edit row currently means: the exact one if untouched, else what was typed.</summary>
+    private decimal? CurrentEditConversion =>
+        editSizeInput.Trim() == editSizeShown && editExactConversion is decimal exact ? exact
+        : decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size)
+            ? EditConversion(size, editBasis)
+            : null;
+
+    /// <summary>"1 PC = 0.083333 PK · ₱11.35" under the edit row, so the number can be read in the stock UOM whatever the basis.</summary>
+    private string? EditPreview
+    {
+        get
+        {
+            if (CurrentEditConversion is not decimal c || c <= 0) return null;
+            var name = string.IsNullOrWhiteSpace(editNameInput) ? editingName : editNameInput.Trim();
+            var text = $"1 {name} = {FormatNumber(c)} {UnitText(StockKey)}";
+            if (PiecesPerStock is decimal pps && !IsPieceName(name) && PieceEntryName is { } piece
+                && !string.Equals(piece, editingName, StringComparison.OrdinalIgnoreCase))
+                text += $" = {FormatNumber(c * pps)} {piece}";
+            if (StockUomRequired && ApplicableStockPrice is decimal p) text += $" · ₱{PriceFor(p, c):N2}";
+            return text;
+        }
+    }
+
     private async Task OnEditBasisChanged(string value)
     {
-        // Keep the same size when switching basis: re-express the typed amount in the new unit.
-        if (decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size)
-            && EditConversion(size, editBasis) is decimal conv)
-            editSizeInput = EditSizeText(conv, value);
-
+        // Keep the same size when switching basis: re-express the amount in the new unit (exactly, not from the rounded text).
+        if (CurrentEditConversion is decimal conv) ShowEditSize(conv, value);
         editBasis = value;
         await InvokeAsync(StateHasChanged);
     }
@@ -693,7 +755,7 @@ public partial class AddUom : IDisposable
                   : options.Contains(StockKey) ? StockKey
                   : options.FirstOrDefault() ?? string.Empty;
 
-        editSizeInput = entry.Conversion is decimal c ? EditSizeText(c, editBasis) : string.Empty;
+        ShowEditSize(entry.Conversion, editBasis);
     }
 
     private void CancelEdit()
@@ -711,7 +773,9 @@ public partial class AddUom : IDisposable
         if (string.IsNullOrWhiteSpace(newName)) editErrors["name"] = "Enter a unit name.";
 
         decimal? conversion = null;
-        if (!decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size) || size <= 0)
+        if (editSizeInput.Trim() == editSizeShown && editExactConversion is decimal exact)
+            conversion = SnapConversion(exact);   // untouched: keep the stored value (cleaned of old drift)
+        else if (!decimal.TryParse(editSizeInput, NumberStyles.Number, CultureInfo.InvariantCulture, out var size) || size <= 0)
             editErrors["size"] = "Enter a number greater than 0.";
         else if (EditConversion(size, editBasis) is decimal worked)
             conversion = worked;
@@ -884,7 +948,7 @@ public partial class AddUom : IDisposable
         if (RescaleRowName is not { } row || workingUomEntries[row].Conversion is not decimal factor || factor <= 0) return;
 
         foreach (var e in workingUomEntries.Values.Where(e => e.Conversion is > 0))
-            e.Conversion = Math.Round(e.Conversion!.Value / factor, 10, MidpointRounding.AwayFromZero);
+            e.Conversion = SnapConversion(e.Conversion!.Value / factor);
 
         workingUomEntries[row].Conversion = 1m;
         RefreshStockFlags();          // the stock-named row is now 1, so it's the stock UOM again
@@ -1092,6 +1156,7 @@ public partial class AddUom : IDisposable
                 validationErrors.Clear();
             }
 
+            SnapAllConversions();   // older saves can hold 0.9999996 for 1: treat it as 1 (saved clean on Save changes)
             RefreshStockFlags();
             ApplySuggestedUom();
             conversionView = PieceEntryName ?? string.Empty;   // show per piece when there is one, else per stock UOM
