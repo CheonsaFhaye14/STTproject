@@ -592,6 +592,16 @@ public sealed class ImportSalesInvoiceService
 					if (invoicePrices.TryGetValue(line.ItemsUomId, out var linePrice) && linePrice.IsPriced)
 					{
 						line.Amount = linePrice.AmountFor(line.Quantity, false);   // credit sign is applied when lines are aggregated
+
+						// The invoice is older than the item's first company price, so that first price was used. Not an error,
+						// but worth a note: once per SKU and UOM on this invoice.
+						if (linePrice.IsFallbackPrice && reportedPriceIssues.Add(line.ItemsUomId))
+						{
+							var since = linePrice.PriceEffectiveDate is { } d ? d.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) : "a later date";
+							var note = $"SKU '{line.ItemCode}' ({line.UomName}) has no company price on {firstRow.InvoiceDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}, " +
+									   $"so its first price (from {since}) was used.";
+							if (!preparedInvoice.Warnings.Contains(note)) preparedInvoice.Warnings.Add(note);
+						}
 						continue;
 					}
 

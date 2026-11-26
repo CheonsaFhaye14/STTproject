@@ -17,7 +17,10 @@ public sealed record UomPriceInfo(
     decimal? StockPrice,
     int? CompanyItemPriceHistoryId,
     string? Issue,
-    bool IsFree = false)
+    bool IsFree = false,
+    // The company had no price yet on the invoice date, so the item's earliest price was used (see InvoicePricing).
+    bool IsFallbackPrice = false,
+    DateOnly? PriceEffectiveDate = null)
 {
     /// <summary>Kept so existing callers compile: the stock UOM is always 1 now.</summary>
     public decimal StockConvToBase => 1m;
@@ -52,7 +55,13 @@ public static class InvoicePricing
     /// Key = ItemsUomId. Lines that cannot be priced carry an Issue instead of a price.
     /// The rules match sp_RecalculateInvoiceAmounts:
     ///   free company item (no StockUomName, no price, no history) -> priced at ₱0
-    ///   price but no StockUomName, no conversion, no price list, no price on the date -> Issue
+    ///   price but no StockUomName, no conversion, no price list -> Issue
+    ///
+    /// No price on or before the invoice date: the item's EARLIEST price is used instead (IsFallbackPrice = true).
+    /// A company item's first price is usually entered after it was already being sold, so invoices dated before
+    /// that first row would otherwise never price. Only when the item has no price row at all (for that price list)
+    /// is it an Issue. Note: sp_RecalculateInvoiceAmounts / fn_CompanyPriceAtDate need the same fallback, or a
+    /// recalculation will undo these prices.
     /// </summary>
     public static async Task<Dictionary<int, UomPriceInfo>> LoadUomPricesAsync(
         EntrielContext context,
@@ -92,26 +101,32 @@ public static class InvoicePricing
         var companyIds = items.Select(i => i.CompanyItemId).Distinct().ToList();
         var cutoff = invoiceDate.AddDays(1).ToDateTime(TimeOnly.MinValue);   // effective on or before the invoice date
 
-        var history = await context.CompanyItemPriceHistories.AsNoTracking()
-            .Where(h => companyIds.Contains(h.CompanyItemId) && h.EffectivityDate < cutoff)
+        // Every price row of these items (any date): the dated ones price the invoice, the earliest is the fallback.
+        var allHistory = await context.CompanyItemPriceHistories.AsNoTracking()
+            .Where(h => companyIds.Contains(h.CompanyItemId))
             .Select(h => new { h.CompanyItemId, h.PriceListType, h.EffectivityDate, h.CompanyItemPriceHistoryId, h.NewPrice })
             .ToListAsync(ct);
 
         // Company items that have ever had a price row (any list, any date): these are never "free".
-        var everPriced = (await context.CompanyItemPriceHistories.AsNoTracking()
-                .Where(h => companyIds.Contains(h.CompanyItemId))
-                .Select(h => h.CompanyItemId)
-                .Distinct()
-                .ToListAsync(ct))
-            .ToHashSet();
+        var everPriced = allHistory.Select(h => h.CompanyItemId).ToHashSet();
 
-        // Latest row per (company item, price list) — same ordering as fn_CompanyPriceAtDate
-        var latest = history
+        // Latest row on or before the invoice date per (company item, price list) — same ordering as fn_CompanyPriceAtDate
+        var latest = allHistory
+            .Where(h => h.EffectivityDate < cutoff)
             .GroupBy(h => (h.CompanyItemId, h.PriceListType))
             .ToDictionary(
                 g => g.Key,
                 g => g.OrderByDescending(h => h.EffectivityDate.Date)
                       .ThenByDescending(h => h.CompanyItemPriceHistoryId)
+                      .First());
+
+        // Earliest row per (company item, price list): used when the invoice is older than the item's first price.
+        var earliest = allHistory
+            .GroupBy(h => (h.CompanyItemId, h.PriceListType))
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(h => h.EffectivityDate.Date)
+                      .ThenBy(h => h.CompanyItemPriceHistoryId)
                       .First());
 
         var result = new Dictionary<int, UomPriceInfo>();
@@ -127,6 +142,8 @@ public static class InvoicePricing
             var hasPrice = false;
             decimal? newPrice = null;
             int? historyId = null;
+            var isFallback = false;
+            DateOnly? effectiveDate = null;
 
             if (!isFree)
             {
@@ -136,13 +153,23 @@ public static class InvoicePricing
                     itemIssue = "Sub distributor has no price list (Regional/National)";
                 else
                 {
-                    hasPrice = latest.TryGetValue((item.CompanyItemId, listType), out var price);
+                    var key = (item.CompanyItemId, listType);
+                    hasPrice = latest.TryGetValue(key, out var price);
+                    if (!hasPrice && earliest.TryGetValue(key, out var first))
+                    {
+                        // The invoice predates the item's first price: use that first price.
+                        price = first;
+                        hasPrice = true;
+                        isFallback = true;
+                    }
+
                     if (!hasPrice)
-                        itemIssue = "No company price on or before the invoice date";
+                        itemIssue = "The company item has no price yet";
                     else
                     {
                         newPrice = price!.NewPrice;
                         historyId = price.CompanyItemPriceHistoryId;
+                        effectiveDate = DateOnly.FromDateTime(price.EffectivityDate);
                     }
                 }
             }
@@ -162,7 +189,9 @@ public static class InvoicePricing
                     issue is null && !isFree ? newPrice : (isFree && issue is null ? 0m : null),
                     issue is null && !isFree ? historyId : null,
                     issue,
-                    IsFree: isFree && issue is null);
+                    IsFree: isFree && issue is null,
+                    IsFallbackPrice: issue is null && !isFree && isFallback,
+                    PriceEffectiveDate: issue is null && !isFree ? effectiveDate : null);
             }
         }
 
